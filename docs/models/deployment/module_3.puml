@@ -1,5 +1,5 @@
 @startuml
-
+skinparam linetype ortho
 node "Cliente Web"{
     artifact "Navegador" as navegador
 }
@@ -24,6 +24,9 @@ node "Microservicio: Eventos, Actividades, Reservas y Reseñas" {
             }
         }
     }
+    database "eventos_actividades_reservas" as DB_SQL
+    database "reseñas" as DB_Mongo
+    database "preferencias_eventos_actividades" as DB_Neo
 
     "in/controllers" --> "use cases"
     "out/persistence" ..> repository
@@ -33,20 +36,11 @@ node "Microservicio: Eventos, Actividades, Reservas y Reseñas" {
 node "Microservicio: Sitios, Servicios,\n Reservas y Reseñas" {
 }
 
-Modulo2Adapter <- "Microservicio: Sitios, Servicios,\n Reservas y Reseñas"
+Modulo2Adapter <-left- "Microservicio: Sitios, Servicios,\n Reservas y Reseñas"
 
-node "Database Eventos, Actividades y Reservas"{
-    database "eventos_actividades_reservas" as DB_SQL
-}
-node "Database Reseñas" {
-    database "reseñas" as DB_Mongo
-}
-node "Database Preferencias Turista" {
-    database "preferencias_eventos_actividades" as DB_Neo
-}
 "out/persistence" ---> DB_SQL
-"out/persistence" ----> DB_Mongo
-"out/persistence" ---> DB_Neo
+"out/persistence" --> DB_Mongo
+"out/persistence" --> DB_Neo
 
 navegador --> "in/controllers"
 

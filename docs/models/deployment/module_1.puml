@@ -1,5 +1,5 @@
 @startuml
-
+skinparam linetype ortho
 node "Cliente Web"{
     artifact "Navegador" as navegador
 }
@@ -24,17 +24,14 @@ node "Microservicio: Usuarios, \nAnomalías, y Reseñas" {
         }
     }
 
+    database "usuarios_anomalías" as DB_SQL_M1
+    database "reseñas" as DB_NOSQL_M1
+
     "in/controllers" --> "use cases"
     "out/persistence" ..> repository
     application ..> "use cases"
 }
 
-node "Database Usuarios & Anomalías"{
-    database "usuarios_anomalías" as DB_SQL_M1
-}
-node "Database Reseñas" {
-    database "reseñas" as DB_NOSQL_M1
-}
 "out/persistence" ---> DB_SQL_M1
 "out/persistence" ---> DB_NOSQL_M1
 

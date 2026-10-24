@@ -1,4 +1,5 @@
 @startuml
+skinparam linetype ortho
 
 node "Cliente Web"{
     artifact "Navegador" as navegador
@@ -23,24 +24,18 @@ node "Microservicio: Sitios, Servicios, Reservas y Reseñas" {
             }
         }
     }
+    database "reservas" as DB_SQL
+    database "reseñas_sitios_servicios" as DB_Mongo
+    database "preferencias_sitios_servicios" as DB_Neo
 
     "in/controllers" --> "use cases"
     "out/persistence" ..> repository
     application ..> "use cases"
 }
 
-node "Database Reservas"{
-    database "reservas" as DB_SQL
-}
-node "Database Reseñas, Sitios y Servicios" {
-    database "reseñas_sitios_servicios" as DB_Mongo
-}
-node "Database Preferencias Turista" {
-    database "preferencias_sitios_servicios" as DB_Neo
-}
-"out/persistence" ---> DB_SQL
-"out/persistence" ----> DB_Mongo
-"out/persistence" ---> DB_Neo
+"out/persistence" --> DB_SQL
+"out/persistence" ---> DB_Mongo
+"out/persistence" --> DB_Neo
 
 navegador --> "in/controllers"
 
