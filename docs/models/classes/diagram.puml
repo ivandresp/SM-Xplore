@@ -25,30 +25,30 @@ Turista -up-|> Usuario
 GestoraDestinos --|> Usuario
 PrestadoraServicios -up-|> Usuario
 
-Usuario "1"*-up-"*" ReporteSeguridad : "postea"
-Usuario "1"o-right-"0..*" Anomalía : "reporta"
+Usuario "1  "*-up-"*" ReporteSeguridad
+Usuario "1    "o-right-"0..*" Anomalía
 
-Anomalía "0..*"--o"1" Admin : "administra"
+Anomalía "0..*"--o"1" Admin
 
-Turista "1"*-left-"*" Review : "       realiza       "
-Turista "1"*--"*" Reserva : "solicita"
+Turista "    1"-left-"*" Review
+Turista "1"*--"*" Reserva
 
-PrestadoraServicios "1"*--"*" Servicio : "ofrece"
+PrestadoraServicios "1"*--"*" Servicio
 
-GestoraDestinos "1"-left-"*" Zona : "  configura   "
+GestoraDestinos "1"-left-"*" Zona
 
-Actividad "*"-right-o"1" Guia : "dirige"
+Actividad "*"-right-o"1" Guia
 
-Sitio "1"-down-"0..*  " Actividad : "  alberga   "
+Sitio "1"-down-"0..*  " Actividad
 
-Zona "1"-left-"*" Sitio : "  pertenece   "
+Zona "1"-left-"*" Sitio
 
-Sitio "1"o-left-"*" Evento : "  alberga   "
+Sitio "1"o-left-"*" Evento
 
-Reserva "*"-right-*"0..1" Servicio : " incluye"
-Reserva "*"--*"0..1" Evento : "incluye"
-Actividad "0..1 "*--"*" Reserva : "incluye"
+Reserva "*"-right-*"0..1" Servicio
+Reserva "*"--*"0..1" Evento
+Actividad "0..1 "*--"*" Reserva
 
-Sitio "*"-right-o"1" GestoraDestinos : "registra"
+Sitio "*"-right-o"1" GestoraDestinos
 
 @enduml
