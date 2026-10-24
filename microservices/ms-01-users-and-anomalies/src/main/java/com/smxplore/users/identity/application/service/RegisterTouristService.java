@@ -8,10 +8,7 @@ import com.smxplore.users.identity.application.port.out.PasswordHasher;
 import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.EmailAlreadyExistsException;
-import com.smxplore.users.identity.domain.model.Dni;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.FullName;
-import com.smxplore.users.identity.domain.model.Phone;
 import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
 import java.time.Clock;
@@ -43,11 +40,12 @@ public final class RegisterTouristService implements RegisterTouristUseCase {
 
             User user = User.registerTourist(
                     UserId.newId(),
-                    new FullName(command.fullName()),
+                    command.fullName(),
                     email,
-                    new Phone(command.phone()),
+                    command.phone(),
                     passwordHasher.hash(command.rawPassword()),
-                    new Dni(command.dniType(), command.dniNumber()),
+                    command.dniType(),
+                    command.dniNumber(),
                     command.preferredLanguage(),
                     command.birthDate(),
                     command.nationality(),

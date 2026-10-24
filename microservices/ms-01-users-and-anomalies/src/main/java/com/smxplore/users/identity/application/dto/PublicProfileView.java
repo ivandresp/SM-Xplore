@@ -7,7 +7,6 @@ import java.util.UUID;
 public record PublicProfileView(UUID id, String fullName, Role role, ProfileView profile) {
 
     public static PublicProfileView from(User user) {
-        return new PublicProfileView(
-                user.id().value(), user.fullName().value(), user.role(), ProfileView.from(user.profile()));
+        return new PublicProfileView(user.id().value(), user.fullName(), user.role(), ProfileView.from(user.profile()));
     }
 }

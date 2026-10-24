@@ -9,9 +9,6 @@ import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.FullName;
-import com.smxplore.users.identity.domain.model.Nit;
-import com.smxplore.users.identity.domain.model.Phone;
 import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
 import java.time.Clock;
@@ -43,11 +40,11 @@ public final class RegisterProviderService implements RegisterProviderUseCase {
 
             User user = User.registerProvider(
                     UserId.newId(),
-                    new FullName(command.fullName()),
+                    command.fullName(),
                     email,
-                    new Phone(command.phone()),
+                    command.phone(),
                     passwordHasher.hash(command.rawPassword()),
-                    new Nit(command.nit()),
+                    command.nit(),
                     command.businessType(),
                     command.latitude(),
                     command.longitude(),

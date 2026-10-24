@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record ProviderProfile(
-        Nit nit,
+        String nit,
         String businessType,
         ProviderRegistrationStatus registrationStatus,
         BigDecimal latitude,
@@ -14,9 +14,6 @@ public record ProviderProfile(
         implements Profile {
 
     public ProviderProfile {
-        if (nit == null) {
-            throw new ValidationException("El NIT de la prestadora es obligatorio");
-        }
         if (registrationStatus == null) {
             registrationStatus = ProviderRegistrationStatus.PENDIENTE;
         }

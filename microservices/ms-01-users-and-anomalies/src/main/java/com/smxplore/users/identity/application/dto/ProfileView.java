@@ -21,28 +21,24 @@ public sealed interface ProfileView
         return switch (profile) {
             case TouristProfile tourist ->
                 new Tourist(
-                        tourist.dni().type(),
-                        tourist.dni().number(),
+                        tourist.dniType(),
+                        tourist.dniNumber(),
                         tourist.preferredLanguage(),
                         tourist.birthDate(),
                         tourist.nationality());
             case GuideProfile guide ->
-                new Guide(guide.dni().type(), guide.dni().number(), guide.license(), guide.startOperationDate());
+                new Guide(guide.dniType(), guide.dniNumber(), guide.license(), guide.startOperationDate());
             case ProviderProfile provider ->
                 new Provider(
-                        provider.nit().value(),
+                        provider.nit(),
                         provider.businessType(),
                         provider.registrationStatus().name(),
                         provider.latitude(),
                         provider.longitude(),
                         provider.startOperationDate());
             case DestinationManagerProfile manager ->
-                new DestinationManager(manager.nit().value(), manager.startOperationDate());
-            case AdminProfile admin ->
-                new Admin(
-                        admin.dni() == null ? null : admin.dni().type(),
-                        admin.dni() == null ? null : admin.dni().number(),
-                        admin.lastAccessDate());
+                new DestinationManager(manager.nit(), manager.startOperationDate());
+            case AdminProfile admin -> new Admin(admin.dniType(), admin.dniNumber(), admin.lastAccessDate());
         };
     }
 

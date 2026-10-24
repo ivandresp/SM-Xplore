@@ -1,6 +1,7 @@
 package com.smxplore.users.identity.domain.model;
 
 import com.smxplore.users.identity.domain.exception.ProfileMismatchException;
+import com.smxplore.users.identity.domain.exception.ValidationException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -9,9 +10,9 @@ import java.util.Objects;
 public final class User {
 
     private final UserId id;
-    private final FullName fullName;
+    private final String fullName;
     private final Email email;
-    private final Phone phone;
+    private final String phone;
     private final PasswordHash passwordHash;
     private final Profile profile;
     private final UserStatus status;
@@ -22,9 +23,9 @@ public final class User {
 
     private User(
             UserId id,
-            FullName fullName,
+            String fullName,
             Email email,
-            Phone phone,
+            String phone,
             PasswordHash passwordHash,
             Profile profile,
             UserStatus status,
@@ -32,8 +33,11 @@ public final class User {
             Instant signedUpAt,
             Instant updatedAt,
             Instant deletedAt) {
+        if (fullName == null || fullName.isBlank()) {
+            throw new ValidationException("El nombre completo es obligatorio");
+        }
         this.id = Objects.requireNonNull(id, "El identificador de usuario es obligatorio");
-        this.fullName = Objects.requireNonNull(fullName, "El nombre completo es obligatorio");
+        this.fullName = fullName;
         this.email = Objects.requireNonNull(email, "El correo electrónico es obligatorio");
         this.phone = phone;
         this.passwordHash = Objects.requireNonNull(passwordHash, "La contraseña es obligatoria");
@@ -47,11 +51,12 @@ public final class User {
 
     public static User registerTourist(
             UserId id,
-            FullName fullName,
+            String fullName,
             Email email,
-            Phone phone,
+            String phone,
             PasswordHash passwordHash,
-            Dni dni,
+            String dniType,
+            String dniNumber,
             String preferredLanguage,
             LocalDate birthDate,
             String nationality,
@@ -62,7 +67,7 @@ public final class User {
                 email,
                 phone,
                 passwordHash,
-                new TouristProfile(dni, preferredLanguage, birthDate, nationality),
+                new TouristProfile(dniType, dniNumber, preferredLanguage, birthDate, nationality),
                 UserStatus.ACTIVO,
                 0L,
                 now,
@@ -72,11 +77,11 @@ public final class User {
 
     public static User registerProvider(
             UserId id,
-            FullName fullName,
+            String fullName,
             Email email,
-            Phone phone,
+            String phone,
             PasswordHash passwordHash,
-            Nit nit,
+            String nit,
             String businessType,
             BigDecimal latitude,
             BigDecimal longitude,
@@ -103,14 +108,21 @@ public final class User {
     }
 
     public static User createAdmin(
-            UserId id, FullName fullName, Email email, Phone phone, PasswordHash passwordHash, Dni dni, Instant now) {
+            UserId id,
+            String fullName,
+            Email email,
+            String phone,
+            PasswordHash passwordHash,
+            String dniType,
+            String dniNumber,
+            Instant now) {
         return new User(
                 id,
                 fullName,
                 email,
                 phone,
                 passwordHash,
-                new AdminProfile(dni, null),
+                new AdminProfile(dniType, dniNumber, null),
                 UserStatus.ACTIVO,
                 0L,
                 now,
@@ -120,9 +132,9 @@ public final class User {
 
     public static User rehydrate(
             UserId id,
-            FullName fullName,
+            String fullName,
             Email email,
-            Phone phone,
+            String phone,
             PasswordHash passwordHash,
             Profile profile,
             UserStatus status,
@@ -144,7 +156,7 @@ public final class User {
                 deletedAt);
     }
 
-    public User updateProfile(FullName newFullName, Phone newPhone, Profile newProfile, Instant now) {
+    public User updateProfile(String newFullName, String newPhone, Profile newProfile, Instant now) {
         if (newProfile.role() != role()) {
             throw new ProfileMismatchException("El perfil no corresponde al rol del usuario");
         }
@@ -162,7 +174,7 @@ public final class User {
                 deletedAt);
     }
 
-    public User changeRole(FullName newFullName, Phone newPhone, Profile newProfile, Instant now) {
+    public User changeRole(String newFullName, String newPhone, Profile newProfile, Instant now) {
         return new User(
                 id,
                 newFullName,
@@ -240,7 +252,7 @@ public final class User {
         return id;
     }
 
-    public FullName fullName() {
+    public String fullName() {
         return fullName;
     }
 
@@ -248,7 +260,7 @@ public final class User {
         return email;
     }
 
-    public Phone phone() {
+    public String phone() {
         return phone;
     }
 

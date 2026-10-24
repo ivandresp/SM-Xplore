@@ -4,11 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.nimbusds.jose.jwk.RSAKey;
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
-import com.smxplore.users.identity.domain.model.Dni;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.FullName;
 import com.smxplore.users.identity.domain.model.PasswordHash;
-import com.smxplore.users.identity.domain.model.Phone;
 import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
 import com.smxplore.users.identity.infrastructure.adapter.out.security.JwtTokenIssuer;
@@ -44,11 +41,12 @@ class JwtContractTest {
 
         User user = User.registerTourist(
                 UserId.newId(),
-                new FullName("Ada Turista"),
+                "Ada Turista",
                 new Email("ada@example.com"),
-                new Phone("3001234567"),
+                "3001234567",
                 new PasswordHash("hash"),
-                new Dni("CC", "1234567890"),
+                "CC",
+                "1234567890",
                 "es",
                 null,
                 "Colombia",

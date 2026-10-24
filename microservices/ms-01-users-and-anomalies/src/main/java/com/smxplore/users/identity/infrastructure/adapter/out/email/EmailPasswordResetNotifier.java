@@ -44,7 +44,7 @@ public class EmailPasswordResetNotifier implements PasswordResetNotifier {
                 %s
 
                 Si no realizaste esta solicitud, puedes ignorar este mensaje.
-                """.formatted(user.fullName().value(), link));
+                """.formatted(user.fullName(), link));
 
         try {
             mailSender.send(message);

@@ -19,9 +19,9 @@ public record UserView(
     public static UserView from(User user) {
         return new UserView(
                 user.id().value(),
-                user.fullName().value(),
+                user.fullName(),
                 user.email().value(),
-                user.phone() == null ? null : user.phone().value(),
+                user.phone(),
                 user.role(),
                 user.status(),
                 ProfileView.from(user.profile()),

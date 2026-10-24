@@ -24,11 +24,11 @@ class UserTest {
     void registersProviderAsPending() {
         User user = User.registerProvider(
                 UserId.newId(),
-                new FullName("Prestadora Demo"),
+                "Prestadora Demo",
                 new Email("provider@example.com"),
-                new Phone("3001234567"),
+                "3001234567",
                 new PasswordHash("hash"),
-                new Nit("900123456"),
+                "900123456",
                 "Hotel",
                 null,
                 null,
@@ -51,18 +51,20 @@ class UserTest {
     void rejectsProfileFromAnotherRole() {
         User user = tourist();
 
-        assertThatThrownBy(() -> user.updateProfile(user.fullName(), user.phone(), new AdminProfile(null, null), NOW))
+        assertThatThrownBy(() ->
+                        user.updateProfile(user.fullName(), user.phone(), new AdminProfile(null, null, null), NOW))
                 .isInstanceOf(ProfileMismatchException.class);
     }
 
     private static User tourist() {
         return User.registerTourist(
                 UserId.newId(),
-                new FullName("Ada Turista"),
+                "Ada Turista",
                 new Email("ada@example.com"),
-                new Phone("3001234567"),
+                "3001234567",
                 new PasswordHash("hash"),
-                new Dni("CC", "1234567890"),
+                "CC",
+                "1234567890",
                 "es",
                 null,
                 "Colombia",

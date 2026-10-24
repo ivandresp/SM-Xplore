@@ -2,13 +2,9 @@ package com.smxplore.users.identity.infrastructure.adapter.out.persistence.jpa;
 
 import com.smxplore.users.identity.domain.model.AdminProfile;
 import com.smxplore.users.identity.domain.model.DestinationManagerProfile;
-import com.smxplore.users.identity.domain.model.Dni;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.FullName;
 import com.smxplore.users.identity.domain.model.GuideProfile;
-import com.smxplore.users.identity.domain.model.Nit;
 import com.smxplore.users.identity.domain.model.PasswordHash;
-import com.smxplore.users.identity.domain.model.Phone;
 import com.smxplore.users.identity.domain.model.Profile;
 import com.smxplore.users.identity.domain.model.ProviderProfile;
 import com.smxplore.users.identity.domain.model.TouristProfile;
@@ -20,9 +16,9 @@ final class UserPersistenceMapper {
     UserJpaEntity toEntity(User user) {
         return new UserJpaEntity(
                 user.id().value(),
-                user.fullName().value(),
+                user.fullName(),
                 user.email().value(),
-                user.phone() == null ? null : user.phone().value(),
+                user.phone(),
                 user.passwordHash().value(),
                 user.role(),
                 user.status(),
@@ -35,9 +31,9 @@ final class UserPersistenceMapper {
     User toDomain(UserJpaEntity entity, Profile profile) {
         return User.rehydrate(
                 new UserId(entity.getId()),
-                new FullName(entity.getFullName()),
+                entity.getFullName(),
                 new Email(entity.getEmail()),
-                entity.getPhone() == null ? null : new Phone(entity.getPhone()),
+                entity.getPhone(),
                 new PasswordHash(entity.getPasswordHash()),
                 profile,
                 entity.getStatus(),
@@ -50,8 +46,8 @@ final class UserPersistenceMapper {
     TouristProfileJpaEntity toTouristEntity(UserId userId, TouristProfile profile) {
         return new TouristProfileJpaEntity(
                 userId.value(),
-                profile.dni().type(),
-                profile.dni().number(),
+                profile.dniType(),
+                profile.dniNumber(),
                 profile.preferredLanguage(),
                 profile.birthDate(),
                 profile.nationality());
@@ -60,8 +56,8 @@ final class UserPersistenceMapper {
     GuideProfileJpaEntity toGuideEntity(UserId userId, GuideProfile profile) {
         return new GuideProfileJpaEntity(
                 userId.value(),
-                profile.dni().type(),
-                profile.dni().number(),
+                profile.dniType(),
+                profile.dniNumber(),
                 profile.license(),
                 profile.startOperationDate());
     }
@@ -69,7 +65,7 @@ final class UserPersistenceMapper {
     ProviderProfileJpaEntity toProviderEntity(UserId userId, ProviderProfile profile) {
         return new ProviderProfileJpaEntity(
                 userId.value(),
-                profile.nit().value(),
+                profile.nit(),
                 profile.businessType(),
                 profile.registrationStatus(),
                 profile.latitude(),
@@ -78,21 +74,18 @@ final class UserPersistenceMapper {
     }
 
     DestinationManagerProfileJpaEntity toDestinationManagerEntity(UserId userId, DestinationManagerProfile profile) {
-        return new DestinationManagerProfileJpaEntity(
-                userId.value(), profile.nit().value(), profile.startOperationDate());
+        return new DestinationManagerProfileJpaEntity(userId.value(), profile.nit(), profile.startOperationDate());
     }
 
     AdminProfileJpaEntity toAdminEntity(UserId userId, AdminProfile profile) {
         return new AdminProfileJpaEntity(
-                userId.value(),
-                profile.dni() == null ? null : profile.dni().type(),
-                profile.dni() == null ? null : profile.dni().number(),
-                profile.lastAccessDate());
+                userId.value(), profile.dniType(), profile.dniNumber(), profile.lastAccessDate());
     }
 
     TouristProfile toTouristProfile(TouristProfileJpaEntity entity) {
         return new TouristProfile(
-                new Dni(entity.getDniType(), entity.getDniNumber()),
+                entity.getDniType(),
+                entity.getDniNumber(),
                 entity.getPreferredLanguage(),
                 entity.getBirthDate(),
                 entity.getNationality());
@@ -100,14 +93,12 @@ final class UserPersistenceMapper {
 
     GuideProfile toGuideProfile(GuideProfileJpaEntity entity) {
         return new GuideProfile(
-                new Dni(entity.getDniType(), entity.getDniNumber()),
-                entity.getLicense(),
-                entity.getStartOperationDate());
+                entity.getDniType(), entity.getDniNumber(), entity.getLicense(), entity.getStartOperationDate());
     }
 
     ProviderProfile toProviderProfile(ProviderProfileJpaEntity entity) {
         return new ProviderProfile(
-                new Nit(entity.getNit()),
+                entity.getNit(),
                 entity.getBusinessType(),
                 entity.getRegistrationStatus(),
                 entity.getLatitude(),
@@ -116,12 +107,10 @@ final class UserPersistenceMapper {
     }
 
     DestinationManagerProfile toDestinationManagerProfile(DestinationManagerProfileJpaEntity entity) {
-        return new DestinationManagerProfile(new Nit(entity.getNit()), entity.getStartOperationDate());
+        return new DestinationManagerProfile(entity.getNit(), entity.getStartOperationDate());
     }
 
     AdminProfile toAdminProfile(AdminProfileJpaEntity entity) {
-        return new AdminProfile(
-                entity.getDniType() == null ? null : new Dni(entity.getDniType(), entity.getDniNumber()),
-                entity.getLastAccessDate());
+        return new AdminProfile(entity.getDniType(), entity.getDniNumber(), entity.getLastAccessDate());
     }
 }

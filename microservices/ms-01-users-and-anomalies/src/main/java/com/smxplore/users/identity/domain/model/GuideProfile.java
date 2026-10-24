@@ -3,12 +3,10 @@ package com.smxplore.users.identity.domain.model;
 import com.smxplore.users.identity.domain.exception.ValidationException;
 import java.time.LocalDate;
 
-public record GuideProfile(Dni dni, String license, LocalDate startOperationDate) implements Profile {
+public record GuideProfile(String dniType, String dniNumber, String license, LocalDate startOperationDate)
+        implements Profile {
 
     public GuideProfile {
-        if (dni == null) {
-            throw new ValidationException("El documento del guía es obligatorio");
-        }
         if (license == null || license.isBlank()) {
             throw new ValidationException("La licencia del guía es obligatoria");
         }

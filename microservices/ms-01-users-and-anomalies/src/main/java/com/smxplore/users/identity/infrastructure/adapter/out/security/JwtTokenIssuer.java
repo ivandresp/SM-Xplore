@@ -41,7 +41,7 @@ public class JwtTokenIssuer implements TokenIssuer {
                 .expiresAt(expiresAt)
                 .id(UUID.randomUUID().toString())
                 .claim("id", user.id().value().toString())
-                .claim("name", user.fullName().value())
+                .claim("name", user.fullName())
                 .claim("role", user.role().name())
                 .claim("ver", user.authVersion());
 
