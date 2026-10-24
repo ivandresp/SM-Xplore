@@ -1,3 +1,14 @@
 spring:
   application:
     name: security-reports
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/security_reports}
+      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-secret-change-me-32-bytes-minimum!}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}

@@ -50,8 +50,9 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public CommentReportUseCasePort commentReportUseCase(CommentRepositoryPort commentRepository) {
-        return new CommentReportUseCase(commentRepository);
+    public CommentReportUseCasePort commentReportUseCase(CommentRepositoryPort commentRepository,
+                                                          SecurityReportRepositoryPort securityReportRepository) {
+        return new CommentReportUseCase(commentRepository, securityReportRepository);
     }
 
     @Bean
