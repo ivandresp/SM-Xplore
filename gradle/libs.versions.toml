@@ -1,0 +1,30 @@
+[versions]
+spring-boot = "4.1.2"
+springdoc = "3.2.0"
+archunit = "1.5.1"
+palantir-java-format = "2.102.0"
+
+[libraries]
+spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
+spring-boot-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
+spring-boot-mail = { module = "org.springframework.boot:spring-boot-starter-mail" }
+spring-boot-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server" }
+spring-boot-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-boot-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
+postgresql = { module = "org.postgresql:postgresql" }
+flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spotless = { id = "com.diffplug.spotless", version = "8.10.4" }

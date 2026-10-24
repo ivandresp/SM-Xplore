@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: smxplore-postgres
+    environment:
+      POSTGRES_DB: smxplore_users
+      POSTGRES_USER: smxplore
+      POSTGRES_PASSWORD: smxplore
+    ports:
+      - "5432:5432"
+    volumes:
+      - smxplore-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smxplore -d smxplore_users"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongodb:
+    image: mongo:8.0
+    container_name: smxplore-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: smxplore
+      MONGO_INITDB_ROOT_PASSWORD: smxplore
+      MONGO_INITDB_DATABASE: smxplore_reviews
+    ports:
+      - "27017:27017"
+    volumes:
+      - smxplore-mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: smxplore-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  smxplore-postgres-data:
+  smxplore-mongodb-data:

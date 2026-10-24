@@ -1,0 +1,22 @@
+app:
+  bootstrap-admin:
+    enabled: false
+  security:
+    jwt:
+      issuer: sm-xplore-ms-01
+      audience: sm-xplore-services
+      ttl: PT60M
+      key-id: test-key
+    password-reset:
+      ttl: PT30M
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  frontend:
+    base-url: http://localhost:5173
+    reset-password-path: /reset-password
+
+spring:
+  mail:
+    host: localhost
+    port: 1025
