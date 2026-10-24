@@ -1,0 +1,27 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Atractivos" {
+    usecase "Buscar sitio" as UC1
+    usecase "Recomendar lugares cercanos" as UC2
+    usecase "Consultar disponibilidad\nde sitio" as UC3
+    usecase "Consultar nivel de congestión" as UC4
+    usecase "Ver sitios más visitados" as UC5
+    usecase "Visualizar sitios en mapa" as UC6
+    usecase "Filtrar atractivos por zona" as UC7
+    usecase "Filtrar atractivos por categoría" as UC8
+}
+
+T -- UC1
+T -- UC2
+T -- UC5
+T -- UC6
+T -- UC7
+T -- UC8
+
+UC1 ..> UC3 : <<include>>
+UC1 ..> UC4 : <<include>>
+
+@enduml

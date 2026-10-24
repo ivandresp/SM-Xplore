@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+
+actor "Guía Turístico" as G
+
+rectangle "Gestionar Reservas" {
+
+    usecase "Consultar reservas" as UC1
+    usecase "Consultar detalle de reserva" as UC2
+    usecase "Confirmar reserva" as UC3
+    usecase "Modificar reserva" as UC4
+    usecase "Cancelar reserva" as UC5
+    usecase "Consultar disponibilidad" as UC6
+    usecase "Rechazar reserva" as UC7
+}
+
+UC1 -- G
+UC2 -- G
+UC3 -- G
+UC4 -- G
+UC5 -- G
+UC6 -- G
+
+UC7 ..> UC3 : <<extend>>
+
+@enduml

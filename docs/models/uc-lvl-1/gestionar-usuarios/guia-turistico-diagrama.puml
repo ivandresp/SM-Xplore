@@ -1,0 +1,24 @@
+@startuml
+
+left to right direction
+
+actor GuiaTuristico as G
+
+package "Gestionar usuario" {
+    usecase "Registrar usuario" as UC1
+    usecase "Iniciar sesión" as UC2
+    usecase "Consultar información de usuario" as UC3
+    usecase "Actualizar información de usuario" as UC4
+    usecase "Eliminar usuario" as UC5
+    usecase "Recuperar contraseña" as UC6
+}
+
+G-- UC1
+G-- UC2
+G-- UC3
+G-- UC4
+G-- UC5
+UC2 <.. UC6 : <<extend>>
+
+
+@enduml

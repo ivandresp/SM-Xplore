@@ -1,0 +1,17 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Reportes de Seguridad" {
+    usecase "Reportar incidente de seguridad" as UC1
+    usecase "Reportar avistamiento de policía" as UC2
+    usecase "Recibir alertas de seguridad" as UC3
+}
+
+T -- UC1
+T -- UC3
+
+UC1 <.. UC2 : <<extend>>
+
+@enduml

@@ -1,0 +1,134 @@
+@startuml
+left to right direction
+skinparam ranksep 50
+skinparam nodesep 50
+skinparam linetype ortho
+
+package "Microservicio: Usuarios, \nAnomalías, y Reseñas" as M1 #aaf {
+    package "Infrastructure" as I1 #fff
+    {
+        package "adapter/in/rest" as c {}
+        package "adapter/out\n/persistence" as p3 {}
+        database "PostgreSQL" as P {
+        }
+        database "MongoDB" as M {
+        }
+
+        p3 --> P : "\npersiste"
+        p3 --> M
+    }
+
+    package "Application" as A1{}
+
+    package "Domain" as D1 #fff
+    {
+        package "ports/repository" as r {}
+        package "ports/usecases" as uc {}
+    }
+
+    p3 ..|> r : implementa
+    c --> uc : " invoca"
+    A1 -up-> r : "usa contrato"
+    A1 ..|> uc : implementa
+}
+
+package "Microservicio: ReportesSeguridad " as M2 #LightBlue {
+    package "Infrastructure" as I2 #fff
+    {
+        package "adapter/in/rest  " as c2 {}
+        package "adapter/out\n/persistence" as p2 {}
+        database "MongoDB" as M {
+        }
+
+        p2 --> M : persiste
+    }
+
+    package "Application" as A2{}
+
+    package "Domain" as D2 #fff
+    {
+        package "ports/repository" as r2 {}
+        package "ports/usecases" as uc2 {}
+    }
+
+    p2 ..|> r2 : \n\nimplementa
+    c2 --> uc2 : \ninvoca
+    A2 --> r2 : "usa contrato"
+    A2 ..|> uc2 : implementa
+}
+
+package "Microservicio: Eventos, Actividades, Reservas y Reseñas" as M3 #LightGreen{
+    package "Infrastructure" as I3 #fff
+    {
+        package "adapter/in/rest " as c3 {}
+        package "adapter/out\n/persistence" as p {}
+        database "PostgreSQL" as P {
+        }
+        database "MongoDB" as M {
+        }
+        database "Neo4j" as N {
+        }
+
+        p --> P
+        p --> M : persiste
+        p --> N
+    }
+
+    package "Application" as A3{}
+
+    package "Domain" as D3 #fff
+    {
+        package "ports/repository" as r3 {}
+        package "ports/usecases" as uc3 {}
+    }
+
+    p ..|> r3 : implementa
+    c3 --> uc3 : "invoca"
+    A3 --> r3 : "usa contrato"
+    A3 ..|> uc3 : implementa
+}
+
+package "Microservicio: Sitios, Servicios, Reservas y Reseñas" as M4 #fbbbfb{
+    package "Infrastructure" as I4 #fff
+    {
+        package "adapter/in/rest  " as c4 {}
+        package "adapter/out\n/persistence" as p4 {}
+        database "PostgreSQL" as P {
+        }
+        database "MongoDB" as M {
+        }
+        database "Neo4j" as N {
+        }
+
+        p4 --> P
+        p4 --> M : persiste
+        p4 --> N
+    }
+
+    package "Application" as A4 {}
+
+    package "Domain" as D4 #fff
+    {
+        package "ports/repository" as r4 {}
+        package "ports/usecases" as uc4 {}
+    }
+
+    p4 ..|> r4 : implementa
+    c4 --> uc4 : "invoca"
+    A4 --> r4 : "usa contrato"
+    A4 ..|> uc4 : implementa
+}
+
+M1 -[hidden]down- M2
+M3 -[hidden]right- M4
+M1 -[hidden]-- M3
+M2 -[hidden]-- M4
+
+M1 --> M2 : <<API REST/HTTP>>
+M1 --> "\n<<API REST/HTTP>>" M3
+M1 ---> M4 : "\n\n<<API REST/HTTP>>"
+M3 <--- M4 : \n<<API REST/HTTP>>
+
+
+
+@enduml

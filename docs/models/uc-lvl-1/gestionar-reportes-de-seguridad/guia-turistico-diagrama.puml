@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+
+actor "Guía Turístico" as G
+
+rectangle "Gestionar Reportes de Seguridad" {
+
+    usecase "Publicar reporte de seguridad" as UC1
+    usecase "Consultar reportes de seguridad" as UC2
+    usecase "Consultar detalle del reporte" as UC3
+    usecase "Comentar reporte" as UC4
+    usecase "Reaccionar a reporte" as UC5
+    usecase "Buscar reportes" as UC6
+    usecase "Reportar contenido inapropiado" as UC7
+}
+
+UC1-- G
+UC2 -- G
+UC3 -- G
+UC6 -- G
+
+UC4 ..> UC3 : <<extend>>
+UC5 ..> UC3 : <<extend>>
+UC7 ..> UC3 : <<extend>>
+
+@enduml

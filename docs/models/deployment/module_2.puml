@@ -1,0 +1,38 @@
+@startuml
+skinparam linetype ortho
+
+node "Cliente Web"{
+    artifact "Navegador" as navegador
+}
+
+node "Microservicio: Reportes de Seguridad" {
+    package "infrastructure/adapters" {
+        package "in/controllers"{
+        }
+        package "out/persistence"{
+        }
+    }
+    package application{
+    }
+    package domain{
+        package model{
+        }
+        package ports{
+            package repository{
+            }
+            package "use cases"{
+            }
+        }
+    }
+    database "reportes_seguridad" as DB
+
+    "in/controllers" --> "use cases"
+    "out/persistence" ..> repository
+    application ..> "use cases"
+}
+
+"out/persistence" --> DB
+
+navegador --> "in/controllers"
+
+@enduml

@@ -1,0 +1,27 @@
+@startuml
+
+left to right direction
+
+actor Admin as A
+
+package "Visualizar Indicadores y Reportes" {
+
+  usecase "Ver Indicadores Globales de la Plataforma" as UC1
+  usecase "Generar Reportes de Auditoria" as UC2
+  usecase "Monitorear Disponibilidad del Sistema en Tiempo Real" as UC3
+  usecase "Generar Alerta de Indisponibilidad" as UC4
+
+  usecase "Validar Datos Obligatorios" as UC_val
+  usecase "Iniciar Sesión" as UC_login
+
+  A -- UC1
+  A -- UC2
+  A -- UC3
+
+  UC2 .> UC_val : <<include>>
+  UC2 .> UC_login : <<include>>
+
+  UC4 .> UC3 : <<extend>>
+}
+
+@enduml

@@ -1,0 +1,22 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Reseñas" {
+    usecase "Leer reseñas y puntuaciones" as UC2
+    usecase "Reseñar atractivo turístico" as UC3
+    usecase "Reseñar actividad" as UC4
+    usecase "Reseñar evento" as UC5
+    usecase "Reseñar servicio" as UC6
+    usecase "Reseñar guía" as UC7
+}
+
+T -- UC2
+T -- UC3
+T -- UC4
+T -- UC5
+T -- UC6
+T -- UC7
+
+@enduml

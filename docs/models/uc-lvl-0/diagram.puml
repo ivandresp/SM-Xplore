@@ -1,0 +1,59 @@
+@startuml
+
+left to right direction
+
+actor Turista as T
+actor Admin as A
+actor Guia as G
+actor PrestadorasServicios as P
+actor GestorasDestinos as GD
+
+rectangle SM-Xplore{
+    usecase "Gestionar Usuarios" as UC1
+    usecase "Gestionar Destino Turistico" as UC2
+    usecase "Gestionar Servicios" as UC3
+    usecase "Gestionar Atractivos Turisticas" as UC4
+    usecase "Gestionar Actividades Turisticas" as UC5
+    usecase "Gestionar Eventos Turisticos" as UC6
+    usecase "Gestionar Reservas" as UC7
+    usecase "Gestionar Reseñas" as UC8
+    usecase "Visualizar indicadores y reportes" as UC9
+    usecase "Administrar Anomalias" as UC10
+    usecase "Gestionar Reportes de Seguridad" as UC11
+}
+
+T -- UC1
+T -- UC3
+T -- UC4
+T -- UC5
+T -- UC6
+T -- UC7
+T -- UC8
+T -- UC11
+
+P -- UC3
+P -- UC7
+P -- UC8
+P -- UC9
+P -- UC11
+
+UC1 -- G
+UC4 -- G
+UC5 -- G
+UC7 -- G
+UC8 -- G
+UC11 -- G
+
+UC2 -- GD
+UC4 -- GD
+UC6 -- GD
+UC8 -- GD
+UC9 -- GD
+UC11 -- GD
+
+UC1 -- A
+UC9 -- A
+UC10 -- A
+UC11 -- A
+
+@enduml

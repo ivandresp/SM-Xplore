@@ -1,0 +1,22 @@
+@startuml
+
+left to right direction
+
+actor GestorasDestinos as G
+
+package GestionarDestinoTuristico {
+    usecase "Configurar zonas turísticas" as UC1
+    usecase "Marcar zona como congestionada" as UC2
+    usecase "Buscar zona" as UC3
+    usecase "Ver zonas turísticas" as UC4
+    usecase "Modificar zonas" as UC5
+}
+
+G -- UC1
+G -- UC2
+G -- UC4
+
+UC2 ..> UC3 : <<include>>
+UC1 <.. UC5 : <<extends>>
+
+@enduml

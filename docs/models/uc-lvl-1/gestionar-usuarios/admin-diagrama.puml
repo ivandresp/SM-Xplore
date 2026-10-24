@@ -1,0 +1,33 @@
+@startuml
+
+left to right direction
+
+actor Admin as A
+
+  package "Gestionar Usuarios" {
+
+    usecase "Registrar Cuenta de Usuario Administrativo" as UC1
+    usecase "Aprobar Registro de Prestador de Servicios" as UC2
+    usecase "Asignar Rol a un Usuario" as UC3
+    usecase "Bloquear o Suspender Cuenta de Usuario" as UC4
+    usecase "Eliminar Cuenta de Usuario" as UC5
+    usecase "Ver Listado de Usuarios Registrados" as UC6
+    usecase "Buscar Usuario Específico" as UC7
+    usecase "Restablecer Contraseña de Usuario" as UC8
+
+    usecase "Validar Datos Obligatorios" as UC_val
+
+   UC_val <. UC1 : <<include>>
+   UC2 .> UC_val : <<include>>
+
+  A -- UC1
+  A -- UC2
+  A -- UC3
+  A -- UC4
+  A -- UC5
+  A -- UC6
+  A -- UC7
+  A -- UC8
+}
+
+@enduml

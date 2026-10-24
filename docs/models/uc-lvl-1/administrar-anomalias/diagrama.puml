@@ -1,0 +1,24 @@
+@startuml
+
+left to right direction
+
+actor Admin as A
+
+package "Administrar Anomalias " {
+
+  usecase "Detectar y Visualizar Anomalias del Sistema" as UC1
+  usecase "Clasificar y Priorizar una Anomalia" as UC2
+  usecase "Marcar Anomalia como Resuelta" as UC3
+  usecase "Configurar Alertas de Anomalias" as UC4
+
+  usecase "Validar Datos Obligatorios" as UC_val
+
+  A -- UC1
+  A -- UC2
+  A -- UC3
+  A -- UC4
+
+  UC4 .> UC_val : <<include>>
+}
+
+@enduml

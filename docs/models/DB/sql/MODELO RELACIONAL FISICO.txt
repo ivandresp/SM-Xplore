@@ -1,0 +1,205 @@
+// =====================================================
+// MODELO LÓGICO
+// =====================================================
+
+// ---------- ENUMS ----------
+Enum rol_usuario {
+  admin
+  guia
+  gestora_destinos
+  prestadora_servicios
+  turista
+}
+
+Enum estado_reserva {
+  pendiente
+  confirmada
+  cancelada
+  completada
+}
+
+// ---------- USUARIO (SUPERTIPO) ----------
+Table Usuario {
+  id integer [primary key, increment]
+  full_name varchar(150) [not null]
+  email varchar(150) [not null, unique]
+  phone varchar(20) [not null, unique]
+  password_hash varchar(255) [not null]
+  role rol_usuario [not null]
+  status varchar(30) [not null]
+  signed_up_at timestamp [not null, default: `now()`]
+}
+
+// ---------- SUBTIPOS (Is-A disjunta) ----------
+Table Admin {
+  id integer [primary key]
+  dni_number varchar(30) [not null, unique]
+  dni_type varchar(20) [not null]
+  last_access_date timestamp
+}
+
+Table Guia {
+  id integer [primary key]
+  dni_number varchar(30) [not null, unique]
+  dni_type varchar(20) [not null]
+  license varchar(50) [not null, unique]
+  start_operation_date date
+}
+
+Table GestoraDestinos {
+  id integer [primary key]
+  nit varchar(30) [not null, unique]
+  start_operation_date date
+}
+
+Table PrestadoraServicios {
+  id integer [primary key]
+  nit varchar(30) [not null, unique]
+  type varchar(50)
+  register_status varchar(30)
+  lat decimal(9,6)
+  lon decimal(9,6)
+  start_operation_date date
+}
+
+Table Turista {
+  id integer [primary key]
+  dni_number varchar(30) [not null, unique]
+  dni_type varchar(20) [not null]
+  preferred_language varchar(50)
+  birth_date date
+  nationality varchar(80)
+}
+
+// ---------- GEOGRAFÍA ----------
+Table Zona {
+  id integer [primary key, increment]
+  gestora_id integer [not null]
+  name varchar(100) [not null]
+  type varchar(50)
+  status varchar(30)
+  description text [null]
+}
+
+Table Sitio {
+  id integer [primary key, increment]
+  gestora_id integer [not null]
+  zona_id integer
+
+  Note: 'NoSQL en el ER: sin atributos definidos. Se agregan solo las llaves de relación.'
+}
+
+// ---------- OFERTA TURÍSTICA ----------
+Table Evento {
+  id integer [primary key, increment]
+  sitio_id integer [not null]
+  name varchar(150) [not null]
+  category varchar(50)
+  status varchar(30)
+  price decimal(12,2) [not null, default: 0]
+  max_capacity integer
+  starts_at timestamp [not null]
+  ends_at timestamp [not null]
+  description text [null]
+}
+
+Table Actividad {
+  id integer [primary key, increment]
+  sitio_id integer [not null]
+  guia_id integer [not null]
+  name varchar(150) [not null]
+  type varchar(50)
+  status varchar(30)
+  price decimal(12,2) [not null, default: 0]
+  max_capacity integer
+  duration_mins integer
+  starts_at timestamp [not null]
+  ends_at timestamp [not null]
+  description text [null]
+}
+
+Table Servicio {
+  id integer [primary key, increment]
+  prestadora_id integer [not null]
+
+  Note: 'NoSQL en el ER: sin atributos definidos. Se agregan solo las llaves de relación.'
+}
+
+// ---------- SEGURIDAD ----------
+Table ReporteSeguridad {
+  id integer [primary key, increment]
+  usuario_id integer [not null]
+
+  Note: 'NoSQL en el ER: sin atributos definidos.'
+}
+
+Table Anomalia {
+  id integer [primary key, increment]
+  usuario_id integer [not null]
+  admin_id integer
+  type varchar(50)
+  level varchar(30)
+  description text [not null]
+  status varchar(30) [not null]
+  reported_at timestamp [not null, default: `now()`]
+  solved_at timestamp
+  solved_note text
+}
+
+// ---------- RESERVAS ----------
+Table Reserva {
+  id integer [primary key, increment]
+  turista_id integer [not null]
+  status estado_reserva [not null, default: 'pendiente']
+  total decimal(12,2) [not null]
+  number_of_people integer [not null, default: 1]
+  booked_at timestamp [not null, default: `now()`]
+  booked_for timestamp [not null]
+  notes text
+  payment_method varchar(50) [null]
+}
+
+// Tabla intermedia: resuelve el N:M de Reserva con Evento / Actividad / Servicio
+Table ReservaItem {
+  id integer [primary key, increment]
+  reserva_id integer [not null]
+  evento_id integer
+  actividad_id integer
+  servicio_id integer
+
+  Note: 'CHECK: exactamente uno de evento_id, actividad_id o servicio_id debe ser NOT NULL.'
+}
+
+// =====================================================
+// RELACIONES
+// =====================================================
+
+// Herencia (Is-A) mapeada como 1 a 1
+Ref: Admin.id - Usuario.id
+Ref: Guia.id - Usuario.id
+Ref: GestoraDestinos.id - Usuario.id
+Ref: PrestadoraServicios.id - Usuario.id
+Ref: Turista.id - Usuario.id
+
+// Seguridad y anomalías
+Ref: ReporteSeguridad.usuario_id > Usuario.id // postea
+Ref: Anomalia.usuario_id > Usuario.id // reporta
+Ref: Anomalia.admin_id >? Admin.id // resuelve
+
+// Geografía
+Ref: Zona.gestora_id > GestoraDestinos.id // configura
+Ref: Sitio.gestora_id > GestoraDestinos.id // registra
+Ref: Sitio.zona_id >? Zona.id // pertenece
+Ref: Evento.sitio_id > Sitio.id // alberga
+Ref: Actividad.sitio_id > Sitio.id // alberga
+
+// Oferta
+Ref: Actividad.guia_id > Guia.id // dirige
+Ref: Servicio.prestadora_id > PrestadoraServicios.id // ofrece
+
+// Reservas
+Ref: Reserva.turista_id > Turista.id // solicita
+Ref: ReservaItem.reserva_id > Reserva.id
+Ref: ReservaItem.evento_id >? Evento.id // incluye
+Ref: ReservaItem.actividad_id >? Actividad.id // incluye
+Ref: ReservaItem.servicio_id >? Servicio.id // incluye

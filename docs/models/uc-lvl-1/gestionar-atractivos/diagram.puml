@@ -1,0 +1,57 @@
+@startuml
+left to right direction
+
+actor GestorasDestinos as GES_Actor
+actor GuiaTuristico as GUI_Actor
+actor Turista as TUR_Actor
+
+package "Gestionar Atractivos Turísticos" {
+    usecase "Registrar atractivos turísticos" as GES_UC_registrar
+    usecase "Actualizar atractivos turísticos" as GES_UC_actualizar
+    usecase "Establecer horario de disponibilidad" as GES_UC_horario
+    usecase "Buscar atractivo" as UC_buscar
+    usecase "Consultar atractivos turísticos" as UC_consultar
+    usecase "Cambiar estado del atractivo" as GES_UC_estado
+    usecase "Asignar atractivo a zona" as GES_UC_zona
+    usecase "Definir capacidad de atractivos turísticos" as GES_UC_capacidad
+    usecase "Ver atractivos en mapa" as UC_mapa
+    usecase "Validar existencia del atractivo" as UC_validar
+    usecase "Consultar información del atractivo" as GUI_UC_info
+    usecase "Filtrar atractivos" as UC_filtrar
+    usecase "Filtrar atractivos por zona" as TUR_UC_zona
+    usecase "Filtrar atractivos por categoría" as TUR_UC_categoria
+    usecase "Buscar sitio turístico" as TUR_UC_buscar
+    usecase "Recomendar lugares cercanos" as TUR_UC_recomendar
+    usecase "Consultar disponibilidad del sitio" as TUR_UC_disponibilidad
+    usecase "Consultar nivel de congestión" as TUR_UC_congestion
+    usecase "Ver sitios más visitados" as TUR_UC_populares
+}
+
+GES_Actor -- GES_UC_registrar
+GES_Actor -- GES_UC_actualizar
+GES_Actor -- GES_UC_horario
+GES_Actor -- UC_buscar
+GES_Actor -- UC_consultar
+GES_Actor -- GES_UC_estado
+GES_Actor -- GES_UC_zona
+GUI_Actor -- UC_consultar
+GUI_Actor -- GUI_UC_info
+GUI_Actor -- UC_buscar
+GUI_Actor -- UC_filtrar
+TUR_Actor -- TUR_UC_buscar
+TUR_Actor -- TUR_UC_recomendar
+TUR_Actor -- TUR_UC_populares
+TUR_Actor -- UC_mapa
+TUR_Actor -- UC_filtrar
+TUR_Actor -- TUR_UC_zona
+TUR_Actor -- TUR_UC_categoria
+
+GES_UC_actualizar ..> UC_validar : <<include>>
+UC_buscar ..> UC_validar : <<include>>
+GES_UC_estado ..> UC_validar : <<include>>
+GES_UC_registrar <.. GES_UC_capacidad : <<extend>>
+GES_UC_actualizar <.. GES_UC_capacidad : <<extend>>
+TUR_UC_buscar ..> TUR_UC_disponibilidad : <<include>>
+TUR_UC_buscar ..> TUR_UC_congestion : <<include>>
+
+@enduml

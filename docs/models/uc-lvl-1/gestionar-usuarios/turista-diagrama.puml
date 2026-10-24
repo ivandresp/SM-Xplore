@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Usuarios" {
+    usecase "Registrar cuenta de turista" as UC1
+    usecase "Modificar perfil" as UC2
+    usecase "Ver perfil propio" as UC3
+    usecase "Ver perfil de guías" as UC4
+    usecase "Ver perfil de prestadores\nde servicio" as UC5
+}
+
+T -- UC1
+T -- UC3
+T -- UC4
+T -- UC5
+
+UC3 <.. UC2 : <<extend>>
+
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+left to right direction
+
+actor Usuario as U_Actor
+actor GuiaTuristico as GUI_Actor
+actor Admin as ADM_Actor
+actor Turista as TUR_Actor
+
+GUI_Actor --|> U_Actor
+ADM_Actor --|> U_Actor
+TUR_Actor --|> U_Actor
+
+package "Gestionar Usuarios" {
+    usecase "Registrar cuenta de usuario" as UC_registrar
+    usecase "Validar datos obligatorios" as UC_validar
+    usecase "Iniciar sesión" as UC_iniciar_sesion
+    usecase "Recuperar contraseña" as GUI_UC6
+    usecase "Consultar información de usuario" as GUI_UC3
+    usecase "Actualizar perfil" as UC_actualizar_perfil
+    usecase "Eliminar usuario" as GUI_UC5
+
+    usecase "Aprobar Registro de Prestador de Servicios" as ADM_UC2
+    usecase "Asignar Rol a un Usuario" as ADM_UC3
+    usecase "Bloquear o Suspender Cuenta de Usuario" as ADM_UC4
+    usecase "Eliminar Cuenta de Usuario" as ADM_UC5
+    usecase "Ver Listado de Usuarios Registrados" as ADM_UC6
+    usecase "Buscar Usuario Específico" as ADM_UC7
+    usecase "Restablecer Contraseña de Usuario" as ADM_UC8
+    usecase "Ver perfil propio" as TUR_UC3
+    usecase "Ver perfil de guías" as TUR_UC4
+    usecase "Ver perfil de prestadores\nde servicio" as TUR_UC5
+}
+
+GUI_Actor -- GUI_UC3
+GUI_Actor -- UC_actualizar_perfil
+GUI_Actor -- GUI_UC5
+
+ADM_Actor -- ADM_UC2
+ADM_Actor -- ADM_UC3
+ADM_Actor -- ADM_UC4
+ADM_Actor -- ADM_UC5
+ADM_Actor -- ADM_UC6
+ADM_Actor -- ADM_UC7
+ADM_Actor -- ADM_UC8
+UC_registrar ..> UC_validar : <<include>>
+ADM_UC2 ..> UC_validar : <<include>>
+
+TUR_Actor -- UC_actualizar_perfil
+TUR_Actor -- TUR_UC3
+TUR_Actor -- TUR_UC4
+TUR_Actor -- TUR_UC5
+
+U_Actor -- UC_registrar
+U_Actor -- UC_iniciar_sesion
+UC_iniciar_sesion <.. GUI_UC6 : <<extend>>
+
+@enduml

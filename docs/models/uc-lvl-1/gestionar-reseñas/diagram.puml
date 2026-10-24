@@ -1,0 +1,59 @@
+@startuml
+
+left to right direction
+
+actor Turista as T
+actor PrestadorasServicios as P
+actor GuíaTurístico as G
+actor GestorasDestinos as GD
+
+package "Gestionar Reseñas" {
+    usecase "Leer reseñas y puntuaciones" as UC2
+    usecase "Reseñar atractivo turístico" as UC3
+    usecase "Reseñar actividad" as UC4
+    usecase "Reseñar evento" as UC5
+    usecase "Reseñar servicio" as UC6
+    usecase "Reseñar guía" as UC7
+    usecase "Ver reseñas del servicio" as UC8
+    usecase "Responder reseñas" as UC9
+    usecase "Ver reseñas atractivo turístico" as UC10
+    usecase "Ver reseñas evento turístico" as UC11
+    usecase "Ver metricas de reputacion" as UC12
+    usecase "Ver reseñas guía turistico" as UC13
+    usecase "Ver reseñas actividad turistica" as UC14
+    usecase "Reportar reseña" as UC15
+}
+
+T -- UC2
+T -- UC3
+T -- UC4
+T -- UC5
+T -- UC6
+T -- UC7
+
+P -- UC8
+P -- UC12
+
+GD -- UC10
+GD -- UC11
+GD -- UC12
+
+G -- UC12
+G -- UC13
+G -- UC14
+
+UC8 <.. UC9 : <<extends>>
+UC10 <.. UC9 : <<extends>>
+UC11 <.. UC9 : <<extends>>
+UC12 <.. UC9 : <<extends>>
+UC13 <.. UC9 : <<extends>>
+UC14 <.. UC9 : <<extends>>
+
+UC8 <.. UC15 : <<extends>>
+UC10 <.. UC15 : <<extends>>
+UC11 <.. UC15 : <<extends>>
+UC12 <.. UC15 : <<extends>>
+UC13 <.. UC15 : <<extends>>
+UC14 <.. UC15 : <<extends>>
+
+@enduml

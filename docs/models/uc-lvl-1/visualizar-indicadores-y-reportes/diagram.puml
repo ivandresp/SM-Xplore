@@ -1,0 +1,40 @@
+@startuml
+
+left to right direction
+
+actor Admin as A
+actor GestorasDestinos as G
+actor PrestadorasServicios as P
+
+package "Visualizar Indicadores y Reportes" {
+
+  usecase "Ver Indicadores Globales de la Plataforma" as UC1
+  usecase "Generar Reportes" as UC2
+  usecase "Monitorear Disponibilidad del Sistema en Tiempo Real" as UC3
+  usecase "Generar Alerta de Indisponibilidad" as UC4
+  usecase "Ver indicadores comportamiento demanda" as UC5
+  usecase "Exportar reportes como pdf" as UC6
+
+  usecase "Validar Datos Obligatorios" as UC_val
+  usecase "Iniciar Sesión" as UC_login
+
+
+}
+
+A -- UC1
+A -- UC2
+A -- UC3
+
+G -- UC5
+G -- UC2
+
+P -- UC2
+P -- UC5
+
+UC2 ..> UC_val : <<include>>
+UC2 ..> UC_login : <<include>>
+
+UC3 <.. UC4 : <<extend>>
+UC2 <.. UC6 : <<extend>>
+
+@enduml

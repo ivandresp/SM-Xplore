@@ -1,0 +1,47 @@
+@startuml
+skinparam linetype ortho
+node "Cliente Web"{
+    artifact "Navegador" as navegador
+}
+
+node "Microservicio: Eventos, Actividades, Reservas y Reseñas" {
+    package "infrastructure/adapters" {
+        package "in/controllers"{
+        }
+        package "out/persistence"{
+        }
+        component Modulo2Adapter
+    }
+    package application{
+    }
+    package domain{
+        package model{
+        }
+        package ports{
+            package repository{
+            }
+            package "use cases"{
+            }
+        }
+    }
+    database "eventos_actividades_reservas" as DB_SQL
+    database "reseñas" as DB_Mongo
+    database "preferencias_eventos_actividades" as DB_Neo
+
+    "in/controllers" --> "use cases"
+    "out/persistence" ..> repository
+    application ..> "use cases"
+}
+
+node "Microservicio: Sitios, Servicios,\n Reservas y Reseñas" {
+}
+
+Modulo2Adapter <-left- "Microservicio: Sitios, Servicios,\n Reservas y Reseñas"
+
+"out/persistence" ---> DB_SQL
+"out/persistence" --> DB_Mongo
+"out/persistence" --> DB_Neo
+
+navegador --> "in/controllers"
+
+@enduml

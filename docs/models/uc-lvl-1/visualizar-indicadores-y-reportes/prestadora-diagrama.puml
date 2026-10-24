@@ -1,0 +1,15 @@
+@startuml
+
+left to right direction
+
+actor PrestadorasServicios as P
+
+package "Visualizar indicadores y reportes (UC9)" {
+    usecase "Ver indicadores de demanda" as UC9_1
+    usecase "Generar reportes del negocio" as UC9_2
+}
+
+P -- UC9_1
+P -- UC9_2
+
+@enduml

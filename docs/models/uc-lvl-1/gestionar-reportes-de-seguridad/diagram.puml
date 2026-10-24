@@ -1,0 +1,41 @@
+@startuml
+left to right direction
+
+actor Turista as T
+actor PrestadorasServicios as P
+actor GestorasDestinos as GD
+actor Admin as A
+
+package "Gestionar Reportes de Seguridad" {
+    usecase "Reportar incidente de seguridad" as UC1
+    usecase "Reportar avistamiento de policía" as UC2
+    usecase "Consultar reportes de seguridad" as UC3
+    usecase "Ver mapa de incidentes de seguridad" as UC4
+    usecase "Responder reportes de seguridad" as UC5
+    usecase "Cerrar un Reporte de Seguridad" as UC6
+    usecase "Notificar a Autoridades Competentes" as UC7
+    usecase "Ordenar reportes por fecha" as UC8
+}
+
+T -- UC1
+T -- UC3
+T -- UC5
+
+P -- UC1
+P -- UC3
+P -- UC5
+
+GD -- UC3
+GD -- UC4
+GD -- UC5
+GD -- UC6
+
+A -- UC3
+A -- UC6
+
+UC3 ..> UC8 : <<include>>
+
+UC1 <.. UC2 : <<extend>>
+UC6 <.. UC7 : <<extend>>
+
+@enduml

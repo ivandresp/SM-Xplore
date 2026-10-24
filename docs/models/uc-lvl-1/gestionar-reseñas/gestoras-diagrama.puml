@@ -1,0 +1,19 @@
+@startuml
+
+left to right direction
+
+actor GestorasDestinos as G
+
+package GestionarReseñas {
+    usecase "Ver reseñas atractivo turístico" as UC1
+    usecase "Ver reseñas evento turístico" as UC2
+    usecase "Responder a reseñas" as UC3
+
+}
+
+G -- UC1
+G -- UC2
+G -- UC3
+
+
+@enduml

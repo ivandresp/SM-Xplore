@@ -1,0 +1,57 @@
+@startuml
+
+class Usuario
+class Turista
+class Guia
+class PrestadoraServicios
+class GestoraDestinos
+class Admin
+
+class Zona
+class Sitio
+class Evento
+class Actividad
+class Servicio
+class Reserva
+class Review
+class Anomalía
+class ReporteSeguridad
+
+Turista -up-|> Usuario
+Guia -up-|> Usuario
+PrestadoraServicios -up-|> Usuario
+GestoraDestinos -up-|> Usuario
+Admin -up-|> Usuario
+
+Turista -down-"*" Review : hace >
+Turista -down-"*" Reserva : realiza >
+
+Reserva "*"-- Servicio : solicita >
+Reserva "*"-- Evento : solicita >
+Reserva "*"-- Actividad : solicita >
+
+Review "*"-- Servicio
+Review "*"-- Actividad
+Review "*"-right- Evento
+
+Usuario -left-"*" ReporteSeguridad : hace >
+Usuario - Anomalía : reporta >
+
+ReporteSeguridad "*"-- Zona
+
+Sitio -left-"*" Evento : alberga >
+Zona -down-"*" Sitio : pertenece <
+
+Guia -- Actividad : dirige >
+
+PrestadoraServicios -down-"*" Servicio : presta >
+
+GestoraDestinos -down-"*" Zona : configura >
+
+Sitio -"*" Actividad : contiene >
+
+Admin "*"-- Anomalía : administra >
+
+Usuario -"*" Review : responde >
+
+@enduml

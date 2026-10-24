@@ -1,0 +1,54 @@
+@startuml
+left to right direction
+
+actor "Guía Turístico" as GUI_Actor
+actor PrestadorasServicios as PRE_Actor
+actor Turista as TUR_Actor
+
+package "Gestionar Reservas" {
+    usecase "Consultar reservas" as UC_consultar
+    usecase "Consultar detalle de reserva" as GUI_UC_detalle
+    usecase "Actualizar estado de reserva" as UC_estado
+    usecase "Confirmar reserva" as GUI_UC_confirmar
+    usecase "Modificar reserva" as GUI_UC_modificar
+    usecase "Cancelar reserva" as UC_cancelar
+    usecase "Consultar disponibilidad" as GUI_UC_disponibilidad
+    usecase "Rechazar reserva" as GUI_UC_rechazar
+    usecase "Recibir notificación de nueva reserva" as PRE_UC_notificacion
+    usecase "Recibir alerta de baja disponibilidad" as PRE_UC_alerta
+    usecase "Gestionar cancelación solicitada por turista" as PRE_UC_cancelacion
+    usecase "Ver historial de reservas" as PRE_UC_historial
+    usecase "Registrar no-show o asistencia" as PRE_UC_asistencia
+    usecase "Crear itinerario de viaje" as TUR_UC_itinerario
+    usecase "Reservar servicio turístico" as TUR_UC_servicio
+    usecase "Reservar entrada para evento" as TUR_UC_evento
+    usecase "Agregar destino al itinerario" as TUR_UC_agregar
+    usecase "Eliminar destino del itinerario" as TUR_UC_eliminar
+}
+
+GUI_Actor -- UC_consultar
+GUI_Actor -- GUI_UC_detalle
+GUI_Actor -- UC_estado
+GUI_Actor -- UC_cancelar
+GUI_Actor -- GUI_UC_disponibilidad
+PRE_Actor -- UC_consultar
+PRE_Actor -- UC_estado
+PRE_Actor -- PRE_UC_notificacion
+PRE_Actor -- PRE_UC_alerta
+TUR_Actor -- UC_consultar
+TUR_Actor -- UC_cancelar
+TUR_Actor -- TUR_UC_itinerario
+TUR_Actor -- TUR_UC_servicio
+TUR_Actor -- TUR_UC_evento
+
+GUI_UC_detalle <.. GUI_UC_confirmar : <<extend>>
+UC_estado <.. GUI_UC_confirmar : <<extend>>
+UC_estado <.. GUI_UC_modificar : <<extend>>
+UC_estado <.. GUI_UC_rechazar : <<extend>>
+UC_estado <.. PRE_UC_cancelacion : <<extend>>
+UC_estado <.. PRE_UC_asistencia : <<extend>>
+UC_consultar <.. PRE_UC_historial : <<extend>>
+TUR_UC_itinerario ..> TUR_UC_agregar : <<include>>
+TUR_UC_itinerario <.. TUR_UC_eliminar : <<extend>>
+
+@enduml

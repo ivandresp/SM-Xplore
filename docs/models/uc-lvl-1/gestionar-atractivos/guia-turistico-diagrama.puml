@@ -1,0 +1,22 @@
+@startuml
+
+left to right direction
+
+actor GuiaTuristico as G
+
+package "Gestionar Atractivos Turísticos" {
+    usecase "Consultar atractivos turísticos" as UC1
+    usecase "Consultar información del atractivo" as UC2
+    usecase "Buscar atractivos turísticos" as UC3
+    usecase "Filtrar atractivos turísticos" as UC4
+
+}
+
+G-- UC1
+G-- UC2
+G-- UC3
+
+
+UC2 <.. UC4 : <<extend>>
+
+@enduml

@@ -1,0 +1,25 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Reservas" {
+    usecase "Crear itinerario de viaje" as UC1
+    usecase "Reservar servicio turístico" as UC2
+    usecase "Reservar entrada para evento" as UC3
+    usecase "Ver reservas realizadas" as UC4
+    usecase "Cancelar reserva" as UC5
+    usecase "Agregar destino al itinerario" as UC6
+    usecase "Eliminar destino del itinerario" as UC7
+}
+
+T -- UC1
+T -- UC2
+T -- UC3
+T -- UC4
+T -- UC5
+
+UC1 ..> UC6 : <<include>>
+UC1 <.. UC7 : <<extend>>
+
+@enduml

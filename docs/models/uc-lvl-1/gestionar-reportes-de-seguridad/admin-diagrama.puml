@@ -1,0 +1,23 @@
+@startuml
+
+left to right direction
+
+actor Admin as A
+
+package "Gestionar Reportes de Seguridad " {
+
+  usecase "Registrar Reporte de Seguridad" as UC1
+  usecase "Dar Seguimiento y Cerrar un Reporte de Seguridad" as UC2
+  usecase "Notificar a Autoridades Competentes" as UC3
+
+  usecase "Validar Datos Obligatorios" as UC_val
+
+
+  A -- UC1
+  A -- UC2
+
+  UC1 .> UC_val : <<include>>
+  UC3 .> UC2 : <<extend>>
+}
+
+@enduml

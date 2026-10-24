@@ -1,0 +1,40 @@
+@startuml
+skinparam linetype ortho
+node "Cliente Web"{
+    artifact "Navegador" as navegador
+}
+
+node "Microservicio: Usuarios, \nAnomalías, y Reseñas" {
+    package "infrastructure/adapters" {
+        package "in/controllers"{
+        }
+        package "out/persistence"{
+        }
+    }
+    package application{
+    }
+    package domain{
+        package model{
+        }
+        package ports{
+            package repository{
+            }
+            package "use cases"{
+            }
+        }
+    }
+
+    database "usuarios_anomalías" as DB_SQL_M1
+    database "reseñas" as DB_NOSQL_M1
+
+    "in/controllers" --> "use cases"
+    "out/persistence" ..> repository
+    application ..> "use cases"
+}
+
+"out/persistence" ---> DB_SQL_M1
+"out/persistence" ---> DB_NOSQL_M1
+
+navegador --> "in/controllers"
+
+@enduml

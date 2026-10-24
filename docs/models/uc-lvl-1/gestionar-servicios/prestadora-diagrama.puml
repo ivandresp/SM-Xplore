@@ -1,0 +1,32 @@
+@startuml
+
+left to right direction
+
+actor PrestadorasServicios as P
+
+package "Gestionar Servicios (UC3)" {
+    usecase "Registrar servicio turistico" as UC3_1
+    usecase "Actualizar informacion del servicio" as UC3_2
+    usecase "Definir precios del servicio" as UC3_3
+    usecase "Configurar horarios de disponibilidad" as UC3_4
+    usecase "Establecer capacidad maxima de cupos" as UC3_5
+    usecase "Cambiar estado del servicio" as UC3_6
+    usecase "Previsualizar perfil publico" as UC3_7
+    usecase "Registrar zona turistica de operacion" as UC3_8
+    usecase "Gestionar galeria de fotos del servicio" as UC3_10
+    usecase "Definir politicas de cancelacion del negocio" as UC3_11
+}
+
+P -- UC3_1
+P -- UC3_2
+P -- UC3_6
+P -- UC3_10
+P -- UC3_11
+
+UC3_1 ..> UC3_3 : <<include>>
+UC3_1 ..> UC3_4 : <<include>>
+UC3_1 ..> UC3_5 : <<include>>
+UC3_1 ..> UC3_8 : <<include>>
+UC3_2 <.. UC3_7 : <<extend>>
+
+@enduml

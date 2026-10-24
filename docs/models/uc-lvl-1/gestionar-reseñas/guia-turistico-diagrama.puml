@@ -1,0 +1,20 @@
+@startuml
+left to right direction
+
+actor "Guía Turístico" as G
+
+rectangle "Gestionar Reseñas" {
+
+    usecase "Consultar reseñas" as UC1
+    usecase "Consultar valoración" as UC2
+    usecase "Responder reseña" as UC3
+    usecase "Reportar reseña" as UC4
+}
+
+G -- UC1
+G -- UC2
+
+UC3 ..> UC1 : <<extend>>
+UC4 ..> UC1 : <<extend>>
+
+@enduml

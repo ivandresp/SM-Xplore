@@ -1,0 +1,21 @@
+@startuml
+
+left to right direction
+
+actor PrestadorasServicios as P
+
+package "Gestionar Reportes de Seguridad (UC11)" {
+    usecase "Reportar incidente de seguridad" as UC11_1
+    usecase "Consultar alertas de seguridad" as UC11_2
+    usecase "Recibir alertas geolocalizadas" as UC11_3
+    usecase "Ver mapa de incidentes de seguridad" as UC11_4
+}
+
+P -- UC11_1
+P -- UC11_2
+P -- UC11_3
+P -- UC11_4
+
+UC11_2 <.. UC11_3 : <<extend>>
+
+@enduml

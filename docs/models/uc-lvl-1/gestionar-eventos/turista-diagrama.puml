@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+
+actor Turista as T
+
+package "Gestionar Eventos Turísticos" {
+    usecase "Consultar eventos disponibles" as UC1
+    usecase "Buscar evento específico" as UC2
+    usecase "Recibir info eventos planificados" as UC3
+    usecase "Ver detalles de evento" as UC4
+}
+
+T -- UC1
+T -- UC2
+T -- UC3
+
+UC1 <.. UC4 : <<extend>>
+UC2 <.. UC4 : <<extend>>
+UC3 <.. UC4 : <<extend>>
+
+@enduml
