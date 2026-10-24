@@ -1,8 +1,8 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.security;
 
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
-import com.smxplore.users.identity.domain.model.ProviderProfile;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.PrestadoraServicios;
+import com.smxplore.users.identity.domain.model.Usuario;
 import com.smxplore.users.shared.infrastructure.config.JwtProperties;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,7 +29,7 @@ public class JwtTokenIssuer implements TokenIssuer {
     }
 
     @Override
-    public IssuedToken issue(User user) {
+    public IssuedToken issue(Usuario user) {
         Instant now = clock.instant();
         Instant expiresAt = now.plus(properties.ttl());
 
@@ -45,7 +45,7 @@ public class JwtTokenIssuer implements TokenIssuer {
                 .claim("role", user.role().name())
                 .claim("ver", user.authVersion());
 
-        if (user.profile() instanceof ProviderProfile provider) {
+        if (user instanceof PrestadoraServicios provider) {
             claims.claim("providerStatus", provider.registrationStatus().name());
         }
 

@@ -1,17 +1,17 @@
 package com.smxplore.users.identity.application.port.out;
 
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.util.Optional;
 
 public interface UserRepository {
 
-    Optional<User> findById(UserId id);
+    Optional<Usuario> findById(UserId id);
 
-    Optional<User> findByEmail(Email email);
+    Optional<Usuario> findByEmail(Email email);
 
     boolean existsByEmail(Email email);
 
-    User save(User user);
+    Usuario save(Usuario user);
 }

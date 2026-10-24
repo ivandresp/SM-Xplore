@@ -5,8 +5,8 @@ import com.smxplore.users.identity.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.UserNotFoundException;
 import com.smxplore.users.identity.domain.model.Role;
-import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 
 public final class GetPublicProfileService implements GetPublicProfileUseCase {
 
@@ -18,7 +18,7 @@ public final class GetPublicProfileService implements GetPublicProfileUseCase {
 
     @Override
     public PublicProfileView get(UserId userId) {
-        User user = users.findById(userId).orElseThrow(UserNotFoundException::new);
+        Usuario user = users.findById(userId).orElseThrow(UserNotFoundException::new);
         if (user.role() != Role.GUIA && user.role() != Role.PRESTADORA_SERVICIOS) {
             throw new UserNotFoundException();
         }

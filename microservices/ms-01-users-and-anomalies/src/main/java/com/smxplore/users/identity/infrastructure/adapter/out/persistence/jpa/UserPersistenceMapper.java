@@ -1,19 +1,18 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.persistence.jpa;
 
-import com.smxplore.users.identity.domain.model.AdminProfile;
-import com.smxplore.users.identity.domain.model.DestinationManagerProfile;
+import com.smxplore.users.identity.domain.model.Admin;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.GuideProfile;
+import com.smxplore.users.identity.domain.model.GestoraDestinos;
+import com.smxplore.users.identity.domain.model.Guia;
 import com.smxplore.users.identity.domain.model.PasswordHash;
-import com.smxplore.users.identity.domain.model.Profile;
-import com.smxplore.users.identity.domain.model.ProviderProfile;
-import com.smxplore.users.identity.domain.model.TouristProfile;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.PrestadoraServicios;
+import com.smxplore.users.identity.domain.model.Turista;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 
 final class UserPersistenceMapper {
 
-    UserJpaEntity toEntity(User user) {
+    UserJpaEntity toEntity(Usuario user) {
         return new UserJpaEntity(
                 user.id().value(),
                 user.fullName(),
@@ -28,89 +27,127 @@ final class UserPersistenceMapper {
                 user.deletedAt());
     }
 
-    User toDomain(UserJpaEntity entity, Profile profile) {
-        return User.rehydrate(
+    Turista toDomain(UserJpaEntity entity, TouristProfileJpaEntity profile) {
+        return Turista.rehydrate(
                 new UserId(entity.getId()),
                 entity.getFullName(),
                 new Email(entity.getEmail()),
                 entity.getPhone(),
                 new PasswordHash(entity.getPasswordHash()),
-                profile,
                 entity.getStatus(),
                 entity.getAuthVersion(),
                 entity.getSignedUpAt(),
                 entity.getUpdatedAt(),
-                entity.getDeletedAt());
+                entity.getDeletedAt(),
+                profile.getDniType(),
+                profile.getDniNumber(),
+                profile.getPreferredLanguage(),
+                profile.getBirthDate(),
+                profile.getNationality());
     }
 
-    TouristProfileJpaEntity toTouristEntity(UserId userId, TouristProfile profile) {
+    Guia toDomain(UserJpaEntity entity, GuideProfileJpaEntity profile) {
+        return Guia.rehydrate(
+                new UserId(entity.getId()),
+                entity.getFullName(),
+                new Email(entity.getEmail()),
+                entity.getPhone(),
+                new PasswordHash(entity.getPasswordHash()),
+                entity.getStatus(),
+                entity.getAuthVersion(),
+                entity.getSignedUpAt(),
+                entity.getUpdatedAt(),
+                entity.getDeletedAt(),
+                profile.getDniType(),
+                profile.getDniNumber(),
+                profile.getLicense(),
+                profile.getStartOperationDate());
+    }
+
+    PrestadoraServicios toDomain(UserJpaEntity entity, ProviderProfileJpaEntity profile) {
+        return PrestadoraServicios.rehydrate(
+                new UserId(entity.getId()),
+                entity.getFullName(),
+                new Email(entity.getEmail()),
+                entity.getPhone(),
+                new PasswordHash(entity.getPasswordHash()),
+                entity.getStatus(),
+                entity.getAuthVersion(),
+                entity.getSignedUpAt(),
+                entity.getUpdatedAt(),
+                entity.getDeletedAt(),
+                profile.getNit(),
+                profile.getBusinessType(),
+                profile.getRegistrationStatus(),
+                profile.getLatitude(),
+                profile.getLongitude(),
+                profile.getStartOperationDate());
+    }
+
+    GestoraDestinos toDomain(UserJpaEntity entity, DestinationManagerProfileJpaEntity profile) {
+        return GestoraDestinos.rehydrate(
+                new UserId(entity.getId()),
+                entity.getFullName(),
+                new Email(entity.getEmail()),
+                entity.getPhone(),
+                new PasswordHash(entity.getPasswordHash()),
+                entity.getStatus(),
+                entity.getAuthVersion(),
+                entity.getSignedUpAt(),
+                entity.getUpdatedAt(),
+                entity.getDeletedAt(),
+                profile.getNit(),
+                profile.getStartOperationDate());
+    }
+
+    Admin toDomain(UserJpaEntity entity, AdminProfileJpaEntity profile) {
+        return Admin.rehydrate(
+                new UserId(entity.getId()),
+                entity.getFullName(),
+                new Email(entity.getEmail()),
+                entity.getPhone(),
+                new PasswordHash(entity.getPasswordHash()),
+                entity.getStatus(),
+                entity.getAuthVersion(),
+                entity.getSignedUpAt(),
+                entity.getUpdatedAt(),
+                entity.getDeletedAt(),
+                profile.getDniType(),
+                profile.getDniNumber(),
+                profile.getLastAccessDate());
+    }
+
+    TouristProfileJpaEntity toProfileEntity(UserId userId, Turista user) {
         return new TouristProfileJpaEntity(
                 userId.value(),
-                profile.dniType(),
-                profile.dniNumber(),
-                profile.preferredLanguage(),
-                profile.birthDate(),
-                profile.nationality());
+                user.dniType(),
+                user.dniNumber(),
+                user.preferredLanguage(),
+                user.birthDate(),
+                user.nationality());
     }
 
-    GuideProfileJpaEntity toGuideEntity(UserId userId, GuideProfile profile) {
+    GuideProfileJpaEntity toProfileEntity(UserId userId, Guia user) {
         return new GuideProfileJpaEntity(
-                userId.value(),
-                profile.dniType(),
-                profile.dniNumber(),
-                profile.license(),
-                profile.startOperationDate());
+                userId.value(), user.dniType(), user.dniNumber(), user.license(), user.startOperationDate());
     }
 
-    ProviderProfileJpaEntity toProviderEntity(UserId userId, ProviderProfile profile) {
+    ProviderProfileJpaEntity toProfileEntity(UserId userId, PrestadoraServicios user) {
         return new ProviderProfileJpaEntity(
                 userId.value(),
-                profile.nit(),
-                profile.businessType(),
-                profile.registrationStatus(),
-                profile.latitude(),
-                profile.longitude(),
-                profile.startOperationDate());
+                user.nit(),
+                user.businessType(),
+                user.registrationStatus(),
+                user.latitude(),
+                user.longitude(),
+                user.startOperationDate());
     }
 
-    DestinationManagerProfileJpaEntity toDestinationManagerEntity(UserId userId, DestinationManagerProfile profile) {
-        return new DestinationManagerProfileJpaEntity(userId.value(), profile.nit(), profile.startOperationDate());
+    DestinationManagerProfileJpaEntity toProfileEntity(UserId userId, GestoraDestinos user) {
+        return new DestinationManagerProfileJpaEntity(userId.value(), user.nit(), user.startOperationDate());
     }
 
-    AdminProfileJpaEntity toAdminEntity(UserId userId, AdminProfile profile) {
-        return new AdminProfileJpaEntity(
-                userId.value(), profile.dniType(), profile.dniNumber(), profile.lastAccessDate());
-    }
-
-    TouristProfile toTouristProfile(TouristProfileJpaEntity entity) {
-        return new TouristProfile(
-                entity.getDniType(),
-                entity.getDniNumber(),
-                entity.getPreferredLanguage(),
-                entity.getBirthDate(),
-                entity.getNationality());
-    }
-
-    GuideProfile toGuideProfile(GuideProfileJpaEntity entity) {
-        return new GuideProfile(
-                entity.getDniType(), entity.getDniNumber(), entity.getLicense(), entity.getStartOperationDate());
-    }
-
-    ProviderProfile toProviderProfile(ProviderProfileJpaEntity entity) {
-        return new ProviderProfile(
-                entity.getNit(),
-                entity.getBusinessType(),
-                entity.getRegistrationStatus(),
-                entity.getLatitude(),
-                entity.getLongitude(),
-                entity.getStartOperationDate());
-    }
-
-    DestinationManagerProfile toDestinationManagerProfile(DestinationManagerProfileJpaEntity entity) {
-        return new DestinationManagerProfile(entity.getNit(), entity.getStartOperationDate());
-    }
-
-    AdminProfile toAdminProfile(AdminProfileJpaEntity entity) {
-        return new AdminProfile(entity.getDniType(), entity.getDniNumber(), entity.getLastAccessDate());
+    AdminProfileJpaEntity toProfileEntity(UserId userId, Admin user) {
+        return new AdminProfileJpaEntity(userId.value(), user.dniType(), user.dniNumber(), user.lastAccessDate());
     }
 }

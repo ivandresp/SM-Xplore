@@ -48,7 +48,8 @@ docker compose -f microservices/docker-compose.yml up -d
 - Clean/hexagonal: `infrastructure -> application -> domain`.
 - `domain` must not import Spring, Jakarta/JPA, Mongo, or Jackson. ArcUnit enforces this; application must not depend on infrastructure.
 - Application use cases live in `application/service`, implement input ports, and use output ports. Write use cases run inside `TransactionPort` (implemented with `TransactionTemplate`); there is no `@Transactional` in controllers or domain.
-- Adapters own JPA entities and mappers; domain has no persistence annotations.
+- Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity.
+- Adapters own JPA entities and mappers; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
 - Controllers only translate HTTP ↔ application DTOs. Errors are RFC 9457 `ProblemDetail`.
 - No Lombok/MapStruct; use records and explicit mappers. Constructor injection only.
 

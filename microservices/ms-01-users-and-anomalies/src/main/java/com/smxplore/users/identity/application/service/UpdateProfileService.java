@@ -6,15 +6,15 @@ import com.smxplore.users.identity.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.UserNotFoundException;
-import com.smxplore.users.identity.domain.model.AdminProfile;
-import com.smxplore.users.identity.domain.model.DestinationManagerProfile;
-import com.smxplore.users.identity.domain.model.GuideProfile;
-import com.smxplore.users.identity.domain.model.Profile;
-import com.smxplore.users.identity.domain.model.ProviderProfile;
-import com.smxplore.users.identity.domain.model.TouristProfile;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Admin;
+import com.smxplore.users.identity.domain.model.GestoraDestinos;
+import com.smxplore.users.identity.domain.model.Guia;
+import com.smxplore.users.identity.domain.model.PrestadoraServicios;
+import com.smxplore.users.identity.domain.model.Turista;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Clock;
+import java.time.Instant;
 
 public final class UpdateProfileService implements UpdateProfileUseCase {
 
@@ -31,15 +31,33 @@ public final class UpdateProfileService implements UpdateProfileUseCase {
     @Override
     public UserView update(UserId userId, UpdateProfileCommand command) {
         return transactions.execute(() -> {
-            User user = users.findById(userId).orElseThrow(UserNotFoundException::new);
+            Usuario user = users.findById(userId).orElseThrow(UserNotFoundException::new);
             String fullName =
                     command.fullName() == null || command.fullName().isBlank() ? user.fullName() : command.fullName();
             String phone = resolvePhone(command.phone(), user.phone());
-            Profile profile = updatedProfile(user.profile(), command);
+            Instant now = clock.instant();
 
-            User updated = user.updateProfile(fullName, phone, profile, clock.instant());
-            return UserView.from(users.save(updated));
+            user.updateContact(fullName, phone, now);
+            updateRoleDetails(user, command, now);
+
+            return UserView.from(users.save(user));
         });
+    }
+
+    private static void updateRoleDetails(Usuario user, UpdateProfileCommand command, Instant now) {
+        switch (user) {
+            case Turista tourist ->
+                tourist.updateDetails(command.preferredLanguage(), command.birthDate(), command.nationality(), now);
+            case Guia guide -> guide.updateLicense(command.license(), now);
+            case PrestadoraServicios provider ->
+                provider.updateBusinessDetails(command.businessType(), command.latitude(), command.longitude(), now);
+            case GestoraDestinos ignored -> {
+                // Only common contact data is editable for destination managers.
+            }
+            case Admin ignored -> {
+                // Only common contact data is editable for administrators.
+            }
+        }
     }
 
     private static String resolvePhone(String rawPhone, String currentPhone) {
@@ -50,34 +68,5 @@ public final class UpdateProfileService implements UpdateProfileUseCase {
             return null;
         }
         return rawPhone;
-    }
-
-    private static Profile updatedProfile(Profile current, UpdateProfileCommand command) {
-        return switch (current) {
-            case TouristProfile tourist ->
-                new TouristProfile(
-                        tourist.dniType(),
-                        tourist.dniNumber(),
-                        command.preferredLanguage() == null ? tourist.preferredLanguage() : command.preferredLanguage(),
-                        command.birthDate() == null ? tourist.birthDate() : command.birthDate(),
-                        command.nationality() == null ? tourist.nationality() : command.nationality());
-            case GuideProfile guide ->
-                new GuideProfile(
-                        guide.dniType(),
-                        guide.dniNumber(),
-                        command.license() == null ? guide.license() : command.license(),
-                        guide.startOperationDate());
-            case ProviderProfile provider ->
-                new ProviderProfile(
-                        provider.nit(),
-                        command.businessType() == null ? provider.businessType() : command.businessType(),
-                        provider.registrationStatus(),
-                        command.latitude() == null ? provider.latitude() : command.latitude(),
-                        command.longitude() == null ? provider.longitude() : command.longitude(),
-                        provider.startOperationDate());
-            case DestinationManagerProfile manager ->
-                new DestinationManagerProfile(manager.nit(), manager.startOperationDate());
-            case AdminProfile admin -> admin;
-        };
     }
 }

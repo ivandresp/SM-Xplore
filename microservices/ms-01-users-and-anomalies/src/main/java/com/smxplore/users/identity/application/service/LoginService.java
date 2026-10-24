@@ -9,7 +9,7 @@ import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.AccountNotActiveException;
 import com.smxplore.users.identity.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Duration;
 
@@ -29,7 +29,7 @@ public final class LoginService implements LoginUseCase {
 
     @Override
     public LoginResult login(LoginCommand command) {
-        User user = users.findByEmail(new Email(command.email())).orElseThrow(InvalidCredentialsException::new);
+        Usuario user = users.findByEmail(new Email(command.email())).orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordHasher.matches(command.rawPassword(), user.passwordHash())) {
             throw new InvalidCredentialsException();

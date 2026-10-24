@@ -1,15 +1,14 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.persistence.jpa;
 
 import com.smxplore.users.identity.application.port.out.UserRepository;
-import com.smxplore.users.identity.domain.model.AdminProfile;
-import com.smxplore.users.identity.domain.model.DestinationManagerProfile;
+import com.smxplore.users.identity.domain.model.Admin;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.GuideProfile;
-import com.smxplore.users.identity.domain.model.Profile;
-import com.smxplore.users.identity.domain.model.ProviderProfile;
-import com.smxplore.users.identity.domain.model.TouristProfile;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.GestoraDestinos;
+import com.smxplore.users.identity.domain.model.Guia;
+import com.smxplore.users.identity.domain.model.PrestadoraServicios;
+import com.smxplore.users.identity.domain.model.Turista;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,13 +41,13 @@ public class UserRepositoryAdapter implements UserRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<User> findById(UserId id) {
+    public Optional<Usuario> findById(UserId id) {
         return users.findById(id.value()).map(this::load);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<User> findByEmail(Email email) {
+    public Optional<Usuario> findByEmail(Email email) {
         return users.findByEmail(email.value()).map(this::load);
     }
 
@@ -59,7 +58,7 @@ public class UserRepositoryAdapter implements UserRepository {
 
     @Override
     @Transactional
-    public User save(User user) {
+    public Usuario save(Usuario user) {
         UserJpaEntity incoming = mapper.toEntity(user);
         UserJpaEntity stored = users.findById(user.id().value()).orElse(null);
         if (stored == null) {
@@ -72,49 +71,45 @@ public class UserRepositoryAdapter implements UserRepository {
         return user;
     }
 
-    private User load(UserJpaEntity entity) {
-        return mapper.toDomain(entity, loadProfile(entity));
-    }
-
-    private Profile loadProfile(UserJpaEntity entity) {
+    private Usuario load(UserJpaEntity entity) {
         return switch (entity.getRole()) {
             case TURISTA ->
                 tourists.findById(entity.getId())
-                        .map(mapper::toTouristProfile)
+                        .map(profile -> (Usuario) mapper.toDomain(entity, profile))
                         .orElseThrow(() -> missingProfile("turista", entity.getId()));
             case GUIA ->
                 guides.findById(entity.getId())
-                        .map(mapper::toGuideProfile)
+                        .map(profile -> (Usuario) mapper.toDomain(entity, profile))
                         .orElseThrow(() -> missingProfile("guía", entity.getId()));
             case PRESTADORA_SERVICIOS ->
                 providers
                         .findById(entity.getId())
-                        .map(mapper::toProviderProfile)
+                        .map(profile -> (Usuario) mapper.toDomain(entity, profile))
                         .orElseThrow(() -> missingProfile("prestadora", entity.getId()));
             case GESTORA_DESTINOS ->
                 destinationManagers
                         .findById(entity.getId())
-                        .map(mapper::toDestinationManagerProfile)
+                        .map(profile -> (Usuario) mapper.toDomain(entity, profile))
                         .orElseThrow(() -> missingProfile("gestora", entity.getId()));
             case ADMIN ->
                 admins.findById(entity.getId())
-                        .map(mapper::toAdminProfile)
+                        .map(profile -> (Usuario) mapper.toDomain(entity, profile))
                         .orElseThrow(() -> missingProfile("administrador", entity.getId()));
         };
     }
 
-    private void saveProfile(User user) {
-        switch (user.profile()) {
-            case TouristProfile profile -> upsertTourist(user.id(), profile);
-            case GuideProfile profile -> upsertGuide(user.id(), profile);
-            case ProviderProfile profile -> upsertProvider(user.id(), profile);
-            case DestinationManagerProfile profile -> upsertDestinationManager(user.id(), profile);
-            case AdminProfile profile -> upsertAdmin(user.id(), profile);
+    private void saveProfile(Usuario user) {
+        switch (user) {
+            case Turista tourist -> upsertTourist(user.id(), tourist);
+            case Guia guide -> upsertGuide(user.id(), guide);
+            case PrestadoraServicios provider -> upsertProvider(user.id(), provider);
+            case GestoraDestinos manager -> upsertDestinationManager(user.id(), manager);
+            case Admin admin -> upsertAdmin(user.id(), admin);
         }
     }
 
-    private void upsertTourist(UserId userId, TouristProfile profile) {
-        TouristProfileJpaEntity incoming = mapper.toTouristEntity(userId, profile);
+    private void upsertTourist(UserId userId, Turista user) {
+        TouristProfileJpaEntity incoming = mapper.toProfileEntity(userId, user);
         TouristProfileJpaEntity stored = tourists.findById(userId.value()).orElse(null);
         if (stored == null) {
             tourists.save(incoming);
@@ -124,8 +119,8 @@ public class UserRepositoryAdapter implements UserRepository {
         }
     }
 
-    private void upsertGuide(UserId userId, GuideProfile profile) {
-        GuideProfileJpaEntity incoming = mapper.toGuideEntity(userId, profile);
+    private void upsertGuide(UserId userId, Guia user) {
+        GuideProfileJpaEntity incoming = mapper.toProfileEntity(userId, user);
         GuideProfileJpaEntity stored = guides.findById(userId.value()).orElse(null);
         if (stored == null) {
             guides.save(incoming);
@@ -135,8 +130,8 @@ public class UserRepositoryAdapter implements UserRepository {
         }
     }
 
-    private void upsertProvider(UserId userId, ProviderProfile profile) {
-        ProviderProfileJpaEntity incoming = mapper.toProviderEntity(userId, profile);
+    private void upsertProvider(UserId userId, PrestadoraServicios user) {
+        ProviderProfileJpaEntity incoming = mapper.toProfileEntity(userId, user);
         ProviderProfileJpaEntity stored = providers.findById(userId.value()).orElse(null);
         if (stored == null) {
             providers.save(incoming);
@@ -146,8 +141,8 @@ public class UserRepositoryAdapter implements UserRepository {
         }
     }
 
-    private void upsertDestinationManager(UserId userId, DestinationManagerProfile profile) {
-        DestinationManagerProfileJpaEntity incoming = mapper.toDestinationManagerEntity(userId, profile);
+    private void upsertDestinationManager(UserId userId, GestoraDestinos user) {
+        DestinationManagerProfileJpaEntity incoming = mapper.toProfileEntity(userId, user);
         DestinationManagerProfileJpaEntity stored =
                 destinationManagers.findById(userId.value()).orElse(null);
         if (stored == null) {
@@ -158,8 +153,8 @@ public class UserRepositoryAdapter implements UserRepository {
         }
     }
 
-    private void upsertAdmin(UserId userId, AdminProfile profile) {
-        AdminProfileJpaEntity incoming = mapper.toAdminEntity(userId, profile);
+    private void upsertAdmin(UserId userId, Admin user) {
+        AdminProfileJpaEntity incoming = mapper.toProfileEntity(userId, user);
         AdminProfileJpaEntity stored = admins.findById(userId.value()).orElse(null);
         if (stored == null) {
             admins.save(incoming);

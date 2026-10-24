@@ -10,7 +10,7 @@ import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.InvalidPasswordResetTokenException;
 import com.smxplore.users.identity.domain.model.PasswordResetToken;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Instant;
 
@@ -54,9 +54,10 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
                     .filter(candidate -> candidate.isUsable(now))
                     .orElseThrow(InvalidPasswordResetTokenException::new);
 
-            User user = users.findById(token.userId()).orElseThrow(InvalidPasswordResetTokenException::new);
+            Usuario user = users.findById(token.userId()).orElseThrow(InvalidPasswordResetTokenException::new);
 
-            users.save(user.changePassword(passwordHasher.hash(command.newPassword()), now));
+            user.changePassword(passwordHasher.hash(command.newPassword()), now);
+            users.save(user);
             resetTokens.save(token.markUsed(now));
             resetTokens.invalidateAllForUser(user.id(), now);
             return null;

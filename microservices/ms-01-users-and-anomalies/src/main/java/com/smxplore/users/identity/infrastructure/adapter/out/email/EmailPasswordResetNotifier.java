@@ -1,7 +1,7 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.email;
 
 import com.smxplore.users.identity.application.port.out.PasswordResetNotifier;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Usuario;
 import com.smxplore.users.shared.infrastructure.config.FrontendProperties;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +25,7 @@ public class EmailPasswordResetNotifier implements PasswordResetNotifier {
     }
 
     @Override
-    public void notify(User user, String rawToken) {
+    public void notify(Usuario user, String rawToken) {
         String link = frontendProperties.baseUrl()
                 + frontendProperties.resetPasswordPath()
                 + "?token="

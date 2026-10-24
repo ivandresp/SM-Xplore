@@ -6,8 +6,8 @@ import com.smxplore.users.identity.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.identity.application.port.out.PasswordHasher;
 import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
+import com.smxplore.users.identity.domain.model.Admin;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
 import java.time.Clock;
 
@@ -35,7 +35,7 @@ public final class BootstrapAdminService implements BootstrapAdminUseCase {
             if (users.existsByEmail(email)) {
                 return null;
             }
-            User admin = User.createAdmin(
+            Admin admin = Admin.create(
                     UserId.newId(),
                     command.fullName(),
                     email,

@@ -11,7 +11,7 @@ import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.model.Email;
 import com.smxplore.users.identity.domain.model.PasswordResetToken;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -48,7 +48,7 @@ public final class ForgotPasswordService implements ForgotPasswordUseCase {
 
     @Override
     public void handle(ForgotPasswordCommand command) {
-        Optional<User> user = users.findByEmail(new Email(command.email()));
+        Optional<Usuario> user = users.findByEmail(new Email(command.email()));
         if (user.isEmpty() || !user.get().isActive()) {
             return;
         }

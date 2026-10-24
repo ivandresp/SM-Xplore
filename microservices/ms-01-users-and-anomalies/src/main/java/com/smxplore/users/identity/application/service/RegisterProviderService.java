@@ -9,7 +9,7 @@ import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.identity.domain.model.Email;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.PrestadoraServicios;
 import com.smxplore.users.identity.domain.model.UserId;
 import java.time.Clock;
 
@@ -38,7 +38,7 @@ public final class RegisterProviderService implements RegisterProviderUseCase {
                 throw new EmailAlreadyExistsException();
             }
 
-            User user = User.registerProvider(
+            PrestadoraServicios user = PrestadoraServicios.register(
                     UserId.newId(),
                     command.fullName(),
                     email,

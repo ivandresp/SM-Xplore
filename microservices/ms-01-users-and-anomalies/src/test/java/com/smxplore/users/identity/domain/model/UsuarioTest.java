@@ -1,28 +1,27 @@
 package com.smxplore.users.identity.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.smxplore.users.identity.domain.exception.ProfileMismatchException;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
-class UserTest {
+class UsuarioTest {
 
     private static final Instant NOW = Instant.parse("2026-10-24T12:00:00Z");
 
     @Test
     void registersTouristAsActive() {
-        User user = tourist();
+        Usuario user = tourist();
 
         assertThat(user.role()).isEqualTo(Role.TURISTA);
         assertThat(user.status()).isEqualTo(UserStatus.ACTIVO);
         assertThat(user.authVersion()).isZero();
+        assertThat(user).isInstanceOf(Turista.class);
     }
 
     @Test
     void registersProviderAsPending() {
-        User user = User.registerProvider(
+        PrestadoraServicios user = PrestadoraServicios.register(
                 UserId.newId(),
                 "Prestadora Demo",
                 new Email("provider@example.com"),
@@ -35,29 +34,32 @@ class UserTest {
                 null,
                 NOW);
 
+        assertThat(user).isInstanceOf(Usuario.class);
         assertThat(user.role()).isEqualTo(Role.PRESTADORA_SERVICIOS);
-        assertThat(((ProviderProfile) user.profile()).registrationStatus())
-                .isEqualTo(ProviderRegistrationStatus.PENDIENTE);
+        assertThat(user.registrationStatus()).isEqualTo(ProviderRegistrationStatus.PENDIENTE);
     }
 
     @Test
     void changePasswordIncrementsAuthVersion() {
-        User user = tourist().changePassword(new PasswordHash("new-hash"), NOW);
+        Usuario user = tourist();
+
+        user.changePassword(new PasswordHash("new-hash"), NOW);
 
         assertThat(user.authVersion()).isEqualTo(1);
     }
 
     @Test
-    void rejectsProfileFromAnotherRole() {
-        User user = tourist();
+    void roleSubtypesPreserveTheirTypeWhenChangingCommonData() {
+        Usuario user = tourist();
 
-        assertThatThrownBy(() ->
-                        user.updateProfile(user.fullName(), user.phone(), new AdminProfile(null, null, null), NOW))
-                .isInstanceOf(ProfileMismatchException.class);
+        user.updateContact("Ada Actualizada", "3000000000", NOW);
+
+        assertThat(user).isInstanceOf(Turista.class);
+        assertThat(user.fullName()).isEqualTo("Ada Actualizada");
     }
 
-    private static User tourist() {
-        return User.registerTourist(
+    private static Turista tourist() {
+        return Turista.register(
                 UserId.newId(),
                 "Ada Turista",
                 new Email("ada@example.com"),

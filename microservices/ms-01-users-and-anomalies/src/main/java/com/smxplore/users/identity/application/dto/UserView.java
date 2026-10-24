@@ -1,8 +1,8 @@
 package com.smxplore.users.identity.application.dto;
 
 import com.smxplore.users.identity.domain.model.Role;
-import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserStatus;
+import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,10 +13,10 @@ public record UserView(
         String phone,
         Role role,
         UserStatus status,
-        ProfileView profile,
+        RoleDetailsView profile,
         Instant signedUpAt) {
 
-    public static UserView from(User user) {
+    public static UserView from(Usuario user) {
         return new UserView(
                 user.id().value(),
                 user.fullName(),
@@ -24,7 +24,7 @@ public record UserView(
                 user.phone(),
                 user.role(),
                 user.status(),
-                ProfileView.from(user.profile()),
+                RoleDetailsView.from(user),
                 user.signedUpAt());
     }
 }

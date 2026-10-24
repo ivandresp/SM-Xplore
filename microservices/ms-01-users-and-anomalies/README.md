@@ -21,8 +21,8 @@ Arquitectura hexagonal / clean architecture:
 infrastructure -> application -> domain
 ```
 
-- `domain`: modelo puro, sin Spring, JPA, Mongo ni Jackson.
-- `application`: casos de uso, puertos de entrada/salida y DTOs de aplicación.
+- `domain`: modelo puro, sin Spring, JPA, Mongo ni Jackson. `Usuario` es la clase base y de ella heredan `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos` y `Admin`, igual que en el diagrama de dominio.
+- `application`: casos de uso, puertos de entrada/salida y DTOs de aplicación. `RoleDetailsView` es solo un DTO de lectura para la API; no es una entidad de dominio.
 - `infrastructure`: controladores REST, adaptadores JPA/Mongo, correo, JWT y configuración.
 - Las dependencias se verifican con ArchUnit.
 - Los casos de uso se escriben dentro de `TransactionPort`, implementado con `TransactionTemplate`.

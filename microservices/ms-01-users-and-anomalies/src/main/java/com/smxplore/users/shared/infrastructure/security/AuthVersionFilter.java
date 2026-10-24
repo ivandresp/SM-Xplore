@@ -2,8 +2,8 @@ package com.smxplore.users.shared.infrastructure.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.smxplore.users.identity.application.port.out.UserRepository;
-import com.smxplore.users.identity.domain.model.User;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.Usuario;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,7 +49,9 @@ public class AuthVersionFilter extends OncePerRequestFilter {
 
             Long currentVersion = cache.get(
                     userId,
-                    id -> users.findById(new UserId(id)).map(User::authVersion).orElse(-1L));
+                    id -> users.findById(new UserId(id))
+                            .map(Usuario::authVersion)
+                            .orElse(-1L));
 
             if (currentVersion == null || currentVersion != version.longValue()) {
                 unauthorized(response);

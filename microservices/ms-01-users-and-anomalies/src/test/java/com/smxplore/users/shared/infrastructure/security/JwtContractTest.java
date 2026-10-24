@@ -6,7 +6,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
 import com.smxplore.users.identity.domain.model.Email;
 import com.smxplore.users.identity.domain.model.PasswordHash;
-import com.smxplore.users.identity.domain.model.User;
+import com.smxplore.users.identity.domain.model.Turista;
 import com.smxplore.users.identity.domain.model.UserId;
 import com.smxplore.users.identity.infrastructure.adapter.out.security.JwtTokenIssuer;
 import com.smxplore.users.shared.infrastructure.config.JwtProperties;
@@ -39,7 +39,7 @@ class JwtContractTest {
         Clock clock = Clock.fixed(now, ZoneOffset.UTC);
         JwtTokenIssuer issuer = new JwtTokenIssuer(encoder, properties, clock);
 
-        User user = User.registerTourist(
+        Turista user = Turista.register(
                 UserId.newId(),
                 "Ada Turista",
                 new Email("ada@example.com"),
