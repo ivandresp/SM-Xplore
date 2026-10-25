@@ -16,8 +16,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ConsultReviewMetricsUseCase implements ConsultReviewMetricsUseCasePort {
 
-    private static final int MAX_REVIEWS = 200;
-
     private final ReviewRepositoryPort reviewRepo;
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;

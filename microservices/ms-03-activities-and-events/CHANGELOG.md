@@ -37,7 +37,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
   - `docker-compose.yml` con app, PostgreSQL y MongoDB.
   - `Dockerfile` multi-stage Java 25.
   - `schema.sql` idempotente.
-- Cobertura de pruebas: **154 tests** unitarios/de slice.
+- Cobertura de pruebas: **157 tests** unitarios/de slice.
 
 ### Endpoints nuevos
 | Método | Ruta | Acceso |
@@ -65,7 +65,8 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 | GET | `/api/v1/reservation-items?type=` | `ADMIN`, `DESTINATION_MANAGER` |
 
 ### Cambios de contrato para el frontend
-- `EventResponse` agrega `siteName` y `managerId`.
+- `EventResponse` agrega `siteName`; `managerId` queda interno y **no** se expone públicamente.
+- Las respuestas públicas de reseñas ya no incluyen `user.id` ni `responderId`.
 - `EventRequest` acepta `siteName` y `managerId` (la gestora que crea el evento no puede falsear `managerId`: se sobrescribe con su JWT).
 - Reseñas: `itemType` (`EVENT`/`ACTIVITY`), `itemId`, `rating` (1–5), `comment`.
 - Respuesta de reseña: `{ "message": "..." }`.

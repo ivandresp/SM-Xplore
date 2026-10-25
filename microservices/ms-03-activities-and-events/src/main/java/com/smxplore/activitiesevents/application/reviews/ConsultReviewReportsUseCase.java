@@ -13,7 +13,7 @@ public class ConsultReviewReportsUseCase implements ConsultReviewReportsUseCaseP
     private final ReviewReportRepositoryPort reportRepo;
 
     @Override
-    public Flux<ReviewReport> handle(ReviewReportStatus status) {
-        return reportRepo.findByStatus(status);
+    public Flux<ReviewReport> handle(ReviewReportStatus status, int limit) {
+        return reportRepo.findByStatus(status).take(limit);
     }
 }

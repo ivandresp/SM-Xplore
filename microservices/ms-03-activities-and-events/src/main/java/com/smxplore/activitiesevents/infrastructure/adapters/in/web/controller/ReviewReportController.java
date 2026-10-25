@@ -4,7 +4,10 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewReportsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ResolveReviewReportUseCasePort;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ResolveReviewReportRequest;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewReportResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReviewReportWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,19 +36,26 @@ public class ReviewReportController {
 
     private final ConsultReviewReportsUseCasePort consultReviewReportsUseCase;
     private final ResolveReviewReportUseCasePort resolveReviewReportUseCase;
+    private final ReviewReportWebMapper mapper;
 
+    // TODO(ms-04): scope report lists to sites owned by the caller's managerId;
+    // currently any destination manager sees every site's reports.
     @GetMapping
     @Operation(summary = "List review reports by status (staff)")
-    public Flux<ReviewReport> findByStatus(@RequestParam(defaultValue = "PENDING") ReviewReportStatus status) {
-        return consultReviewReportsUseCase.handle(status);
+    public Flux<ReviewReportResponse> findByStatus(
+            @RequestParam(defaultValue = "200") int limit,
+            @RequestParam(defaultValue = "PENDING") ReviewReportStatus status) {
+        return consultReviewReportsUseCase.handle(status, PaginationLimits.clamp(limit))
+                .map(mapper::toResponse);
     }
 
     @PatchMapping("/{reportId}")
     @Operation(summary = "Resolve or dismiss a review report (staff)")
-    public Mono<ReviewReport> resolve(@PathVariable UUID reportId,
-                                      @Valid @RequestBody ResolveReviewReportRequest request,
-                                      @AuthenticationPrincipal Jwt jwt) {
-        return resolveReviewReportUseCase.handle(reportId, request.status(), subject(jwt));
+    public Mono<ReviewReportResponse> resolve(@PathVariable UUID reportId,
+                                              @Valid @RequestBody ResolveReviewReportRequest request,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        return resolveReviewReportUseCase.handle(reportId, request.status(), subject(jwt))
+                .map(mapper::toResponse);
     }
 
     private static UUID subject(Jwt jwt) {

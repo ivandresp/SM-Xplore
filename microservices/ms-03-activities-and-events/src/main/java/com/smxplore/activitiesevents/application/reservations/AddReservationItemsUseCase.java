@@ -139,9 +139,10 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
 
     private Mono<List<ReservationItem>> resolveActivities(Reservation reservation, List<ReservationItem> existing,
                                                           List<ReservationItem> incoming) {
-        var activityIds = Stream.concat(existing.stream(), incoming.stream())
+        var activityIds = incoming.stream()
                 .map(ReservationItem::getItemId)
                 .distinct()
+                .sorted()
                 .toList();
         return Flux.fromIterable(activityIds)
                 .concatMap(activityId -> activityRepo.findByIdForUpdate(activityId)
@@ -173,6 +174,7 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
         var eventIds = incoming.stream()
                 .map(ReservationItem::getItemId)
                 .distinct()
+                .sorted()
                 .toList();
         return Flux.fromIterable(eventIds)
                 .concatMap(eventId -> eventRepo.findByIdForUpdate(eventId)

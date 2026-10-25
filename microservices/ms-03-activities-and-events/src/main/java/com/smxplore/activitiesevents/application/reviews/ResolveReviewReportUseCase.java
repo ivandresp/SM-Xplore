@@ -23,6 +23,11 @@ public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePor
         }
         return reportRepo.findById(reportId)
                 .switchIfEmpty(Mono.error(new ReviewNotFoundException(reportId)))
-                .flatMap(report -> reportRepo.save(report.resolve(status, resolverId)));
+                .flatMap(report -> {
+                    if (report.status() != ReviewReportStatus.PENDING) {
+                        return Mono.error(new InvalidReviewException("The report was already resolved."));
+                    }
+                    return reportRepo.save(report.resolve(status, resolverId));
+                });
     }
 }

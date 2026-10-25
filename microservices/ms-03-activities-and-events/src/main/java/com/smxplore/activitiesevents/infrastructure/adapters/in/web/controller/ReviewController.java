@@ -60,7 +60,7 @@ public class ReviewController {
     @GetMapping("/events/{eventId}")
     @Operation(summary = "List the reviews of an event")
     public Flux<ReviewResponse> findByEvent(@PathVariable UUID eventId,
-                                            @RequestParam(defaultValue = "50") int limit) {
+                                            @RequestParam(defaultValue = "200") int limit) {
         return consultReviewsByItemUseCase.handle(eventId,
                         com.smxplore.activitiesevents.domain.model.review.ReviewItemType.EVENT,
                         PaginationLimits.clamp(limit))
@@ -70,7 +70,7 @@ public class ReviewController {
     @GetMapping("/activities/{activityId}")
     @Operation(summary = "List the reviews of an activity")
     public Flux<ReviewResponse> findByActivity(@PathVariable UUID activityId,
-                                               @RequestParam(defaultValue = "50") int limit) {
+                                               @RequestParam(defaultValue = "200") int limit) {
         return consultReviewsByItemUseCase.handle(activityId,
                         com.smxplore.activitiesevents.domain.model.review.ReviewItemType.ACTIVITY,
                         PaginationLimits.clamp(limit))

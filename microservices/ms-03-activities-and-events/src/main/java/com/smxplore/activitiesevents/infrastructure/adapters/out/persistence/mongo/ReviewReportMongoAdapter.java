@@ -45,6 +45,7 @@ public class ReviewReportMongoAdapter implements ReviewReportRepositoryPort {
 
     private ReviewReport toDomain(ReviewReportDocument document) {
         return new ReviewReport(document.id(), document.reviewId(), document.reporterId(), document.reason(),
-                document.status(), document.resolvedBy(), document.resolvedAt(), document.createdAt());
+                document.status() == null ? ReviewReportStatus.PENDING : document.status(),
+                document.resolvedBy(), document.resolvedAt(), document.createdAt());
     }
 }

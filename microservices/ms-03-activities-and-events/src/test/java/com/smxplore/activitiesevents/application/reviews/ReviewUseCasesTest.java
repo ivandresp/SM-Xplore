@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.application.reviews;
 
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
@@ -10,6 +11,8 @@ import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
+import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
+import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
@@ -197,6 +200,41 @@ class ReviewUseCasesTest {
 
         StepVerifier.create(reporter.handle(review.getId(), reporterId, "Spam"))
                 .expectError(ReviewAlreadyReportedException.class)
+                .verify();
+    }
+
+    @Test
+    void listsPendingReports() {
+        var report = ReviewReport.pending(UUID.randomUUID(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findByStatus(ReviewReportStatus.PENDING)).willReturn(reactor.core.publisher.Flux.just(report));
+
+        StepVerifier.create(new ConsultReviewReportsUseCase(reportRepo)
+                        .handle(ReviewReportStatus.PENDING, 10))
+                .assertNext(found -> assertThat(found.status()).isEqualTo(ReviewReportStatus.PENDING))
+                .verifyComplete();
+    }
+
+    @Test
+    void resolvesPendingReport() {
+        var report = ReviewReport.pending(UUID.randomUUID(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo)
+                        .handle(report.id(), ReviewReportStatus.RESOLVED, UUID.randomUUID()))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
+                .verifyComplete();
+    }
+
+    @Test
+    void rejectsResolvingAnAlreadyResolvedReport() {
+        var report = ReviewReport.pending(UUID.randomUUID(), UUID.randomUUID(), "Spam")
+                .resolve(ReviewReportStatus.RESOLVED, UUID.randomUUID());
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo)
+                        .handle(report.id(), ReviewReportStatus.DISMISSED, UUID.randomUUID()))
+                .expectError(InvalidReviewException.class)
                 .verify();
     }
 

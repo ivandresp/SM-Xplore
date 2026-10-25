@@ -6,5 +6,5 @@ import reactor.core.publisher.Flux;
 
 public interface ConsultReviewReportsUseCasePort {
 
-    Flux<ReviewReport> handle(ReviewReportStatus status);
+    Flux<ReviewReport> handle(ReviewReportStatus status, int limit);
 }
