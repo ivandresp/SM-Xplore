@@ -1,9 +1,12 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewsByItemUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewMetricsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.review.ReportReviewUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.CreateReviewRequest;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReportReviewRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.RespondReviewRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReviewWebMapper;
@@ -36,7 +39,9 @@ public class ReviewController {
 
     private final CreateReviewUseCasePort createReviewUseCase;
     private final ConsultReviewsByItemUseCasePort consultReviewsByItemUseCase;
+    private final ConsultReviewMetricsUseCasePort consultReviewMetricsUseCase;
     private final RespondToReviewUseCasePort respondToReviewUseCase;
+    private final ReportReviewUseCasePort reportReviewUseCase;
     private final ReviewWebMapper mapper;
     private final JwtProperties jwtProperties;
 
@@ -64,6 +69,31 @@ public class ReviewController {
         return consultReviewsByItemUseCase.handle(activityId,
                         com.smxplore.activitiesevents.domain.model.review.ReviewItemType.ACTIVITY)
                 .map(mapper::toResponse);
+    }
+
+    @GetMapping("/events/{eventId}/metrics")
+    @Operation(summary = "Rating average and count for an event")
+    public Mono<com.smxplore.activitiesevents.domain.model.review.ReviewMetrics> eventMetrics(
+            @PathVariable UUID eventId) {
+        return consultReviewMetricsUseCase.handle(eventId,
+                com.smxplore.activitiesevents.domain.model.review.ReviewItemType.EVENT);
+    }
+
+    @GetMapping("/activities/{activityId}/metrics")
+    @Operation(summary = "Rating average and count for an activity")
+    public Mono<com.smxplore.activitiesevents.domain.model.review.ReviewMetrics> activityMetrics(
+            @PathVariable UUID activityId) {
+        return consultReviewMetricsUseCase.handle(activityId,
+                com.smxplore.activitiesevents.domain.model.review.ReviewItemType.ACTIVITY);
+    }
+
+    @PostMapping("/{reviewId}/report")
+    @Operation(summary = "Report a review")
+    public Mono<ReviewResponse> report(@PathVariable UUID reviewId,
+                                       @Valid @RequestBody ReportReviewRequest request,
+                                       @AuthenticationPrincipal Jwt jwt) {
+        subject(jwt);
+        return reportReviewUseCase.handle(reviewId, request.reason()).map(mapper::toResponse);
     }
 
     @PostMapping("/{reviewId}/response")

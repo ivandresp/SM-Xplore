@@ -15,4 +15,5 @@ public interface ReservationItemRepositoryPort {
     Flux<ReservationItem> findByItemId(UUID itemId);
     Flux<ReservationItem> findByItemType(ReservationItemType reservationItemType, int limit);
     Mono<Integer> sumActivePeopleForItem(UUID reservationId, UUID itemId, ReservationItemType type);
+    Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);
 }

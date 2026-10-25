@@ -83,6 +83,25 @@ public class ReservationItemPostgresAdapter implements ReservationItemRepository
                 .defaultIfEmpty(0);
     }
 
+    @Override
+    public Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type) {
+        var sql = """
+                SELECT COALESCE(SUM(r.number_of_people), 0) AS reserved
+                FROM reservations r
+                JOIN reservation_items i ON i.reservation_id = r.id
+                WHERE i.item_id = :itemId
+                  AND i.type = :type
+                  AND r.status IN ('PENDING', 'CONFIRMED', 'CANCELLATION_REQUESTED')
+                """;
+        return template.getDatabaseClient().sql(sql)
+                .bind("itemId", itemId)
+                .bind("type", type.name())
+                .map((row, metadata) -> row.get("reserved", Long.class))
+                .one()
+                .map(Long::intValue)
+                .defaultIfEmpty(0);
+    }
+
     private PageRequest page(int limit) {
         return PageRequest.of(0, limit, STABLE_ORDER);
     }

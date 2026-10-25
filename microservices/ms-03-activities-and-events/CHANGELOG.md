@@ -5,6 +5,10 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 ## [No publicado] — 2026-10-25
 
 ### Añadido
+- **Validar existencia de evento**: `GET /api/v1/events/{id}/exists` (200/404).
+- **Consultar disponibilidad**: cupos libres de evento/actividad (`GET /api/v1/events/{id}/availability`, `GET /api/v1/activities/{id}/availability`).
+- **Reportar reseña** (`POST /api/v1/reviews/{id}/report`, una vez por reseña, 409 si se repite).
+- **Métricas de reputación** por ítem (`GET /api/v1/reviews/events|activities/{id}/metrics`: total y promedio).
 - **Reseñas de eventos y actividades** con MongoDB reactivo.
   - Dos colecciones separadas: `event_reviews` y `activity_reviews`.
   - `user` se guarda anidado con `{ id, name }`, tomado de los claims del JWT.
@@ -26,7 +30,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
   - `docker-compose.yml` con app, PostgreSQL y MongoDB.
   - `Dockerfile` multi-stage Java 25.
   - `schema.sql` idempotente.
-- Cobertura de pruebas: **148 tests** unitarios/de slice.
+- Cobertura de pruebas: **153 tests** unitarios/de slice.
 
 ### Endpoints nuevos
 | Método | Ruta | Acceso |
@@ -69,6 +73,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - Refresco de `siteName`/`managerId` si cambia la gestora del sitio (contrato con ms-04).
 - Notificaciones: las maneja el front; falta definir el contrato con el back.
 - Neo4j para “recibir info de eventos planificados” (recomendaciones).
+- Modificar reserva (fecha/personas/pago) y su política.
 - Itinerario, fuentes externas (clima/mapa/links) y pagos QR/Wompi.
 - Pruebas de integración con Testcontainers y paginación de listados.
 

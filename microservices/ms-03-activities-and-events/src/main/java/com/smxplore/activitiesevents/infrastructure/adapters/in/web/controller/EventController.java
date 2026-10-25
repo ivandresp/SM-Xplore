@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUs
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.RegisterEventUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.SearchEventsUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.event.ValidateEventExistsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ViewEventDetailsUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ChangeEventStatusRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.EstimateAttendanceRequest;
@@ -17,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +48,7 @@ public class EventController {
     private final SearchEventsUseCasePort searchEventsUseCase;
     private final ChangeEventStatusUseCasePort changeEventStatusUseCase;
     private final EstimateEventAttendanceUseCasePort estimateEventAttendanceUseCase;
+    private final ValidateEventExistsUseCasePort validateEventExistsUseCase;
     private final EventWebMapper mapper;
 
     @Value("${app.security.jwt.role-claim:role}")
@@ -79,6 +82,13 @@ public class EventController {
     @Operation(summary = "Get one event by id")
     public Mono<EventResponse> findOne(@PathVariable UUID eventId) {
         return viewEventDetailsUseCase.handle(eventId).map(mapper::toResponse);
+    }
+
+    @GetMapping("/{eventId}/exists")
+    @Operation(summary = "Validate that an event exists")
+    public Mono<ResponseEntity<Void>> exists(@PathVariable UUID eventId) {
+        return validateEventExistsUseCase.handle(eventId)
+                .map(exists -> exists ? ResponseEntity.ok().build() : ResponseEntity.notFound().build());
     }
 
     @GetMapping

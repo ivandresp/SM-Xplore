@@ -8,6 +8,7 @@ import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.event.ValidateEventExistsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.RegisterEventUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.SearchEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ViewEventDetailsUseCasePort;
@@ -58,6 +59,9 @@ class EventControllerTest {
 
     @MockitoBean
     private EstimateEventAttendanceUseCasePort estimateEventAttendanceUseCase;
+
+    @MockitoBean
+    private ValidateEventExistsUseCasePort validateEventExistsUseCase;
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {

@@ -17,6 +17,9 @@ public record EventReviewDocument(
         int rating,
         String comment,
         ReviewReplyDocument reply,
+        boolean reported,
+        String reportReason,
+        Instant reportedAt,
         Instant createdAt
 ) {
 }

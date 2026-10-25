@@ -82,12 +82,15 @@ Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias q
 |---|---|---|
 | GET | `/api/v1/events` | Público |
 | GET | `/api/v1/events/{eventId}` | Público |
+| GET | `/api/v1/events/{eventId}/exists` | Público (200/404) |
+| GET | `/api/v1/events/{eventId}/availability` | Público |
 | GET | `/api/v1/events/search?name=` | Público |
 | POST | `/api/v1/events` | `ADMIN`, `DESTINATION_MANAGER` |
 | PATCH | `/api/v1/events/{eventId}/status` | `ADMIN`, `DESTINATION_MANAGER` |
 | PATCH | `/api/v1/events/{eventId}/attendance` | `ADMIN`, `DESTINATION_MANAGER` |
 | GET | `/api/v1/activities` | Público |
 | GET | `/api/v1/activities/{activityId}` | Público |
+| GET | `/api/v1/activities/{activityId}/availability` | Público |
 | GET | `/api/v1/activities/search?category=` | Público |
 | GET | `/api/v1/activities/site/{siteId}` | Público |
 | POST | `/api/v1/activities` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
@@ -139,7 +142,10 @@ Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una res
 | POST | `/api/v1/reviews` | Autenticado; no exige reserva |
 | GET | `/api/v1/reviews/events/{eventId}` | Público |
 | GET | `/api/v1/reviews/activities/{activityId}` | Público |
-| POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o staff |
+| GET | `/api/v1/reviews/events/{eventId}/metrics` | Público |
+| GET | `/api/v1/reviews/activities/{activityId}/metrics` | Público |
+| POST | `/api/v1/reviews/{reviewId}/report` | Autenticado |
+| POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o ADMIN |
 
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.

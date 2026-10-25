@@ -31,6 +31,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNo
 import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyReservationItemsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
@@ -63,6 +64,7 @@ public class GlobalExceptionHandler {
             ReservationItemsNotAllowedException.class,
             TooManyReservationItemsException.class,
             ReviewAlreadyExistsException.class,
+            ReviewAlreadyReportedException.class,
             ReviewAlreadyRespondedException.class})
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);

@@ -60,12 +60,14 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
 
     private EventReviewDocument toEventDocument(Review review) {
         return new EventReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
-                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt());
+                review.getRating(), review.getComment(), toReplyDocument(review.getReply()),
+                review.isReported(), review.getReportReason(), review.getReportedAt(), review.getCreatedAt());
     }
 
     private ActivityReviewDocument toActivityDocument(Review review) {
         return new ActivityReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
-                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt());
+                review.getRating(), review.getComment(), toReplyDocument(review.getReply()),
+                review.isReported(), review.getReportReason(), review.getReportedAt(), review.getCreatedAt());
     }
 
     private Review toEventDomain(EventReviewDocument document) {
@@ -77,6 +79,9 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .rating(document.rating())
                 .comment(document.comment())
                 .reply(toReplyDomain(document.reply()))
+                .reported(document.reported())
+                .reportReason(document.reportReason())
+                .reportedAt(document.reportedAt())
                 .createdAt(document.createdAt())
                 .build();
     }
@@ -90,6 +95,9 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .rating(document.rating())
                 .comment(document.comment())
                 .reply(toReplyDomain(document.reply()))
+                .reported(document.reported())
+                .reportReason(document.reportReason())
+                .reportedAt(document.reportedAt())
                 .createdAt(document.createdAt())
                 .build();
     }

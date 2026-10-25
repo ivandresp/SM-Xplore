@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.application.reviews;
 
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
@@ -8,6 +9,7 @@ import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
+import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
@@ -152,6 +154,49 @@ class ReviewUseCasesTest {
         StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
+    }
+
+    @Test
+    void reportsReviewOnce() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        var reporter = new ReportReviewUseCase(reviewRepo);
+
+        StepVerifier.create(reporter.handle(review.getId(), "Spam"))
+                .assertNext(updated -> {
+                    assertThat(updated.isReported()).isTrue();
+                    assertThat(updated.getReportReason()).isEqualTo("Spam");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void rejectsSecondReport() {
+        var reported = review(ReviewItemType.ACTIVITY, UUID.randomUUID()).withReport("Spam");
+        given(reviewRepo.findById(reported.getId())).willReturn(Mono.just(reported));
+
+        var reporter = new ReportReviewUseCase(reviewRepo);
+
+        StepVerifier.create(reporter.handle(reported.getId(), "Otra"))
+                .expectError(ReviewAlreadyReportedException.class)
+                .verify();
+    }
+
+    @Test
+    void computesReviewMetrics() {
+        var itemId = UUID.randomUUID();
+        var first = review(ReviewItemType.EVENT, itemId).toBuilder().rating(4).build();
+        var second = review(ReviewItemType.EVENT, itemId).toBuilder().rating(5).build();
+        given(reviewRepo.findByItem(itemId, ReviewItemType.EVENT)).willReturn(reactor.core.publisher.Flux.just(first, second));
+
+        StepVerifier.create(new ConsultReviewMetricsUseCase(reviewRepo).handle(itemId, ReviewItemType.EVENT))
+                .assertNext(metrics -> {
+                    assertThat(metrics.count()).isEqualTo(2);
+                    assertThat(metrics.averageRating()).isEqualTo(4.5);
+                })
+                .verifyComplete();
     }
 
     private Review review(ReviewItemType itemType, UUID itemId) {
