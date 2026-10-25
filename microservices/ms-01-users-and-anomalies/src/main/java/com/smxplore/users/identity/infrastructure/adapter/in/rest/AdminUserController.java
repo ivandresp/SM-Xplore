@@ -2,12 +2,14 @@ package com.smxplore.users.identity.infrastructure.adapter.in.rest;
 
 import com.smxplore.users.identity.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.identity.application.dto.PageResult;
+import com.smxplore.users.identity.application.dto.ReviewProviderCommand;
 import com.smxplore.users.identity.application.dto.SortOrder;
 import com.smxplore.users.identity.application.dto.UserSearchCriteria;
 import com.smxplore.users.identity.application.dto.UserSummaryView;
 import com.smxplore.users.identity.application.dto.UserView;
 import com.smxplore.users.identity.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.identity.application.port.in.GetUserDetailUseCase;
+import com.smxplore.users.identity.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.identity.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.identity.domain.model.ProviderRegistrationStatus;
 import com.smxplore.users.identity.domain.model.Role;
@@ -22,6 +24,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,14 +39,17 @@ public class AdminUserController {
     private final SearchUsersUseCase searchUsers;
     private final GetUserDetailUseCase getUserDetail;
     private final ChangeUserStatusUseCase changeUserStatus;
+    private final ReviewProviderUseCase reviewProvider;
 
     public AdminUserController(
             SearchUsersUseCase searchUsers,
             GetUserDetailUseCase getUserDetail,
-            ChangeUserStatusUseCase changeUserStatus) {
+            ChangeUserStatusUseCase changeUserStatus,
+            ReviewProviderUseCase reviewProvider) {
         this.searchUsers = searchUsers;
         this.getUserDetail = getUserDetail;
         this.changeUserStatus = changeUserStatus;
+        this.reviewProvider = reviewProvider;
     }
 
     @GetMapping
@@ -73,6 +79,16 @@ public class AdminUserController {
             @Valid @RequestBody ChangeUserStatusRequest request) {
         changeUserStatus.change(
                 actorId(jwt), new UserId(id), new ChangeUserStatusCommand(request.status(), request.reason()));
+    }
+
+    @PostMapping("/{id}/provider-review")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reviewProvider(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID id,
+            @Valid @RequestBody ProviderReviewRequest request) {
+        reviewProvider.review(
+                actorId(jwt), new UserId(id), new ReviewProviderCommand(request.decision(), request.reason()));
     }
 
     private static UserId actorId(Jwt jwt) {

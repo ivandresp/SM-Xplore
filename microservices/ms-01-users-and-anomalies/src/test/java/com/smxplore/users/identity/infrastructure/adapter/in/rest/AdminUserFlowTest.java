@@ -202,6 +202,41 @@ class AdminUserFlowTest {
         });
     }
 
+    @Test
+    void approvesAndRejectsProviderRegistrations() {
+        String approvedId =
+                registerProvider("Prestadora Aprobada", "aprobada@example.com", "900222333-4", "3007770001");
+        String rejectedId =
+                registerProvider("Prestadora Rechazada", "rechazada@example.com", "900222444-5", "3007770002");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+        assertThat(reviewProvider(adminToken, approvedId, "APROBADO", "Documentación verificada"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        Map<?, ?> approved = get(adminToken, "/api/v1/admin/users/" + approvedId);
+        assertThat(registrationStatus(approved)).isEqualTo("APROBADO");
+
+        assertThat(reviewProvider(adminToken, rejectedId, "RECHAZADO", "NIT no verificable"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        Map<?, ?> rejected = get(adminToken, "/api/v1/admin/users/" + rejectedId);
+        assertThat(registrationStatus(rejected)).isEqualTo("RECHAZADO");
+
+        assertThat(reviewProvider(adminToken, approvedId, "APROBADO", null)).isEqualTo(HttpStatus.CONFLICT);
+
+        Map<?, ?> audit = get(adminToken, "/api/v1/admin/audit-logs?targetUserId=" + approvedId);
+        assertThat(entries(audit))
+                .anySatisfy(entry -> assertThat(entry.get("action")).isEqualTo("PRESTADORA_APROBADA"));
+    }
+
+    @Test
+    void onlyProvidersCanBeReviewed() {
+        String touristId =
+                registerTourist("Elena No Prestadora", "elena.review@example.com", "7770001111", "3007770011");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+        assertThat(reviewProvider(adminToken, touristId, "APROBADO", null)).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(reviewProvider(adminToken, touristId, "PENDIENTE", null)).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
     private String registerTourist(String fullName, String email, String dniNumber, String phone) {
         ResponseEntity<Map> response = client.post()
                 .uri("/api/v1/auth/register/turista")
@@ -281,6 +316,23 @@ class AdminUserFlowTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .body(body)
                 .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private HttpStatusCode reviewProvider(String token, String userId, String decision, String reason) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("decision", decision);
+        if (reason != null) {
+            body.put("reason", reason);
+        }
+        return client.post()
+                .uri("/api/v1/admin/users/" + userId + "/provider-review")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(body)
+                .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private static Object registrationStatus(Map<?, ?> detail) {
+        return ((Map<?, ?>) detail.get("profile")).get("registrationStatus");
     }
 
     @SuppressWarnings("unchecked")

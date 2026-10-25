@@ -13,12 +13,14 @@ import com.smxplore.users.identity.application.port.in.LoginUseCase;
 import com.smxplore.users.identity.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.identity.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.identity.application.port.in.ResetPasswordUseCase;
+import com.smxplore.users.identity.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.identity.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.identity.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.identity.application.port.out.AuditLogRepository;
 import com.smxplore.users.identity.application.port.out.PasswordHasher;
 import com.smxplore.users.identity.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.identity.application.port.out.PasswordResetTokenRepository;
+import com.smxplore.users.identity.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.identity.application.port.out.TokenGenerator;
 import com.smxplore.users.identity.application.port.out.TokenHasher;
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
@@ -37,6 +39,7 @@ import com.smxplore.users.identity.application.service.LoginService;
 import com.smxplore.users.identity.application.service.RegisterProviderService;
 import com.smxplore.users.identity.application.service.RegisterTouristService;
 import com.smxplore.users.identity.application.service.ResetPasswordService;
+import com.smxplore.users.identity.application.service.ReviewProviderService;
 import com.smxplore.users.identity.application.service.SearchUsersService;
 import com.smxplore.users.identity.application.service.UpdateProfileService;
 import java.time.Clock;
@@ -143,6 +146,16 @@ public class ApplicationConfig {
     public ChangeUserStatusUseCase changeUserStatusUseCase(
             UserRepository users, AuditTrailRecorder auditTrailRecorder, TransactionPort transactions, Clock clock) {
         return new ChangeUserStatusService(users, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public ReviewProviderUseCase reviewProviderUseCase(
+            UserRepository users,
+            AuditTrailRecorder auditTrailRecorder,
+            ProviderReviewNotifier providerReviewNotifier,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ReviewProviderService(users, auditTrailRecorder, providerReviewNotifier, transactions, clock);
     }
 
     @Bean
