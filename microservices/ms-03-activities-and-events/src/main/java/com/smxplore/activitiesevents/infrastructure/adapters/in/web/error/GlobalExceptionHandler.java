@@ -29,6 +29,11 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationIt
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationItemsNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyReservationItemsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +51,8 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({EventNotFoundException.class, ActivityNotFoundException.class,
-            ReservationNotFoundException.class, ReservationItemNotFoundException.class})
+            ReservationNotFoundException.class, ReservationItemNotFoundException.class,
+            ReviewNotFoundException.class})
     public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.NOT_FOUND, exception.getMessage(), exchange);
     }
@@ -55,9 +61,17 @@ public class GlobalExceptionHandler {
             InvalidActivityStatusTransitionException.class,
             InvalidReservationStatusTransitionException.class,
             ReservationItemsNotAllowedException.class,
-            TooManyReservationItemsException.class})
+            TooManyReservationItemsException.class,
+            ReviewAlreadyExistsException.class,
+            ReviewAlreadyRespondedException.class})
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewResponseNotAllowedException.class)
+    public ResponseEntity<ApiErrorResponse> handleReviewForbidden(RuntimeException exception,
+                                                                  ServerWebExchange exchange) {
+        return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler({
@@ -80,7 +94,8 @@ public class GlobalExceptionHandler {
             InvalidReservationItemException.class,
             InvalidReservationItemPriceException.class,
             MixedReservationItemTypesException.class,
-            DifferentProvidersInReservationException.class
+            DifferentProvidersInReservationException.class,
+            InvalidReviewException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);

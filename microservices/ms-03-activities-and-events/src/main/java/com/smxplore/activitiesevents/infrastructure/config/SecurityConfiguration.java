@@ -54,6 +54,7 @@ public class SecurityConfiguration {
                         // Public catalog
                         .pathMatchers(HttpMethod.GET, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
                         .pathMatchers(HttpMethod.HEAD, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/reviews/**").permitAll()
                         // Events: destination managers (and admins) manage the offer
                         .pathMatchers(HttpMethod.POST, "/api/v1/events/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)

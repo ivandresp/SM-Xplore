@@ -132,6 +132,20 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 
 Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una reserva de evento admite un solo ítem; el precio sale del catálogo, nunca del cliente; las actividades deben ser del mismo guía; solo se reservan ítems publicados, vigentes y con cupo disponible; el total es la suma de precios por persona.
 
+## Reseñas
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| POST | `/api/v1/reviews` | Autenticado; no exige reserva |
+| GET | `/api/v1/reviews/events/{eventId}` | Público |
+| GET | `/api/v1/reviews/activities/{activityId}` | Público |
+| POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o staff |
+
+- Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
+- `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
+- Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
+- La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, `ADMIN`/`DESTINATION_MANAGER`.
+
 ## Pruebas
 
 ```bash
