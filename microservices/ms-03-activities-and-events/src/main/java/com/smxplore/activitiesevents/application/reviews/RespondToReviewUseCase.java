@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.application.reviews;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
@@ -9,6 +10,7 @@ import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
 
     private final ReviewRepositoryPort reviewRepo;
     private final ActivityRepositoryPort activityRepo;
+    private final EventRepositoryPort eventRepo;
 
     @Override
     public Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message) {
@@ -42,24 +45,31 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
         }
         return reviewRepo.findById(reviewId)
                 .switchIfEmpty(Mono.error(new ReviewNotFoundException(reviewId)))
-                .flatMap(review -> {
-                    if (review.getReply() != null) {
-                        return Mono.error(new ReviewAlreadyRespondedException(
-                                "This review already has a response."));
-                    }
-                    return canRespond(review, responderId, role)
-                            .then(Mono.defer(() -> reviewRepo.save(review.withReply(
-                                    new ReviewReply(message, responderId, Instant.now())))));
-                });
+                .flatMap(review -> canRespond(review, responderId, role)
+                        .then(Mono.defer(() -> {
+                            if (review.getReply() != null) {
+                                return Mono.error(new ReviewAlreadyRespondedException(
+                                        "This review already has a response."));
+                            }
+                            return reviewRepo.save(review.withReply(
+                                    new ReviewReply(message, responderId, Instant.now())));
+                        })));
     }
 
     private Mono<Void> canRespond(Review review, UUID responderId, String role) {
-        if (ADMIN.equals(role) || DESTINATION_MANAGER.equals(role)) {
+        if (ADMIN.equals(role)) {
+            return Mono.empty();
+        }
+        if (review.getItemType() == ReviewItemType.ACTIVITY && DESTINATION_MANAGER.equals(role)) {
             return Mono.empty();
         }
         if (review.getItemType() == ReviewItemType.EVENT) {
-            return Mono.error(new ReviewResponseNotAllowedException(
-                    "Only the entity in charge of the event can respond."));
+            return eventRepo.findById(review.getItemId())
+                    .switchIfEmpty(Mono.error(new EventNotFoundException(review.getItemId())))
+                    .flatMap(event -> DESTINATION_MANAGER.equals(role) && responderId.equals(event.getManagerId())
+                            ? Mono.empty()
+                            : Mono.error(new ReviewResponseNotAllowedException(
+                                    "Only the destination manager in charge of the event can respond.")));
         }
         return activityRepo.findById(review.getItemId())
                 .switchIfEmpty(Mono.error(new ActivityNotFoundException(review.getItemId())))

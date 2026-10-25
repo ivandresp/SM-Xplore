@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public record EventRequest(
         @NotNull UUID siteId,
+        @Size(max = 150) String siteName,
+        UUID managerId,
         @NotBlank @Size(max = 150) String name,
         @NotBlank @Size(max = 50) String category,
         @NotNull @DecimalMin(value = "0.0") BigDecimal price,

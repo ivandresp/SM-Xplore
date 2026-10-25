@@ -15,7 +15,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -44,12 +48,31 @@ public class EventController {
     private final EstimateEventAttendanceUseCasePort estimateEventAttendanceUseCase;
     private final EventWebMapper mapper;
 
+    @Value("${app.security.jwt.role-claim:role}")
+    private String roleClaim;
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register an event for a site")
-    public Mono<EventResponse> register(@Valid @RequestBody EventRequest request) {
-        return registerEventUseCase.handle(mapper.toDomain(request))
+    public Mono<EventResponse> register(@Valid @RequestBody EventRequest request,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        var event = mapper.toDomain(request);
+        if (jwt != null && "DESTINATION_MANAGER".equals(jwt.getClaimAsString(roleClaim))) {
+            event = event.toBuilder().managerId(managerIdFrom(jwt)).build();
+        }
+        return registerEventUseCase.handle(event)
                 .map(mapper::toResponse);
+    }
+
+    private static UUID managerIdFrom(Jwt jwt) {
+        if (jwt.getSubject() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject is required.");
+        }
+        try {
+            return UUID.fromString(jwt.getSubject());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token subject.");
+        }
     }
 
     @GetMapping("/{eventId}")

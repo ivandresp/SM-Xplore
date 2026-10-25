@@ -46,7 +46,7 @@ class ReviewUseCasesTest {
     @BeforeEach
     void setUp() {
         createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo);
-        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo);
+        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo);
     }
 
     @Test
@@ -123,8 +123,33 @@ class ReviewUseCasesTest {
     void guideCannotRespondToEventReview() {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
 
         StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!"))
+                .expectError(ReviewResponseNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
+    void destinationManagerInChargeCanRespondToEventReview() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), managerId, "DESTINATION_MANAGER", "Thanks!"))
+                .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
+                .verifyComplete();
+    }
+
+    @Test
+    void anotherDestinationManagerCannotRespondToEventReview() {
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
     }
@@ -155,10 +180,11 @@ class ReviewUseCasesTest {
                 .build();
     }
 
-    private Event event() {
+    private Event event(UUID managerId) {
         var startsAt = Instant.now().plusSeconds(3_600);
         return Event.builder()
                 .siteId(UUID.randomUUID())
+                .managerId(managerId)
                 .name("Kayak")
                 .category("Nautical")
                 .status(EventStatus.PUBLISHED)

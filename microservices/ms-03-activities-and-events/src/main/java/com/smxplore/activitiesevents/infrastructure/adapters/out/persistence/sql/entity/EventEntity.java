@@ -12,6 +12,8 @@ import java.util.UUID;
 public record EventEntity(
         @Id UUID id,
         @Column("sitio_id") UUID siteId,
+        @Column("sitio_nombre") String siteName,
+        @Column("manager_id") UUID managerId,
         String name,
         String category,
         String status,

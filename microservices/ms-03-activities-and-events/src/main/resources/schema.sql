@@ -1,6 +1,8 @@
 CREATE TABLE IF NOT EXISTS evento (
     id                  uuid PRIMARY KEY,
     sitio_id            uuid NOT NULL,
+    sitio_nombre        varchar(150),
+    manager_id          uuid,
     name                varchar(150) NOT NULL,
     category            varchar(50) NOT NULL,
     status              varchar(30) NOT NULL DEFAULT 'DRAFT',
@@ -27,7 +29,11 @@ CREATE TABLE IF NOT EXISTS actividad (
     description   text
 );
 
+ALTER TABLE evento ADD COLUMN IF NOT EXISTS sitio_nombre varchar(150);
+ALTER TABLE evento ADD COLUMN IF NOT EXISTS manager_id uuid;
+
 CREATE INDEX IF NOT EXISTS evento_sitio_idx ON evento (sitio_id);
+CREATE INDEX IF NOT EXISTS evento_manager_idx ON evento (manager_id);
 CREATE INDEX IF NOT EXISTS evento_name_idx ON evento (name);
 CREATE INDEX IF NOT EXISTS actividad_sitio_idx ON actividad (sitio_id);
 CREATE INDEX IF NOT EXISTS actividad_category_idx ON actividad (category);

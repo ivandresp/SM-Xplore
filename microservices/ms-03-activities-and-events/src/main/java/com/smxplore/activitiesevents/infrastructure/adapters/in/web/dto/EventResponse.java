@@ -9,6 +9,8 @@ import java.util.UUID;
 public record EventResponse(
         UUID id,
         UUID siteId,
+        String siteName,
+        UUID managerId,
         String name,
         String category,
         EventStatus status,

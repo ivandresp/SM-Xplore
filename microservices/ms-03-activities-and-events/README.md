@@ -144,7 +144,11 @@ Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una res
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
 - Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
-- La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, `ADMIN`/`DESTINATION_MANAGER`.
+- La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, la **gestora del sitio** (`managerId` guardado en el evento) o `ADMIN`.
+
+## Snapshot de sitio en eventos
+
+`Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `DESTINATION_MANAGER`, `managerId` se toma del `sub` del JWT (no del body). Esto permite autorizar la respuesta a reseñas sin consultar ms-04 en caliente. Si cambia la gestora, el snapshot debe refrescarse (pendiente de contrato con ms-04).
 
 ## Pruebas
 

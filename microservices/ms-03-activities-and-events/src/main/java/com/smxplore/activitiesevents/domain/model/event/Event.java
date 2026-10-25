@@ -25,6 +25,8 @@ public class Event {
     @Builder.Default
     private final UUID id = UUID.randomUUID();
     private final UUID siteId;
+    private final String siteName;
+    private final UUID managerId;
     private String name;
     private String category;
 
