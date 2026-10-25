@@ -2,6 +2,7 @@ package com.smxplore.users.shared.infrastructure.config;
 
 import com.smxplore.users.identity.application.model.PasswordResetPolicy;
 import com.smxplore.users.identity.application.port.in.BootstrapAdminUseCase;
+import com.smxplore.users.identity.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.identity.application.port.in.GetPublicProfileUseCase;
@@ -19,6 +20,7 @@ import com.smxplore.users.identity.application.port.out.TokenIssuer;
 import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.application.service.BootstrapAdminService;
+import com.smxplore.users.identity.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.identity.application.service.ForgotPasswordService;
 import com.smxplore.users.identity.application.service.GetCurrentUserService;
 import com.smxplore.users.identity.application.service.GetPublicProfileService;
@@ -95,6 +97,16 @@ public class ApplicationConfig {
     @Bean
     public GetPublicProfileUseCase getPublicProfileUseCase(UserRepository users) {
         return new GetPublicProfileService(users);
+    }
+
+    @Bean
+    public ChangeOwnPasswordUseCase changeOwnPasswordUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            PasswordHasher passwordHasher,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ChangeOwnPasswordService(users, resetTokens, passwordHasher, transactions, clock);
     }
 
     @Bean
