@@ -1,14 +1,20 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.persistence.jpa;
 
+import com.smxplore.users.identity.application.dto.PageResult;
+import com.smxplore.users.identity.application.dto.UserSearchCriteria;
+import com.smxplore.users.identity.application.dto.UserSummaryView;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.model.Admin;
 import com.smxplore.users.identity.domain.model.Email;
 import com.smxplore.users.identity.domain.model.GestoraDestinos;
 import com.smxplore.users.identity.domain.model.Guia;
 import com.smxplore.users.identity.domain.model.PrestadoraServicios;
+import com.smxplore.users.identity.domain.model.Role;
 import com.smxplore.users.identity.domain.model.Turista;
 import com.smxplore.users.identity.domain.model.UserId;
+import com.smxplore.users.identity.domain.model.UserStatus;
 import com.smxplore.users.identity.domain.model.Usuario;
+import jakarta.persistence.EntityManager;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +29,7 @@ public class UserRepositoryAdapter implements UserRepository {
     private final DestinationManagerProfileJpaRepository destinationManagers;
     private final AdminProfileJpaRepository admins;
     private final UserPersistenceMapper mapper = new UserPersistenceMapper();
+    private final UserSummaryQuery summaryQuery;
 
     public UserRepositoryAdapter(
             UserJpaRepository users,
@@ -30,13 +37,15 @@ public class UserRepositoryAdapter implements UserRepository {
             GuideProfileJpaRepository guides,
             ProviderProfileJpaRepository providers,
             DestinationManagerProfileJpaRepository destinationManagers,
-            AdminProfileJpaRepository admins) {
+            AdminProfileJpaRepository admins,
+            EntityManager entityManager) {
         this.users = users;
         this.tourists = tourists;
         this.guides = guides;
         this.providers = providers;
         this.destinationManagers = destinationManagers;
         this.admins = admins;
+        this.summaryQuery = new UserSummaryQuery(entityManager);
     }
 
     @Override
@@ -54,6 +63,18 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public boolean existsByEmail(Email email) {
         return users.existsByEmail(email.value());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<UserSummaryView> search(UserSearchCriteria criteria) {
+        return summaryQuery.search(criteria);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countActiveByRole(Role role) {
+        return users.countByRoleAndStatus(role, UserStatus.ACTIVO);
     }
 
     @Override

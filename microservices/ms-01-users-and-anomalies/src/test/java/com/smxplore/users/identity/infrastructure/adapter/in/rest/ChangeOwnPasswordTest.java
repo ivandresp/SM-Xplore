@@ -44,7 +44,7 @@ class ChangeOwnPasswordTest {
 
     @Test
     void changesThePasswordAndInvalidatesThePreviousOne() {
-        registerTourist("clave@example.com");
+        registerTourist("clave@example.com", "1000000001", "3001110001");
         String token = login("clave@example.com", INITIAL_PASSWORD);
 
         HttpStatusCode wrongCurrent = changePassword(token, "NotMyPassword123!", NEW_PASSWORD);
@@ -59,7 +59,7 @@ class ChangeOwnPasswordTest {
 
     @Test
     void rejectsANewPasswordThatViolatesThePolicy() {
-        registerTourist("corta@example.com");
+        registerTourist("corta@example.com", "1000000002", "3001110002");
         String token = login("corta@example.com", INITIAL_PASSWORD);
 
         HttpStatusCode status = changePassword(token, INITIAL_PASSWORD, "short");
@@ -77,18 +77,26 @@ class ChangeOwnPasswordTest {
         assertThat(status).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
-    private void registerTourist(String email) {
+    private void registerTourist(String email, String dniNumber, String phone) {
         ResponseEntity<Void> registration = client.post()
                 .uri("/api/v1/auth/register/turista")
                 .body(Map.of(
-                        "fullName", "Ada Turista",
-                        "email", email,
-                        "phone", "3001234567",
-                        "password", INITIAL_PASSWORD,
-                        "dniType", "CC",
-                        "dniNumber", "1234567890",
-                        "preferredLanguage", "es",
-                        "nationality", "Colombia"))
+                        "fullName",
+                        "Ada Turista",
+                        "email",
+                        email,
+                        "phone",
+                        phone,
+                        "password",
+                        INITIAL_PASSWORD,
+                        "dniType",
+                        "CC",
+                        "dniNumber",
+                        dniNumber,
+                        "preferredLanguage",
+                        "es",
+                        "nationality",
+                        "Colombia"))
                 .retrieve()
                 .toBodilessEntity();
         assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);

@@ -2,9 +2,11 @@ package com.smxplore.users.shared.infrastructure.rest;
 
 import com.smxplore.users.identity.domain.exception.AccountNotActiveException;
 import com.smxplore.users.identity.domain.exception.EmailAlreadyExistsException;
+import com.smxplore.users.identity.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.identity.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.identity.domain.exception.InvalidCurrentPasswordException;
 import com.smxplore.users.identity.domain.exception.InvalidPasswordResetTokenException;
+import com.smxplore.users.identity.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.identity.domain.exception.ProfileMismatchException;
 import com.smxplore.users.identity.domain.exception.UserNotFoundException;
 import com.smxplore.users.identity.domain.exception.ValidationException;
@@ -54,6 +56,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidCurrentPasswordException.class)
     public ResponseEntity<ProblemDetail> handleInvalidCurrentPassword(InvalidCurrentPasswordException exception) {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_CURRENT_PASSWORD", exception.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenOperationException.class)
+    public ResponseEntity<ProblemDetail> handleForbiddenOperation(ForbiddenOperationException exception) {
+        return problem(HttpStatus.FORBIDDEN, "FORBIDDEN_OPERATION", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidStatusTransitionException exception) {
+        return problem(HttpStatus.CONFLICT, "INVALID_STATUS_TRANSITION", exception.getMessage());
     }
 
     @ExceptionHandler(AccountNotActiveException.class)
