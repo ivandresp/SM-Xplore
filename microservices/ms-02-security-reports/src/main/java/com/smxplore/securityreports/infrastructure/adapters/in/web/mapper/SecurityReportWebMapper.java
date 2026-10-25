@@ -7,18 +7,17 @@ import com.smxplore.securityreports.domain.model.types.UserRef;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.*;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface SecurityReportWebMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "version", ignore = true)
     @Mapping(target = "user", ignore = true)
-    @Mapping(target = "title", source = "text")
-    @Mapping(target = "description", ignore = true)
     SecurityReport toDomain(SecurityReportRequest request);
 
-    @Mapping(target = "text", source = "title")
     SecurityReportResponse toResponse(SecurityReport securityReport);
 
     @Mapping(target = "id", ignore = true)

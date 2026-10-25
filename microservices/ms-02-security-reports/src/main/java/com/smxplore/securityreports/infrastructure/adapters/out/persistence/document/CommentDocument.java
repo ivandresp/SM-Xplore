@@ -17,8 +17,8 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "security_report_comments")
-@CompoundIndex(name = "idx_security_report_comments_report_created_at",
-        def = "{'reportId': 1, 'createdAt': 1}")
+@CompoundIndex(name = "idx_security_report_comments_report_created_at_v2",
+        def = "{'reportId': 1, 'createdAt': 1, '_id': 1}")
 public class CommentDocument {
     @Id
     private String id;

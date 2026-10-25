@@ -2,7 +2,8 @@ package com.smxplore.securityreports.domain.ports.repository;
 
 import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.SecurityReportStatus;
-import reactor.core.publisher.Flux;
+import com.smxplore.securityreports.domain.model.types.Page;
+import com.smxplore.securityreports.domain.model.types.PageRequest;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -12,13 +13,7 @@ public interface SecurityReportRepositoryPort {
 
     Mono<SecurityReport> findById(UUID id);
 
-    Flux<SecurityReport> findAllByStatus(SecurityReportStatus status);
+    Mono<Page<SecurityReport>> findAllByStatus(SecurityReportStatus status, PageRequest pageRequest);
 
-    Flux<SecurityReport> findAll();
-
-    Mono<Void> changeContent(UUID reportId, String title, String description);
-
-    Mono<Void> changeStatus(UUID reportId, SecurityReportStatus status);
-
-    Flux<SecurityReport> findAllByUserId(UUID userId);
+    Mono<Page<SecurityReport>> findAllByUserId(UUID userId, PageRequest pageRequest);
 }

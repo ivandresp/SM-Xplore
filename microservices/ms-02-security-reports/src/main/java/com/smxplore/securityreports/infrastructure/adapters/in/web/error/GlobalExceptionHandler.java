@@ -1,7 +1,10 @@
 package com.smxplore.securityreports.infrastructure.adapters.in.web.error;
 
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
+import com.smxplore.securityreports.domain.exceptions.InvalidCursorException;
+import com.smxplore.securityreports.domain.exceptions.InvalidJwtException;
 import com.smxplore.securityreports.domain.exceptions.InvalidLocationParamsException;
+import com.smxplore.securityreports.domain.exceptions.InvalidPageSizeException;
 import com.smxplore.securityreports.domain.exceptions.InvalidReportRequestException;
 import com.smxplore.securityreports.domain.exceptions.InvalidStatusTransitionException;
 import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterException;
@@ -10,6 +13,7 @@ import com.smxplore.securityreports.domain.exceptions.ReportWithoutContentExcept
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -39,6 +43,8 @@ public class GlobalExceptionHandler {
             InvalidLocationParamsException.class,
             InvalidCommentException.class,
             InvalidUserReporterException.class,
+            InvalidPageSizeException.class,
+            InvalidCursorException.class,
             ReportWithoutContentException.class
     })
     public ResponseEntity<ApiErrorResponse> handleInvalidRequest(RuntimeException exception,
@@ -46,10 +52,23 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
     }
 
+    @ExceptionHandler(InvalidJwtException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidJwt(InvalidJwtException exception,
+                                                             ServerWebExchange exchange) {
+        return error(HttpStatus.UNAUTHORIZED, exception.getMessage(), exchange);
+    }
+
     @ExceptionHandler(InvalidStatusTransitionException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidStatusTransition(InvalidStatusTransitionException exception,
                                                                           ServerWebExchange exchange) {
         return error(HttpStatus.CONFLICT, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(OptimisticLockingFailureException exception,
+                                                                 ServerWebExchange exchange) {
+        return error(HttpStatus.CONFLICT,
+                "The report was modified by another request. Please retry with the latest version.", exchange);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

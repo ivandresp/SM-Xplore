@@ -1,10 +1,12 @@
 package com.smxplore.securityreports.application;
 
 import com.smxplore.securityreports.domain.model.SecurityReport;
+import com.smxplore.securityreports.domain.model.types.Page;
+import com.smxplore.securityreports.domain.model.types.PageRequest;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
 import com.smxplore.securityreports.domain.ports.usecases.ConsultReportsByUserUseCasePort;
 import lombok.RequiredArgsConstructor;
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -13,9 +15,7 @@ public class ConsultReportsByUserUseCase implements ConsultReportsByUserUseCaseP
     private final SecurityReportRepositoryPort securityReportRepo;
 
     @Override
-    public Flux<SecurityReport> handle(UUID userId) {
-        return securityReportRepo.findAllByUserId(userId);
+    public Mono<Page<SecurityReport>> handle(UUID userId, PageRequest pageRequest) {
+        return securityReportRepo.findAllByUserId(userId, pageRequest);
     }
-
-
 }

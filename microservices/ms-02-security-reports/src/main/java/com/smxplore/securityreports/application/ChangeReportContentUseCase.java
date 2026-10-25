@@ -1,6 +1,5 @@
 package com.smxplore.securityreports.application;
 
-
 import com.smxplore.securityreports.domain.exceptions.ReportNotFoundException;
 import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
@@ -18,7 +17,7 @@ public class ChangeReportContentUseCase implements ChangeReportContentUseCasePor
     public Mono<SecurityReport> handle(UUID reportId, String newTitle, String newDescription) {
         return securityReportRepo.findById(reportId)
                 .switchIfEmpty(Mono.error(new ReportNotFoundException(reportId)))
-                .doOnNext(comment -> comment.changeContent(newTitle, newDescription))
+                .doOnNext(report -> report.changeContent(newTitle, newDescription))
                 .flatMap(securityReportRepo::save);
     }
 }

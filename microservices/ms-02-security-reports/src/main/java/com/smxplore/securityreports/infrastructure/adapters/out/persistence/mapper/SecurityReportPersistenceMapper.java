@@ -4,12 +4,15 @@ import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.infrastructure.adapters.out.persistence.document.SecurityReportDocument;
 import org.mapstruct.Mapper;
+import org.mapstruct.ReportingPolicy;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = {UserRefPersistenceMapper.class, LocationPersistenceMapper.class})
+@Mapper(componentModel = "spring",
+        uses = {UserRefPersistenceMapper.class, LocationPersistenceMapper.class},
+        unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface SecurityReportPersistenceMapper {
 
     SecurityReportDocument toDocument(SecurityReport report);
@@ -25,6 +28,6 @@ public interface SecurityReportPersistenceMapper {
     }
 
     default Instant mapCreatedAt(Instant createdAt) {
-        return createdAt == null ? Instant.now() : createdAt;
+        return createdAt == null ? Instant.EPOCH : createdAt;
     }
 }

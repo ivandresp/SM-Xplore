@@ -56,7 +56,8 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public ConsultReportCommentsUseCasePort consultReportCommentsUseCase(CommentRepositoryPort commentRepository) {
-        return new ConsultReportCommentUseCase(commentRepository);
+    public ConsultReportCommentsUseCasePort consultReportCommentsUseCase(CommentRepositoryPort commentRepository,
+                                                                          SecurityReportRepositoryPort securityReportRepository) {
+        return new ConsultReportCommentUseCase(commentRepository, securityReportRepository);
     }
 }

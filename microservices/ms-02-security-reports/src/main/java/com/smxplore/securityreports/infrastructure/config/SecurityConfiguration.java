@@ -1,6 +1,7 @@
 package com.smxplore.securityreports.infrastructure.config;
 
 import com.smxplore.securityreports.domain.model.types.UserRole;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.error.ApiErrorResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,9 +21,9 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
@@ -75,10 +76,10 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter() {
+    public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter(JwtProperties jwtProperties) {
         var converter = new ReactiveJwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            var role = jwt.getClaimAsString(JwtConfiguration.ROLE_CLAIM);
+            var role = jwt.getClaimAsString(jwtProperties.getRoleClaim());
             return role == null
                     ? Flux.empty()
                     : Flux.just(new SimpleGrantedAuthority("ROLE_" + role));
@@ -87,17 +88,18 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public ServerAuthenticationEntryPoint apiAuthenticationEntryPoint() {
+    public ServerAuthenticationEntryPoint apiAuthenticationEntryPoint(ObjectMapper objectMapper) {
         return (exchange, exception) -> {
             exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
-            return writeError(exchange, HttpStatus.UNAUTHORIZED, "Authentication required or token invalid.");
+            return writeError(exchange, HttpStatus.UNAUTHORIZED, "Authentication required or token invalid.",
+                    objectMapper);
         };
     }
 
     @Bean
-    public ServerAccessDeniedHandler apiAccessDeniedHandler() {
+    public ServerAccessDeniedHandler apiAccessDeniedHandler(ObjectMapper objectMapper) {
         return (exchange, exception) -> writeError(exchange, HttpStatus.FORBIDDEN,
-                "Insufficient role for this operation.");
+                "Insufficient role for this operation.", objectMapper);
     }
 
     @Bean
@@ -115,16 +117,18 @@ public class SecurityConfiguration {
         return source;
     }
 
-    private static Mono<Void> writeError(ServerWebExchange exchange, HttpStatus status, String message) {
+    private static Mono<Void> writeError(ServerWebExchange exchange, HttpStatus status, String message,
+                                         ObjectMapper objectMapper) {
         var response = exchange.getResponse();
         response.setStatusCode(status);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        // Same JSON shape as ApiErrorResponse (keep in sync) — built manually so the
-        // filter chain does not depend on any JSON mapper bean.
-        var json = "{\"timestamp\":\"%s\",\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}"
-                .formatted(Instant.now(), status.value(), status.getReasonPhrase(), message,
-                        exchange.getRequest().getPath().value());
-        var buffer = response.bufferFactory().wrap(json.getBytes(StandardCharsets.UTF_8));
-        return response.writeWith(Mono.just(buffer));
+
+        try {
+            var json = objectMapper.writeValueAsBytes(ApiErrorResponse.of(status, message, exchange));
+            var buffer = response.bufferFactory().wrap(json);
+            return response.writeWith(Mono.just(buffer));
+        } catch (JacksonException exception) {
+            return Mono.error(exception);
+        }
     }
 }

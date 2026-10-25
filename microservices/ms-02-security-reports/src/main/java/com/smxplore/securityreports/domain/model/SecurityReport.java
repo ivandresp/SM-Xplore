@@ -1,5 +1,6 @@
 package com.smxplore.securityreports.domain.model;
 
+import com.smxplore.securityreports.domain.exceptions.InvalidReportRequestException;
 import com.smxplore.securityreports.domain.exceptions.InvalidStatusTransitionException;
 import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterException;
 import com.smxplore.securityreports.domain.exceptions.ReportWithoutContentException;
@@ -9,11 +10,21 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.Instant;
-import java.util.*;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Builder(toBuilder = true)
 public class SecurityReport {
+    private static final int MAX_TITLE_LENGTH = 200;
+    private static final int MAX_DESCRIPTION_LENGTH = 2000;
+    private static final int MAX_PHOTO_URL_LENGTH = 2048;
+    private static final int MAX_PHOTOS = 10;
+
     @Builder.Default
     private final UUID id = UUID.randomUUID();
     private UserRef user;
@@ -28,11 +39,15 @@ public class SecurityReport {
     private SecurityReportStatus status = SecurityReportStatus.ONGOING;
 
     @Builder.Default
-    private final Instant createdAt = Instant.now();
+    private final Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+    private Long version;
 
     //Methods
     public void validate() {
         validateTitle(title);
+        validateDescription(description);
+        if (createdAt == null) throw new InvalidReportRequestException("Creation date is mandatory.");
         if (location != null) location.validate();
         if (user == null) throw new InvalidUserReporterException("User is empty");
 
@@ -41,6 +56,7 @@ public class SecurityReport {
 
     public void changeContent(String title, String description) {
         validateTitle(title);
+        validateDescription(description);
         this.title = title;
         this.description = description;
     }
@@ -52,10 +68,25 @@ public class SecurityReport {
 
     public void addPhoto(String photoUrl) {
         if (photoUrl == null || photoUrl.isBlank()) return;
-        var url = photoUrl.trim();
+        var url = validateUrl(photoUrl);
+
         if (photosUrls.contains(url)) return;
+        if (photosUrls.size() >= MAX_PHOTOS) {
+            throw new InvalidReportRequestException("A report cannot have more than " + MAX_PHOTOS + " photos.");
+        }
 
         photosUrls.add(url);
+    }
+
+    private String validateUrl(String url){
+        url = url.trim();
+        if (url.length() > MAX_PHOTO_URL_LENGTH) {
+            throw new InvalidReportRequestException("Photo URL is too long.");
+        }
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            throw new InvalidReportRequestException("Photo URL must use http or https.");
+        }
+        return url;
     }
 
     public boolean removePhoto(String photo) {
@@ -76,6 +107,9 @@ public class SecurityReport {
 
     public void markAsSolved() {
         if (isSolved()) throw new InvalidStatusTransitionException("Already solved");
+        if (!isReported()) {
+            throw new InvalidStatusTransitionException("SecurityReport must be reported before being solved");
+        }
         status = SecurityReportStatus.SOLVED;
     }
 
@@ -91,5 +125,12 @@ public class SecurityReport {
     private void validateTitle(String title) {
         if (title == null || title.isBlank())
             throw new ReportWithoutContentException("Title is empty");
+        if (title.length() > MAX_TITLE_LENGTH)
+            throw new ReportWithoutContentException("Title is too long");
+    }
+
+    private void validateDescription(String description) {
+        if (description != null && description.length() > MAX_DESCRIPTION_LENGTH)
+            throw new ReportWithoutContentException("Description is too long");
     }
 }

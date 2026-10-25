@@ -1,10 +1,13 @@
 package com.smxplore.securityreports.infrastructure.adapters.in.web.controller;
 
-import com.smxplore.securityreports.domain.model.types.UserRef;
 import com.smxplore.securityreports.domain.ports.usecases.CommentReportUseCasePort;
 import com.smxplore.securityreports.domain.ports.usecases.ConsultReportCommentsUseCasePort;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.CommentRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.CommentResponse;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageResponse;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -13,11 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 
-import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -29,6 +29,8 @@ public class CommentController {
     private final CommentReportUseCasePort commentReportUseCase;
     private final ConsultReportCommentsUseCasePort consultReportCommentsUseCase;
     private final SecurityReportWebMapper mapper;
+    private final PageResponseMapper pageResponseMapper;
+    private final JwtUserResolver jwtUserResolver;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -36,14 +38,19 @@ public class CommentController {
     public Mono<CommentResponse> comment(@PathVariable UUID reportId,
                                          @Valid @RequestBody CommentRequest request,
                                          @AuthenticationPrincipal Jwt jwt) {
-        var user = new UserRef(UUID.fromString(Objects.requireNonNull(jwt.getSubject())), jwt.getClaimAsString("name"));
+        var user = jwtUserResolver.resolve(jwt);
         var comment = mapper.toDomain(request).toBuilder().reportId(reportId).user(user).build();
         return commentReportUseCase.handle(comment).map(mapper::toResponse);
     }
 
     @GetMapping
-    @Operation(summary = "List the comments of a security report")
-    public Flux<CommentResponse> findComments(@PathVariable UUID reportId) {
-        return consultReportCommentsUseCase.handle(reportId).map(mapper::toResponse);
+    @Operation(summary = "List the comments of a security report using cursor-based pagination")
+    public Mono<PageResponse<CommentResponse>> findComments(
+            @PathVariable UUID reportId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
+        return consultReportCommentsUseCase.handle(reportId, pageRequest)
+                .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
     }
 }

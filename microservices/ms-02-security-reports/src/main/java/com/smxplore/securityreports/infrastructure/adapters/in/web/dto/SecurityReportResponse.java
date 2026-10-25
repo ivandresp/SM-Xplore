@@ -9,7 +9,8 @@ import java.util.UUID;
 public record SecurityReportResponse(
         UUID id,
         UserRefDto user,
-        String text,
+        String title,
+        String description,
         LocationDto location,
         List<String> photosUrls,
         SecurityReportStatus status,

@@ -4,24 +4,25 @@ import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.domain.model.types.*;
 import com.smxplore.securityreports.domain.ports.usecases.*;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.ChangeReportContentRequest;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PhotosRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
+import com.smxplore.securityreports.infrastructure.config.JwtProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import org.springframework.security.oauth2.jwt.Jwt;
-import com.smxplore.securityreports.infrastructure.config.JwtConfiguration;
 
-import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -39,13 +40,16 @@ public class SecurityReportController {
     private final CloseReportUseCasePort closeReportUseCase;
     private final MarkReportAsSolvedUseCasePort markReportAsSolvedUseCase;
     private final SecurityReportWebMapper mapper;
+    private final PageResponseMapper pageResponseMapper;
+    private final JwtUserResolver jwtUserResolver;
+    private final JwtProperties jwtProperties;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Report a security incident (the reporter is taken from the token)")
     public Mono<SecurityReportResponse> reportIncident(@Valid @RequestBody SecurityReportRequest request,
                                                        @AuthenticationPrincipal Jwt jwt) {
-        var user = new UserRef(UUID.fromString(Objects.requireNonNull(jwt.getSubject())), jwt.getClaimAsString("name"));
+        var user = jwtUserResolver.resolve(jwt);
         var securityReport = mapper.toDomain(request).toBuilder().user(user).build();
         return reportIncidentUseCase.handle(user, securityReport)
                 .map(mapper::toResponse);
@@ -58,15 +62,27 @@ public class SecurityReportController {
     }
 
     @GetMapping
-    @Operation(summary = "List security reports by status")
-    public Flux<SecurityReportResponse> findByStatus(@RequestParam SecurityReportStatus status) {
-        return consultReportsUseCase.handle(status).map(mapper::toResponse);
+    @Operation(summary = "List security reports by status using cursor-based pagination")
+    public Mono<PageResponse<SecurityReportResponse>> findByStatus(
+            @RequestParam SecurityReportStatus status,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
+        return consultReportsUseCase.handle(status, pageRequest)
+                .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
     }
 
     @GetMapping("/by-user/{userId}")
-    @Operation(summary = "List security reports reported by a user")
-    public Flux<SecurityReportResponse> findByUser(@PathVariable UUID userId) {
-        return consultReportsByUserUseCase.handle(userId).map(mapper::toResponse);
+    @Operation(summary = "List security reports reported by a user using cursor-based pagination")
+    public Mono<PageResponse<SecurityReportResponse>> findByUser(
+            @PathVariable UUID userId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        requireSelfOrStaff(jwt, userId);
+        var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
+        return consultReportsByUserUseCase.handle(userId, pageRequest)
+                .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
     }
 
     @PatchMapping("/{reportId}/content")
@@ -102,19 +118,27 @@ public class SecurityReportController {
 
     }
 
-    private static boolean isAdminOrManager(Jwt jwt) {
-        var role = jwt.getClaimAsString(JwtConfiguration.ROLE_CLAIM);
+    private boolean isAdminOrManager(Jwt jwt) {
+        var role = jwt.getClaimAsString(jwtProperties.getRoleClaim());
         return UserRole.ADMIN.name().equals(role) || UserRole.DESTINATION_MANAGER.name().equals(role);
+    }
+
+    private void requireSelfOrStaff(Jwt jwt, UUID userId) {
+        if (!isAdminOrManager(jwt) && !jwtUserResolver.subjectId(jwt).equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only the user themselves or staff can list these reports.");
+        }
     }
 
     private Mono<Void> requireReportAuthorOrStaff(Jwt jwt, UUID reportId) {
         if (isAdminOrManager(jwt)) {
             return Mono.empty();
         }
+        var requesterId = jwtUserResolver.subjectId(jwt);
         return consultOneReportUseCase.handle(reportId)
                 .doOnNext(report -> {
                     var authorId = report.getUser() == null ? null : report.getUser().id();
-                    if (authorId == null || !authorId.toString().equals(jwt.getSubject())) {
+                    if (!requesterId.equals(authorId)) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the author of the report (or staff) can change it.");
                     }

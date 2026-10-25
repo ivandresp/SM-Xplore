@@ -50,4 +50,10 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    environment("JWT_SECRET", "test-secret-for-integration-tests-32-bytes-minimum!")
+    environment("JWT_ISSUER", "https://securityreports.local")
+}
+
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName.set("app.jar")
 }
