@@ -6,11 +6,13 @@ import com.smxplore.users.identity.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.identity.application.port.in.GetPublicProfileUseCase;
+import com.smxplore.users.identity.application.port.in.ListAuditEntriesUseCase;
 import com.smxplore.users.identity.application.port.in.LoginUseCase;
 import com.smxplore.users.identity.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.identity.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.identity.application.port.in.ResetPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.UpdateProfileUseCase;
+import com.smxplore.users.identity.application.port.out.AuditLogRepository;
 import com.smxplore.users.identity.application.port.out.PasswordHasher;
 import com.smxplore.users.identity.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.identity.application.port.out.PasswordResetTokenRepository;
@@ -24,6 +26,7 @@ import com.smxplore.users.identity.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.identity.application.service.ForgotPasswordService;
 import com.smxplore.users.identity.application.service.GetCurrentUserService;
 import com.smxplore.users.identity.application.service.GetPublicProfileService;
+import com.smxplore.users.identity.application.service.ListAuditEntriesService;
 import com.smxplore.users.identity.application.service.LoginService;
 import com.smxplore.users.identity.application.service.RegisterProviderService;
 import com.smxplore.users.identity.application.service.RegisterTouristService;
@@ -107,6 +110,11 @@ public class ApplicationConfig {
             TransactionPort transactions,
             Clock clock) {
         return new ChangeOwnPasswordService(users, resetTokens, passwordHasher, transactions, clock);
+    }
+
+    @Bean
+    public ListAuditEntriesUseCase listAuditEntriesUseCase(AuditLogRepository auditLogRepository) {
+        return new ListAuditEntriesService(auditLogRepository);
     }
 
     @Bean

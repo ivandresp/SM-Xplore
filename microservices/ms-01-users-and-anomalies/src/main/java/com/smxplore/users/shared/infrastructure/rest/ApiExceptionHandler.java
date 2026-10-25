@@ -18,6 +18,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -58,6 +59,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ProblemDetail> handleAccountNotActive(AccountNotActiveException exception) {
         return problem(HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", exception.getMessage());
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ProblemDetail> handleAccessDenied(AuthorizationDeniedException exception) {
+        return problem(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "No tienes permisos para realizar esta operación");
     }
 
     @ExceptionHandler(UserNotFoundException.class)

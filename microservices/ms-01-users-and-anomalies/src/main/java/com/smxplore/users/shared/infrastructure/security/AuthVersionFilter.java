@@ -10,7 +10,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -63,12 +62,11 @@ public class AuthVersionFilter extends OncePerRequestFilter {
     }
 
     private static void unauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
-        response.getWriter().write("""
-                        {"type":"about:blank","title":"Unauthorized","status":401,\
-                        "detail":"La sesión ya no es válida."}\
-                        """);
+        SecurityProblemWriter.write(
+                response,
+                HttpServletResponse.SC_UNAUTHORIZED,
+                "Unauthorized",
+                "La sesión ya no es válida.",
+                "UNAUTHORIZED");
     }
 }
