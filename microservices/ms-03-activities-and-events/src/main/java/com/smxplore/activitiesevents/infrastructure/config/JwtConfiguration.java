@@ -24,6 +24,8 @@ import java.util.List;
 @Configuration(proxyBeanMethods = false)
 public class JwtConfiguration {
 
+    public static final String ROLE_CLAIM = "role";
+
     private static final int MIN_SECRET_BYTES = 32;
 
     @Bean

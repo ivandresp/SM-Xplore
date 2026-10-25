@@ -108,6 +108,30 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 - Faltan pruebas de integración con Testcontainers (declaradas en el build).
 - Neo4j (preferencias) queda diferido.
 
+## Reservas
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| POST | `/api/v1/reservations` | Autenticado (turista crea la suya; admin puede crear para otro) |
+| GET | `/api/v1/reservations/{id}` | Dueño, guía de la reserva o staff |
+| GET | `/api/v1/reservations?status=` | `ADMIN`, `DESTINATION_MANAGER` |
+| GET | `/api/v1/reservations/tourists/{touristId}` | El propio turista o staff |
+| GET | `/api/v1/reservations/guides/{guideId}` | El propio guía o staff |
+| GET | `/api/v1/reservations/by-item?itemType=&itemId=` | Guía dueño del ítem o staff (eventos: staff) |
+| PATCH | `/api/v1/reservations/{id}/confirm` | Guía de la reserva o staff |
+| PATCH | `/api/v1/reservations/{id}/reject` | Guía de la reserva o staff |
+| PATCH | `/api/v1/reservations/{id}/cancel` | Dueño o staff |
+| PATCH | `/api/v1/reservations/{id}/request-cancellation` | Dueño o staff |
+| PATCH | `/api/v1/reservations/{id}/attendance` | Guía de la reserva o staff |
+| PATCH | `/api/v1/reservations/{id}/no-show` | Guía de la reserva o staff |
+| POST | `/api/v1/reservations/{id}/items` | Dueño o staff |
+| POST | `/api/v1/reservations/{id}/items/batch` | Dueño o staff |
+| GET | `/api/v1/reservations/{id}/items` | Dueño, guía o staff |
+| GET | `/api/v1/reservation-items/{id}` | Dueño, guía o staff |
+| GET | `/api/v1/reservation-items?type=` | `ADMIN`, `DESTINATION_MANAGER` |
+
+Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una reserva de evento admite un solo ítem; el precio sale del catálogo, nunca del cliente; las actividades deben ser del mismo guía.
+
 ## Pruebas
 
 ```bash

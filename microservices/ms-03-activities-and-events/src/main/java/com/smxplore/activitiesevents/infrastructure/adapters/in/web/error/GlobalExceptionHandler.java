@@ -15,6 +15,20 @@ import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventRequest
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidExpectedAttendanceException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.DifferentProvidersInReservationException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemPriceException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationRequestException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTotalException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.MixedReservationItemTypesException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationItemNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationItemsNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyReservationItemsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,13 +45,17 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler({EventNotFoundException.class, ActivityNotFoundException.class})
+    @ExceptionHandler({EventNotFoundException.class, ActivityNotFoundException.class,
+            ReservationNotFoundException.class, ReservationItemNotFoundException.class})
     public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.NOT_FOUND, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler({InvalidEventStatusTransitionException.class,
-            InvalidActivityStatusTransitionException.class})
+            InvalidActivityStatusTransitionException.class,
+            InvalidReservationStatusTransitionException.class,
+            ReservationItemsNotAllowedException.class,
+            TooManyReservationItemsException.class})
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
@@ -53,7 +71,16 @@ public class GlobalExceptionHandler {
             InvalidActivityNameException.class,
             InvalidActivityPriceException.class,
             InvalidActivityCapacityException.class,
-            InvalidActivityScheduleException.class
+            InvalidActivityScheduleException.class,
+            InvalidReservationRequestException.class,
+            InvalidNumberOfPeopleException.class,
+            InvalidBookingDateException.class,
+            InvalidReservationTotalException.class,
+            InvalidReservationTouristException.class,
+            InvalidReservationItemException.class,
+            InvalidReservationItemPriceException.class,
+            MixedReservationItemTypesException.class,
+            DifferentProvidersInReservationException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
