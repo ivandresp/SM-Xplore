@@ -3,12 +3,16 @@ package com.smxplore.activitiesevents.application.reservations;
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.DifferentProvidersInReservationException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.MixedReservationItemTypesException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyReservationItemsException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItem;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
@@ -22,7 +26,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -31,15 +37,15 @@ import java.util.stream.Stream;
 /**
  * Business rules for the items of a reservation:
  * <ul>
- *     <li>The reservation must exist and not be in a final state.</li>
+ *     <li>The reservation must exist and be in PENDING state to accept items.</li>
  *     <li>All the items of a reservation must share the same type; there is a
  *     maximum of {@value #MAX_ITEMS_PER_RESERVATION} items per reservation.</li>
- *     <li>ACTIVITY items must belong to activities of the same guide; their price
- *     comes from the catalog (the client-sent price is ignored).</li>
- *     <li>EVENT items are limited to one per reservation and their price also
- *     comes from the event catalog.</li>
- *     <li>The reservation remembers its guide (ACTIVITY items) so each guide can
- *     list the reservations they received.</li>
+ *     <li>ACTIVITY items must belong to published activities of the same guide;
+ *     EVENT items must belong to a published event and are limited to one per
+ *     reservation.</li>
+ *     <li>The price always comes from the catalog, never from the client.</li>
+ *     <li>Capacity is checked against the item's max capacity using the people
+ *     count of the reservation and the active reservations already booked.</li>
  * </ul>
  */
 @RequiredArgsConstructor
@@ -61,7 +67,7 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
                             reservation.validateItemsCanBeAdded();
                             return reservationItemRepo.findByReservationId(reservationId)
                                     .collectList()
-                                    .flatMapMany(existing -> resolveItems(existing, prepared)
+                                    .flatMapMany(existing -> resolveItems(reservation, existing, prepared)
                                             .flatMapMany(resolved -> Flux.defer(() -> reservationItemRepo.saveAll(resolved))
                                                     .collectList()
                                                     .flatMap(saved -> assignOwner(reservation, resolved)
@@ -76,8 +82,15 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
         if (items == null || items.isEmpty()) {
             throw new InvalidReservationItemException("At least one reservation item is required.");
         }
+        var seen = new HashSet<UUID>();
         var prepared = items.stream()
                 .map(item -> prepareItem(reservationId, item))
+                .peek(item -> {
+                    if (!seen.add(item.getItemId())) {
+                        throw new InvalidReservationItemException(
+                                "Duplicate item %s in the same request.".formatted(item.getItemId()));
+                    }
+                })
                 .toList();
         if (prepared.stream().map(ReservationItem::getType).distinct().count() > 1) {
             throw new MixedReservationItemTypesException("All the items of a reservation must have the same type.");
@@ -98,7 +111,8 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
         return item.toBuilder().reservationId(reservationId).build();
     }
 
-    private Mono<List<ReservationItem>> resolveItems(List<ReservationItem> existing, List<ReservationItem> incoming) {
+    private Mono<List<ReservationItem>> resolveItems(Reservation reservation, List<ReservationItem> existing,
+                                                     List<ReservationItem> incoming) {
         var incomingType = incoming.getFirst().getType();
         if (!existing.isEmpty() && existing.getFirst().getType() != incomingType) {
             return Mono.error(new MixedReservationItemTypesException(
@@ -113,12 +127,13 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
             return Mono.error(new TooManyReservationItemsException("An EVENT reservation can only have one item."));
         }
         return switch (incomingType) {
-            case ACTIVITY -> resolveActivities(existing, incoming);
-            case EVENT -> resolveEvents(incoming);
+            case ACTIVITY -> resolveActivities(reservation, existing, incoming);
+            case EVENT -> resolveEvents(reservation, incoming);
         };
     }
 
-    private Mono<List<ReservationItem>> resolveActivities(List<ReservationItem> existing, List<ReservationItem> incoming) {
+    private Mono<List<ReservationItem>> resolveActivities(Reservation reservation, List<ReservationItem> existing,
+                                                          List<ReservationItem> incoming) {
         var activityIds = Stream.concat(existing.stream(), incoming.stream())
                 .map(ReservationItem::getItemId)
                 .distinct()
@@ -137,14 +152,19 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
                         return Mono.error(new DifferentProvidersInReservationException(
                                 "All the activities of a reservation must be offered by the same guide."));
                     }
-                    var resolved = incoming.stream()
-                            .map(item -> item.toBuilder().price(activities.get(item.getItemId()).getPrice()).build())
-                            .toList();
-                    return Mono.just(validate(resolved));
+                    return Flux.fromIterable(activities.values())
+                            .concatMap(activity -> validateActivity(reservation, activity))
+                            .then(Mono.fromCallable(() -> {
+                                var resolved = incoming.stream()
+                                        .map(item -> item.toBuilder()
+                                                .price(activities.get(item.getItemId()).getPrice()).build())
+                                        .toList();
+                                return validate(resolved);
+                            }));
                 });
     }
 
-    private Mono<List<ReservationItem>> resolveEvents(List<ReservationItem> incoming) {
+    private Mono<List<ReservationItem>> resolveEvents(Reservation reservation, List<ReservationItem> incoming) {
         var eventIds = incoming.stream()
                 .map(ReservationItem::getItemId)
                 .distinct()
@@ -153,12 +173,54 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
                 .concatMap(eventId -> eventRepo.findById(eventId)
                         .switchIfEmpty(Mono.error(new EventNotFoundException(eventId))))
                 .collectMap(Event::getId)
-                .flatMap(events -> {
-                    var resolved = incoming.stream()
-                            .map(item -> item.toBuilder().price(events.get(item.getItemId()).getPrice()).build())
-                            .toList();
-                    return Mono.just(validate(resolved));
-                });
+                .flatMap(events -> Flux.fromIterable(events.values())
+                        .concatMap(event -> validateEvent(reservation, event))
+                        .then(Mono.fromCallable(() -> {
+                            var resolved = incoming.stream()
+                                    .map(item -> item.toBuilder()
+                                            .price(events.get(item.getItemId()).getPrice()).build())
+                                    .toList();
+                            return validate(resolved);
+                        })));
+    }
+
+    private Mono<Void> validateActivity(Reservation reservation, Activity activity) {
+        if (activity.getStatus() != ActivityStatus.PUBLISHED) {
+            return Mono.error(new InvalidReservationItemException(
+                    "Activity %s is not published.".formatted(activity.getId())));
+        }
+        if (activity.getEndsAt() == null || !activity.getEndsAt().isAfter(Instant.now())) {
+            return Mono.error(new InvalidBookingDateException(
+                    "Activity %s has already ended.".formatted(activity.getId())));
+        }
+        return validateCapacity(reservation, activity.getId(), ReservationItemType.ACTIVITY,
+                activity.getMaxCapacity());
+    }
+
+    private Mono<Void> validateEvent(Reservation reservation, Event event) {
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            return Mono.error(new InvalidReservationItemException(
+                    "Event %s is not published.".formatted(event.getId())));
+        }
+        if (event.getEndsAt() == null || !event.getEndsAt().isAfter(Instant.now())) {
+            return Mono.error(new InvalidBookingDateException(
+                    "Event %s has already ended.".formatted(event.getId())));
+        }
+        return validateCapacity(reservation, event.getId(), ReservationItemType.EVENT, event.getMaxCapacity());
+    }
+
+    private Mono<Void> validateCapacity(Reservation reservation, UUID itemId, ReservationItemType type,
+                                        int maxCapacity) {
+        if (reservation.getNumberOfPeople() > maxCapacity) {
+            return Mono.error(new InvalidNumberOfPeopleException(
+                    "The reservation exceeds the max capacity (%d).".formatted(maxCapacity)));
+        }
+        return reservationItemRepo.sumActivePeopleForItem(reservation.getId(), itemId, type)
+                .flatMap(reserved -> reserved + reservation.getNumberOfPeople() > maxCapacity
+                        ? Mono.error(new InvalidNumberOfPeopleException(
+                                "Not enough capacity for this item: %d of %d seats are already reserved."
+                                        .formatted(reserved, maxCapacity)))
+                        : Mono.empty());
     }
 
     /** Fixes the guide (ACTIVITY items) of the reservation. */
@@ -183,14 +245,14 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
     }
 
     /**
-     * The total of the reservation is the sum of the prices of all its items.
+     * The total is the sum of the item prices multiplied by the number of people.
      */
     private Mono<Void> recalculateTotal(Reservation reservation, List<ReservationItem> existing,
                                         List<ReservationItem> saved) {
-        var total = Stream.concat(existing.stream(), saved.stream())
+        var unitTotal = Stream.concat(existing.stream(), saved.stream())
                 .map(ReservationItem::getPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        reservation.changePrice(total);
+        reservation.changePrice(unitTotal.multiply(BigDecimal.valueOf(reservation.getNumberOfPeople())));
         return reservationRepo.save(reservation).then();
     }
 }

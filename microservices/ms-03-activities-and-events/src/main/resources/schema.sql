@@ -68,6 +68,6 @@ CREATE TABLE IF NOT EXISTS reservation_items (
     CONSTRAINT reservation_items_type_valid CHECK (type IN ('EVENT', 'ACTIVITY'))
 );
 
-CREATE INDEX IF NOT EXISTS reservation_items_reservation_idx ON reservation_items (reservation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS reservation_items_reservation_item_uidx ON reservation_items (reservation_id, item_id);
 CREATE INDEX IF NOT EXISTS reservation_items_item_idx ON reservation_items (item_id);
 CREATE INDEX IF NOT EXISTS reservation_items_type_idx ON reservation_items (type);

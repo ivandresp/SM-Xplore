@@ -62,16 +62,33 @@ public class ReservationItemPostgresAdapter implements ReservationItemRepository
         return repository.findByType(type, page(limit)).map(mapper::toDomain);
     }
 
+    @Override
+    public Mono<Integer> sumActivePeopleForItem(UUID reservationId, UUID itemId, ReservationItemType type) {
+        var sql = """
+                SELECT COALESCE(SUM(r.number_of_people), 0) AS reserved
+                FROM reservations r
+                JOIN reservation_items i ON i.reservation_id = r.id
+                WHERE i.item_id = :itemId
+                  AND i.type = :type
+                  AND r.id <> :reservationId
+                  AND r.status IN ('PENDING', 'CONFIRMED', 'CANCELLATION_REQUESTED')
+                """;
+        return template.getDatabaseClient().sql(sql)
+                .bind("reservationId", reservationId)
+                .bind("itemId", itemId)
+                .bind("type", type.name())
+                .map((row, metadata) -> row.get("reserved", Long.class))
+                .one()
+                .map(Long::intValue)
+                .defaultIfEmpty(0);
+    }
+
     private PageRequest page(int limit) {
         return PageRequest.of(0, limit, STABLE_ORDER);
     }
 
-    /**
-     * Los ids se generan en el dominio: se consulta la existencia y se hace el
-     * upsert explícito (ver {@link ReservationPostgresAdapter#save}).
-     */
     private Mono<ReservationItemEntity> saveEntity(ReservationItemEntity entity) {
-        return repository.existsById(entity.id())
-                .flatMap(exists -> exists ? repository.save(entity) : template.insert(entity));
+        // Ids are generated in the domain and items are insert-only, so existence cannot be true.
+        return template.insert(entity);
     }
 }

@@ -52,7 +52,7 @@ public class Reservation {
      * ya no admite cambios en sus items.
      */
     public void validateItemsCanBeAdded() {
-        if (status.isFinal()) {
+        if (status != ReservationStatus.PENDING) {
             throw new ReservationItemsNotAllowedException(
                     "Items cannot be added to a reservation in status %s".formatted(status));
         }

@@ -130,7 +130,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 | GET | `/api/v1/reservation-items/{id}` | Dueño, guía o staff |
 | GET | `/api/v1/reservation-items?type=` | `ADMIN`, `DESTINATION_MANAGER` |
 
-Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una reserva de evento admite un solo ítem; el precio sale del catálogo, nunca del cliente; las actividades deben ser del mismo guía.
+Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una reserva de evento admite un solo ítem; el precio sale del catálogo, nunca del cliente; las actividades deben ser del mismo guía; solo se reservan ítems publicados, vigentes y con cupo disponible; el total es la suma de precios por persona.
 
 ## Pruebas
 

@@ -22,11 +22,11 @@ import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLi
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReservationWebMapper;
-import com.smxplore.activitiesevents.infrastructure.config.JwtConfiguration;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -66,18 +66,21 @@ public class ReservationController {
     private final ActivityRepositoryPort activityRepository;
     private final ReservationWebMapper mapper;
 
+    @Value("${app.security.jwt.role-claim:role}")
+    private String roleClaim;
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a reservation (tourists create their own; admins may book for anyone)")
     public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
                                             @AuthenticationPrincipal Jwt jwt) {
-        if (!isAdmin(jwt) && !jwt.getSubject().equals(request.touristId().toString())) {
+        if (!isAdmin(jwt) && !subject(jwt).equals(request.touristId().toString())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Tourists can only create their own reservations.");
         }
         var reservation = mapper.toDomain(request);
         if (!isAdmin(jwt)) {
-            reservation = reservation.toBuilder().touristId(UUID.fromString(jwt.getSubject())).build();
+            reservation = reservation.toBuilder().touristId(UUID.fromString(subject(jwt))).build();
         }
         return createReservationUseCase.handle(reservation).map(mapper::toResponse);
     }
@@ -182,26 +185,33 @@ public class ReservationController {
                 .map(mapper::toResponse);
     }
 
-    private static boolean isAdmin(Jwt jwt) {
-        return UserRole.ADMIN.name().equals(jwt.getClaimAsString(JwtConfiguration.ROLE_CLAIM));
+    private static String subject(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject is required.");
+        }
+        return jwt.getSubject();
     }
 
-    private static boolean isAdminOrManager(Jwt jwt) {
-        var role = jwt.getClaimAsString(JwtConfiguration.ROLE_CLAIM);
+    private boolean isAdmin(Jwt jwt) {
+        return jwt != null && UserRole.ADMIN.name().equals(jwt.getClaimAsString(roleClaim));
+    }
+
+    private boolean isAdminOrManager(Jwt jwt) {
+        var role = jwt == null ? null : jwt.getClaimAsString(roleClaim);
         return UserRole.ADMIN.name().equals(role) || UserRole.DESTINATION_MANAGER.name().equals(role);
     }
 
-    private static void requireSelfOrStaff(Jwt jwt, UUID userId, String message) {
-        if (!isAdminOrManager(jwt) && !userId.toString().equals(jwt.getSubject())) {
+    private void requireSelfOrStaff(Jwt jwt, UUID userId, String message) {
+        if (!isAdminOrManager(jwt) && !userId.toString().equals(subject(jwt))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
         }
     }
 
-    private static void requireReservationAccess(Jwt jwt, Reservation reservation) {
+    private void requireReservationAccess(Jwt jwt, Reservation reservation) {
         if (isAdminOrManager(jwt)) {
             return;
         }
-        var subject = jwt.getSubject();
+        var subject = subject(jwt);
         var isOwner = reservation.getTouristId() != null && reservation.getTouristId().toString().equals(subject);
         var isGuide = reservation.getGuideId() != null && reservation.getGuideId().toString().equals(subject);
         if (!isOwner && !isGuide) {
@@ -215,7 +225,7 @@ public class ReservationController {
         }
         return consultOneReservationUseCase.handle(reservationId)
                 .doOnNext(reservation -> {
-                    var subject = jwt.getSubject();
+                    var subject = subject(jwt);
                     var isGuide = reservation.getGuideId() != null
                             && reservation.getGuideId().toString().equals(subject);
                     if (!isGuide) {
@@ -233,7 +243,7 @@ public class ReservationController {
         return consultOneReservationUseCase.handle(reservationId)
                 .doOnNext(reservation -> {
                     if (reservation.getTouristId() == null
-                            || !reservation.getTouristId().toString().equals(jwt.getSubject())) {
+                            || !reservation.getTouristId().toString().equals(subject(jwt))) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the owner of the reservation can cancel it.");
                     }
@@ -245,7 +255,7 @@ public class ReservationController {
         if (isAdminOrManager(jwt)) {
             return Mono.empty();
         }
-        var subject = jwt.getSubject();
+        var subject = subject(jwt);
         return switch (itemType) {
             case ACTIVITY -> activityRepository.findById(itemId)
                     .switchIfEmpty(Mono.error(new ActivityNotFoundException(itemId)))

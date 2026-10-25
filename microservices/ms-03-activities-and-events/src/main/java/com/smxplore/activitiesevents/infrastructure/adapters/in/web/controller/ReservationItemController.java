@@ -14,11 +14,11 @@ import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.Reservat
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationItemResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationItemsRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReservationItemWebMapper;
-import com.smxplore.activitiesevents.infrastructure.config.JwtConfiguration;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -49,6 +49,9 @@ public class ReservationItemController {
     private final ConsultReservationItemsByTypeUseCasePort consultReservationItemsByTypeUseCase;
     private final ConsultOneReservationUseCasePort consultOneReservationUseCase;
     private final ReservationItemWebMapper mapper;
+
+    @Value("${app.security.jwt.role-claim:role}")
+    private String roleClaim;
 
     @PostMapping("/reservations/{reservationId}/items")
     @ResponseStatus(HttpStatus.CREATED)
@@ -98,8 +101,15 @@ public class ReservationItemController {
                 .map(mapper::toResponse);
     }
 
-    private static boolean isAdminOrManager(Jwt jwt) {
-        var role = jwt.getClaimAsString(JwtConfiguration.ROLE_CLAIM);
+    private static String subject(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject is required.");
+        }
+        return jwt.getSubject();
+    }
+
+    private boolean isAdminOrManager(Jwt jwt) {
+        var role = jwt == null ? null : jwt.getClaimAsString(roleClaim);
         return UserRole.ADMIN.name().equals(role) || UserRole.DESTINATION_MANAGER.name().equals(role);
     }
 
@@ -110,7 +120,7 @@ public class ReservationItemController {
         return consultOneReservationUseCase.handle(reservationId)
                 .doOnNext(reservation -> {
                     if (reservation.getTouristId() == null
-                            || !reservation.getTouristId().toString().equals(jwt.getSubject())) {
+                            || !reservation.getTouristId().toString().equals(subject(jwt))) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the owner of the reservation can change its items.");
                     }
@@ -128,7 +138,7 @@ public class ReservationItemController {
     }
 
     private static void ensureAccess(Jwt jwt, Reservation reservation) {
-        var subject = jwt.getSubject();
+        var subject = subject(jwt);
         var isOwner = reservation.getTouristId() != null && reservation.getTouristId().toString().equals(subject);
         var isProvider = reservation.getProviderId() != null && reservation.getProviderId().toString().equals(subject);
         var isGuide = reservation.getGuideId() != null && reservation.getGuideId().toString().equals(subject);
