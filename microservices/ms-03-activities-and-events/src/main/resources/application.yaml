@@ -9,7 +9,7 @@ spring:
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
   mongodb:
-    uri: ${MONGODB_URI:mongodb://localhost:27017/reviews}
+    uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
   data:
     mongodb:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:false}
