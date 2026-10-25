@@ -2,6 +2,7 @@ package com.smxplore.users.shared.infrastructure.config;
 
 import com.smxplore.users.identity.application.model.AccountInvitationPolicy;
 import com.smxplore.users.identity.application.model.PasswordResetPolicy;
+import com.smxplore.users.identity.application.port.in.AdminResetPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.identity.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ChangeUserStatusUseCase;
@@ -29,6 +30,7 @@ import com.smxplore.users.identity.application.port.out.TokenHasher;
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
 import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
+import com.smxplore.users.identity.application.service.AdminResetPasswordService;
 import com.smxplore.users.identity.application.service.AuditTrailRecorder;
 import com.smxplore.users.identity.application.service.BootstrapAdminService;
 import com.smxplore.users.identity.application.service.ChangeOwnPasswordService;
@@ -187,6 +189,29 @@ public class ApplicationConfig {
                 tokenHasher,
                 accountInvitationNotifier,
                 accountInvitationPolicy,
+                auditTrailRecorder,
+                transactions,
+                clock);
+    }
+
+    @Bean
+    public AdminResetPasswordUseCase adminResetPasswordUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            PasswordResetNotifier passwordResetNotifier,
+            TokenGenerator tokenGenerator,
+            TokenHasher tokenHasher,
+            PasswordResetPolicy passwordResetPolicy,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new AdminResetPasswordService(
+                users,
+                resetTokens,
+                passwordResetNotifier,
+                tokenGenerator,
+                tokenHasher,
+                passwordResetPolicy,
                 auditTrailRecorder,
                 transactions,
                 clock);

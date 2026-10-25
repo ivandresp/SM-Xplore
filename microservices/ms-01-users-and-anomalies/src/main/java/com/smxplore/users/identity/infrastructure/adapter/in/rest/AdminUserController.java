@@ -8,6 +8,7 @@ import com.smxplore.users.identity.application.dto.SortOrder;
 import com.smxplore.users.identity.application.dto.UserSearchCriteria;
 import com.smxplore.users.identity.application.dto.UserSummaryView;
 import com.smxplore.users.identity.application.dto.UserView;
+import com.smxplore.users.identity.application.port.in.AdminResetPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.identity.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.identity.application.port.in.GetUserDetailUseCase;
@@ -45,18 +46,21 @@ public class AdminUserController {
     private final ChangeUserStatusUseCase changeUserStatus;
     private final ReviewProviderUseCase reviewProvider;
     private final CreateInternalUserUseCase createInternalUser;
+    private final AdminResetPasswordUseCase adminResetPassword;
 
     public AdminUserController(
             SearchUsersUseCase searchUsers,
             GetUserDetailUseCase getUserDetail,
             ChangeUserStatusUseCase changeUserStatus,
             ReviewProviderUseCase reviewProvider,
-            CreateInternalUserUseCase createInternalUser) {
+            CreateInternalUserUseCase createInternalUser,
+            AdminResetPasswordUseCase adminResetPassword) {
         this.searchUsers = searchUsers;
         this.getUserDetail = getUserDetail;
         this.changeUserStatus = changeUserStatus;
         this.reviewProvider = reviewProvider;
         this.createInternalUser = createInternalUser;
+        this.adminResetPassword = adminResetPassword;
     }
 
     @GetMapping
@@ -115,6 +119,12 @@ public class AdminUserController {
             @Valid @RequestBody ProviderReviewRequest request) {
         reviewProvider.review(
                 actorId(jwt), new UserId(id), new ReviewProviderCommand(request.decision(), request.reason()));
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void resetPassword(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        adminResetPassword.reset(actorId(jwt), new UserId(id));
     }
 
     private static UserId actorId(Jwt jwt) {
