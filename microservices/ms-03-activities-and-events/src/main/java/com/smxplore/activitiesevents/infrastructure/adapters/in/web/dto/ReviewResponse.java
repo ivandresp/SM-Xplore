@@ -15,9 +15,9 @@ public record ReviewResponse(
         ReviewReplyResponse reply,
         Instant createdAt
 ) {
-    public record ReviewUserResponse(UUID id, String name) {
+    public record ReviewUserResponse(String name) {
     }
 
-    public record ReviewReplyResponse(String message, UUID responderId, Instant createdAt) {
+    public record ReviewReplyResponse(String message, Instant createdAt) {
     }
 }

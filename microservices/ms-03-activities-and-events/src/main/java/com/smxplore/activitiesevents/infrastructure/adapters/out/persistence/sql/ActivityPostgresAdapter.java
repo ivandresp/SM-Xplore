@@ -38,6 +38,11 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
+    public Mono<Activity> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(mapper::toDomain);
+    }
+
+    @Override
     public Mono<Boolean> existsById(UUID id) {
         return repository.existsById(id);
     }

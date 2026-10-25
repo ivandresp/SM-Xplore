@@ -40,7 +40,6 @@ public class ReportReviewUseCase implements ReportReviewUseCasePort {
                         .flatMap(exists -> exists
                                 ? Mono.error(new ReviewAlreadyReportedException(
                                         "The user already reported this review."))
-                                : reportRepo.save(new ReviewReport(UUID.randomUUID(), reviewId, reporterId,
-                                        reason, Instant.now())).thenReturn(review)));
+                                : reportRepo.save(ReviewReport.pending(reviewId, reporterId, reason)).thenReturn(review)));
     }
 }

@@ -26,6 +26,11 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
+    public Mono<Activity> findByIdForUpdate(UUID id) {
+        return findById(id);
+    }
+
+    @Override
     public Mono<Boolean> existsById(UUID id) {
         return Mono.just(activities.containsKey(id));
     }

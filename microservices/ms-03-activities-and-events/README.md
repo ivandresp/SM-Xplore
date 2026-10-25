@@ -146,6 +146,8 @@ Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una res
 | GET | `/api/v1/reviews/activities/{activityId}/metrics` | Público |
 | POST | `/api/v1/reviews/{reviewId}/report` | Autenticado; un reporte por usuario y reseña |
 | POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o ADMIN |
+| GET | `/api/v1/review-reports?status=PENDING` | `ADMIN`, `DESTINATION_MANAGER` |
+| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`, `DESTINATION_MANAGER` |
 
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.

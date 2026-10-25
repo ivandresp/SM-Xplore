@@ -203,10 +203,9 @@ class ReviewUseCasesTest {
     @Test
     void computesReviewMetrics() {
         var itemId = UUID.randomUUID();
-        var first = review(ReviewItemType.EVENT, itemId).toBuilder().rating(4).build();
-        var second = review(ReviewItemType.EVENT, itemId).toBuilder().rating(5).build();
         given(eventRepo.findById(itemId)).willReturn(Mono.just(event(UUID.randomUUID())));
-        given(reviewRepo.findByItem(itemId, ReviewItemType.EVENT)).willReturn(reactor.core.publisher.Flux.just(first, second));
+        given(reviewRepo.metrics(itemId, ReviewItemType.EVENT))
+                .willReturn(Mono.just(new ReviewMetrics(itemId, ReviewItemType.EVENT, 2, 4.5)));
 
         StepVerifier.create(new ConsultReviewMetricsUseCase(reviewRepo, eventRepo, activityRepo)
                         .handle(itemId, ReviewItemType.EVENT))

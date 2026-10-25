@@ -8,7 +8,13 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Validar existencia de evento**: `GET /api/v1/events/{id}/exists` (200/404).
 - **Consultar disponibilidad**: cupos libres de evento/actividad (`GET /api/v1/events/{id}/availability`, `GET /api/v1/activities/{id}/availability`).
 - **Reportar reseña** (`POST /api/v1/reviews/{id}/report`, un reporte por usuario y reseña, 409 si se repite).
-  - Los reportes viven en la colección `review_reports`; el motivo no se expone en la API pública.
+  | GET | `/api/v1/review-reports?status=PENDING` | `ADMIN`, `DESTINATION_MANAGER` |
+| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`, `DESTINATION_MANAGER` (`RESOLVED`/`DISMISSED`) |
+
+- Los reportes viven en `review_reports`; un reporte por usuario y reseña.
+- Las respuestas públicas no exponen IDs de usuario ni de quien responde.
+- Solo se reseñan ítems publicados y vigentes; la guía/gestora no puede reseñar su propio ítem.
+- Métricas calculadas con aggregation de Mongo (count + promedio).
 - **Métricas de reputación** por ítem (`GET /api/v1/reviews/events|activities/{id}/metrics`: total y promedio).
 - **Reseñas de eventos y actividades** con MongoDB reactivo.
   - Dos colecciones separadas: `event_reviews` y `activity_reviews`.

@@ -144,7 +144,7 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
                 .distinct()
                 .toList();
         return Flux.fromIterable(activityIds)
-                .concatMap(activityId -> activityRepo.findById(activityId)
+                .concatMap(activityId -> activityRepo.findByIdForUpdate(activityId)
                         .switchIfEmpty(Mono.error(new ActivityNotFoundException(activityId))))
                 .collectMap(Activity::getId)
                 .flatMap(activities -> {
@@ -175,7 +175,7 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
                 .distinct()
                 .toList();
         return Flux.fromIterable(eventIds)
-                .concatMap(eventId -> eventRepo.findById(eventId)
+                .concatMap(eventId -> eventRepo.findByIdForUpdate(eventId)
                         .switchIfEmpty(Mono.error(new EventNotFoundException(eventId))))
                 .collectMap(Event::getId)
                 .flatMap(events -> Flux.fromIterable(events.values())

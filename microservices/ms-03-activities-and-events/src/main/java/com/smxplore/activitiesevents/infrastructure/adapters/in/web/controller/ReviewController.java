@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewM
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ReportReviewUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.CreateReviewRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReportReviewRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.RespondReviewRequest;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -57,17 +59,21 @@ public class ReviewController {
 
     @GetMapping("/events/{eventId}")
     @Operation(summary = "List the reviews of an event")
-    public Flux<ReviewResponse> findByEvent(@PathVariable UUID eventId) {
+    public Flux<ReviewResponse> findByEvent(@PathVariable UUID eventId,
+                                            @RequestParam(defaultValue = "50") int limit) {
         return consultReviewsByItemUseCase.handle(eventId,
-                        com.smxplore.activitiesevents.domain.model.review.ReviewItemType.EVENT)
+                        com.smxplore.activitiesevents.domain.model.review.ReviewItemType.EVENT,
+                        PaginationLimits.clamp(limit))
                 .map(mapper::toResponse);
     }
 
     @GetMapping("/activities/{activityId}")
     @Operation(summary = "List the reviews of an activity")
-    public Flux<ReviewResponse> findByActivity(@PathVariable UUID activityId) {
+    public Flux<ReviewResponse> findByActivity(@PathVariable UUID activityId,
+                                               @RequestParam(defaultValue = "50") int limit) {
         return consultReviewsByItemUseCase.handle(activityId,
-                        com.smxplore.activitiesevents.domain.model.review.ReviewItemType.ACTIVITY)
+                        com.smxplore.activitiesevents.domain.model.review.ReviewItemType.ACTIVITY,
+                        PaginationLimits.clamp(limit))
                 .map(mapper::toResponse);
     }
 

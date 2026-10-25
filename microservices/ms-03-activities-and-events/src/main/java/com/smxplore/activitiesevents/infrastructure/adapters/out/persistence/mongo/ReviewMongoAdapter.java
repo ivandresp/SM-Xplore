@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mo
 
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
+import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
@@ -56,6 +57,17 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
             case EVENT -> eventReviews.existsByItemAndUser(itemId, userId);
             case ACTIVITY -> activityReviews.existsByItemAndUser(itemId, userId);
         };
+    }
+
+    @Override
+    public Mono<ReviewMetrics> metrics(UUID itemId, ReviewItemType itemType) {
+        var aggregate = switch (itemType) {
+            case EVENT -> eventReviews.aggregateMetrics(itemId);
+            case ACTIVITY -> activityReviews.aggregateMetrics(itemId);
+        };
+        return aggregate
+                .map(result -> new ReviewMetrics(itemId, itemType, result.count(), result.average()))
+                .defaultIfEmpty(new ReviewMetrics(itemId, itemType, 0, 0.0));
     }
 
     private EventReviewDocument toEventDocument(Review review) {

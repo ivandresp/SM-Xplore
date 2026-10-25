@@ -1,9 +1,11 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.application.reviews.ConsultReviewReportsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultReviewMetricsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultReviewsByItemUseCase;
 import com.smxplore.activitiesevents.application.reviews.CreateReviewUseCase;
 import com.smxplore.activitiesevents.application.reviews.ReportReviewUseCase;
+import com.smxplore.activitiesevents.application.reviews.ResolveReviewReportUseCase;
 import com.smxplore.activitiesevents.application.reviews.RespondToReviewUseCase;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
@@ -11,8 +13,10 @@ import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportReposit
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewsByItemUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewMetricsUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewReportsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ReportReviewUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.review.ResolveReviewReportUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,5 +54,15 @@ public class ReviewUseCaseConfiguration {
                                                                        EventRepositoryPort eventRepository,
                                                                        ActivityRepositoryPort activityRepository) {
         return new ConsultReviewMetricsUseCase(reviewRepository, eventRepository, activityRepository);
+    }
+
+    @Bean
+    public ConsultReviewReportsUseCasePort consultReviewReportsUseCase(ReviewReportRepositoryPort reportRepository) {
+        return new ConsultReviewReportsUseCase(reportRepository);
+    }
+
+    @Bean
+    public ResolveReviewReportUseCasePort resolveReviewReportUseCase(ReviewReportRepositoryPort reportRepository) {
+        return new ResolveReviewReportUseCase(reportRepository);
     }
 }

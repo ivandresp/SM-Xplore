@@ -59,6 +59,8 @@ public class EventController {
     @Operation(summary = "Register an event for a site")
     public Mono<EventResponse> register(@Valid @RequestBody EventRequest request,
                                         @AuthenticationPrincipal Jwt jwt) {
+        // TODO(ms-04): resolve and validate the site from ms-04 (GET /sites/{id}) before persisting.
+        // Until that contract exists, siteName is client-supplied and any manager can target any siteId.
         var event = mapper.toDomain(request);
         if (jwt != null && "DESTINATION_MANAGER".equals(jwt.getClaimAsString(roleClaim))) {
             event = event.toBuilder().managerId(managerIdFrom(jwt)).build();

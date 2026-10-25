@@ -61,6 +61,8 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
             return Mono.empty();
         }
         if (review.getItemType() == ReviewItemType.EVENT) {
+            // TODO(ms-04): managerId is a creation-time snapshot. Revalidate the current site manager
+            // (GET /sites/{id}) before authorizing replies; a reassigned manager keeps rights until refresh.
             return eventRepo.findById(review.getItemId())
                     .switchIfEmpty(Mono.error(new EventNotFoundException(review.getItemId())))
                     .flatMap(event -> DESTINATION_MANAGER.equals(role) && responderId.equals(event.getManagerId())

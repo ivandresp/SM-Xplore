@@ -38,6 +38,11 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
+    public Mono<Event> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(mapper::toDomain);
+    }
+
+    @Override
     public Mono<Boolean> existsById(UUID id) {
         return repository.existsById(id);
     }

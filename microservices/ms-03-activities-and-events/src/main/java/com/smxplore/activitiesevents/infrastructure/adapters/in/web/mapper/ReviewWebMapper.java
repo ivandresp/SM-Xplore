@@ -13,12 +13,12 @@ public class ReviewWebMapper {
                 review.getItemId(),
                 review.getItemType(),
                 review.getUser() == null ? null
-                        : new ReviewResponse.ReviewUserResponse(review.getUser().id(), review.getUser().name()),
+                        : new ReviewResponse.ReviewUserResponse(review.getUser().name()),
                 review.getRating(),
                 review.getComment(),
                 review.getReply() == null ? null
                         : new ReviewResponse.ReviewReplyResponse(review.getReply().message(),
-                        review.getReply().responderId(), review.getReply().createdAt()),
+                        review.getReply().createdAt()),
                 review.getCreatedAt()
         );
     }

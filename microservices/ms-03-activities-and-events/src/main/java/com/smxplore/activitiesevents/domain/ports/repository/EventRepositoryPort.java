@@ -12,6 +12,7 @@ public interface EventRepositoryPort {
     Mono<Event> save(Event event);
 
     Mono<Event> findById(UUID id);
+    Mono<Event> findByIdForUpdate(UUID id);
 
     Mono<Boolean> existsById(UUID id);
 

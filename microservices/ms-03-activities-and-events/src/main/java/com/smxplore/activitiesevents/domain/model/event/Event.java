@@ -25,6 +25,8 @@ public class Event {
     @Builder.Default
     private final UUID id = UUID.randomUUID();
     private final UUID siteId;
+    // TODO(ms-04): siteName and managerId are a snapshot of the site. Refresh them when ms-04
+    // exposes the site manager contract; the source of truth is the sites microservice.
     private final String siteName;
     private final UUID managerId;
     private String name;

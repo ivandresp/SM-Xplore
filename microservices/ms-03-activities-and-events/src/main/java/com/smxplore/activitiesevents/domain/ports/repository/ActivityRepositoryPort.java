@@ -12,6 +12,7 @@ public interface ActivityRepositoryPort {
     Mono<Activity> save(Activity activity);
 
     Mono<Activity> findById(UUID id);
+    Mono<Activity> findByIdForUpdate(UUID id);
 
     Mono<Boolean> existsById(UUID id);
 

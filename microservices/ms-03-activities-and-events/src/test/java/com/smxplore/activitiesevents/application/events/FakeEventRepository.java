@@ -26,6 +26,11 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
+    public Mono<Event> findByIdForUpdate(UUID id) {
+        return findById(id);
+    }
+
+    @Override
     public Mono<Boolean> existsById(UUID id) {
         return Mono.just(events.containsKey(id));
     }

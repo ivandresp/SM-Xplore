@@ -25,13 +25,7 @@ public class ConsultReviewMetricsUseCase implements ConsultReviewMetricsUseCaseP
     @Override
     public Mono<ReviewMetrics> handle(UUID itemId, ReviewItemType itemType) {
         return validateItem(itemId, itemType)
-                .thenMany(reviewRepo.findByItem(itemId, itemType).take(MAX_REVIEWS))
-                .collectList()
-                .map(reviews -> {
-                    var count = reviews.size();
-                    var average = reviews.stream().mapToInt(review -> review.getRating()).average().orElse(0.0);
-                    return new ReviewMetrics(itemId, itemType, count, average);
-                });
+                .then(reviewRepo.metrics(itemId, itemType));
     }
 
     private Mono<Void> validateItem(UUID itemId, ReviewItemType itemType) {

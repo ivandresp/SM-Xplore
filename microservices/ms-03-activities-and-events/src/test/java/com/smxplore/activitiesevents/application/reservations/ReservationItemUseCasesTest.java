@@ -62,6 +62,7 @@ class ReservationItemUseCasesTest {
         var reservation = validReservation();
         var activity = activity(new BigDecimal("80000.00"), UUID.randomUUID());
         stubReservation(reservation);
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
         given(reservationItemRepo.sumActivePeopleForItem(any(), any(), any())).willReturn(Mono.just(0));
         given(reservationItemRepo.saveAll(any())).willAnswer(invocation -> Flux.fromIterable(invocation.getArgument(0)));
@@ -79,7 +80,7 @@ class ReservationItemUseCasesTest {
         var reservation = validReservation();
         var event = event(new BigDecimal("150000.00"));
         stubReservation(reservation);
-        given(eventRepo.findById(event.getId())).willReturn(Mono.just(event));
+        given(eventRepo.findByIdForUpdate(event.getId())).willReturn(Mono.just(event));
         given(reservationItemRepo.sumActivePeopleForItem(any(), any(), any())).willReturn(Mono.just(0));
         given(reservationItemRepo.saveAll(any())).willAnswer(invocation -> Flux.fromIterable(invocation.getArgument(0)));
         given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
@@ -96,7 +97,7 @@ class ReservationItemUseCasesTest {
         var reservation = validReservation();
         var activity = activity(new BigDecimal("80000.00"), UUID.randomUUID());
         stubReservation(reservation);
-        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
         given(reservationItemRepo.sumActivePeopleForItem(any(), any(), any())).willReturn(Mono.just(9));
 
         var item = item(activity.getId(), ReservationItemType.ACTIVITY);
@@ -113,7 +114,7 @@ class ReservationItemUseCasesTest {
                 .status(ActivityStatus.DRAFT)
                 .build();
         stubReservation(reservation);
-        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
 
         var item = item(activity.getId(), ReservationItemType.ACTIVITY);
 
@@ -128,8 +129,8 @@ class ReservationItemUseCasesTest {
         var first = activity(new BigDecimal("80000.00"), UUID.randomUUID());
         var second = activity(new BigDecimal("90000.00"), UUID.randomUUID());
         stubReservation(reservation);
-        given(activityRepo.findById(first.getId())).willReturn(Mono.just(first));
-        given(activityRepo.findById(second.getId())).willReturn(Mono.just(second));
+        given(activityRepo.findByIdForUpdate(first.getId())).willReturn(Mono.just(first));
+        given(activityRepo.findByIdForUpdate(second.getId())).willReturn(Mono.just(second));
 
         var items = List.of(item(first.getId(), ReservationItemType.ACTIVITY),
                 item(second.getId(), ReservationItemType.ACTIVITY));

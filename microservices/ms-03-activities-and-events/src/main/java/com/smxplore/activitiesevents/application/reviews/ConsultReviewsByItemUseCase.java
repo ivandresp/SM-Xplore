@@ -15,7 +15,7 @@ public class ConsultReviewsByItemUseCase implements ConsultReviewsByItemUseCaseP
     private final ReviewRepositoryPort reviewRepo;
 
     @Override
-    public Flux<Review> handle(UUID itemId, ReviewItemType itemType) {
-        return reviewRepo.findByItem(itemId, itemType).take(200);
+    public Flux<Review> handle(UUID itemId, ReviewItemType itemType, int limit) {
+        return reviewRepo.findByItem(itemId, itemType).take(limit);
     }
 }

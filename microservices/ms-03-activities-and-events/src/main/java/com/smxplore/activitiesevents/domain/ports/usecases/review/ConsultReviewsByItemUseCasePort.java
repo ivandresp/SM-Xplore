@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface ConsultReviewsByItemUseCasePort {
 
-    Flux<Review> handle(UUID itemId, ReviewItemType itemType);
+    Flux<Review> handle(UUID itemId, ReviewItemType itemType, int limit);
 }
