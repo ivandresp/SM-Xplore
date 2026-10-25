@@ -2,7 +2,7 @@
 
 ## Project state
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth implemented; admin user management, reviews, and anomalies pending).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth and admin user management implemented; reviews and anomalies pending).
 
 All deliverables, user stories, diagrams, and commit messages are in **Spanish**. Code identifiers are English; domain class names follow the Spanish model (`Usuario`, `Guia`, `PrestadoraServicios`).
 
@@ -66,20 +66,14 @@ docker compose -f microservices/docker-compose.yml up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration, login, RS256 JWT/JWKS, `/users/me`, self profile update, forgot/reset password, bootstrap admin, persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration, login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, approve/reject providers, block/suspend/reactivate, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
 1. **Admin user management** (RF06–RF13, Admin US1–US8)
-   - Create internal Guía/Gestora/Admin accounts with a set-password invitation.
-   - Approve or reject provider registration.
    - Change a user’s role, migrating the role subtype correctly.
-   - Block, suspend, and reactivate accounts.
    - Delete/deactivate and anonymize PII (Ley 1581).
-   - List/search/filter/paginate users.
-   - Admin-initiated password reset.
-   - Audit log for critical admin actions (Admin US10).
-   - RF01 is still partial: only Turista and Prestadora self-register; the other roles need admin creation.
+   - RF01 is now complete: Turista/Prestadora self-register and Guía/Gestora/Admin are created by an admin.
 
 2. **Guide/provider reviews in MongoDB** (RF69–RF75, RF77)
    - Add Spring Data MongoDB and the `smxplore_reviews` database.
@@ -97,13 +91,12 @@ Still to design/implement:
 
 4. **Security hardening**
    - Admin/operator MFA (RNF01).
-   - Persist the JWT RSA key pair: today keys are generated at startup, so a restart invalidates existing tokens and changes JWKS.
-   - Self-service password change for authenticated users.
    - Rate limiting or brute-force protection.
    - Complete the soft-delete/anonymization flow.
+   - Self-service password change is done; JWT keys are persisted (env PEM or the dev key store).
 
 5. **Tests and infrastructure**
-   - Admin flow tests, password-reset E2E with Mailpit token capture, 401/403 tests, duplicate email/DNI/NIT cases, and role-change tests.
+   - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
    - MongoDB tests and index creation/migration.
    - CI and a Dockerfile for the service.
 
