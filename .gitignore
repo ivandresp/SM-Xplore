@@ -9,6 +9,7 @@ build/
 # Local configuration and secrets
 .env
 *.local
+.local/
 application-local.yml
 
 # Logs

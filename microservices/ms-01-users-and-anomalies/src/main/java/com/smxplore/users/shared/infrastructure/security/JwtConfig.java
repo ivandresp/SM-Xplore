@@ -3,11 +3,6 @@ package com.smxplore.users.shared.infrastructure.security;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.smxplore.users.shared.infrastructure.config.JwtProperties;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -31,17 +26,7 @@ public class JwtConfig {
 
     @Bean
     public RSAKey rsaKey(JwtProperties properties) {
-        try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            KeyPair keyPair = generator.generateKeyPair();
-            return new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
-                    .privateKey((RSAPrivateKey) keyPair.getPrivate())
-                    .keyID(properties.keyId())
-                    .build();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("No se pudo generar la llave RSA", exception);
-        }
+        return JwtKeyStore.load(properties);
     }
 
     @Bean

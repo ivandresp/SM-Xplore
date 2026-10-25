@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+app:
+  security:
+    jwt:
+      allow-generated-keys: true

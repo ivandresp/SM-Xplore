@@ -6,7 +6,8 @@ app:
       issuer: sm-xplore-ms-01
       audience: sm-xplore-services
       ttl: PT60M
-      key-id: test-key
+      key-store-path: build/test-jwt/keys.pem
+      allow-generated-keys: true
     password-reset:
       ttl: PT30M
   cors:

@@ -28,8 +28,8 @@ class JwtContractTest {
 
     @Test
     void issuedTokenContainsTheClaimsExpectedByOtherServices() throws Exception {
-        JwtProperties properties =
-                new JwtProperties("sm-xplore-ms-01", "sm-xplore-services", Duration.ofMinutes(60), "test-key");
+        JwtProperties properties = new JwtProperties(
+                "sm-xplore-ms-01", "sm-xplore-services", Duration.ofMinutes(60), null, null, null, true);
         RSAKey rsaKey = rsaKey();
 
         JwtConfig config = new JwtConfig();
@@ -37,7 +37,7 @@ class JwtContractTest {
         JwtDecoder decoder = config.jwtDecoder(rsaKey, properties);
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         Clock clock = Clock.fixed(now, ZoneOffset.UTC);
-        JwtTokenIssuer issuer = new JwtTokenIssuer(encoder, properties, clock);
+        JwtTokenIssuer issuer = new JwtTokenIssuer(encoder, properties, rsaKey, clock);
 
         Turista user = Turista.register(
                 UserId.newId(),

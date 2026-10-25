@@ -1,5 +1,6 @@
 package com.smxplore.users.identity.infrastructure.adapter.out.security;
 
+import com.nimbusds.jose.jwk.RSAKey;
 import com.smxplore.users.identity.application.port.out.TokenIssuer;
 import com.smxplore.users.identity.domain.model.PrestadoraServicios;
 import com.smxplore.users.identity.domain.model.Usuario;
@@ -20,11 +21,13 @@ public class JwtTokenIssuer implements TokenIssuer {
 
     private final JwtEncoder jwtEncoder;
     private final JwtProperties properties;
+    private final RSAKey rsaKey;
     private final Clock clock;
 
-    public JwtTokenIssuer(JwtEncoder jwtEncoder, JwtProperties properties, Clock clock) {
+    public JwtTokenIssuer(JwtEncoder jwtEncoder, JwtProperties properties, RSAKey rsaKey, Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
+        this.rsaKey = rsaKey;
         this.clock = clock;
     }
 
@@ -50,7 +53,7 @@ public class JwtTokenIssuer implements TokenIssuer {
         }
 
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256)
-                .keyId(properties.keyId())
+                .keyId(rsaKey.getKeyID())
                 .build();
 
         String token = jwtEncoder

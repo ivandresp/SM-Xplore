@@ -1,6 +1,8 @@
 spring:
   application:
     name: ms-01-users-and-anomalies
+  profiles:
+    default: dev
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/smxplore_users}
     username: ${DB_USERNAME:smxplore}
@@ -45,7 +47,10 @@ app:
       issuer: ${JWT_ISSUER:sm-xplore-ms-01}
       audience: ${JWT_AUDIENCE:sm-xplore-services}
       ttl: ${JWT_TTL:PT60M}
-      key-id: ${JWT_KEY_ID:ms-01-dev}
+      private-key: ${JWT_PRIVATE_KEY:}
+      public-key: ${JWT_PUBLIC_KEY:}
+      key-store-path: ${JWT_KEY_STORE:.local/jwt/keys.pem}
+      allow-generated-keys: false
     password-reset:
       ttl: ${PASSWORD_RESET_TTL:PT30M}
   cors:
