@@ -226,8 +226,8 @@ class ActivityUseCasesTest {
 
     @Test
     void shouldConsultAllActivities() {
-        activityRepo.save(validActivity(UUID.randomUUID())).block();
-        activityRepo.save(validActivity(UUID.randomUUID())).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
 
         List<Activity> activities = Objects.requireNonNull(consultActivities.handle().collectList().block());
 
@@ -236,8 +236,8 @@ class ActivityUseCasesTest {
 
     @Test
     void shouldFindActivitiesByCategory() {
-        activityRepo.save(validActivity(UUID.randomUUID())).block();
-        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().category("Nautical").build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).category("Nautical").build()).block();
 
         List<Activity> matches = Objects.requireNonNull(
                 findActivitiesByCategory.handle("Water Sports").collectList().block());
@@ -249,9 +249,9 @@ class ActivityUseCasesTest {
     @Test
     void shouldFindActivitiesBySite() {
         UUID siteId = UUID.randomUUID();
-        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().siteId(siteId).build()).block();
-        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().siteId(siteId).build()).block();
-        activityRepo.save(validActivity(UUID.randomUUID())).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).siteId(siteId).build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).siteId(siteId).build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
 
         List<Activity> matches = Objects.requireNonNull(findActivitiesBySite.handle(siteId).collectList().block());
 

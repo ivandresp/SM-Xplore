@@ -17,6 +17,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.activity.ViewActivity
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller.ActivityController;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.error.GlobalExceptionHandler;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ActivityWebMapperImpl;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.security.ActivityAccessGuard;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -37,7 +38,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 
 @WebFluxTest(controllers = ActivityController.class)
-@Import({ActivityWebMapperImpl.class, GlobalExceptionHandler.class})
+@Import({ActivityWebMapperImpl.class, GlobalExceptionHandler.class, ActivityAccessGuard.class})
 class ActivityControllerTest {
 
     @Autowired
@@ -75,8 +76,21 @@ class ActivityControllerTest {
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {
+        this.baseClient = webTestClient;
         this.webTestClient = webTestClient
-                .mutateWith(SecurityMockServerConfigurers.mockUser("tester"))
+                .mutateWith(SecurityMockServerConfigurers.mockJwt()
+                        .jwt(jwt -> jwt.subject(GUIDE_ID.toString()).claim("role", "ADMIN")))
+                .mutateWith(SecurityMockServerConfigurers.csrf());
+    }
+
+    private static final UUID GUIDE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+    private WebTestClient baseClient;
+
+    private WebTestClient guideClient() {
+        return baseClient
+                .mutateWith(SecurityMockServerConfigurers.mockJwt()
+                        .jwt(jwt -> jwt.subject(GUIDE_ID.toString()).claim("role", "GUIDE")))
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 
@@ -335,5 +349,58 @@ class ActivityControllerTest {
                         """)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void guideRegistrationIgnoresGuideIdFromBody() {
+        var siteId = UUID.randomUUID();
+        var otherGuide = UUID.randomUUID();
+        var registered = activityWith(UUID.randomUUID(), ActivityStatus.DRAFT).toBuilder()
+                .guideId(GUIDE_ID)
+                .build();
+        given(registerActivityUseCase.handle(argThat(activity -> GUIDE_ID.equals(activity.getGuideId()))))
+                .willReturn(Mono.just(registered));
+
+        guideClient().post().uri("/api/v1/activities")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "guideId": "%s",
+                          "name": "City Walking Tour",
+                          "category": "Tour",
+                          "price": 80000.00,
+                          "maxCapacity": 20,
+                          "durationMinutes": 90,
+                          "startsAt": "2026-11-01T10:00:00Z",
+                          "endsAt": "2026-11-01T11:30:00Z",
+                          "description": "Historic downtown walk."
+                        }
+                        """.formatted(siteId, otherGuide))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.guideId").isEqualTo(GUIDE_ID.toString());
+    }
+
+    @Test
+    void guideCannotManageAnotherGuidesActivity() {
+        var id = UUID.randomUUID();
+        var otherGuide = UUID.randomUUID();
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(
+                activityWith(id, ActivityStatus.PUBLISHED).toBuilder().guideId(otherGuide).build()));
+
+        guideClient().patch().uri("/api/v1/activities/{activityId}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "name": "Hijacked",
+                          "category": "Tour",
+                          "price": 1,
+                          "description": "Should not be applied."
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
     }
 }

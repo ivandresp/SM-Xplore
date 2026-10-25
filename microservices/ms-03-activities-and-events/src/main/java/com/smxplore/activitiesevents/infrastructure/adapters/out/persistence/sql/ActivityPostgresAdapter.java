@@ -22,8 +22,7 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
 
     /**
      * R2DBC has no upsert, so an explicit existence check decides between insert and update.
-     * Ids are generated per registration and concurrent writes of the same row are not part
-     * of the current flows.
+     * shortcut: no optimistic locking; add a @Version column when concurrent edits matter.
      */
     @Override
     public Mono<Activity> save(Activity activity) {

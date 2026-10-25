@@ -19,10 +19,7 @@ public class ChangeActivityStatusUseCase implements ChangeActivityStatusUseCaseP
 
     @Override
     public Mono<Activity> handle(UUID activityId, ActivityStatus newStatus) {
-        return activityRepo.existsById(activityId)
-                .filter(exists -> exists)
-                .switchIfEmpty(Mono.error(new ActivityNotFoundException(activityId)))
-                .flatMap(exists -> activityRepo.findById(activityId))
+        return activityRepo.findById(activityId)
                 .switchIfEmpty(Mono.error(new ActivityNotFoundException(activityId)))
                 .map(activity -> changeStatus(activity, newStatus))
                 .flatMap(activityRepo::save);

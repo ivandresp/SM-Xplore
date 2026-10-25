@@ -206,18 +206,18 @@ class EventControllerTest {
     void estimateAttendanceReturnsUpdatedEvent() {
         var id = UUID.randomUUID();
         var updated = eventWith(id, EventStatus.DRAFT);
-        updated.estimateAttendance(200);
-        given(estimateEventAttendanceUseCase.handle(id, 200)).willReturn(Mono.just(updated));
+        updated.estimateAttendance(10);
+        given(estimateEventAttendanceUseCase.handle(id, 10)).willReturn(Mono.just(updated));
 
         webTestClient.patch().uri("/api/v1/events/{eventId}/attendance", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"expectedAttendance": 200}
+                        {"expectedAttendance": 10}
                         """)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.expectedAttendance").isEqualTo(200);
+                .jsonPath("$.expectedAttendance").isEqualTo(10);
     }
 
     @Test

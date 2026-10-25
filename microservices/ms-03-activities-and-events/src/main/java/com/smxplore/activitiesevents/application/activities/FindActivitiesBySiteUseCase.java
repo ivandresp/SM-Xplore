@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.application.activities;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.FindActivitiesBySiteUseCasePort;
 
@@ -17,6 +18,7 @@ public class FindActivitiesBySiteUseCase implements FindActivitiesBySiteUseCaseP
 
     @Override
     public Flux<Activity> handle(UUID siteId) {
-        return activityRepo.findAllBySiteId(siteId);
+        return activityRepo.findAllBySiteId(siteId)
+                .filter(activity -> activity.getStatus() == ActivityStatus.PUBLISHED);
     }
 }

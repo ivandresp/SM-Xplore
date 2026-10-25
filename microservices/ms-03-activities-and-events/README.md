@@ -66,6 +66,7 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker se activa. |
+| `SQL_INIT_MODE` | `never` | Ejecuta `schema.sql` al arrancar. En Docker Compose se activa (`always`). |
 
 ## Alcance
 
@@ -97,6 +98,15 @@ Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias q
 | POST | `/api/v1/activities/{activityId}/cancel` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
 
 Los errores usan el formato uniforme `{timestamp, status, error, message, path}`.
+
+## Limitaciones conocidas
+
+- Los listados públicos no paginan todavía (catalog pequeño).
+- No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
+- La búsqueda por nombre usa `ILIKE` sin índice `pg_trgm`.
+- El detalle por UUID no filtra por estado; los listados públicos sí (solo `PUBLISHED`).
+- Faltan pruebas de integración con Testcontainers (declaradas en el build).
+- Neo4j (preferencias) queda diferido.
 
 ## Pruebas
 

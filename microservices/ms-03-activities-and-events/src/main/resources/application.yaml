@@ -15,7 +15,7 @@ spring:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:false}
   sql:
     init:
-      mode: ${SQL_INIT_MODE:always}
+      mode: ${SQL_INIT_MODE:never}
       schema-locations: classpath:schema.sql
 
 springdoc:

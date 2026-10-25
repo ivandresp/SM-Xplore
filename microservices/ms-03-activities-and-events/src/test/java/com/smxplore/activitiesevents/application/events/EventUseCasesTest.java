@@ -112,9 +112,9 @@ class EventUseCasesTest {
         UUID id = UUID.randomUUID();
         eventRepo.save(eventWith(id)).block();
 
-        Event updated = Objects.requireNonNull(estimateEventAttendance.handle(id, 200).block());
+        Event updated = Objects.requireNonNull(estimateEventAttendance.handle(id, 10).block());
 
-        assertEquals(200, updated.getExpectedAttendance());
+        assertEquals(10, updated.getExpectedAttendance());
     }
 
     @Test
@@ -134,8 +134,8 @@ class EventUseCasesTest {
 
     @Test
     void shouldConsultAllEvents() {
-        eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour")).block();
-        eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour")).block();
+        eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
+        eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
 
         List<Event> events = Objects.requireNonNull(consultEvents.handle().collectList().block());
 
@@ -144,8 +144,8 @@ class EventUseCasesTest {
 
     @Test
     void shouldSearchEventsByName() {
-        eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour")).block();
-        eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour")).block();
+        eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
+        eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
 
         List<Event> matches = Objects.requireNonNull(searchEvents.handle("kayak").collectList().block());
 

@@ -60,9 +60,16 @@ public class Event {
     }
 
     public void estimateAttendance(int expectedAttendance) {
-        if (expectedAttendance < 0)
-            throw new InvalidExpectedAttendanceException("Expected attendance must not be negative.");
+        requireMutable();
+        if (expectedAttendance < 0 || expectedAttendance > maxCapacity)
+            throw new InvalidExpectedAttendanceException(
+                    "Expected attendance must be between 0 and the max capacity (%d).".formatted(maxCapacity));
         this.expectedAttendance = expectedAttendance;
+    }
+
+    private void requireMutable() {
+        if (status.isFinal())
+            throw new InvalidEventStatusTransitionException("Cannot modify a cancelled event.");
     }
 
     private void validateSite() {

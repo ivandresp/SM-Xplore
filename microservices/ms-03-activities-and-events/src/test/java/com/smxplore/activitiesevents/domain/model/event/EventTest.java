@@ -138,9 +138,16 @@ class EventTest {
     void shouldSetExpectedAttendance() {
         Event event = validEvent();
 
-        event.estimateAttendance(200);
+        event.estimateAttendance(10);
 
-        assertEquals(200, event.getExpectedAttendance());
+        assertEquals(10, event.getExpectedAttendance());
+    }
+
+    @Test
+    void shouldRejectAttendanceAboveCapacity() {
+        Event event = validEvent();
+
+        assertThrows(InvalidExpectedAttendanceException.class, () -> event.estimateAttendance(13));
     }
 
     @Test

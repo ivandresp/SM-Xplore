@@ -14,7 +14,7 @@ public record ActivityEntity(
         @Column("sitio_id") UUID siteId,
         @Column("guia_id") UUID guideId,
         String name,
-        @Column("type") String category,
+        @Column("category") String category,
         String status,
         BigDecimal price,
         @Column("max_capacity") int maxCapacity,

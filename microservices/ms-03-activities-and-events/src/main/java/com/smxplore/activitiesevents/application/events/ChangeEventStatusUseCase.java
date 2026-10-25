@@ -19,10 +19,7 @@ public class ChangeEventStatusUseCase implements ChangeEventStatusUseCasePort {
 
     @Override
     public Mono<Event> handle(UUID eventId, EventStatus newStatus) {
-        return eventRepo.existsById(eventId)
-                .filter(exists -> exists)
-                .switchIfEmpty(Mono.error(new EventNotFoundException(eventId)))
-                .flatMap(exists -> eventRepo.findById(eventId))
+        return eventRepo.findById(eventId)
                 .switchIfEmpty(Mono.error(new EventNotFoundException(eventId)))
                 .map(event -> changeStatus(event, newStatus))
                 .flatMap(eventRepo::save);

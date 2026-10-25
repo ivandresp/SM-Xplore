@@ -11,6 +11,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -42,31 +43,40 @@ public class Activity {
 
     public void validate() {
         validateSite();
-        validateName();
-        validateCategory();
-        validatePrice();
-        validateCapacity();
-        validateDuration();
-        validateSchedule();
+        validateName(name);
+        validateCategory(category);
+        validatePrice(price);
+        validateCapacity(maxCapacity);
+        validateDuration(durationMinutes);
+        validateSchedule(startsAt, endsAt);
     }
 
     public void updateDetails(String name, String category, String description, BigDecimal price) {
+        requireMutable();
+        validateName(name);
+        validateCategory(category);
+        validatePrice(price);
         this.name = name;
         this.category = category;
         this.description = description;
         this.price = price;
-        validate();
     }
 
     public void updateSchedule(Instant startsAt, Instant endsAt) {
+        requireMutable();
+        validateSchedule(startsAt, endsAt);
+        var minutes = (int) Duration.between(startsAt, endsAt).toMinutes();
+        if (minutes <= 0)
+            throw new InvalidActivityScheduleException("Activity schedule must last at least one minute.");
         this.startsAt = startsAt;
         this.endsAt = endsAt;
-        validate();
+        this.durationMinutes = minutes;
     }
 
     public void changeMaxCapacity(int maxCapacity) {
+        requireMutable();
+        validateCapacity(maxCapacity);
         this.maxCapacity = maxCapacity;
-        validate();
     }
 
     public void changeStatus(ActivityStatus target) {
@@ -76,41 +86,46 @@ public class Activity {
         status = target;
     }
 
+    private void requireMutable() {
+        if (status.isFinal())
+            throw new InvalidActivityStatusTransitionException("Cannot modify a cancelled activity.");
+    }
+
     private void validateSite() {
         if (siteId == null)
             throw new InvalidActivityRequestException("Site is mandatory.");
     }
 
-    private void validateName() {
+    private void validateName(String name) {
         if (name == null || name.isBlank())
             throw new InvalidActivityNameException("Name must not be blank.");
         if (name.strip().length() > NAME_MAX_LENGTH)
             throw new InvalidActivityNameException("Name must not exceed %d characters.".formatted(NAME_MAX_LENGTH));
     }
 
-    private void validateCategory() {
+    private void validateCategory(String category) {
         if (category == null || category.isBlank())
             throw new InvalidActivityRequestException("Category must not be blank.");
         if (category.strip().length() > CATEGORY_MAX_LENGTH)
             throw new InvalidActivityRequestException("Category must not exceed %d characters.".formatted(CATEGORY_MAX_LENGTH));
     }
 
-    private void validatePrice() {
+    private void validatePrice(BigDecimal price) {
         if (price == null || price.compareTo(BigDecimal.ZERO) < 0)
             throw new InvalidActivityPriceException("Price must not be null or negative.");
     }
 
-    private void validateCapacity() {
+    private void validateCapacity(int maxCapacity) {
         if (maxCapacity <= 0)
             throw new InvalidActivityCapacityException("Max capacity must be greater than zero.");
     }
 
-    private void validateDuration() {
+    private void validateDuration(int durationMinutes) {
         if (durationMinutes <= 0)
             throw new InvalidActivityRequestException("Duration must be positive.");
     }
 
-    private void validateSchedule() {
+    private void validateSchedule(Instant startsAt, Instant endsAt) {
         if (startsAt == null || endsAt == null || !endsAt.isAfter(startsAt))
             throw new InvalidActivityScheduleException("Activity schedule must have an end date after the start date.");
     }
