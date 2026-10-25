@@ -75,6 +75,29 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 
 Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias queda diferido.
 
+## Endpoints
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| GET | `/api/v1/events` | Público |
+| GET | `/api/v1/events/{eventId}` | Público |
+| GET | `/api/v1/events/search?name=` | Público |
+| POST | `/api/v1/events` | `ADMIN`, `DESTINATION_MANAGER` |
+| PATCH | `/api/v1/events/{eventId}/status` | `ADMIN`, `DESTINATION_MANAGER` |
+| PATCH | `/api/v1/events/{eventId}/attendance` | `ADMIN`, `DESTINATION_MANAGER` |
+| GET | `/api/v1/activities` | Público |
+| GET | `/api/v1/activities/{activityId}` | Público |
+| GET | `/api/v1/activities/search?category=` | Público |
+| GET | `/api/v1/activities/site/{siteId}` | Público |
+| POST | `/api/v1/activities` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| PATCH | `/api/v1/activities/{activityId}` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| PATCH | `/api/v1/activities/{activityId}/availability` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| PATCH | `/api/v1/activities/{activityId}/slots` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| PATCH | `/api/v1/activities/{activityId}/status` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| POST | `/api/v1/activities/{activityId}/cancel` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+
+Los errores usan el formato uniforme `{timestamp, status, error, message, path}`.
+
 ## Pruebas
 
 ```bash

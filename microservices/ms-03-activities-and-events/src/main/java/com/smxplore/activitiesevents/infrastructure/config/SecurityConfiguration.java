@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -24,11 +25,16 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Single stateless JWT security chain. Endpoint-level role rules land with the
- * first use cases; for now every non-public exchange requires a valid token.
+ * Single stateless JWT security chain. Catalog reads are public; writes are
+ * restricted to the roles that own the offer (destination managers for events,
+ * guides and managers for activities).
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
+
+    private static final String ADMIN = "ADMIN";
+    private static final String DESTINATION_MANAGER = "DESTINATION_MANAGER";
+    private static final String GUIDE = "GUIDE";
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
@@ -45,6 +51,19 @@ public class SecurityConfiguration {
                         .pathMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**")
                         .permitAll()
+                        // Public catalog
+                        .pathMatchers(HttpMethod.GET, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
+                        .pathMatchers(HttpMethod.HEAD, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
+                        // Events: destination managers (and admins) manage the offer
+                        .pathMatchers(HttpMethod.POST, "/api/v1/events/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER)
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/events/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER)
+                        // Activities: guides own their activities; managers and admins oversee
+                        .pathMatchers(HttpMethod.POST, "/api/v1/activities/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/activities/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         .anyExchange().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiAuthenticationEntryPoint)
