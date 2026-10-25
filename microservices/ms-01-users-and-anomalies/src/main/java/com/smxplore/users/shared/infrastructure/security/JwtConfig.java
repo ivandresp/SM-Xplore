@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -25,8 +27,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 public class JwtConfig {
 
     @Bean
-    public RSAKey rsaKey(JwtProperties properties) {
-        return JwtKeyStore.load(properties);
+    public RSAKey rsaKey(JwtProperties properties, Environment environment) {
+        return JwtKeyStore.load(properties, environment.acceptsProfiles(Profiles.of("dev")));
     }
 
     @Bean

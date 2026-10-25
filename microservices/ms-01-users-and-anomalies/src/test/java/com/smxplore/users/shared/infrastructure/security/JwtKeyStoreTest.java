@@ -24,8 +24,8 @@ class JwtKeyStoreTest {
     void generatesTheKeyPairOnceAndReusesItOnLaterStarts() throws Exception {
         Path keyStore = tempDir.resolve("jwt/keys.pem");
 
-        RSAKey first = JwtKeyStore.load(properties(null, null, keyStore, true));
-        RSAKey second = JwtKeyStore.load(properties(null, null, keyStore, true));
+        RSAKey first = JwtKeyStore.load(properties(null, null, keyStore, true), true);
+        RSAKey second = JwtKeyStore.load(properties(null, null, keyStore, true), true);
 
         assertThat(Files.exists(keyStore)).isTrue();
         assertThat(first.getKeyID()).isNotBlank().isEqualTo(second.getKeyID());
@@ -36,10 +36,10 @@ class JwtKeyStoreTest {
     @Test
     void readsTheKeyPairFromConfiguredPemValues() throws Exception {
         Path keyStore = tempDir.resolve("keys.pem");
-        RSAKey generated = JwtKeyStore.load(properties(null, null, keyStore, true));
+        RSAKey generated = JwtKeyStore.load(properties(null, null, keyStore, true), true);
         String pem = Files.readString(keyStore, StandardCharsets.UTF_8);
 
-        RSAKey configured = JwtKeyStore.load(properties(pem, pem, tempDir.resolve("unused.pem"), false));
+        RSAKey configured = JwtKeyStore.load(properties(pem, pem, tempDir.resolve("unused.pem"), false), false);
 
         assertThat(configured.getKeyID()).isEqualTo(generated.getKeyID());
         assertThat(configured.toPublicJWK().toJSONString())
@@ -48,7 +48,7 @@ class JwtKeyStoreTest {
 
     @Test
     void derivesTheKeyIdFromThePublicKeyThumbprint() throws Exception {
-        RSAKey key = JwtKeyStore.load(properties(null, null, tempDir.resolve("keys.pem"), true));
+        RSAKey key = JwtKeyStore.load(properties(null, null, tempDir.resolve("keys.pem"), true), true);
 
         assertThat(key.getKeyID()).isEqualTo(key.computeThumbprint().toString());
     }
@@ -57,9 +57,19 @@ class JwtKeyStoreTest {
     void failsWhenThereAreNoKeysAndGenerationIsDisabled() {
         JwtProperties properties = properties(null, null, tempDir.resolve("missing.pem"), false);
 
-        assertThatThrownBy(() -> JwtKeyStore.load(properties))
+        assertThatThrownBy(() -> JwtKeyStore.load(properties, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No hay llaves JWT configuradas");
+    }
+
+    @Test
+    void generatesInDevelopmentEvenWhenThePropertyIsDisabled() {
+        Path keyStore = tempDir.resolve("dev/keys.pem");
+
+        RSAKey key = JwtKeyStore.load(properties(null, null, keyStore, false), true);
+
+        assertThat(Files.exists(keyStore)).isTrue();
+        assertThat(key.getKeyID()).isNotBlank();
     }
 
     @Test
@@ -67,7 +77,7 @@ class JwtKeyStoreTest {
         Path keyStore = tempDir.resolve("broken.pem");
         Files.writeString(keyStore, "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n");
 
-        assertThatThrownBy(() -> JwtKeyStore.load(properties(null, null, keyStore, false)))
+        assertThatThrownBy(() -> JwtKeyStore.load(properties(null, null, keyStore, false), false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("no contiene ambas llaves PEM");
     }

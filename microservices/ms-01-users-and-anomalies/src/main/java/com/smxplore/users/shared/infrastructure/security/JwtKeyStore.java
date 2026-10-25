@@ -48,7 +48,7 @@ final class JwtKeyStore {
 
     private JwtKeyStore() {}
 
-    static RSAKey load(JwtProperties properties) {
+    static RSAKey load(JwtProperties properties, boolean developmentFallback) {
         if (hasText(properties.privateKey())) {
             return withThumbprintKeyId(fromPem(properties.privateKey(), properties.publicKey()));
         }
@@ -58,9 +58,9 @@ final class JwtKeyStore {
             return withThumbprintKeyId(readFromFile(path));
         }
 
-        if (!properties.allowGeneratedKeys()) {
+        if (!properties.allowGeneratedKeys() && !developmentFallback) {
             throw new IllegalStateException("No hay llaves JWT configuradas. Define JWT_PRIVATE_KEY y "
-                    + "JWT_PUBLIC_KEY, o habilita app.security.jwt.allow-generated-keys solo en desarrollo.");
+                    + "JWT_PUBLIC_KEY, o habilita JWT_ALLOW_GENERATED_KEYS solo en desarrollo.");
         }
 
         RSAKey generated = withThumbprintKeyId(generate());
