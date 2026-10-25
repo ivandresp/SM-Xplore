@@ -50,7 +50,8 @@ public class PasswordResetTokenRepositoryAdapter implements PasswordResetTokenRe
                 token.tokenHash(),
                 token.createdAt(),
                 token.expiresAt(),
-                token.usedAt());
+                token.usedAt(),
+                token.purpose());
     }
 
     private PasswordResetToken toDomain(PasswordResetTokenJpaEntity entity) {
@@ -60,6 +61,7 @@ public class PasswordResetTokenRepositoryAdapter implements PasswordResetTokenRe
                 entity.getTokenHash(),
                 entity.getCreatedAt(),
                 entity.getExpiresAt(),
-                entity.getUsedAt());
+                entity.getUsedAt(),
+                entity.getPurpose());
     }
 }

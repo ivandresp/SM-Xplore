@@ -1,6 +1,7 @@
 package com.smxplore.users.identity.infrastructure.adapter.in.rest;
 
 import com.smxplore.users.identity.application.dto.ChangeUserStatusCommand;
+import com.smxplore.users.identity.application.dto.CreateInternalUserCommand;
 import com.smxplore.users.identity.application.dto.PageResult;
 import com.smxplore.users.identity.application.dto.ReviewProviderCommand;
 import com.smxplore.users.identity.application.dto.SortOrder;
@@ -8,6 +9,7 @@ import com.smxplore.users.identity.application.dto.UserSearchCriteria;
 import com.smxplore.users.identity.application.dto.UserSummaryView;
 import com.smxplore.users.identity.application.dto.UserView;
 import com.smxplore.users.identity.application.port.in.ChangeUserStatusUseCase;
+import com.smxplore.users.identity.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.identity.application.port.in.GetUserDetailUseCase;
 import com.smxplore.users.identity.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.identity.application.port.in.SearchUsersUseCase;
@@ -16,8 +18,10 @@ import com.smxplore.users.identity.domain.model.Role;
 import com.smxplore.users.identity.domain.model.UserId;
 import com.smxplore.users.identity.domain.model.UserStatus;
 import jakarta.validation.Valid;
+import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -40,16 +44,19 @@ public class AdminUserController {
     private final GetUserDetailUseCase getUserDetail;
     private final ChangeUserStatusUseCase changeUserStatus;
     private final ReviewProviderUseCase reviewProvider;
+    private final CreateInternalUserUseCase createInternalUser;
 
     public AdminUserController(
             SearchUsersUseCase searchUsers,
             GetUserDetailUseCase getUserDetail,
             ChangeUserStatusUseCase changeUserStatus,
-            ReviewProviderUseCase reviewProvider) {
+            ReviewProviderUseCase reviewProvider,
+            CreateInternalUserUseCase createInternalUser) {
         this.searchUsers = searchUsers;
         this.getUserDetail = getUserDetail;
         this.changeUserStatus = changeUserStatus;
         this.reviewProvider = reviewProvider;
+        this.createInternalUser = createInternalUser;
     }
 
     @GetMapping
@@ -69,6 +76,25 @@ public class AdminUserController {
     @GetMapping("/{id}")
     public UserView detail(@PathVariable UUID id) {
         return getUserDetail.get(new UserId(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<UserView> create(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateInternalUserRequest request) {
+        UserView user = createInternalUser.create(
+                actorId(jwt),
+                new CreateInternalUserCommand(
+                        request.role(),
+                        request.fullName(),
+                        request.email(),
+                        request.phone(),
+                        request.dniType(),
+                        request.dniNumber(),
+                        request.license(),
+                        request.nit(),
+                        request.startOperationDate()));
+        return ResponseEntity.created(URI.create("/api/v1/admin/users/" + user.id()))
+                .body(user);
     }
 
     @PatchMapping("/{id}/status")

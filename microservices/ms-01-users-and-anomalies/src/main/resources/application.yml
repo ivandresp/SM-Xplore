@@ -53,6 +53,8 @@ app:
       allow-generated-keys: false
     password-reset:
       ttl: ${PASSWORD_RESET_TTL:PT30M}
+    account-invitation:
+      ttl: ${ACCOUNT_INVITATION_TTL:PT48H}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   frontend:

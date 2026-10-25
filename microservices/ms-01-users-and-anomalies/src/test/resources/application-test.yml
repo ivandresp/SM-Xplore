@@ -10,6 +10,8 @@ app:
       allow-generated-keys: true
     password-reset:
       ttl: PT30M
+    account-invitation:
+      ttl: PT48H
   cors:
     allowed-origins:
       - http://localhost:5173

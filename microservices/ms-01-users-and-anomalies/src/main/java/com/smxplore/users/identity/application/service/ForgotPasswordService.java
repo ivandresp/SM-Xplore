@@ -11,6 +11,7 @@ import com.smxplore.users.identity.application.port.out.TransactionPort;
 import com.smxplore.users.identity.application.port.out.UserRepository;
 import com.smxplore.users.identity.domain.model.Email;
 import com.smxplore.users.identity.domain.model.PasswordResetToken;
+import com.smxplore.users.identity.domain.model.TokenPurpose;
 import com.smxplore.users.identity.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Instant;
@@ -55,8 +56,8 @@ public final class ForgotPasswordService implements ForgotPasswordUseCase {
 
         Instant now = clock.instant();
         String rawToken = tokenGenerator.generate();
-        PasswordResetToken token =
-                PasswordResetToken.create(user.get().id(), tokenHasher.hash(rawToken), now, policy.ttl());
+        PasswordResetToken token = PasswordResetToken.create(
+                user.get().id(), tokenHasher.hash(rawToken), now, policy.ttl(), TokenPurpose.PASSWORD_RESET);
 
         transactions.execute(() -> {
             resetTokens.invalidateAllForUser(user.get().id(), now);

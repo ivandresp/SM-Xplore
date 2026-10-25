@@ -1,9 +1,11 @@
 package com.smxplore.users.shared.infrastructure.config;
 
+import com.smxplore.users.identity.application.model.AccountInvitationPolicy;
 import com.smxplore.users.identity.application.model.PasswordResetPolicy;
 import com.smxplore.users.identity.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.identity.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ChangeUserStatusUseCase;
+import com.smxplore.users.identity.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.identity.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.identity.application.port.in.GetPublicProfileUseCase;
@@ -16,6 +18,7 @@ import com.smxplore.users.identity.application.port.in.ResetPasswordUseCase;
 import com.smxplore.users.identity.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.identity.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.identity.application.port.in.UpdateProfileUseCase;
+import com.smxplore.users.identity.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.identity.application.port.out.AuditLogRepository;
 import com.smxplore.users.identity.application.port.out.PasswordHasher;
 import com.smxplore.users.identity.application.port.out.PasswordResetNotifier;
@@ -30,6 +33,7 @@ import com.smxplore.users.identity.application.service.AuditTrailRecorder;
 import com.smxplore.users.identity.application.service.BootstrapAdminService;
 import com.smxplore.users.identity.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.identity.application.service.ChangeUserStatusService;
+import com.smxplore.users.identity.application.service.CreateInternalUserService;
 import com.smxplore.users.identity.application.service.ForgotPasswordService;
 import com.smxplore.users.identity.application.service.GetCurrentUserService;
 import com.smxplore.users.identity.application.service.GetPublicProfileService;
@@ -52,6 +56,11 @@ public class ApplicationConfig {
     @Bean
     public PasswordResetPolicy passwordResetPolicy(PasswordResetProperties properties) {
         return new PasswordResetPolicy(properties.ttl());
+    }
+
+    @Bean
+    public AccountInvitationPolicy accountInvitationPolicy(AccountInvitationProperties properties) {
+        return new AccountInvitationPolicy(properties.ttl());
     }
 
     @Bean
@@ -156,6 +165,31 @@ public class ApplicationConfig {
             TransactionPort transactions,
             Clock clock) {
         return new ReviewProviderService(users, auditTrailRecorder, providerReviewNotifier, transactions, clock);
+    }
+
+    @Bean
+    public CreateInternalUserUseCase createInternalUserUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            PasswordHasher passwordHasher,
+            TokenGenerator tokenGenerator,
+            TokenHasher tokenHasher,
+            AccountInvitationNotifier accountInvitationNotifier,
+            AccountInvitationPolicy accountInvitationPolicy,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new CreateInternalUserService(
+                users,
+                resetTokens,
+                passwordHasher,
+                tokenGenerator,
+                tokenHasher,
+                accountInvitationNotifier,
+                accountInvitationPolicy,
+                auditTrailRecorder,
+                transactions,
+                clock);
     }
 
     @Bean
