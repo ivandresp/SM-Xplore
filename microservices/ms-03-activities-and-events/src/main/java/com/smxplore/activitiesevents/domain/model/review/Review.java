@@ -1,7 +1,6 @@
 package com.smxplore.activitiesevents.domain.model.review;
 
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
-import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -13,7 +12,6 @@ import java.util.UUID;
 public class Review {
 
     private static final int COMMENT_MAX_LENGTH = 1000;
-    private static final int REPORT_REASON_MAX_LENGTH = 500;
 
     @Builder.Default
     private final UUID id = UUID.randomUUID();
@@ -23,11 +21,6 @@ public class Review {
     private final int rating;
     private final String comment;
     private final ReviewReply reply;
-
-    @Builder.Default
-    private final boolean reported = false;
-    private final String reportReason;
-    private final Instant reportedAt;
 
     @Builder.Default
     private final Instant createdAt = Instant.now();
@@ -52,23 +45,5 @@ public class Review {
 
     public Review withReply(ReviewReply reply) {
         return toBuilder().reply(reply).build();
-    }
-
-    public Review withReport(String reason) {
-        if (reported) {
-            throw new ReviewAlreadyReportedException("This review was already reported.");
-        }
-        if (reason == null || reason.isBlank()) {
-            throw new InvalidReviewException("Report reason must not be blank.");
-        }
-        if (reason.length() > REPORT_REASON_MAX_LENGTH) {
-            throw new InvalidReviewException(
-                    "Report reason must not exceed %d characters.".formatted(REPORT_REASON_MAX_LENGTH));
-        }
-        return toBuilder()
-                .reported(true)
-                .reportReason(reason)
-                .reportedAt(Instant.now())
-                .build();
     }
 }

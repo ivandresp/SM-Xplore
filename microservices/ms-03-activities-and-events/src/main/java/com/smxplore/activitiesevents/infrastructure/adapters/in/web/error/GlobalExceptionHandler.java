@@ -36,6 +36,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespo
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -74,6 +75,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleReviewForbidden(RuntimeException exception,
                                                                   ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateKey(DuplicateKeyException exception,
+                                                               ServerWebExchange exchange) {
+        return build(HttpStatus.CONFLICT, "The resource already exists.", exchange);
     }
 
     @ExceptionHandler({

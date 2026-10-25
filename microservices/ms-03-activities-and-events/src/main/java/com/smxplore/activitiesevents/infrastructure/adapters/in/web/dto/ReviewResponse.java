@@ -13,9 +13,6 @@ public record ReviewResponse(
         int rating,
         String comment,
         ReviewReplyResponse reply,
-        boolean reported,
-        String reportReason,
-        Instant reportedAt,
         Instant createdAt
 ) {
     public record ReviewUserResponse(UUID id, String name) {

@@ -12,7 +12,7 @@ spring:
     uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
   data:
     mongodb:
-      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:false}
+      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
   sql:
     init:
       mode: ${SQL_INIT_MODE:never}

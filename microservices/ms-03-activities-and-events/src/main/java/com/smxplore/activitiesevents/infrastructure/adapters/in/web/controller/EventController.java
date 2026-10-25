@@ -106,15 +106,37 @@ public class EventController {
     @PatchMapping("/{eventId}/status")
     @Operation(summary = "Change the status of an event")
     public Mono<EventResponse> changeStatus(@PathVariable UUID eventId,
-                                            @Valid @RequestBody ChangeEventStatusRequest request) {
-        return changeEventStatusUseCase.handle(eventId, request.status()).map(mapper::toResponse);
+                                            @Valid @RequestBody ChangeEventStatusRequest request,
+                                            @AuthenticationPrincipal Jwt jwt) {
+        return requireCanManage(eventId, jwt)
+                .then(Mono.defer(() -> changeEventStatusUseCase.handle(eventId, request.status())))
+                .map(mapper::toResponse);
     }
 
     @PatchMapping("/{eventId}/attendance")
     @Operation(summary = "Estimate the expected attendance of an event")
     public Mono<EventResponse> estimateAttendance(@PathVariable UUID eventId,
-                                                  @Valid @RequestBody EstimateAttendanceRequest request) {
-        return estimateEventAttendanceUseCase.handle(eventId, request.expectedAttendance())
+                                                  @Valid @RequestBody EstimateAttendanceRequest request,
+                                                  @AuthenticationPrincipal Jwt jwt) {
+        return requireCanManage(eventId, jwt)
+                .then(Mono.defer(() -> estimateEventAttendanceUseCase.handle(eventId, request.expectedAttendance())))
                 .map(mapper::toResponse);
+    }
+
+    private Mono<Void> requireCanManage(UUID eventId, Jwt jwt) {
+        if (jwt == null || "ADMIN".equals(jwt.getClaimAsString(roleClaim))) {
+            return Mono.empty();
+        }
+        if (!"DESTINATION_MANAGER".equals(jwt.getClaimAsString(roleClaim))) {
+            return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only the manager of the event or an admin can modify it."));
+        }
+        return viewEventDetailsUseCase.handle(eventId)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found.")))
+                .flatMap(event -> event.getManagerId() != null
+                        && event.getManagerId().toString().equals(jwt.getSubject())
+                        ? Mono.empty()
+                        : Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Only the manager of the event or an admin can modify it.")));
     }
 }

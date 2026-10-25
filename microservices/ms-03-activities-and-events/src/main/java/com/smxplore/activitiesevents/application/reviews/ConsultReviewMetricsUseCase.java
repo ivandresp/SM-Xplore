@@ -1,7 +1,11 @@
 package com.smxplore.activitiesevents.application.reviews;
 
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
+import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewMetricsUseCasePort;
 import lombok.RequiredArgsConstructor;
@@ -12,16 +16,32 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ConsultReviewMetricsUseCase implements ConsultReviewMetricsUseCasePort {
 
+    private static final int MAX_REVIEWS = 200;
+
     private final ReviewRepositoryPort reviewRepo;
+    private final EventRepositoryPort eventRepo;
+    private final ActivityRepositoryPort activityRepo;
 
     @Override
     public Mono<ReviewMetrics> handle(UUID itemId, ReviewItemType itemType) {
-        return reviewRepo.findByItem(itemId, itemType)
+        return validateItem(itemId, itemType)
+                .thenMany(reviewRepo.findByItem(itemId, itemType).take(MAX_REVIEWS))
                 .collectList()
                 .map(reviews -> {
                     var count = reviews.size();
                     var average = reviews.stream().mapToInt(review -> review.getRating()).average().orElse(0.0);
                     return new ReviewMetrics(itemId, itemType, count, average);
                 });
+    }
+
+    private Mono<Void> validateItem(UUID itemId, ReviewItemType itemType) {
+        return switch (itemType) {
+            case EVENT -> eventRepo.findById(itemId)
+                    .switchIfEmpty(Mono.error(new EventNotFoundException(itemId)))
+                    .then();
+            case ACTIVITY -> activityRepo.findById(itemId)
+                    .switchIfEmpty(Mono.error(new ActivityNotFoundException(itemId)))
+                    .then();
+        };
     }
 }

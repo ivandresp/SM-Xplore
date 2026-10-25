@@ -93,7 +93,7 @@ public class ReviewController {
                                        @Valid @RequestBody ReportReviewRequest request,
                                        @AuthenticationPrincipal Jwt jwt) {
         subject(jwt);
-        return reportReviewUseCase.handle(reviewId, request.reason()).map(mapper::toResponse);
+        return reportReviewUseCase.handle(reviewId, subject(jwt), request.reason()).map(mapper::toResponse);
     }
 
     @PostMapping("/{reviewId}/response")

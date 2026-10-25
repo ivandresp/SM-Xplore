@@ -7,7 +7,8 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 ### Añadido
 - **Validar existencia de evento**: `GET /api/v1/events/{id}/exists` (200/404).
 - **Consultar disponibilidad**: cupos libres de evento/actividad (`GET /api/v1/events/{id}/availability`, `GET /api/v1/activities/{id}/availability`).
-- **Reportar reseña** (`POST /api/v1/reviews/{id}/report`, una vez por reseña, 409 si se repite).
+- **Reportar reseña** (`POST /api/v1/reviews/{id}/report`, un reporte por usuario y reseña, 409 si se repite).
+  - Los reportes viven en la colección `review_reports`; el motivo no se expone en la API pública.
 - **Métricas de reputación** por ítem (`GET /api/v1/reviews/events|activities/{id}/metrics`: total y promedio).
 - **Reseñas de eventos y actividades** con MongoDB reactivo.
   - Dos colecciones separadas: `event_reviews` y `activity_reviews`.
@@ -30,7 +31,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
   - `docker-compose.yml` con app, PostgreSQL y MongoDB.
   - `Dockerfile` multi-stage Java 25.
   - `schema.sql` idempotente.
-- Cobertura de pruebas: **153 tests** unitarios/de slice.
+- Cobertura de pruebas: **154 tests** unitarios/de slice.
 
 ### Endpoints nuevos
 | Método | Ruta | Acceso |
@@ -65,7 +66,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - Totales de reserva ahora incluyen `numberOfPeople`.
 
 ### Decisiones
-- Se puede **reseñar sin haber reservado**.
+- Se puede **reseñar sin haber reservado**, pero solo ítems **publicados**, vigentes y sin auto-reseña de su guía/gestora.
 - Las reseñas de eventos y actividades van en **colecciones separadas**.
 - `managerId` se replica al crear el evento para autorizar respuestas sin consultar ms-04 en caliente.
 

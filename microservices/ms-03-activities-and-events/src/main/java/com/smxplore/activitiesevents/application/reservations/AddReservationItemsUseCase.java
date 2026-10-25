@@ -126,6 +126,11 @@ public class AddReservationItemsUseCase implements AddReservationItemsUseCasePor
         if (incomingType == ReservationItemType.EVENT && existing.size() + incoming.size() > 1) {
             return Mono.error(new TooManyReservationItemsException("An EVENT reservation can only have one item."));
         }
+        var existingIds = existing.stream().map(ReservationItem::getItemId).toList();
+        if (incoming.stream().anyMatch(item -> existingIds.contains(item.getItemId()))) {
+            return Mono.error(new TooManyReservationItemsException(
+                    "An item cannot be added twice to the same reservation."));
+        }
         return switch (incomingType) {
             case ACTIVITY -> resolveActivities(reservation, existing, incoming);
             case EVENT -> resolveEvents(reservation, incoming);

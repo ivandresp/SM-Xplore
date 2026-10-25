@@ -13,6 +13,7 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class ReviewUseCasesTest {
 
     @Mock
     private ReviewRepositoryPort reviewRepo;
+
+    @Mock
+    private ReviewReportRepositoryPort reportRepo;
 
     @Mock
     private EventRepositoryPort eventRepo;
@@ -111,6 +115,17 @@ class ReviewUseCasesTest {
     }
 
     @Test
+    void destinationManagerCannotRespondToActivityReview() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(UUID.randomUUID())));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!"))
+                .expectError(ReviewResponseNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
     void staffCanRespondToEventReview() {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
@@ -157,29 +172,30 @@ class ReviewUseCasesTest {
     }
 
     @Test
-    void reportsReviewOnce() {
+    void reportsReviewOncePerUser() {
         var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var reporterId = UUID.randomUUID();
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
-        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        given(reportRepo.existsByReviewAndReporter(review.getId(), reporterId)).willReturn(Mono.just(false));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        var reporter = new ReportReviewUseCase(reviewRepo);
+        var reporter = new ReportReviewUseCase(reviewRepo, reportRepo);
 
-        StepVerifier.create(reporter.handle(review.getId(), "Spam"))
-                .assertNext(updated -> {
-                    assertThat(updated.isReported()).isTrue();
-                    assertThat(updated.getReportReason()).isEqualTo("Spam");
-                })
+        StepVerifier.create(reporter.handle(review.getId(), reporterId, "Spam"))
+                .assertNext(found -> assertThat(found.getId()).isEqualTo(review.getId()))
                 .verifyComplete();
     }
 
     @Test
-    void rejectsSecondReport() {
-        var reported = review(ReviewItemType.ACTIVITY, UUID.randomUUID()).withReport("Spam");
-        given(reviewRepo.findById(reported.getId())).willReturn(Mono.just(reported));
+    void rejectsSecondReportFromSameUser() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var reporterId = UUID.randomUUID();
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reportRepo.existsByReviewAndReporter(review.getId(), reporterId)).willReturn(Mono.just(true));
 
-        var reporter = new ReportReviewUseCase(reviewRepo);
+        var reporter = new ReportReviewUseCase(reviewRepo, reportRepo);
 
-        StepVerifier.create(reporter.handle(reported.getId(), "Otra"))
+        StepVerifier.create(reporter.handle(review.getId(), reporterId, "Spam"))
                 .expectError(ReviewAlreadyReportedException.class)
                 .verify();
     }
@@ -189,9 +205,11 @@ class ReviewUseCasesTest {
         var itemId = UUID.randomUUID();
         var first = review(ReviewItemType.EVENT, itemId).toBuilder().rating(4).build();
         var second = review(ReviewItemType.EVENT, itemId).toBuilder().rating(5).build();
+        given(eventRepo.findById(itemId)).willReturn(Mono.just(event(UUID.randomUUID())));
         given(reviewRepo.findByItem(itemId, ReviewItemType.EVENT)).willReturn(reactor.core.publisher.Flux.just(first, second));
 
-        StepVerifier.create(new ConsultReviewMetricsUseCase(reviewRepo).handle(itemId, ReviewItemType.EVENT))
+        StepVerifier.create(new ConsultReviewMetricsUseCase(reviewRepo, eventRepo, activityRepo)
+                        .handle(itemId, ReviewItemType.EVENT))
                 .assertNext(metrics -> {
                     assertThat(metrics.count()).isEqualTo(2);
                     assertThat(metrics.averageRating()).isEqualTo(4.5);

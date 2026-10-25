@@ -60,9 +60,6 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
         if (ADMIN.equals(role)) {
             return Mono.empty();
         }
-        if (review.getItemType() == ReviewItemType.ACTIVITY && DESTINATION_MANAGER.equals(role)) {
-            return Mono.empty();
-        }
         if (review.getItemType() == ReviewItemType.EVENT) {
             return eventRepo.findById(review.getItemId())
                     .switchIfEmpty(Mono.error(new EventNotFoundException(review.getItemId())))

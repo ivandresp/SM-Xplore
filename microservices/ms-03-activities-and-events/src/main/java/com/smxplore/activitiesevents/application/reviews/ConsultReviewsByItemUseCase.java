@@ -16,6 +16,6 @@ public class ConsultReviewsByItemUseCase implements ConsultReviewsByItemUseCaseP
 
     @Override
     public Flux<Review> handle(UUID itemId, ReviewItemType itemType) {
-        return reviewRepo.findByItem(itemId, itemType);
+        return reviewRepo.findByItem(itemId, itemType).take(200);
     }
 }
