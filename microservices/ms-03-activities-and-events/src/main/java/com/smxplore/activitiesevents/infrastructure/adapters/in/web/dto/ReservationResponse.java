@@ -23,6 +23,7 @@ public record ReservationResponse(
         ReservationStatus status,
         Instant bookedAt,
         Instant bookedFor,
+        Instant itemStartsAt,
         String notes
 ) {
 }

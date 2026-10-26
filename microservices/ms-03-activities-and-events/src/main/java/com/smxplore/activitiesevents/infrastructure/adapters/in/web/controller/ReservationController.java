@@ -77,7 +77,7 @@ public class ReservationController {
         }
         var reservation = mapper.toDomain(request);
         if (!isAdmin(jwt)) {
-            reservation = reservation.toBuilder().touristId(UUID.fromString(subject(jwt))).build();
+            reservation = reservation.toBuilder().touristId(subjectAsUuid(jwt)).build();
         }
         return createReservationUseCase.handle(reservation).map(mapper::toResponse);
     }
@@ -94,6 +94,8 @@ public class ReservationController {
     @Operation(summary = "List reservations by status (admin/managers)")
     public Flux<ReservationResponse> findByStatus(@RequestParam ReservationStatus status,
                                                   @RequestParam(defaultValue = "50") int limit) {
+        // TODO(ms-04): scope this listing to the sites of the caller's managerId.
+        // Today any DESTINATION_MANAGER sees every reservation in the system.
         return consultReservationsByStatusUseCase.handle(status, PaginationLimits.clamp(limit))
                 .map(mapper::toResponse);
     }
@@ -171,6 +173,14 @@ public class ReservationController {
         return jwt.getSubject();
     }
 
+    private static UUID subjectAsUuid(Jwt jwt) {
+        try {
+            return UUID.fromString(subject(jwt));
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token subject.");
+        }
+    }
+
     private boolean isAdmin(Jwt jwt) {
         return jwt != null && UserRole.ADMIN.name().equals(jwt.getClaimAsString(roleClaim));
     }
@@ -212,15 +222,9 @@ public class ReservationController {
     }
 
     private Mono<Void> requireReservationOperator(Jwt jwt, UUID reservationId) {
-        if (isAdminOrManager(jwt)) {
-            return Mono.empty();
-        }
         return consultOneReservationUseCase.handle(reservationId)
                 .doOnNext(reservation -> {
-                    var subject = subject(jwt);
-                    var isGuide = reservation.getGuideId() != null
-                            && reservation.getGuideId().toString().equals(subject);
-                    if (!isGuide) {
+                    if (!isStaff(jwt, reservation)) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the guide of the reservation can operate it.");
                     }
@@ -238,15 +242,13 @@ public class ReservationController {
                     .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
                             "You can only list reservations of your own activities.")))
                     .then();
-            case EVENT -> {
-                if (!staff) {
-                    yield Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
-                            "Only administrators or destination managers can list reservations of an event."));
-                }
-                yield eventRepository.findById(itemId)
-                        .switchIfEmpty(Mono.error(new EventNotFoundException(itemId)))
-                        .then();
-            }
+            case EVENT -> eventRepository.findById(itemId)
+                    .switchIfEmpty(Mono.error(new EventNotFoundException(itemId)))
+                    .filter(event -> isAdmin(jwt) || (event.getManagerId() != null
+                            && event.getManagerId().toString().equals(subject(jwt))))
+                    .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "You can only list reservations of your own events.")))
+                    .then();
         };
     }
 }

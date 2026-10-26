@@ -64,6 +64,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(activity -> {
                     validateActivity(activity);
                     return validateCapacity(reservation, activity.getMaxCapacity())
+                            .then(reservationRepo.lockTourist(reservation.getTouristId()))
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, activity.getPrice(), activity.getStartsAt(),
                                     activity.getGuideId(), null));
@@ -76,6 +77,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(event -> {
                     validateEvent(event);
                     return validateCapacity(reservation, event.getMaxCapacity())
+                            .then(reservationRepo.lockTourist(reservation.getTouristId()))
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, event.getPrice(), event.getStartsAt(),
                                     null, event.getManagerId()));

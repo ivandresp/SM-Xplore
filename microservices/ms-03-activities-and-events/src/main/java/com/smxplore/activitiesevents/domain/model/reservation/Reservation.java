@@ -4,7 +4,6 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationW
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemPriceException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTotalException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
@@ -70,30 +69,6 @@ public class Reservation {
         }
         validateBookingDate();
         validateTotal();
-    }
-
-    public void changeUnitPrice(BigDecimal price) {
-        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new InvalidReservationItemPriceException("Unit price must not be null or negative.");
-        }
-        this.unitPrice = price;
-    }
-
-    public void changePrice(BigDecimal newPrice) {
-        validateTotal(newPrice);
-        total = newPrice;
-    }
-
-    public void assignBookedFor(Instant bookedFor) {
-        this.bookedFor = bookedFor;
-    }
-
-    public void assignGuide(UUID guideId) {
-        this.guideId = guideId;
-    }
-
-    public void assignProvider(UUID providerId) {
-        this.providerId = providerId;
     }
 
     public void cancel() {

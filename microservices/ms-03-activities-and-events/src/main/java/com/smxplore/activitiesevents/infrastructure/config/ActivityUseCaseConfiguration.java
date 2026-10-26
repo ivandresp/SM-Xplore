@@ -11,6 +11,7 @@ import com.smxplore.activitiesevents.application.activities.RegisterActivityUseC
 import com.smxplore.activitiesevents.application.activities.UpdateActivityUseCase;
 import com.smxplore.activitiesevents.application.activities.ViewActivityDetailsUseCase;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ChangeActivityStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ConsultActivitiesUseCasePort;
@@ -58,8 +59,9 @@ public class ActivityUseCaseConfiguration {
     }
 
     @Bean
-    public ManageAvailabilityUseCasePort manageAvailabilityUseCase(ActivityRepositoryPort activityRepository) {
-        return new ManageAvailabilityUseCase(activityRepository);
+    public ManageAvailabilityUseCasePort manageAvailabilityUseCase(ActivityRepositoryPort activityRepository,
+                                                                   ReservationRepositoryPort reservationRepository) {
+        return new ManageAvailabilityUseCase(activityRepository, reservationRepository);
     }
 
     @Bean

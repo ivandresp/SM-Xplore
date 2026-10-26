@@ -9,7 +9,6 @@ spring:
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
     pool:
-      initial-size: 5
       max-size: ${R2DBC_POOL_MAX_SIZE:20}
       max-acquire-time: 5s
   mongodb:

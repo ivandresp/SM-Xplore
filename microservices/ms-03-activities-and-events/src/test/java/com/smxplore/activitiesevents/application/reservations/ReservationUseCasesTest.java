@@ -19,6 +19,7 @@ import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -35,6 +36,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -70,6 +72,11 @@ class ReservationUseCasesTest {
 
     @InjectMocks
     private ConsultReservationsByTouristUseCase consultReservationsByTouristUseCase;
+
+    @BeforeEach
+    void allowTouristLock() {
+        lenient().when(reservationRepo.lockTourist(any())).thenReturn(Mono.empty());
+    }
 
     @Test
     void createConfirmsTheReservationAndUsesTheCatalogPriceAndStart() {

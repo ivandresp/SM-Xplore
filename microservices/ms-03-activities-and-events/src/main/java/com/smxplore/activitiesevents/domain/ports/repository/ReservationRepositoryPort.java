@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public interface ReservationRepositoryPort {
@@ -36,6 +37,12 @@ public interface ReservationRepositoryPort {
     /** People already booked (CONFIRMED) for an event or activity. */
     Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);
 
-    /** Number of CONFIRMED reservations of a tourist, for the anti-abuse cap. */
+    /** CONFIRMED reservations of a tourist whose item has not started yet. */
     Mono<Long> countActiveByTourist(UUID touristId);
+
+    /** Serializes the active-reservation cap for one tourist, inside the current transaction. */
+    Mono<Void> lockTourist(UUID touristId);
+
+    /** Keeps open reservations aligned when the item schedule changes. */
+    Mono<Integer> rescheduleItem(UUID itemId, ReservationItemType type, Instant newStartsAt);
 }

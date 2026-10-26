@@ -40,7 +40,7 @@ class ActivityUseCasesTest {
         activityRepo = new FakeActivityRepository();
         registerActivity = new RegisterActivityUseCase(activityRepo);
         updateActivity = new UpdateActivityUseCase(activityRepo);
-        manageAvailability = new ManageAvailabilityUseCase(activityRepo);
+        manageAvailability = new ManageAvailabilityUseCase(activityRepo, new com.smxplore.activitiesevents.application.reservations.FakeReservationRepository());
         manageSlots = new ManageSlotsUseCase(activityRepo);
         cancelActivity = new CancelActivityUseCase(activityRepo);
         changeActivityStatus = new ChangeActivityStatusUseCase(activityRepo);

@@ -85,11 +85,22 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS unit_price     NUMERIC(14, 2);
 UPDATE reservations
 SET unit_price = CASE WHEN number_of_people > 0 THEN total / number_of_people ELSE 0 END
 WHERE unit_price IS NULL;
+
+-- Prefer the catalog start over the old (client-supplied) booked_for.
+UPDATE reservations r SET item_starts_at = a.starts_at
+FROM actividad a
+WHERE r.item_type = 'ACTIVITY' AND r.item_id = a.id AND r.item_starts_at IS NULL;
+
+UPDATE reservations r SET item_starts_at = e.starts_at
+FROM evento e
+WHERE r.item_type = 'EVENT' AND r.item_id = e.id AND r.item_starts_at IS NULL;
+
 UPDATE reservations SET item_starts_at = booked_for WHERE item_starts_at IS NULL;
 DELETE FROM reservations
 WHERE item_type IS NULL OR item_id IS NULL OR item_starts_at IS NULL;
 
-UPDATE reservations SET total = unit_price * number_of_people;
+UPDATE reservations SET total = unit_price * number_of_people
+WHERE total <> unit_price * number_of_people;
 UPDATE reservations SET status = 'CONFIRMED' WHERE status = 'PENDING';
 UPDATE reservations SET status = 'CANCELLED' WHERE status IN ('REJECTED', 'CANCELLATION_REQUESTED');
 

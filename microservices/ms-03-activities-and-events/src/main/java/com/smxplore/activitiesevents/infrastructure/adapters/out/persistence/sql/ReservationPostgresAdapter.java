@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Repository
@@ -99,7 +100,33 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
 
     @Override
     public Mono<Long> countActiveByTourist(UUID touristId) {
-        return repository.countByTouristIdAndStatus(touristId, ReservationStatus.CONFIRMED);
+        return repository.countActiveByTourist(touristId);
+    }
+
+    @Override
+    public Mono<Void> lockTourist(UUID touristId) {
+        return template.getDatabaseClient()
+                .sql("SELECT pg_advisory_xact_lock(hashtext(:touristId))")
+                .bind("touristId", touristId.toString())
+                .then();
+    }
+
+    @Override
+    public Mono<Integer> rescheduleItem(UUID itemId, ReservationItemType type, Instant newStartsAt) {
+        return template.getDatabaseClient()
+                .sql("""
+                        UPDATE reservations
+                        SET item_starts_at = :startsAt,
+                            booked_for     = :startsAt
+                        WHERE item_id = :itemId
+                          AND item_type = :type
+                          AND status = 'CONFIRMED'
+                        """)
+                .bind("startsAt", newStartsAt)
+                .bind("itemId", itemId)
+                .bind("type", type.name())
+                .fetch().rowsUpdated()
+                .map(Long::intValue);
     }
 
     private PageRequest page(int limit) {

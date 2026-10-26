@@ -30,5 +30,7 @@ public interface ReservationR2dbcRepository extends ReactiveCrudRepository<Reser
     @Query("SELECT * FROM reservations WHERE id = :id FOR UPDATE")
     Mono<ReservationEntity> findByIdForUpdate(UUID id);
 
-    Mono<Long> countByTouristIdAndStatus(UUID touristId, ReservationStatus status);
+    @Query("SELECT COUNT(*) FROM reservations WHERE tourist_id = :touristId "
+            + "AND status = 'CONFIRMED' AND item_starts_at > now()")
+    Mono<Long> countActiveByTourist(UUID touristId);
 }
