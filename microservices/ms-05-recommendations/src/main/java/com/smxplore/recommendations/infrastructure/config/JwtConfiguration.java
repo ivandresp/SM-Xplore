@@ -55,7 +55,7 @@ public class JwtConfiguration {
         if (StringUtils.hasText(properties.getAudience())) {
             validators.add(new JwtClaimValidator<List<String>>(
                     JwtClaimNames.AUD,
-                    audience -> audience != null && audience.contains(properties.getAudience())
+                    audience -> audience.contains(properties.getAudience())
             ));
         }
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));

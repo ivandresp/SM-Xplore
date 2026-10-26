@@ -1,9 +1,9 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.mapper;
 
-import com.smxplore.recommendations.domain.model.Preference;
-import com.smxplore.recommendations.domain.model.Recommendation;
-import com.smxplore.recommendations.domain.model.RecommendationItem;
-import com.smxplore.recommendations.domain.model.RecommendationSignals;
+import com.smxplore.recommendations.domain.model.preference.Preference;
+import com.smxplore.recommendations.domain.model.recommendation.Recommendation;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationItem;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationSignals;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationItemResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationResponse;

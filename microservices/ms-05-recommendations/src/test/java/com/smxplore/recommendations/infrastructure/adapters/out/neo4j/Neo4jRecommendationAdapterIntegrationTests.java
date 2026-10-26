@@ -2,9 +2,9 @@ package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 
 import com.smxplore.recommendations.AbstractNeo4jIntegrationTest;
 import com.smxplore.recommendations.TestSeedData;
-import com.smxplore.recommendations.domain.model.CandidateOrigin;
-import com.smxplore.recommendations.domain.model.ItemType;
-import com.smxplore.recommendations.domain.model.RecommendationCandidate;
+import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import org.junit.jupiter.api.Test;
 import org.neo4j.driver.Driver;

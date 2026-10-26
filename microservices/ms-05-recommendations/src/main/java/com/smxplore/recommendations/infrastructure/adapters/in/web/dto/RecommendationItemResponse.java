@@ -1,6 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.dto;
 
-import com.smxplore.recommendations.domain.model.ItemType;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
 
 import java.util.UUID;
 

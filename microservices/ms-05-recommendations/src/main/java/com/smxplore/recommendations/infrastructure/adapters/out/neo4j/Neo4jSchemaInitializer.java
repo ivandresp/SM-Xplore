@@ -17,10 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-@Component
-@Order(0)
-@RequiredArgsConstructor
 @Slf4j
+@Order(0)
+@Component
+@RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.neo4j.initialize-schema", havingValue = "true", matchIfMissing = true)
 public class Neo4jSchemaInitializer implements ApplicationRunner {
 

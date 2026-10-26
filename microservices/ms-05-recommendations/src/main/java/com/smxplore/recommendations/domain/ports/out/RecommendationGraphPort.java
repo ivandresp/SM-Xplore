@@ -1,8 +1,8 @@
 package com.smxplore.recommendations.domain.ports.out;
 
-import com.smxplore.recommendations.domain.model.GeoLocation;
-import com.smxplore.recommendations.domain.model.ItemType;
-import com.smxplore.recommendations.domain.model.RecommendationCandidate;
+import com.smxplore.recommendations.domain.model.geo.GeoLocation;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 

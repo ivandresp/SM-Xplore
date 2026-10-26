@@ -1,9 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 
-final class Neo4jQueries {
-
-    private Neo4jQueries() {
-    }
+public record Neo4jQueries() {
 
     static String affinityCandidates(int categoryMaxDepth) {
         if (categoryMaxDepth < 0 || categoryMaxDepth > 5) {

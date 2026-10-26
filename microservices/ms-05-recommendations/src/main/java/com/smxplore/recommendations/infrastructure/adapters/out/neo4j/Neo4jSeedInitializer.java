@@ -12,10 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Component
-@Order(1)
-@RequiredArgsConstructor
 @Slf4j
+@Order(1)
+@Component
+@RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 public class Neo4jSeedInitializer implements ApplicationRunner {
 

@@ -1,6 +1,6 @@
 package com.smxplore.recommendations.domain.exception;
 
-import com.smxplore.recommendations.domain.model.ItemType;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
 
 import java.util.UUID;
 

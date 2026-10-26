@@ -1,8 +1,8 @@
 package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 
-import com.smxplore.recommendations.domain.model.CandidateOrigin;
-import com.smxplore.recommendations.domain.model.ItemType;
-import com.smxplore.recommendations.domain.model.RecommendationCandidate;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Value;
 
@@ -15,23 +15,25 @@ final class Neo4jRecordMapper {
     }
 
     static RecommendationCandidate mapCandidate(Record record, CandidateOrigin origin) {
-        return new RecommendationCandidate(
-                ItemType.valueOf(string(record, "itemType")),
-                uuid(record, "itemId"),
-                string(record, "name"),
-                uuid(record, "categoryId"),
-                string(record, "categoryName"),
-                uuid(record, "siteId"),
-                nullableDouble(record, "latitude"),
-                nullableDouble(record, "longitude"),
-                nullableInstant(record, "startsAt"),
-                nullableInstant(record, "endsAt"),
-                nullableInstant(record, "updatedAt"),
-                doubleValue(record, "ratingAvg", 0.0),
-                longValue(record, "ratingCount", 0L),
-                doubleValue(record, "affinity", 0.0),
-                origin
-        );
+        RecommendationCandidate candidate = RecommendationCandidate.builder()
+                .itemType(ItemType.valueOf(string(record, "itemType")))
+                .itemId(uuid(record, "itemId"))
+                .name(string(record, "name"))
+                .categoryId(uuid(record, "categoryId"))
+                .categoryName(string(record, "categoryName"))
+                .siteId(uuid(record, "siteId"))
+                .latitude(nullableDouble(record, "latitude"))
+                .longitude(nullableDouble(record, "longitude"))
+                .startsAt(nullableInstant(record, "startsAt"))
+                .endsAt(nullableInstant(record, "endsAt"))
+                .updatedAt(nullableInstant(record, "updatedAt"))
+                .ratingAvg(doubleValue(record, "ratingAvg"))
+                .ratingCount(longValue(record))
+                .affinity(doubleValue(record, "affinity"))
+                .origin(origin)
+                .build();
+        candidate.validate();
+        return candidate;
     }
 
     private static String string(Record record, String key) {
@@ -49,14 +51,14 @@ final class Neo4jRecordMapper {
         return value == null || value.isNull() ? null : value.asDouble();
     }
 
-    private static double doubleValue(Record record, String key, double defaultValue) {
+    private static double doubleValue(Record record, String key) {
         Value value = record.get(key);
-        return value == null || value.isNull() ? defaultValue : value.asDouble();
+        return value == null || value.isNull() ? 0.0 : value.asDouble();
     }
 
-    private static long longValue(Record record, String key, long defaultValue) {
-        Value value = record.get(key);
-        return value == null || value.isNull() ? defaultValue : value.asLong();
+    private static long longValue(Record record) {
+        Value value = record.get("ratingCount");
+        return value == null || value.isNull() ? 0L : value.asLong();
     }
 
     private static Instant nullableInstant(Record record, String key) {

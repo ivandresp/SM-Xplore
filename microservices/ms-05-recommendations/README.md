@@ -42,14 +42,20 @@ Decisiones importantes:
 src/main/java/com/smxplore/recommendations
 ├── domain
 │   ├── model
+│   │   ├── catalog
+│   │   ├── geo
+│   │   ├── preference
+│   │   ├── ranking
+│   │   ├── recommendation
+│   │   └── tourist
 │   ├── exception
-│   ├── ports/in
-│   ├── ports/out
-│   └── service
+│   └── ports
+│       ├── in
+│       └── out
 ├── application
-│   ├── RecommendationService
-│   ├── PreferenceService
-│   └── ViewService
+│   ├── interaction
+│   ├── preference
+│   └── recommendation
 └── infrastructure
     ├── adapters/in/web
     ├── adapters/out/neo4j
@@ -57,9 +63,10 @@ src/main/java/com/smxplore/recommendations
 ```
 
 - El dominio no depende de Spring.
-- Los puertos devuelven `Mono`/`Flux`.
+- Los modelos están agrupados por uso: catálogo, geografía, preferencias, ranking, recomendación y turista.
+- Los puertos devuelven `Mono`/`Flux` y sus métodos de entrada se llaman `handle`.
 - Los casos de uso se cablean como beans en `BeanConfiguration`.
-- El adaptador Neo4j ejecuta Cypher explícito; el ranking se calcula en el dominio.
+- El adaptador Neo4j ejecuta Cypher explícito; el ranking y la diversidad son políticas de la capa `application`.
 - MapStruct mapea dominio ↔ DTO.
 
 ## API

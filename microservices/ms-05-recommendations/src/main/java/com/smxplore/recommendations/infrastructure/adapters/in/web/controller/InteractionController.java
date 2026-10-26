@@ -1,6 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 
-import com.smxplore.recommendations.domain.model.ItemType;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
 import com.smxplore.recommendations.domain.ports.in.RegisterViewUseCase;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.AuthenticatedUser;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.JwtUserResolver;
@@ -37,6 +37,6 @@ public class InteractionController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         AuthenticatedUser user = jwtUserResolver.resolve(jwt);
-        return registerViewUseCase.registerView(user.touristId(), itemType, itemId, user.language());
+        return registerViewUseCase.handle(user.touristId(), itemType, itemId, user.language());
     }
 }

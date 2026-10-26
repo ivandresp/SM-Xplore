@@ -1,6 +1,7 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 
-import com.smxplore.recommendations.domain.ports.in.ManagePreferencesUseCase;
+import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceRequest;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.mapper.RecommendationWebMapper;
@@ -8,7 +9,6 @@ import com.smxplore.recommendations.infrastructure.adapters.in.web.security.Auth
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,7 +30,8 @@ import java.util.UUID;
 @Tag(name = "Preferences", description = "Explicit category preferences for the authenticated tourist.")
 public class PreferenceController {
 
-    private final ManagePreferencesUseCase managePreferencesUseCase;
+    private final AddPreferenceUseCase addPreferenceUseCase;
+    private final RemovePreferenceUseCase removePreferenceUseCase;
     private final RecommendationWebMapper mapper;
     private final JwtUserResolver jwtUserResolver;
 
@@ -38,11 +39,11 @@ public class PreferenceController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Add an explicit like for a category")
     public Mono<PreferenceResponse> addPreference(
-            @Valid @RequestBody PreferenceRequest request,
+            @RequestBody PreferenceRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
         AuthenticatedUser user = jwtUserResolver.resolve(jwt);
-        return managePreferencesUseCase.addPreference(user.touristId(), request.categoryId(), user.language())
+        return addPreferenceUseCase.handle(user.touristId(), request.categoryId(), user.language())
                 .map(mapper::toPreferenceResponse);
     }
 
@@ -54,6 +55,6 @@ public class PreferenceController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         AuthenticatedUser user = jwtUserResolver.resolve(jwt);
-        return managePreferencesUseCase.removePreference(user.touristId(), categoryId);
+        return removePreferenceUseCase.handle(user.touristId(), categoryId);
     }
 }

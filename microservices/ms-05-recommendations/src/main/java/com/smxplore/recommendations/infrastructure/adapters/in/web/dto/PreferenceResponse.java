@@ -1,6 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.dto;
 
-import com.smxplore.recommendations.domain.model.PreferenceSource;
+import com.smxplore.recommendations.domain.model.preference.PreferenceSource;
 
 import java.time.Instant;
 import java.util.UUID;

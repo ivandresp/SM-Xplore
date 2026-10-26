@@ -3,8 +3,8 @@ package com.smxplore.recommendations.infrastructure.adapters.in.web;
 import com.smxplore.recommendations.AbstractNeo4jIntegrationTest;
 import com.smxplore.recommendations.TestJwtConfiguration;
 import com.smxplore.recommendations.TestSeedData;
-import com.smxplore.recommendations.domain.model.ItemType;
-import com.smxplore.recommendations.domain.model.RecommendationSource;
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationSource;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationItemResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationResponse;
@@ -159,6 +159,22 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
     }
 
     @Test
+    void invalidLatitudeIsRejectedByDomainValidation() {
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?lat=91&lng=0")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void zeroLimitIsRejectedByDomainValidation() {
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=0")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
     void addsAndRemovesPreference() {
         PreferenceResponse created = clientFor(TestSeedData.ANA, "TOURIST")
                 .post().uri("/api/v1/preferences")
@@ -191,6 +207,16 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
                         """.formatted(UUID.randomUUID()))
                 .exchange()
                 .expectStatus().isNotFound();
+    }
+
+    @Test
+    void missingCategoryIdIsRejectedByApplicationValidation() {
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .post().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     @Test

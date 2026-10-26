@@ -1,6 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.dto;
 
-import com.smxplore.recommendations.domain.model.RecommendationSource;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationSource;
 
 import java.time.Instant;
 import java.util.List;
