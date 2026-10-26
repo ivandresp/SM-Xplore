@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -68,14 +69,20 @@ public class ReservationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a symbolic reservation (tourists create their own; admins may book for anyone)")
+    @Operation(summary = "Create a symbolic reservation (tourists create their own; admins may book for anyone)",
+            description = "Send Idempotency-Key to make retries safe: a repeated key returns the reservation "
+                    + "created by the first attempt.")
     public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
+                                            @RequestHeader(value = "Idempotency-Key", required = false)
+                                            String idempotencyKey,
                                             @AuthenticationPrincipal Jwt jwt) {
         if (!isAdmin(jwt) && !subject(jwt).equals(request.touristId().toString())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Tourists can only create their own reservations.");
         }
-        var reservation = mapper.toDomain(request);
+        var reservation = mapper.toDomain(request).toBuilder()
+                .idempotencyKey(normalizedIdempotencyKey(idempotencyKey))
+                .build();
         if (!isAdmin(jwt)) {
             reservation = reservation.toBuilder().touristId(subjectAsUuid(jwt)).build();
         }
@@ -164,6 +171,19 @@ public class ReservationController {
         return requireReservationOperator(jwt, reservationId)
                 .then(Mono.defer(() -> registerReservationNoShowUseCase.handle(reservationId)))
                 .map(mapper::toResponse);
+    }
+
+    private static String normalizedIdempotencyKey(String rawKey) {
+        if (rawKey == null) {
+            return null;
+        }
+        var key = rawKey.trim();
+        if (key.isEmpty() || key.length() > Reservation.MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Idempotency-Key must have between 1 and %d characters."
+                            .formatted(Reservation.MAX_IDEMPOTENCY_KEY_LENGTH));
+        }
+        return key;
     }
 
     private static String subject(Jwt jwt) {

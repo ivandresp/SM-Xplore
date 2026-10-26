@@ -14,6 +14,9 @@ public interface ReservationRepositoryPort {
 
     Mono<Reservation> findById(UUID id);
 
+    /** Looks up the reservation that already consumed a client retry token. */
+    Mono<Reservation> findByTouristIdAndIdempotencyKey(UUID touristId, String idempotencyKey);
+
     /**
      * Lectura con lock pesimista de la fila (SELECT ... FOR UPDATE) para
      * serializar las operaciones que mutan la reserva. Debe ejecutarse dentro

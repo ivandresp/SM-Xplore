@@ -18,6 +18,7 @@ public interface ReservationWebMapper {
     @Mapping(target = "providerId", ignore = true)
     @Mapping(target = "guideId", ignore = true)
     @Mapping(target = "code", ignore = true)
+    @Mapping(target = "idempotencyKey", ignore = true)
     Reservation toDomain(ReservationRequest request);
 
     ReservationResponse toResponse(Reservation reservation);

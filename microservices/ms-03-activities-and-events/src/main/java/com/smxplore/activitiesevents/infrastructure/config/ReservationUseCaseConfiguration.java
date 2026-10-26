@@ -40,7 +40,7 @@ public class ReservationUseCaseConfiguration {
                                                                  EventRepositoryPort eventRepository,
                                                                  TransactionalOperator transactionalOperator) {
         var useCase = new CreateReservationUseCase(reservationRepository, activityRepository, eventRepository);
-        return new TransactionalCreateReservationUseCase(useCase, transactionalOperator);
+        return new TransactionalCreateReservationUseCase(useCase, transactionalOperator, reservationRepository);
     }
 
     @Bean

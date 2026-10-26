@@ -15,6 +15,7 @@ public record ReservationEntity(
         @Id
         UUID id,
         UUID touristId,
+        String idempotencyKey,
         ReservationItemType itemType,
         UUID itemId,
         Instant itemStartsAt,

@@ -50,6 +50,11 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     @Override
+    public Mono<Reservation> findByTouristIdAndIdempotencyKey(UUID touristId, String idempotencyKey) {
+        return repository.findByTouristIdAndIdempotencyKey(touristId, idempotencyKey).map(mapper::toDomain);
+    }
+
+    @Override
     public Flux<Reservation> findAllByTouristId(UUID touristId, int limit) {
         return repository.findAllByTouristId(touristId, page(limit)).map(mapper::toDomain);
     }
@@ -151,8 +156,8 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     private ReservationEntity withCode(ReservationEntity entity, String code) {
-        return new ReservationEntity(entity.id(), entity.touristId(), entity.itemType(), entity.itemId(),
-                entity.itemStartsAt(), entity.unitPrice(), entity.numberOfPeople(), entity.total(),
+        return new ReservationEntity(entity.id(), entity.touristId(), entity.idempotencyKey(), entity.itemType(),
+                entity.itemId(), entity.itemStartsAt(), entity.unitPrice(), entity.numberOfPeople(), entity.total(),
                 entity.paymentMethod(), entity.status(), entity.bookedAt(), entity.bookedFor(), entity.notes(),
                 entity.providerId(), entity.guideId(), code);
     }

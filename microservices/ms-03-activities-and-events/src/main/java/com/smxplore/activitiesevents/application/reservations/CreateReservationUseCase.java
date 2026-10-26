@@ -29,7 +29,9 @@ import java.util.UUID;
  * come from the catalog and the reservation is stored already CONFIRMED.
  * <p>
  * The caller must wrap this use case in a transaction so the item lock is held
- * until the reservation is inserted.
+ * until the reservation is inserted. The tourist advisory lock is taken first:
+ * a retry with the same idempotency key waits for the first attempt and then
+ * reads its reservation instead of racing the capacity check.
  */
 @RequiredArgsConstructor
 public class CreateReservationUseCase implements CreateReservationUseCasePort {
@@ -46,6 +48,25 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
         return Mono.justOrEmpty(reservation)
                 .switchIfEmpty(Mono.error(new InvalidReservationRequestException("Reservation cannot be null")))
                 .doOnNext(Reservation::validate)
+                .flatMap(this::createOrReplay);
+    }
+
+    private Mono<Reservation> createOrReplay(Reservation reservation) {
+        return reservationRepo.lockTourist(reservation.getTouristId())
+                .then(Mono.defer(() -> findReplay(reservation)))
+                .switchIfEmpty(Mono.defer(() -> create(reservation)));
+    }
+
+    private Mono<Reservation> findReplay(Reservation reservation) {
+        if (reservation.getIdempotencyKey() == null) {
+            return Mono.empty();
+        }
+        return reservationRepo.findByTouristIdAndIdempotencyKey(
+                reservation.getTouristId(), reservation.getIdempotencyKey());
+    }
+
+    private Mono<Reservation> create(Reservation reservation) {
+        return Mono.just(reservation)
                 .flatMap(this::resolveItem)
                 .doOnNext(Reservation::validatePricing)
                 .flatMap(reservationRepo::save);
@@ -64,7 +85,6 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(activity -> {
                     validateActivity(activity);
                     return validateCapacity(reservation, activity.getMaxCapacity())
-                            .then(reservationRepo.lockTourist(reservation.getTouristId()))
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, activity.getPrice(), activity.getStartsAt(),
                                     activity.getGuideId(), null));
@@ -77,7 +97,6 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(event -> {
                     validateEvent(event);
                     return validateCapacity(reservation, event.getMaxCapacity())
-                            .then(reservationRepo.lockTourist(reservation.getTouristId()))
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, event.getPrice(), event.getStartsAt(),
                                     null, event.getManagerId()));

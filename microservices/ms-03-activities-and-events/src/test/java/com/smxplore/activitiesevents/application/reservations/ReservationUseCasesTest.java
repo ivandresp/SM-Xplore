@@ -4,6 +4,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationW
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationRequestException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
@@ -36,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -120,6 +122,51 @@ class ReservationUseCasesTest {
     }
 
     @Test
+    void createReturnsTheExistingReservationWhenTheIdempotencyKeyRepeats() {
+        var itemId = UUID.randomUUID();
+        var touristId = UUID.randomUUID();
+        var key = "checkout-123";
+        var original = reservation(itemId).toBuilder()
+                .touristId(touristId)
+                .idempotencyKey(key)
+                .build();
+        var retry = reservation(itemId).toBuilder()
+                .touristId(touristId)
+                .idempotencyKey(key)
+                .build();
+        given(reservationRepo.findByTouristIdAndIdempotencyKey(touristId, key))
+                .willReturn(Mono.just(original));
+
+        StepVerifier.create(createReservationUseCase.handle(retry))
+                .expectNext(original)
+                .verifyComplete();
+
+        verify(reservationRepo, never()).save(any());
+        verify(activityRepo, never()).findByIdForUpdate(any());
+        var ordered = inOrder(reservationRepo);
+        ordered.verify(reservationRepo).lockTourist(touristId);
+        ordered.verify(reservationRepo).findByTouristIdAndIdempotencyKey(touristId, key);
+    }
+
+    @Test
+    void createPersistsTheIdempotencyKey() {
+        var activity = activity(new BigDecimal("50000.00"), 10);
+        var key = "checkout-456";
+        var reservation = reservation(activity.getId()).toBuilder().idempotencyKey(key).build();
+        given(reservationRepo.findByTouristIdAndIdempotencyKey(reservation.getTouristId(), key))
+                .willReturn(Mono.empty());
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+        given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(0));
+        given(reservationRepo.countActiveByTourist(any())).willReturn(Mono.just(0L));
+        given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation))
+                .assertNext(saved -> assertThat(saved.getIdempotencyKey()).isEqualTo(key))
+                .verifyComplete();
+    }
+
+    @Test
     void createAcceptsTheExactCapacity() {
         var activity = activity(new BigDecimal("50000.00"), 10);
         given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
@@ -141,6 +188,9 @@ class ReservationUseCasesTest {
                 .bookedFor(Instant.now().minusSeconds(3600))
                 .build();
         var withoutItem = reservation(UUID.randomUUID()).toBuilder().itemId(null).build();
+        var withLongKey = reservation(UUID.randomUUID()).toBuilder()
+                .idempotencyKey("x".repeat(Reservation.MAX_IDEMPOTENCY_KEY_LENGTH + 1))
+                .build();
 
         StepVerifier.create(createReservationUseCase.handle(withoutTourist))
                 .expectError(InvalidReservationTouristException.class)
@@ -153,6 +203,9 @@ class ReservationUseCasesTest {
                 .verify();
         StepVerifier.create(createReservationUseCase.handle(withoutItem))
                 .expectError(InvalidReservationItemException.class)
+                .verify();
+        StepVerifier.create(createReservationUseCase.handle(withLongKey))
+                .expectError(InvalidReservationRequestException.class)
                 .verify();
 
         verify(reservationRepo, never()).save(any());

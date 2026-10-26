@@ -34,6 +34,14 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     }
 
     @Override
+    public Mono<Reservation> findByTouristIdAndIdempotencyKey(UUID touristId, String idempotencyKey) {
+        return Flux.fromIterable(reservations.values())
+                .filter(reservation -> touristId.equals(reservation.getTouristId())
+                        && idempotencyKey.equals(reservation.getIdempotencyKey()))
+                .next();
+    }
+
+    @Override
     public Flux<Reservation> findAllByTouristId(UUID touristId, int limit) {
         return Flux.fromIterable(reservations.values())
                 .filter(reservation -> touristId.equals(reservation.getTouristId()));

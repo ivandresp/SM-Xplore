@@ -4,6 +4,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationW
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationRequestException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTotalException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
@@ -23,9 +24,15 @@ public class Reservation {
     /** A tourist may cancel up to this long before the item starts. */
     public static final Duration CANCELLATION_WINDOW = Duration.ofHours(24);
 
+    /** Upper bound for the client retry token; it also caps the database column. */
+    public static final int MAX_IDEMPOTENCY_KEY_LENGTH = 64;
+
     @Builder.Default
     private final UUID id = UUID.randomUUID();
     private final UUID touristId;
+
+    /** Client-supplied retry token, unique per tourist. Null when the client does not send one. */
+    private final String idempotencyKey;
     private final ReservationItemType itemType;
     private final UUID itemId;
 
@@ -56,6 +63,7 @@ public class Reservation {
 
     public void validate() {
         validateTourist();
+        validateIdempotencyKey();
         validateItem();
         validateNumberOfPeople();
         validateBookingDate();
@@ -112,6 +120,18 @@ public class Reservation {
     private void validateTourist() {
         if (touristId == null) {
             throw new InvalidReservationTouristException("Tourist is mandatory.");
+        }
+    }
+
+    private void validateIdempotencyKey() {
+        if (idempotencyKey == null) {
+            return;
+        }
+        var key = idempotencyKey.trim();
+        if (key.isEmpty() || key.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new InvalidReservationRequestException(
+                    "Idempotency key must have between 1 and %d characters."
+                            .formatted(MAX_IDEMPOTENCY_KEY_LENGTH));
         }
     }
 

@@ -41,6 +41,7 @@ CREATE INDEX IF NOT EXISTS actividad_category_idx ON actividad (category);
 CREATE TABLE IF NOT EXISTS reservations (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tourist_id       UUID                     NOT NULL,
+    idempotency_key  VARCHAR(64),
     item_type        VARCHAR(20)              NOT NULL,
     item_id          UUID                     NOT NULL,
     item_starts_at   TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -72,6 +73,7 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_type      VARCHAR(20);
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_id        UUID;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_starts_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS unit_price     NUMERIC(14, 2);
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64);
 
 -- If the old join table still exists, copy its single item into the reservation.
 -- Run this block manually (psql) before the first boot when the table has data:
@@ -132,5 +134,8 @@ CREATE INDEX IF NOT EXISTS reservations_status_idx ON reservations (status);
 CREATE INDEX IF NOT EXISTS reservations_guide_idx ON reservations (guide_id);
 CREATE INDEX IF NOT EXISTS reservations_item_idx ON reservations (item_type, item_id, status);
 CREATE INDEX IF NOT EXISTS reservations_tourist_status_idx ON reservations (tourist_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS reservations_tourist_idempotency_idx
+    ON reservations (tourist_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 
 CREATE SEQUENCE IF NOT EXISTS reservation_code_seq;

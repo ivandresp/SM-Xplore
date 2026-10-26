@@ -4,6 +4,12 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 
 ## [No publicado] — 2026-10-26
 
+### Añadido
+- **Idempotencia en `POST /api/v1/reservations`**: header opcional `Idempotency-Key` (1–64 caracteres).
+  - Índice único parcial `(tourist_id, idempotency_key)`; un reintento devuelve la reserva original sin consumir cupo.
+  - El bloqueo por turista se toma antes de leer la clave, así un reintento concurrente no falla por cupo.
+  - Si el índice rechaza una carrera, la transacción se revierte y se devuelve la reserva ganadora.
+
 ### Cambiado
 - **Reservas simbólicas**: la reserva aparta cupo y nace `CONFIRMED`; el pago se resuelve con la entidad, fuera de la plataforma.
   - Una reserva = un ítem (`item_type`, `item_id`, `unit_price`); se elimina `reservation_items`.

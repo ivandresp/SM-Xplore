@@ -127,6 +127,8 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 
 Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. El servidor fija `bookedFor` con el inicio del ítem e ignora el valor del cliente. Máximo **5 reservas activas** por turista. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
 
+**Idempotencia:** `POST /api/v1/reservations` acepta el header opcional `Idempotency-Key` (1–64 caracteres). Si la misma clave se repite para el mismo turista, la respuesta es la reserva creada en el primer intento y no se consume cupo otra vez. La clave se guarda en `reservations` y el índice único parcial `(tourist_id, idempotency_key)` cubre la carrera concurrente. Reutilizar una clave con otro ítem o con otro número de personas devuelve la reserva original: la clave identifica la operación completa, no el ítem.
+
 ## Reseñas
 
 | Método | Ruta | Acceso |
