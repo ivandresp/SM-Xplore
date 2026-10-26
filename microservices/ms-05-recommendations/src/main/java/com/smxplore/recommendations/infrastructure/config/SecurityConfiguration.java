@@ -92,7 +92,7 @@ public class SecurityConfiguration {
                 .filter(origin -> !origin.isBlank())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept-Language", "X-Correlation-Id"));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

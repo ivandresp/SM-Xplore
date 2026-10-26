@@ -19,6 +19,9 @@ FOR (e:Evento) REQUIRE e.eventId IS UNIQUE;
 CREATE CONSTRAINT servicio_id IF NOT EXISTS
 FOR (v:Servicio) REQUIRE v.serviceId IS UNIQUE;
 
+CREATE CONSTRAINT processed_event_id IF NOT EXISTS
+FOR (p:ProcessedEvent) REQUIRE p.eventId IS UNIQUE;
+
 CREATE INDEX catalog_item_status IF NOT EXISTS
 FOR (i:CatalogItem) ON (i.status);
 
@@ -45,3 +48,6 @@ FOR (c:Categoria) ON (c.parentId);
 
 CREATE INDEX categoria_scope IF NOT EXISTS
 FOR (c:Categoria) ON (c.scope);
+
+CREATE INDEX processed_event_processed_at IF NOT EXISTS
+FOR (p:ProcessedEvent) ON (p.processedAt);

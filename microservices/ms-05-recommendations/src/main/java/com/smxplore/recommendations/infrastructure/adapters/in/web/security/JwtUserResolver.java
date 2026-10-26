@@ -22,24 +22,23 @@ public class JwtUserResolver {
         }
 
         String name = jwt.getClaimAsString(properties.getNameClaim());
-        String language = jwt.getClaimAsString(properties.getLanguageClaim());
-        return new AuthenticatedUser(
-                touristId,
-                role,
-                name,
-                language == null || language.isBlank() ? "es" : language
-        );
+        return new AuthenticatedUser(touristId, role, name);
     }
 
     public UUID subjectId(Jwt jwt) {
         String subject = jwt.getSubject();
         if (subject == null || subject.isBlank()) {
-            throw new InvalidJwtException("JWT subject (sub) is required");
+            subject = jwt.getClaimAsString(properties.getUserIdClaim());
+        }
+        if (subject == null || subject.isBlank()) {
+            throw new InvalidJwtException(
+                    "JWT must contain the sub claim or the configured userId claim: "
+                            + properties.getUserIdClaim());
         }
         try {
             return UUID.fromString(subject);
         } catch (IllegalArgumentException exception) {
-            throw new InvalidJwtException("JWT subject (sub) must be a UUID");
+            throw new InvalidJwtException("JWT tourist id must be a UUID");
         }
     }
 }

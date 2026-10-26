@@ -12,7 +12,8 @@ public record Neo4jQueries() {
             WHERE item.status = 'PUBLISHED'
               AND (item.endsAt IS NULL OR item.endsAt > datetime($now))
               AND ($siteId IS NULL OR item.siteId = $siteId)
-              AND NOT EXISTS { (t)-[:`RESEÑO`]->(item) }
+              AND NOT EXISTS { (t)-[review:`RESEÑO`]->(item)
+                               WHERE coalesce(review.status, 'PUBLISHED') = 'PUBLISHED' }
             WITH item,
                  sum(coalesce(g.weight, 1.0)
                      * 0.5 ^ (duration.inDays(coalesce(g.updatedAt, datetime($now)), datetime($now)).days
@@ -43,7 +44,8 @@ public record Neo4jQueries() {
             WHERE item.status = 'PUBLISHED'
               AND (item.endsAt IS NULL OR item.endsAt > datetime($now))
               AND ($siteId IS NULL OR item.siteId = $siteId)
-              AND NOT EXISTS { (:TuristaProfile {touristId: $touristId})-[:`RESEÑO`]->(item) }
+              AND NOT EXISTS { (:TuristaProfile {touristId: $touristId})-[review:`RESEÑO`]->(item)
+                               WHERE coalesce(review.status, 'PUBLISHED') = 'PUBLISHED' }
             OPTIONAL MATCH (item)-[:ES_DE_TIPO]->(c:Categoria)
             WITH item, collect(DISTINCT c.name) AS categoryNames
             RETURN item.itemType AS itemType,

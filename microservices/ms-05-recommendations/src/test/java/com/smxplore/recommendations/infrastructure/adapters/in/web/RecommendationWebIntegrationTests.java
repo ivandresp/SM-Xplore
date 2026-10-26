@@ -9,6 +9,8 @@ import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.Preferenc
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationItemResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationResponse;
 import org.junit.jupiter.api.Test;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.Session;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.context.annotation.Import;
@@ -22,6 +24,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +40,9 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
 
     @Autowired
     private JwtEncoder jwtEncoder;
+
+    @Autowired
+    private Driver driver;
 
     @Test
     void recommendationsForAnaExcludeReviewedAndExpiredItems() {
@@ -198,6 +204,34 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
     }
 
     @Test
+    void languageComesFromAcceptLanguageAndNotFromTheJwt() {
+        UUID tourist = UUID.randomUUID();
+
+        clientFor(tourist, "TOURIST")
+                .mutate()
+                .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9")
+                .build()
+                .post().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryId":"%s"}
+                        """.formatted(TestSeedData.CULTURA))
+                .exchange()
+                .expectStatus().isCreated();
+
+        try (Session session = driver.session()) {
+            String language = session.run("""
+                            MATCH (t:TuristaProfile {touristId: $touristId})
+                            RETURN t.language AS language
+                            """, Map.of("touristId", tourist.toString()))
+                    .single()
+                    .get("language")
+                    .asString();
+            assertThat(language).isEqualTo("en-us");
+        }
+    }
+
+    @Test
     void unknownCategoryIsRejected() {
         clientFor(TestSeedData.ANA, "TOURIST")
                 .post().uri("/api/v1/preferences")
@@ -240,6 +274,7 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
     private WebTestClient clientFor(UUID touristId, String role) {
         return webTestClient.mutate()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + bearer(touristId, role))
+                .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, "es")
                 .build();
     }
 
@@ -251,7 +286,6 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
                 .claim("role", role)
-                .claim("locale", "es")
                 .claim("name", "Test User")
                 .build();
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).build();

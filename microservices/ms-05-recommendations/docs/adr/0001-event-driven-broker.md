@@ -31,8 +31,9 @@ Usar **Kafka** (modo KRaft en desarrollo) como broker de eventos de dominio, con
 - Se necesita operar un broker y un relay por productor.
 - La consistencia es eventual (1-5 s esperados).
 - Los contratos viven en `contracts/events/` y se validan en tests.
-- La fase 0-1 de ms-05 no implementa Kafka: usa seed y consultas directas a Neo4j. La fase 2
-  añade consumidores y outbox en ms-03/ms-04.
+- La fase 0-1 de ms-05 no implementa Kafka: usa seed y consultas directas a Neo4j.
+- La fase 2 ya implementa los consumidores en ms-05; el outbox y la publicación siguen
+  pendientes en ms-03/ms-04.
 
 ## Producción
 

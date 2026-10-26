@@ -5,8 +5,7 @@ import java.util.UUID;
 public record AuthenticatedUser(
         UUID touristId,
         String role,
-        String name,
-        String language
+        String name
 ) {
 
     public boolean isAdmin() {

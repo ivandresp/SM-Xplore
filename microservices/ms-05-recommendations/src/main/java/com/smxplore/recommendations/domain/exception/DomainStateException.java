@@ -9,4 +9,8 @@ public class DomainStateException extends RuntimeException {
     public DomainStateException(String message) {
         super(message);
     }
+
+    public DomainStateException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

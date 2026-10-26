@@ -44,7 +44,7 @@ class JwtConfigurationTest {
         JWKSet jwkSet = new JWKSet(rsaKey);
         JwtEncoder encoder = new NimbusJwtEncoder(new ImmutableJWKSet<SecurityContext>(jwkSet));
 
-        Instant now = Instant.parse("2026-10-26T12:00:00Z");
+        Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("https://ms-05.local")
                 .subject("66666666-6666-6666-6666-666666666601")

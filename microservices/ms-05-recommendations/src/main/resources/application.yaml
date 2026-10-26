@@ -15,6 +15,19 @@ spring:
       connection-acquisition-timeout: ${NEO4J_ACQUISITION_TIMEOUT:30s}
     connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:15s}
     max-transaction-retry-time: ${NEO4J_RETRY_TIME:15s}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:ms-05-recommendations}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.records: ${KAFKA_MAX_POLL_RECORDS:50}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
@@ -25,9 +38,9 @@ app:
       public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
       issuer: ${JWT_ISSUER:}
       audience: ${JWT_AUDIENCE:}
+      user-id-claim: ${JWT_USER_ID_CLAIM:userId}
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
-      language-claim: ${JWT_LANGUAGE_CLAIM:locale}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
   recommendations:
@@ -51,6 +64,16 @@ app:
     initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
   seed:
     enabled: ${SEED_ENABLED:false}
+  events:
+    consumer:
+      enabled: ${EVENTS_CONSUMER_ENABLED:false}
+      max-retries: ${EVENTS_CONSUMER_MAX_RETRIES:3}
+      initial-backoff: ${EVENTS_CONSUMER_INITIAL_BACKOFF:500ms}
+      max-backoff: ${EVENTS_CONSUMER_MAX_BACKOFF:5s}
+      processing-timeout: ${EVENTS_CONSUMER_PROCESSING_TIMEOUT:15s}
+      backoff-multiplier: ${EVENTS_CONSUMER_BACKOFF_MULTIPLIER:2.0}
+      concurrency: ${EVENTS_CONSUMER_CONCURRENCY:1}
+      dlq-suffix: ${EVENTS_CONSUMER_DLQ_SUFFIX:.dlq}
 
 springdoc:
   api-docs:

@@ -3,14 +3,17 @@ app:
     initialize-schema: true
   seed:
     enabled: true
+  events:
+    consumer:
+      enabled: false
   security:
     jwt:
       public-key-location: classpath:keys/test-public.pem
       issuer: https://ms-05.local
       audience: ""
+      user-id-claim: userId
       role-claim: role
       name-claim: name
-      language-claim: locale
 
 springdoc:
   api-docs:

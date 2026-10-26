@@ -506,9 +506,11 @@ SET v.lastAt = datetime() - duration('P1D'), v.count = coalesce(v.count, 0) + 1;
 MATCH (t:TuristaProfile {touristId: '66666666-6666-6666-6666-666666666601'}),
       (i:CatalogItem {itemId: '44444444-4444-4444-4444-444444444402'})
 MERGE (t)-[r:`RESEÑO` {reviewId: '77777777-7777-7777-7777-777777777701'}]->(i)
-SET r.rating = 5, r.at = datetime() - duration('P2D');
+SET r.rating = 5, r.status = 'PUBLISHED', r.at = datetime() - duration('P2D'),
+    r.updatedAt = datetime() - duration('P2D');
 
 MATCH (t:TuristaProfile {touristId: '66666666-6666-6666-6666-666666666602'}),
       (i:CatalogItem {itemId: '33333333-3333-3333-3333-333333333301'})
 MERGE (t)-[r:`RESEÑO` {reviewId: '77777777-7777-7777-7777-777777777702'}]->(i)
-SET r.rating = 4, r.at = datetime() - duration('P3D');
+SET r.rating = 4, r.status = 'PUBLISHED', r.at = datetime() - duration('P3D'),
+    r.updatedAt = datetime() - duration('P3D');

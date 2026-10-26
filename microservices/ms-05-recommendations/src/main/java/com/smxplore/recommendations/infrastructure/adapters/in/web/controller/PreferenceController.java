@@ -4,12 +4,14 @@ import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceRequest;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
+import com.smxplore.recommendations.infrastructure.adapters.in.web.language.RequestLanguageResolver;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.mapper.RecommendationWebMapper;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.AuthenticatedUser;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,16 +37,19 @@ public class PreferenceController {
     private final RemovePreferenceUseCase removePreferenceUseCase;
     private final RecommendationWebMapper mapper;
     private final JwtUserResolver jwtUserResolver;
+    private final RequestLanguageResolver languageResolver;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Add an explicit like for a category")
     public Mono<PreferenceResponse> addPreference(
             @RequestBody PreferenceRequest request,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage,
             @AuthenticationPrincipal Jwt jwt
     ) {
         AuthenticatedUser user = jwtUserResolver.resolve(jwt);
-        return addPreferenceUseCase.handle(user.touristId(), request.categoryId(), user.language())
+        String language = languageResolver.resolve(acceptLanguage);
+        return addPreferenceUseCase.handle(user.touristId(), request.categoryId(), language)
                 .map(mapper::toPreferenceResponse);
     }
 

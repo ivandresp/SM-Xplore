@@ -5,14 +5,18 @@ driver de Neo4j. El grafo es una **proyección** de ms-03, ms-04 y ms-01; no es 
 
 ## Estado
 
-Fase **0-1** implementada:
+Fases **0-1** y **2 (lado consumidor)** implementadas:
 
 - API de recomendaciones, preferencias y vistas.
 - Ranking por afinidad, calidad de reseñas, proximidad y novedad.
 - Diversidad por sitio y categoría.
 - Seguridad RS256/JWKS o llave pública PEM.
 - Neo4j reactivo, constraints, seed y tests con Testcontainers.
-- Sin Kafka todavía.
+- Consumidores Kafka para `catalog.*`, `activities.*` y `reviews.review.changed`.
+- Idempotencia por `eventId`, descarte de eventos viejos por `updatedAt`, reintentos con
+  backoff y DLQ.
+- Agregados de reseñas materializados en Neo4j (`ratingAvg`, `ratingCount`, `lastReviewAt`).
+- Tests de contrato contra `contracts/events/` y tests de integración con Kafka + Neo4j.
 
 Decisiones importantes:
 
@@ -21,8 +25,11 @@ Decisiones importantes:
 - La calidad se calcula con promedio bayesiano de reseñas.
 - Las vistas crean una preferencia inferida de peso bajo; una preferencia explícita siempre
   tiene prioridad.
-- La fase 2 añadirá consumidores Kafka y contratos; la fase 3, caché, reindex y métricas
-  avanzadas.
+- El idioma **no viaja en el JWT**. El usuario lo elige en el frontend y se envía en
+  `Accept-Language`; si falta, se usa `es`.
+- ms-03 y ms-04 todavía no publican eventos reales. En esta fase se simulan con fixtures y
+  `KafkaTemplate`; el outbox queda pendiente en esos servicios. Ver
+  `docs/fase-2-consumidores.md`.
 
 ## Stack
 
@@ -31,10 +38,11 @@ Decisiones importantes:
 - Gradle 9.8.2 (Kotlin DSL)
 - WebFlux + Reactor
 - Spring Security + OAuth2 Resource Server
+- Spring Kafka (consumidores y plantilla para la DLQ)
 - Neo4j Java Driver 6.x (API Reactive Streams)
 - Spring Data Neo4j (solo auto-configuración del driver)
 - Lombok + MapStruct
-- Testcontainers 2.x
+- Testcontainers 2.x (Neo4j y Kafka)
 
 ## Arquitectura hexagonal
 
@@ -43,6 +51,7 @@ src/main/java/com/smxplore/recommendations
 ├── domain
 │   ├── model
 │   │   ├── catalog
+│   │   ├── event
 │   │   ├── geo
 │   │   ├── preference
 │   │   ├── ranking
@@ -55,8 +64,10 @@ src/main/java/com/smxplore/recommendations
 ├── application
 │   ├── interaction
 │   ├── preference
+│   ├── projection
 │   └── recommendation
 └── infrastructure
+    ├── adapters/in/kafka
     ├── adapters/in/web
     ├── adapters/out/neo4j
     └── config
@@ -81,8 +92,38 @@ src/main/java/com/smxplore/recommendations
 | GET | `/actuator/health` | público | Liveness/readiness |
 | GET | `/swagger-ui.html` | público | Documentación OpenAPI |
 
-El `touristId` sale del `sub` del JWT. Un `TOURIST` no puede consultar a otro turista; solo
-`ADMIN` puede usar el query param `touristId`.
+El `touristId` sale de `sub` o, si no viene, del claim configurado `userId`. Un `TOURIST` no
+puede consultar a otro turista; solo `ADMIN` puede usar el query param `touristId`.
+
+El idioma preferido del turista se envía en `Accept-Language` (`es`, `en-US`, etc.). Se usa al
+crear o refrescar su perfil en Neo4j y no se lee de ningún claim del JWT.
+
+### Eventos Kafka
+
+Topics consumidos:
+
+| Topic | Productor esperado | Efecto en ms-05 |
+|---|---|---|
+| `catalog.site.changed` | ms-04 | Upsert de `Sitio` y enlaces con categoría/ítems hijos |
+| `catalog.service.changed` | ms-04 | Upsert de `Servicio` |
+| `catalog.category.changed` | ms-04 | Upsert de `Categoria` y jerarquía |
+| `activities.event.changed` | ms-03 | Upsert de `Evento` |
+| `activities.activity.changed` | ms-03 | Upsert de `Actividad` |
+| `reviews.review.changed` | ms-03 | Arista `RESEÑO` y agregados de calidad |
+
+`bookings.reservation.changed` **no se consume**. Grupo de consumo:
+`ms-05-recommendations`. La key debe ser el `aggregateId`.
+
+Cada mensaje se procesa en una transacción de Neo4j que, en la misma operación:
+
+1. comprueba `ProcessedEvent.eventId` para deduplicar;
+2. compara `updatedAt` contra el nodo o la arista existente y descarta eventos viejos;
+3. aplica el cambio;
+4. registra el `eventId` con el resultado (`APPLIED`, `DUPLICATE` o `STALE`).
+
+Los fallos de contrato van directo a `<topic>.dlq`. Los fallos transitorios se reintentan con
+backoff exponencial y después van a la DLQ. El offset se confirma solo después de aplicar el
+cambio o de publicar en la DLQ.
 
 ### Ejemplo de respuesta
 
@@ -120,7 +161,17 @@ El `touristId` sale del `sub` del JWT. Un `TOURIST` no puede consultar a otro tu
 - Local / tests: `JWT_PUBLIC_KEY_LOCATION=file:/ruta/public.pem` o `classpath:...`.
 - `JWT_ISSUER` es obligatorio si se quiere validar `iss`.
 - El rol se lee del claim configurado (`role` por defecto) y se prefija con `ROLE_`.
+- El UUID del turista se lee de `sub`; si no existe, se usa el claim configurado
+  `JWT_USER_ID_CLAIM` (`userId` por defecto). Los claims esperados son `userId`/`sub`, `role`
+  y `name`.
+- El idioma **no** es un claim del token; se toma de `Accept-Language`.
 - Errores en RFC 9457 (`ProblemDetail`), incluidos 401/403.
+
+**JWKS** (JSON Web Key Set) es el estándar para publicar las llaves públicas con las que se
+verifican los JWT. ms-01 firma con su llave privada y expone las públicas en un endpoint como
+`/.well-known/jwks.json`; ms-05 descarga ese conjunto, elige la llave por el `kid` del header
+del JWT y cachea el resultado. Así ms-01 puede rotar llaves sin reiniciar a los consumidores.
+La llave pública PEM es solo el atajo local/test.
 
 Si no hay ni JWKS ni llave pública, el servicio falla al arrancar. Es intencional: no queremos
 un arranque silencioso sin validación de tokens.
@@ -139,9 +190,20 @@ un arranque silencioso sin validación de tokens.
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Llave pública PEM para local/test |
 | `JWT_ISSUER` | vacío | Issuer esperado |
 | `JWT_AUDIENCE` | vacío | Audiencia esperada, opcional |
+| `JWT_USER_ID_CLAIM` | `userId` | Claim de identidad si no viene `sub` |
 | `JWT_ROLE_CLAIM` | `role` | Claim de rol |
 | `JWT_NAME_CLAIM` | `name` | Claim de nombre |
-| `JWT_LANGUAGE_CLAIM` | `locale` | Claim de idioma |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka |
+| `KAFKA_CONSUMER_GROUP_ID` | `ms-05-recommendations` | Grupo de consumo |
+| `KAFKA_AUTO_OFFSET_RESET` | `earliest` | Política si no hay offset |
+| `EVENTS_CONSUMER_ENABLED` | `false` | Activa los consumidores |
+| `EVENTS_CONSUMER_MAX_RETRIES` | `3` | Reintentos antes de la DLQ |
+| `EVENTS_CONSUMER_INITIAL_BACKOFF` | `500ms` | Backoff inicial |
+| `EVENTS_CONSUMER_MAX_BACKOFF` | `5s` | Backoff máximo |
+| `EVENTS_CONSUMER_PROCESSING_TIMEOUT` | `15s` | Timeout de una proyección |
+| `EVENTS_CONSUMER_BACKOFF_MULTIPLIER` | `2.0` | Multiplicador del backoff |
+| `EVENTS_CONSUMER_CONCURRENCY` | `1` | Hilos por listener |
+| `EVENTS_CONSUMER_DLQ_SUFFIX` | `.dlq` | Sufijo del topic de descarte |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes |
 | `RECOMMENDATIONS_*` | ver `application.yaml` | Pesos, límites y diversidad |
 
@@ -156,7 +218,7 @@ docker compose up -d
 
 cd ../microservices/ms-05-recommendations
 cp .env.example .env
-# Configura NEO4J_PASSWORD, JWT_JWK_SET_URI o JWT_PUBLIC_KEY_LOCATION, JWT_ISSUER
+# Configura NEO4J_PASSWORD, JWK_SET_URI o JWT_PUBLIC_KEY_LOCATION, JWT_ISSUER
 docker compose up --build
 ```
 
@@ -212,8 +274,8 @@ El seed es idempotente (`MERGE`).
 ./gradlew test
 ```
 
-Las pruebas de integración usan Testcontainers con `neo4j:5.26-community` y Docker. La suite
-cubre:
+Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafka
+(`apache/kafka:4.1.0`) y Docker. La suite cubre:
 
 - scoring bayesiano, proximidad, novedad y normalización;
 - topes de diversidad por sitio/categoría;
@@ -221,10 +283,15 @@ cubre:
 - preferencias y vistas;
 - seguridad RS256, roles, consulta admin y errores;
 - consultas Neo4j y ausencia total de aristas `RESERVO`;
-- contexto completo con seed.
+- contexto completo con seed;
+- validación de todos los ejemplos contra los JSON Schema de `contracts/`;
+- consumidores Kafka, idempotencia, eventos viejos, DLQ y agregados de reseñas;
+- idioma desde `Accept-Language` y JWT sin claim `locale`.
 
 ## Documentación
 
+- `docs/ESTADO-Y-PENDIENTES.md`: estado actual, decisiones y pendientes.
+- `docs/fase-2-consumidores.md`: alcance de la fase 2, contratos asumidos y pendientes de ms-03/ms-04.
 - `docs/neo4j-logical-model.md`: modelo lógico actualizado, constraints, queries y fairness.
 - `docs/adr/0001-event-driven-broker.md`: Kafka + outbox para fase 2.
 - `docs/adr/0002-no-reservation-signal.md`: decisión de excluir `RESERVO`.
@@ -234,8 +301,9 @@ cubre:
 
 ## Fuera de alcance en esta fase
 
-- Consumidores Kafka y outbox (fase 2).
+- Outbox y publicación real de eventos en ms-03/ms-04. ms-05 ya consume; los productores se
+  implementan en sus ramas.
 - Reindex desde ms-03/ms-04 (fase 3).
 - Caché Redis/Caffeine (fase 3).
-- Circuit breaker, DLQ y pruebas de carga (fases 3-4).
+- Circuit breaker y pruebas de carga (fases 3-4).
 - Recomendaciones para guías (US10/US17).

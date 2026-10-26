@@ -13,7 +13,7 @@ public class JwtProperties {
     private String publicKeyLocation;
     private String issuer;
     private String audience;
+    private String userIdClaim = "userId";
     private String roleClaim = "role";
     private String nameClaim = "name";
-    private String languageClaim = "locale";
 }

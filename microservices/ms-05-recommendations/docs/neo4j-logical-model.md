@@ -19,10 +19,10 @@ graph LR
   T -- "VIO<br/>firstAt, lastAt, count" --> E
   T -- "VIO<br/>firstAt, lastAt, count" --> S
   T -- "VIO<br/>firstAt, lastAt, count" --> V
-  T -- "RESEÑO<br/>reviewId, rating, at" --> A
-  T -- "RESEÑO<br/>reviewId, rating, at" --> E
-  T -- "RESEÑO<br/>reviewId, rating, at" --> S
-  T -- "RESEÑO<br/>reviewId, rating, at" --> V
+  T -- "RESEÑO<br/>reviewId, rating, status, at, updatedAt" --> A
+  T -- "RESEÑO<br/>reviewId, rating, status, at, updatedAt" --> E
+  T -- "RESEÑO<br/>reviewId, rating, status, at, updatedAt" --> S
+  T -- "RESEÑO<br/>reviewId, rating, status, at, updatedAt" --> V
 
   A -- "ES_DE_TIPO" --> C
   E -- "ES_DE_TIPO" --> C
@@ -38,6 +38,33 @@ graph LR
 
 No existe la arista `RESERVO`. Tampoco se guardan `reservationId`, `people`, `total` ni
 `payment_method` en ms-05.
+
+Las aristas `RESEÑO` guardan `status` (`PUBLISHED`, `HIDDEN`, `DELETED`) y `updatedAt`.
+Solo las `PUBLISHED` cuentan para `ratingAvg`, `ratingCount` y `lastReviewAt`, y solo una
+reseña `PUBLISHED` excluye el ítem de las recomendaciones del turista. Las reseñas ocultas o
+borradas se conservan para que un evento posterior pueda volver a publicarlas; el agregado se
+recalcula en cada evento.
+
+### Idempotencia de eventos
+
+Cada evento aplicado deja un nodo `ProcessedEvent`:
+
+| Propiedad | Uso |
+|---|---|
+| `eventId` | UUID único del evento; constraint de unicidad |
+| `eventType` | Topic/tipo del evento |
+| `aggregateId` | Entidad afectada |
+| `occurredAt` | Instante del evento |
+| `processedAt` | Instante de aplicación; índice para retención |
+| `outcome` | `APPLIED`, `DUPLICATE` o `STALE` |
+
+El evento se aplica en la misma transacción que registra `ProcessedEvent`. Antes de escribir se
+compara `updatedAt`: un evento viejo se marca `STALE` y no modifica el grafo.
+
+Los eventos pueden llegar desordenados entre topics. Si una reseña llega antes que su ítem, se
+crea un `CatalogItem` mínimo (`itemId`, `itemType`) que el evento de catálogo posterior completa.
+Si un ítem llega antes que su categoría o sitio, el evento de categoría/sitio crea los enlaces
+que falten.
 
 Una vista (`VIO`) crea o refresca una preferencia **inferida** `LE_GUSTA`
 (`source = INFERRED`, `weight = 0.15`) para la categoría del ítem. Una preferencia explícita
@@ -93,7 +120,8 @@ MATCH (liked)<-[:PERTENECE_A*0..2]-(c:Categoria)<-[:ES_DE_TIPO]-(item:CatalogIte
 WHERE item.status = 'PUBLISHED'
   AND (item.endsAt IS NULL OR item.endsAt > datetime($now))
   AND ($siteId IS NULL OR item.siteId = $siteId)
-  AND NOT EXISTS { (t)-[:`RESEÑO`]->(item) }
+  AND NOT EXISTS { (t)-[review:`RESEÑO`]->(item)
+                   WHERE coalesce(review.status, 'PUBLISHED') = 'PUBLISHED' }
 WITH item,
      sum(coalesce(g.weight, 1.0)
          * 0.5 ^ (duration.inDays(coalesce(g.updatedAt, datetime($now)), datetime($now)).days / 90.0))
@@ -114,7 +142,8 @@ MATCH (item:CatalogItem)
 WHERE item.status = 'PUBLISHED'
   AND (item.endsAt IS NULL OR item.endsAt > datetime($now))
   AND ($siteId IS NULL OR item.siteId = $siteId)
-  AND NOT EXISTS { (:TuristaProfile {touristId: $touristId})-[:`RESEÑO`]->(item) }
+  AND NOT EXISTS { (:TuristaProfile {touristId: $touristId})-[review:`RESEÑO`]->(item)
+                   WHERE coalesce(review.status, 'PUBLISHED') = 'PUBLISHED' }
 OPTIONAL MATCH (item)-[:ES_DE_TIPO]->(c:Categoria)
 WITH item, collect(DISTINCT c.name) AS categoryNames
 RETURN item, categoryNames
@@ -146,6 +175,9 @@ FOR (e:Evento) REQUIRE e.eventId IS UNIQUE;
 CREATE CONSTRAINT servicio_id IF NOT EXISTS
 FOR (v:Servicio) REQUIRE v.serviceId IS UNIQUE;
 
+CREATE CONSTRAINT processed_event_id IF NOT EXISTS
+FOR (p:ProcessedEvent) REQUIRE p.eventId IS UNIQUE;
+
 CREATE INDEX catalog_item_status IF NOT EXISTS FOR (i:CatalogItem) ON (i.status);
 CREATE INDEX catalog_item_type IF NOT EXISTS FOR (i:CatalogItem) ON (i.itemType);
 CREATE INDEX catalog_item_site IF NOT EXISTS FOR (i:CatalogItem) ON (i.siteId);
@@ -155,17 +187,26 @@ CREATE INDEX evento_starts_at IF NOT EXISTS FOR (e:Evento) ON (e.startsAt);
 CREATE INDEX evento_ends_at IF NOT EXISTS FOR (e:Evento) ON (e.endsAt);
 CREATE INDEX categoria_parent IF NOT EXISTS FOR (c:Categoria) ON (c.parentId);
 CREATE INDEX categoria_scope IF NOT EXISTS FOR (c:Categoria) ON (c.scope);
+CREATE INDEX processed_event_processed_at IF NOT EXISTS
+FOR (p:ProcessedEvent) ON (p.processedAt);
 ```
 
 Los IDs son los UUID estables de ms-03/ms-04. No se usa `id(n)` ni `randomUUID()` en ms-05:
 un re-sync debe ser idempotente.
 
-## Qué falta para la fase 2
+## Estado de la fase 2
 
-- Consumidores Kafka para `catalog.*`, `activities.*` y `reviews.review.changed`.
-- Idempotencia por `eventId` y comparación de `updatedAt`.
-- Actualización materializada de `ratingAvg`, `ratingCount` y `lastReviewAt`.
-- Reindex desde ms-03/ms-04.
-- DLQ y métricas de lag.
+Implementado en ms-05:
 
-`bookings.reservation.changed` no se consume en ms-05.
+- consumidores Kafka para `catalog.*`, `activities.*` y `reviews.review.changed`;
+- idempotencia por `eventId` y comparación de `updatedAt`;
+- actualización materializada de `ratingAvg`, `ratingCount` y `lastReviewAt`;
+- DLQ, reintentos y métricas (incluida la lag del cliente Kafka).
+
+Pendiente:
+
+- outbox y publicación real en ms-03/ms-04;
+- reindex desde ms-03/ms-04 (fase 3);
+- retención de nodos `ProcessedEvent`.
+
+`bookings.reservation.changed` no se consume en ms-05 ni crea aristas `RESERVO`.
