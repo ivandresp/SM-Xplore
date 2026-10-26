@@ -332,6 +332,17 @@ class ReservationUseCasesTest {
     }
 
     @Test
+    void staffCanCorrectAnAutomaticNoShowWithAttendance() {
+        var reservation = givenFound(startedReservation().toBuilder()
+                .status(ReservationStatus.NO_SHOW)
+                .build());
+
+        StepVerifier.create(registerReservationAttendanceUseCase.handle(reservation.getId()))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(ReservationStatus.COMPLETED))
+                .verifyComplete();
+    }
+
+    @Test
     void terminalStatesCannotChangeAgain() {
         var reservation = givenLocked(startedReservation().toBuilder()
                 .status(ReservationStatus.CANCELLED)

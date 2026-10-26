@@ -28,6 +28,10 @@ springdoc:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
 
 app:
+  reservations:
+    auto-close:
+      cron: "${RESERVATION_AUTO_CLOSE_CRON:0 15 3 * * *}"
+      grace: "${RESERVATION_AUTO_CLOSE_GRACE:P1D}"
   security:
     jwt:
       secret: ${JWT_SECRET:}

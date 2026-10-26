@@ -48,4 +48,7 @@ public interface ReservationRepositoryPort {
 
     /** Keeps open reservations aligned when the item schedule changes. */
     Mono<Integer> rescheduleItem(UUID itemId, ReservationItemType type, Instant newStartsAt);
+
+    /** Closes CONFIRMED reservations of cancelled items and of published items ended before {@code cutoff}. */
+    Mono<Integer> closeStaleConfirmed(Instant cutoff);
 }

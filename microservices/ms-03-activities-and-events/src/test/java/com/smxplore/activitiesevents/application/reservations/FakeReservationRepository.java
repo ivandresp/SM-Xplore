@@ -95,4 +95,9 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     public Mono<Integer> rescheduleItem(UUID itemId, ReservationItemType type, Instant newStartsAt) {
         return Mono.just(0);
     }
+
+    @Override
+    public Mono<Integer> closeStaleConfirmed(Instant cutoff) {
+        return Mono.just(0);
+    }
 }

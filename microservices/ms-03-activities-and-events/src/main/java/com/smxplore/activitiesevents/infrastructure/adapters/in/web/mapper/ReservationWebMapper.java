@@ -3,6 +3,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationSummaryResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -22,4 +23,6 @@ public interface ReservationWebMapper {
     Reservation toDomain(ReservationRequest request);
 
     ReservationResponse toResponse(Reservation reservation);
+
+    ReservationSummaryResponse toSummary(Reservation reservation);
 }

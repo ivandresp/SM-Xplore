@@ -134,6 +134,52 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
                 .map(Long::intValue);
     }
 
+    @Override
+    public Mono<Integer> closeStaleConfirmed(Instant cutoff) {
+        return template.getDatabaseClient()
+                .sql("""
+                        WITH stale AS (
+                            SELECT r.id, 'NO_SHOW' AS next_status
+                            FROM reservations r
+                            JOIN evento e ON e.id = r.item_id
+                            WHERE r.item_type = 'EVENT'
+                              AND r.status = 'CONFIRMED'
+                              AND e.status = 'PUBLISHED'
+                              AND e.ends_at < :cutoff
+                            UNION ALL
+                            SELECT r.id, 'CANCELLED'
+                            FROM reservations r
+                            JOIN evento e ON e.id = r.item_id
+                            WHERE r.item_type = 'EVENT'
+                              AND r.status = 'CONFIRMED'
+                              AND e.status = 'CANCELLED'
+                            UNION ALL
+                            SELECT r.id, 'NO_SHOW'
+                            FROM reservations r
+                            JOIN actividad a ON a.id = r.item_id
+                            WHERE r.item_type = 'ACTIVITY'
+                              AND r.status = 'CONFIRMED'
+                              AND a.status = 'PUBLISHED'
+                              AND a.ends_at < :cutoff
+                            UNION ALL
+                            SELECT r.id, 'CANCELLED'
+                            FROM reservations r
+                            JOIN actividad a ON a.id = r.item_id
+                            WHERE r.item_type = 'ACTIVITY'
+                              AND r.status = 'CONFIRMED'
+                              AND a.status = 'CANCELLED'
+                        )
+                        UPDATE reservations r
+                        SET status = stale.next_status
+                        FROM stale
+                        WHERE r.id = stale.id
+                          AND r.status = 'CONFIRMED'
+                        """)
+                .bind("cutoff", cutoff)
+                .fetch().rowsUpdated()
+                .map(Long::intValue);
+    }
+
     private PageRequest page(int limit) {
         return PageRequest.of(0, limit, STABLE_ORDER);
     }

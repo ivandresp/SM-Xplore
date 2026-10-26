@@ -9,8 +9,10 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
   - Índice único parcial `(tourist_id, idempotency_key)`; un reintento devuelve la reserva original sin consumir cupo.
   - El bloqueo por turista se toma antes de leer la clave, así un reintento concurrente no falla por cupo.
   - Si el índice rechaza una carrera, la transacción se revierte y se devuelve la reserva ganadora.
+- **Cierre automático de reservas vencidas**: job diario (03:15 `America/Bogota`) que pasa a `NO_SHOW` las `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `app.reservations.auto-close.grace` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`; los ítems pausados o postergados se omiten. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
 
 ### Cambiado
+- **Listados de reservas sin `notes`**: `?status=`, `/tourists/{id}`, `/guides/{id}` y `/by-item` usan `ReservationSummaryResponse`. El detalle `GET /{id}` conserva el texto libre.
 - **Reservas simbólicas**: la reserva aparta cupo y nace `CONFIRMED`; el pago se resuelve con la entidad, fuera de la plataforma.
   - Una reserva = un ítem (`item_type`, `item_id`, `unit_price`); se elimina `reservation_items`.
   - Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`.

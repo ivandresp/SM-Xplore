@@ -11,7 +11,8 @@ public enum ReservationStatus {
     public Set<ReservationStatus> allowedTransitions() {
         return switch (this) {
             case CONFIRMED -> Set.of(CANCELLED, NO_SHOW, COMPLETED);
-            case CANCELLED, NO_SHOW, COMPLETED -> Set.of();
+            case NO_SHOW -> Set.of(COMPLETED);
+            case CANCELLED, COMPLETED -> Set.of();
         };
     }
 

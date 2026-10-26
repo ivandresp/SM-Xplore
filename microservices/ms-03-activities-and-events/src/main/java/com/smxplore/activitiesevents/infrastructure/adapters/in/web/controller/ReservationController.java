@@ -20,6 +20,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterR
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationSummaryResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReservationWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -99,45 +100,45 @@ public class ReservationController {
 
     @GetMapping
     @Operation(summary = "List reservations by status (admin/managers)")
-    public Flux<ReservationResponse> findByStatus(@RequestParam ReservationStatus status,
-                                                  @RequestParam(defaultValue = "50") int limit) {
+    public Flux<ReservationSummaryResponse> findByStatus(@RequestParam ReservationStatus status,
+                                                         @RequestParam(defaultValue = "50") int limit) {
         // TODO(ms-04): scope this listing to the sites of the caller's managerId.
         // Today any DESTINATION_MANAGER sees every reservation in the system.
         return consultReservationsByStatusUseCase.handle(status, PaginationLimits.clamp(limit))
-                .map(mapper::toResponse);
+                .map(mapper::toSummary);
     }
 
     @GetMapping("/tourists/{touristId}")
     @Operation(summary = "List the reservations of a tourist (self or staff)")
-    public Flux<ReservationResponse> findByTourist(@PathVariable UUID touristId,
-                                                   @RequestParam(defaultValue = "50") int limit,
-                                                   @AuthenticationPrincipal Jwt jwt) {
+    public Flux<ReservationSummaryResponse> findByTourist(@PathVariable UUID touristId,
+                                                          @RequestParam(defaultValue = "50") int limit,
+                                                          @AuthenticationPrincipal Jwt jwt) {
         requireSelfOrStaff(jwt, touristId, "You can only list your own reservations.");
         return consultReservationsByTouristUseCase.handle(touristId, PaginationLimits.clamp(limit))
-                .map(mapper::toResponse);
+                .map(mapper::toSummary);
     }
 
     @GetMapping("/guides/{guideId}")
     @Operation(summary = "List the reservations received by a guide (self or staff)")
-    public Flux<ReservationResponse> findByGuide(@PathVariable UUID guideId,
-                                                 @RequestParam(required = false) ReservationStatus status,
-                                                 @RequestParam(defaultValue = "50") int limit,
-                                                 @AuthenticationPrincipal Jwt jwt) {
+    public Flux<ReservationSummaryResponse> findByGuide(@PathVariable UUID guideId,
+                                                        @RequestParam(required = false) ReservationStatus status,
+                                                        @RequestParam(defaultValue = "50") int limit,
+                                                        @AuthenticationPrincipal Jwt jwt) {
         requireSelfOrStaff(jwt, guideId, "You can only list your own received reservations.");
         return consultReservationsByGuideUseCase.handle(guideId, status, PaginationLimits.clamp(limit))
-                .map(mapper::toResponse);
+                .map(mapper::toSummary);
     }
 
     @GetMapping("/by-item")
     @Operation(summary = "List the reservations of a given event or activity")
-    public Flux<ReservationResponse> findByItem(@RequestParam ReservationItemType itemType,
-                                                @RequestParam UUID itemId,
-                                                @RequestParam(defaultValue = "50") int limit,
-                                                @AuthenticationPrincipal Jwt jwt) {
+    public Flux<ReservationSummaryResponse> findByItem(@RequestParam ReservationItemType itemType,
+                                                       @RequestParam UUID itemId,
+                                                       @RequestParam(defaultValue = "50") int limit,
+                                                       @AuthenticationPrincipal Jwt jwt) {
         return requireItemAccess(jwt, itemType, itemId)
                 .thenMany(Flux.defer(() -> consultReservationsByItemUseCase.handle(itemId, itemType,
                         PaginationLimits.clamp(limit))))
-                .map(mapper::toResponse);
+                .map(mapper::toSummary);
     }
 
     @PatchMapping("/{reservationId}/cancel")
