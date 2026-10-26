@@ -73,16 +73,11 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration, login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, approve/reject providers, block/suspend/reactivate, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
-1. **Admin user management** (RF06–RF13, Admin US1–US8)
-   - Change a user’s role, migrating the role subtype correctly.
-   - Delete/deactivate and anonymize PII (Ley 1581).
-   - RF01 is now complete: Turista/Prestadora self-register and Guía/Gestora/Admin are created by an admin.
-
-2. **Guide/provider reviews in MongoDB** (RF69–RF75, RF77)
+1. **Guide/provider reviews in MongoDB** (RF69–RF75, RF77)
    - Add Spring Data MongoDB and the `smxplore_reviews` database.
    - `Review` document, indexes, repository adapter, and mapping.
    - Create/read reviews, guide/provider responses, report, moderation, and reputation summary.
@@ -90,19 +85,18 @@ Still to design/implement:
    - Only guide/provider reviews belong in ms-01; other review targets belong to their owning services.
    - Integration tests with a MongoDB Testcontainer.
 
-3. **Anomalies** (RF99–RF102, Admin US11–US14)
+2. **Anomalies** (RF99–RF102, Admin US11–US14)
    - Table and API for anomalies.
    - Classify by severity and mark as resolved.
    - Configurable alert thresholds.
    - Detection hooks for suspicious access, service downtime, and request spikes.
 
-4. **Security hardening**
+3. **Security hardening**
    - Admin/operator MFA (RNF01).
    - Rate limiting or brute-force protection.
-   - Complete the soft-delete/anonymization flow.
    - Self-service password change is done; JWT keys are persisted (env PEM or the dev key store).
 
-5. **Tests and infrastructure**
+4. **Tests and infrastructure**
    - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
    - MongoDB tests and index creation/migration.
    - CI and a Dockerfile for the service.

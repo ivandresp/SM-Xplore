@@ -108,6 +108,13 @@ public class UserRepositoryAdapter implements UserRepository {
                 last_access_date = EXCLUDED.last_access_date
             """;
 
+    private static final String DELETE_TOURIST_PROFILE = "DELETE FROM tourist_profiles WHERE user_id = :userId";
+    private static final String DELETE_GUIDE_PROFILE = "DELETE FROM guide_profiles WHERE user_id = :userId";
+    private static final String DELETE_PROVIDER_PROFILE = "DELETE FROM provider_profiles WHERE user_id = :userId";
+    private static final String DELETE_DESTINATION_MANAGER_PROFILE =
+            "DELETE FROM destination_manager_profiles WHERE user_id = :userId";
+    private static final String DELETE_ADMIN_PROFILE = "DELETE FROM admin_profiles WHERE user_id = :userId";
+
     private final DatabaseClient databaseClient;
     private final UserSummaryQuery summaryQuery;
     private final UserPersistenceMapper mapper = new UserPersistenceMapper();
@@ -164,6 +171,23 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public Mono<Usuario> save(Usuario user) {
         return saveUser(user).flatMap(saved -> saveProfile(saved).thenReturn(saved));
+    }
+
+    @Override
+    public Mono<Void> deleteProfile(Role role, UUID userId) {
+        String sql = switch (role) {
+            case TOURIST -> DELETE_TOURIST_PROFILE;
+            case GUIDE -> DELETE_GUIDE_PROFILE;
+            case SERVICE_PROVIDER -> DELETE_PROVIDER_PROFILE;
+            case DESTINATION_MANAGER -> DELETE_DESTINATION_MANAGER_PROFILE;
+            case ADMIN -> DELETE_ADMIN_PROFILE;
+        };
+        return databaseClient
+                .sql(sql)
+                .bind("userId", userId)
+                .fetch()
+                .rowsUpdated()
+                .then();
     }
 
     private Mono<Usuario> saveUser(Usuario user) {

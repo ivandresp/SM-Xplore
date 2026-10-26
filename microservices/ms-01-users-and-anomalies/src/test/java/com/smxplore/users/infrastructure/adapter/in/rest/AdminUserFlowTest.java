@@ -219,6 +219,105 @@ class AdminUserFlowTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void changesRoleAndMigratesTheProfile() {
+        String userId = registerTourist("Rita Rol", "rita.role@example.com", "6660004444", "3006660004");
+        String oldToken = login("rita.role@example.com", PASSWORD);
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+        ResponseEntity<Map> changed = changeRole(
+                adminToken,
+                userId,
+                Map.of(
+                        "role", "GUIA",
+                        "dniType", "CC",
+                        "dniNumber", "6660004444",
+                        "license", "LIC-ROLE-1"));
+
+        assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(changed.getBody().get("role")).isEqualTo("GUIA");
+        Map<String, Object> profile = (Map<String, Object>) changed.getBody().get("profile");
+        assertThat(profile.get("license")).isEqualTo("LIC-ROLE-1");
+        assertThat(profile).doesNotContainKeys("preferredLanguage", "birthDate", "nationality");
+
+        assertThat(status(oldToken, "/api/v1/users/me")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(loginStatus("rita.role@example.com", PASSWORD)).isEqualTo(HttpStatus.OK);
+
+        Map<?, ?> detail = get(adminToken, "/api/v1/admin/users/" + userId);
+        assertThat(detail.get("role")).isEqualTo("GUIA");
+        assertThat(((Map<?, ?>) detail.get("profile")).get("license")).isEqualTo("LIC-ROLE-1");
+
+        Map<?, ?> audit = get(adminToken, "/api/v1/admin/audit-logs?targetUserId=" + userId);
+        assertThat(entries(audit)).anySatisfy(entry -> {
+            assertThat(entry.get("action")).isEqualTo("ROL_CAMBIADO");
+            Map<String, Object> details = (Map<String, Object>) entry.get("details");
+            assertThat(details).containsEntry("rolAnterior", "TURISTA").containsEntry("rolNuevo", "GUIA");
+        });
+
+        assertThat(changeRoleStatus(
+                        adminToken,
+                        userId,
+                        Map.of(
+                                "role", "GUIA",
+                                "dniType", "CC",
+                                "dniNumber", "6660004444",
+                                "license", "LIC-ROLE-1")))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void rejectsRoleChangeWithoutRequiredProfileData() {
+        String userId = registerTourist("Iván Inválido", "ivan.role@example.com", "6660005555", "3006660005");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+        assertThat(changeRoleStatus(
+                        adminToken, userId, Map.of("role", "GUIA", "dniType", "CC", "dniNumber", "6660005555")))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(changeRoleStatus(adminToken, userId, Map.of("role", "PRESTADORA_SERVICIOS")))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void adminCannotChangeOwnRoleOrDeleteOwnAccount() {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        Map<?, ?> me = get(adminToken, "/api/v1/users/me");
+        String adminId = String.valueOf(me.get("id"));
+
+        assertThat(changeRoleStatus(
+                        adminToken, adminId, Map.of("role", "TURISTA", "dniType", "CC", "dniNumber", "1000000000")))
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(deleteUser(adminToken, adminId)).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void deletesAndAnonymizesAnAccount() {
+        String userId = registerTourist("Dora Baja", "dora.delete@example.com", "6660006666", "3006660006");
+        String userToken = login("dora.delete@example.com", PASSWORD);
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+        assertThat(deleteUser(adminToken, userId)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        Map<?, ?> detail = get(adminToken, "/api/v1/admin/users/" + userId);
+        assertThat(detail.get("status")).isEqualTo("ELIMINADO");
+        assertThat(detail.get("fullName")).isEqualTo("Usuario eliminado");
+        assertThat(detail.get("phone")).isNull();
+        assertThat(String.valueOf(detail.get("email")))
+                .contains("@anonimo.smxplore.local")
+                .doesNotContain("dora.delete");
+        Map<String, Object> profile = (Map<String, Object>) detail.get("profile");
+        assertThat(String.valueOf(profile.get("dniNumber"))).startsWith("ANON-");
+
+        assertThat(status(userToken, "/api/v1/users/me")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(loginStatus("dora.delete@example.com", PASSWORD)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(deleteUser(adminToken, userId)).isEqualTo(HttpStatus.CONFLICT);
+
+        Map<?, ?> audit = get(adminToken, "/api/v1/admin/audit-logs?targetUserId=" + userId);
+        assertThat(entries(audit))
+                .anySatisfy(entry -> assertThat(entry.get("action")).isEqualTo("CUENTA_ELIMINADA"));
+    }
+
+    @Test
     void approvesAndRejectsProviderRegistrations() {
         String approvedId =
                 registerProvider("Prestadora Aprobada", "aprobada@example.com", "900222333-4", "3007770001");
@@ -332,6 +431,30 @@ class AdminUserFlowTest {
                 .uri("/api/v1/admin/users/" + userId + "/status")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .body(body)
+                .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private ResponseEntity<Map> changeRole(String token, String userId, Map<String, Object> body) {
+        return client.patch()
+                .uri("/api/v1/admin/users/" + userId + "/role")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(body)
+                .retrieve()
+                .toEntity(Map.class);
+    }
+
+    private HttpStatusCode changeRoleStatus(String token, String userId, Map<String, Object> body) {
+        return client.patch()
+                .uri("/api/v1/admin/users/" + userId + "/role")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(body)
+                .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private HttpStatusCode deleteUser(String token, String userId) {
+        return client.delete()
+                .uri("/api/v1/admin/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .exchange((request, response) -> response.getStatusCode());
     }
 

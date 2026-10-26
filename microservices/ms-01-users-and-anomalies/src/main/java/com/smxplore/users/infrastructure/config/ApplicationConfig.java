@@ -3,8 +3,10 @@ package com.smxplore.users.infrastructure.config;
 import com.smxplore.users.application.port.in.AdminResetPasswordUseCase;
 import com.smxplore.users.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
+import com.smxplore.users.application.port.in.ChangeUserRoleUseCase;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
+import com.smxplore.users.application.port.in.DeleteUserUseCase;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
@@ -32,8 +34,10 @@ import com.smxplore.users.application.service.AdminResetPasswordService;
 import com.smxplore.users.application.service.AuditTrailRecorder;
 import com.smxplore.users.application.service.BootstrapAdminService;
 import com.smxplore.users.application.service.ChangeOwnPasswordService;
+import com.smxplore.users.application.service.ChangeUserRoleService;
 import com.smxplore.users.application.service.ChangeUserStatusService;
 import com.smxplore.users.application.service.CreateInternalUserService;
+import com.smxplore.users.application.service.DeleteUserService;
 import com.smxplore.users.application.service.ForgotPasswordService;
 import com.smxplore.users.application.service.GetCurrentUserService;
 import com.smxplore.users.application.service.GetPublicProfileService;
@@ -157,6 +161,23 @@ public class ApplicationConfig {
     public ChangeUserStatusUseCase changeUserStatusUseCase(
             UserRepository users, AuditTrailRecorder auditTrailRecorder, TransactionPort transactions, Clock clock) {
         return new ChangeUserStatusService(users, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public ChangeUserRoleUseCase changeUserRoleUseCase(
+            UserRepository users, AuditTrailRecorder auditTrailRecorder, TransactionPort transactions, Clock clock) {
+        return new ChangeUserRoleService(users, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public DeleteUserUseCase deleteUserUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            PasswordHasher passwordHasher,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new DeleteUserService(users, resetTokens, passwordHasher, auditTrailRecorder, transactions, clock);
     }
 
     @Bean

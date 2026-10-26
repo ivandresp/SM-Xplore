@@ -22,4 +22,6 @@ public interface UserRepository {
     Mono<Long> countActiveByRole(Role role);
 
     Mono<Usuario> save(Usuario user);
+
+    Mono<Void> deleteProfile(Role role, UUID userId);
 }

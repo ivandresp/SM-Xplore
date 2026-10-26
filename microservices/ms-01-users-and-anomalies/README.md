@@ -102,6 +102,8 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 | GET | `/api/v1/admin/users/{id}` | ADMIN |
 | POST | `/api/v1/admin/users` | ADMIN, crea guía/gestora/admin con invitación |
 | PATCH | `/api/v1/admin/users/{id}/status` | ADMIN |
+| PATCH | `/api/v1/admin/users/{id}/role` | ADMIN, migra el perfil al nuevo rol |
+| DELETE | `/api/v1/admin/users/{id}` | ADMIN, baja definitiva con anonimización |
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
@@ -113,6 +115,11 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 El registro de prestadoras y `PATCH /api/v1/users/me` aceptan el campo opcional `websiteUrl` (máximo
 255 caracteres, solo `http://` o `https://`). Un valor vacío en la actualización elimina el enlace, y el
 campo se devuelve en el perfil administrativo y en el perfil público de la prestadora.
+
+### Roles y bajas
+
+- `PATCH /api/v1/admin/users/{id}/role` recibe el nuevo `role` y los datos exigidos por ese rol (`dniType`/`dniNumber` para turista o guía, `license` para guía, `nit` para prestadora o gestora, etc.). Migra la fila de perfil, conserva la identidad de la cuenta e invalida los JWT anteriores incrementando `authVersion`.
+- `DELETE /api/v1/admin/users/{id}` aplica una baja lógica: deja la cuenta en estado `ELIMINADO`, reemplaza nombre, correo, teléfono, documento/NIT, licencia y contraseña por valores anónimos, invalida tokens de recuperación y conserva el registro para trazabilidad. No permite eliminar la propia cuenta ni al último administrador activo.
 
 ## Contrato JWT para otros microservicios
 
