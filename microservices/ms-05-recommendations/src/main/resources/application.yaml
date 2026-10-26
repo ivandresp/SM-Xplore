@@ -1,0 +1,73 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: ms-05-recommendations
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    authentication:
+      username: ${NEO4J_USER:neo4j}
+      password: ${NEO4J_PASSWORD:change-me}
+    pool:
+      max-connection-pool-size: ${NEO4J_POOL_SIZE:50}
+      connection-acquisition-timeout: ${NEO4J_ACQUISITION_TIMEOUT:30s}
+    connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:15s}
+    max-transaction-retry-time: ${NEO4J_RETRY_TIME:15s}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+      language-claim: ${JWT_LANGUAGE_CLAIM:locale}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+  recommendations:
+    default-limit: ${RECOMMENDATIONS_DEFAULT_LIMIT:20}
+    max-limit: ${RECOMMENDATIONS_MAX_LIMIT:50}
+    candidate-limit: ${RECOMMENDATIONS_CANDIDATE_LIMIT:200}
+    category-max-depth: ${RECOMMENDATIONS_CATEGORY_MAX_DEPTH:2}
+    proximity-radius-km: ${RECOMMENDATIONS_PROXIMITY_RADIUS_KM:10.0}
+    novelty-half-life-days: ${RECOMMENDATIONS_NOVELTY_HALF_LIFE_DAYS:90.0}
+    preference-half-life-days: ${RECOMMENDATIONS_PREFERENCE_HALF_LIFE_DAYS:90.0}
+    quality-prior-mean: ${RECOMMENDATIONS_QUALITY_PRIOR_MEAN:3.5}
+    quality-prior-count: ${RECOMMENDATIONS_QUALITY_PRIOR_COUNT:10.0}
+    max-items-per-site: ${RECOMMENDATIONS_MAX_ITEMS_PER_SITE:2}
+    max-category-ratio: ${RECOMMENDATIONS_MAX_CATEGORY_RATIO:0.4}
+    weights:
+      affinity: ${RECOMMENDATIONS_WEIGHT_AFFINITY:0.45}
+      quality: ${RECOMMENDATIONS_WEIGHT_QUALITY:0.25}
+      proximity: ${RECOMMENDATIONS_WEIGHT_PROXIMITY:0.20}
+      novelty: ${RECOMMENDATIONS_WEIGHT_NOVELTY:0.10}
+  neo4j:
+    initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
+  seed:
+    enabled: ${SEED_ENABLED:false}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: ${HEALTH_SHOW_DETAILS:never}
+  metrics:
+    tags:
+      application: ${spring.application.name}

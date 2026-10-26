@@ -1,0 +1,24 @@
+app:
+  neo4j:
+    initialize-schema: true
+  seed:
+    enabled: true
+  security:
+    jwt:
+      public-key-location: classpath:keys/test-public.pem
+      issuer: https://ms-05.local
+      audience: ""
+      role-claim: role
+      name-claim: name
+      language-claim: locale
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    org.neo4j.driver: WARN
+    com.smxplore.recommendations: INFO
