@@ -19,6 +19,7 @@ public sealed interface PublicProfileDetails permits PublicProfileDetails.Guide,
                 new Provider(
                         provider.nit(),
                         provider.businessType(),
+                        provider.websiteUrl(),
                         provider.latitude(),
                         provider.longitude(),
                         provider.startOperationDate());
@@ -29,6 +30,11 @@ public sealed interface PublicProfileDetails permits PublicProfileDetails.Guide,
     record Guide(String license, LocalDate startOperationDate) implements PublicProfileDetails {}
 
     record Provider(
-            String nit, String businessType, BigDecimal latitude, BigDecimal longitude, LocalDate startOperationDate)
+            String nit,
+            String businessType,
+            String websiteUrl,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            LocalDate startOperationDate)
             implements PublicProfileDetails {}
 }

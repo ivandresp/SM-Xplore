@@ -1,7 +1,9 @@
 package com.smxplore.users.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.smxplore.users.domain.exception.ValidationException;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -33,11 +35,33 @@ class UsuarioTest {
                 null,
                 null,
                 null,
+                null,
                 NOW);
 
         assertThat(user).isInstanceOf(Usuario.class);
         assertThat(user.role()).isEqualTo(Role.SERVICE_PROVIDER);
         assertThat(user.registrationStatus()).isEqualTo(ProviderRegistrationStatus.PENDIENTE);
+    }
+
+    @Test
+    void keepsAndNormalizesTheOptionalProviderWebsite() {
+        PrestadoraServicios user = provider("  https://prestadora.example.com  ");
+
+        assertThat(user.websiteUrl()).isEqualTo("https://prestadora.example.com");
+    }
+
+    @Test
+    void rejectsAProviderWebsiteThatIsNotHttp() {
+        assertThatThrownBy(() -> provider("ftp://prestadora.example.com")).isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    void clearsTheProviderWebsiteWhenAnEmptyValueIsSent() {
+        PrestadoraServicios user = provider("https://prestadora.example.com");
+
+        user.updateBusinessDetails(null, null, null, "", NOW);
+
+        assertThat(user.websiteUrl()).isNull();
     }
 
     @Test
@@ -71,6 +95,22 @@ class UsuarioTest {
                 "es",
                 null,
                 "Colombia",
+                NOW);
+    }
+
+    private static PrestadoraServicios provider(String websiteUrl) {
+        return PrestadoraServicios.register(
+                UUID.randomUUID(),
+                "Prestadora Demo",
+                new Email("provider@example.com"),
+                "3001234567",
+                new PasswordHash("hash"),
+                "900123456",
+                "Hotel",
+                null,
+                null,
+                websiteUrl,
+                null,
                 NOW);
     }
 }

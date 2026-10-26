@@ -50,6 +50,7 @@ public final class RegisterProviderService implements RegisterProviderUseCase {
                             command.businessType(),
                             command.latitude(),
                             command.longitude(),
+                            command.websiteUrl(),
                             command.startOperationDate(),
                             clock.instant()))
                     .flatMap(users::save)

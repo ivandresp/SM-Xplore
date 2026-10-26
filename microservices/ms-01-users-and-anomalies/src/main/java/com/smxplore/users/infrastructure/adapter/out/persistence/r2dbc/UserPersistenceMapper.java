@@ -87,6 +87,7 @@ final class UserPersistenceMapper {
                 ProviderRegistrationStatus.valueOf(profile.get("registration_status", String.class)),
                 profile.get("latitude", BigDecimal.class),
                 profile.get("longitude", BigDecimal.class),
+                profile.get("website_url", String.class),
                 profile.get("start_operation_date", LocalDate.class));
     }
 

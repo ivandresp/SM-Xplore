@@ -57,6 +57,7 @@ public class UserController {
                         request.businessType(),
                         request.latitude(),
                         request.longitude(),
+                        request.websiteUrl(),
                         request.license()));
     }
 

@@ -2,17 +2,21 @@ package com.smxplore.users.domain.model;
 
 import com.smxplore.users.domain.exception.ValidationException;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
 public final class PrestadoraServicios extends Usuario {
 
+    private static final int MAX_WEBSITE_LENGTH = 255;
+
     private final String nit;
     private String businessType;
     private ProviderRegistrationStatus registrationStatus;
     private BigDecimal latitude;
     private BigDecimal longitude;
+    private String websiteUrl;
     private final LocalDate startOperationDate;
 
     private PrestadoraServicios(
@@ -31,6 +35,7 @@ public final class PrestadoraServicios extends Usuario {
             ProviderRegistrationStatus registrationStatus,
             BigDecimal latitude,
             BigDecimal longitude,
+            String websiteUrl,
             LocalDate startOperationDate) {
         super(id, fullName, email, phone, passwordHash, status, authVersion, signedUpAt, updatedAt, deletedAt);
         this.nit = nit;
@@ -40,6 +45,7 @@ public final class PrestadoraServicios extends Usuario {
         validateCoordinates(latitude, longitude);
         this.latitude = latitude;
         this.longitude = longitude;
+        this.websiteUrl = normalizeWebsite(websiteUrl);
         this.startOperationDate = startOperationDate;
     }
 
@@ -53,6 +59,7 @@ public final class PrestadoraServicios extends Usuario {
             String businessType,
             BigDecimal latitude,
             BigDecimal longitude,
+            String websiteUrl,
             LocalDate startOperationDate,
             Instant now) {
         return new PrestadoraServicios(
@@ -71,6 +78,7 @@ public final class PrestadoraServicios extends Usuario {
                 ProviderRegistrationStatus.PENDIENTE,
                 latitude,
                 longitude,
+                websiteUrl,
                 startOperationDate);
     }
 
@@ -90,6 +98,7 @@ public final class PrestadoraServicios extends Usuario {
             ProviderRegistrationStatus registrationStatus,
             BigDecimal latitude,
             BigDecimal longitude,
+            String websiteUrl,
             LocalDate startOperationDate) {
         return new PrestadoraServicios(
                 id,
@@ -107,15 +116,20 @@ public final class PrestadoraServicios extends Usuario {
                 registrationStatus,
                 latitude,
                 longitude,
+                websiteUrl,
                 startOperationDate);
     }
 
-    public void updateBusinessDetails(String businessType, BigDecimal latitude, BigDecimal longitude, Instant now) {
+    public void updateBusinessDetails(
+            String businessType, BigDecimal latitude, BigDecimal longitude, String websiteUrl, Instant now) {
         BigDecimal newLatitude = latitude != null ? latitude : this.latitude;
         BigDecimal newLongitude = longitude != null ? longitude : this.longitude;
         validateCoordinates(newLatitude, newLongitude);
         if (businessType != null) {
             this.businessType = normalize(businessType);
+        }
+        if (websiteUrl != null) {
+            this.websiteUrl = normalizeWebsite(websiteUrl);
         }
         this.latitude = newLatitude;
         this.longitude = newLongitude;
@@ -153,12 +167,38 @@ public final class PrestadoraServicios extends Usuario {
         return longitude;
     }
 
+    public String websiteUrl() {
+        return websiteUrl;
+    }
+
     public LocalDate startOperationDate() {
         return startOperationDate;
     }
 
     private static String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String normalizeWebsite(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String candidate = value.trim();
+        if (candidate.length() > MAX_WEBSITE_LENGTH) {
+            throw new ValidationException("El sitio web no puede superar los " + MAX_WEBSITE_LENGTH + " caracteres");
+        }
+        try {
+            URI uri = URI.create(candidate);
+            String scheme = uri.getScheme();
+            boolean supportedScheme = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+            if (!supportedScheme || uri.getHost() == null) {
+                throw new ValidationException(
+                        "El sitio web debe ser una URL válida que empiece por http:// o https://");
+            }
+        } catch (IllegalArgumentException exception) {
+            throw new ValidationException("El sitio web debe ser una URL válida que empiece por http:// o https://");
+        }
+        return candidate;
     }
 
     private static void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {

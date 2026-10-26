@@ -98,6 +98,7 @@ class AdminUserFlowTest {
         Map<?, ?> detail = get(adminToken, "/api/v1/admin/users/" + providerId);
         assertThat(detail.get("status")).isEqualTo("ACTIVO");
         assertThat(detail.get("profile")).isNotNull();
+        assertThat(((Map<?, ?>) detail.get("profile")).get("websiteUrl")).isEqualTo("https://guias.example.com");
     }
 
     @Test
@@ -279,7 +280,8 @@ class AdminUserFlowTest {
                         "phone", phone,
                         "password", PASSWORD,
                         "nit", nit,
-                        "businessType", "Agencia de viajes"))
+                        "businessType", "Agencia de viajes",
+                        "websiteUrl", "https://guias.example.com"))
                 .retrieve()
                 .toEntity(Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);

@@ -17,4 +17,5 @@ public record UpdateProfileRequest(
         @Size(max = 50) String businessType,
         @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitude,
         @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
+        @Size(max = 255) String websiteUrl,
         @Size(max = 50) String license) {}

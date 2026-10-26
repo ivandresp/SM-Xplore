@@ -80,6 +80,7 @@ public class AuthController {
                         request.businessType(),
                         request.latitude(),
                         request.longitude(),
+                        request.websiteUrl(),
                         request.startOperationDate()))
                 .map(user -> ResponseEntity.created(URI.create("/api/v1/users/" + user.id()))
                         .body(user));

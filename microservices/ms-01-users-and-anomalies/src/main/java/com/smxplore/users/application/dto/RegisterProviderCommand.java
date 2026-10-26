@@ -12,4 +12,5 @@ public record RegisterProviderCommand(
         String businessType,
         BigDecimal latitude,
         BigDecimal longitude,
+        String websiteUrl,
         LocalDate startOperationDate) {}

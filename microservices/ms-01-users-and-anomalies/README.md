@@ -108,6 +108,12 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 | GET | `/.well-known/jwks.json` | Público |
 | GET | `/actuator/health` | Público |
 
+### Sitio web de las prestadoras
+
+El registro de prestadoras y `PATCH /api/v1/users/me` aceptan el campo opcional `websiteUrl` (máximo
+255 caracteres, solo `http://` o `https://`). Un valor vacío en la actualización elimina el enlace, y el
+campo se devuelve en el perfil administrativo y en el perfil público de la prestadora.
+
 ## Contrato JWT para otros microservicios
 
 Tokens RS256, access-only, sin refresh token. Claims relevantes:

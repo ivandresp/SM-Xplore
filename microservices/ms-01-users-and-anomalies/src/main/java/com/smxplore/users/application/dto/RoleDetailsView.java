@@ -33,6 +33,7 @@ public sealed interface RoleDetailsView
                         provider.nit(),
                         provider.businessType(),
                         provider.registrationStatus().name(),
+                        provider.websiteUrl(),
                         provider.latitude(),
                         provider.longitude(),
                         provider.startOperationDate());
@@ -51,6 +52,7 @@ public sealed interface RoleDetailsView
             String nit,
             String businessType,
             String registrationStatus,
+            String websiteUrl,
             BigDecimal latitude,
             BigDecimal longitude,
             LocalDate startOperationDate)

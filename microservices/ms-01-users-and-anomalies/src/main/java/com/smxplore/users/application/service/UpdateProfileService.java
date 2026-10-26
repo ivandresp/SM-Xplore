@@ -55,7 +55,8 @@ public final class UpdateProfileService implements UpdateProfileUseCase {
                 tourist.updateDetails(command.preferredLanguage(), command.birthDate(), command.nationality(), now);
             case Guia guide -> guide.updateLicense(command.license(), now);
             case PrestadoraServicios provider ->
-                provider.updateBusinessDetails(command.businessType(), command.latitude(), command.longitude(), now);
+                provider.updateBusinessDetails(
+                        command.businessType(), command.latitude(), command.longitude(), command.websiteUrl(), now);
             case GestoraDestinos ignored -> {
                 // Only common contact data is editable for destination managers.
             }

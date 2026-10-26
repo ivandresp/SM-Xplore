@@ -12,4 +12,5 @@ public record UpdateProfileCommand(
         String businessType,
         BigDecimal latitude,
         BigDecimal longitude,
+        String websiteUrl,
         String license) {}

@@ -78,14 +78,16 @@ public class UserRepositoryAdapter implements UserRepository {
 
     private static final String UPSERT_PROVIDER = """
             INSERT INTO provider_profiles (user_id, nit, business_type, registration_status, latitude,
-                                           longitude, start_operation_date)
-            VALUES (:userId, :nit, :businessType, :registrationStatus, :latitude, :longitude, :startOperationDate)
+                                           longitude, website_url, start_operation_date)
+            VALUES (:userId, :nit, :businessType, :registrationStatus, :latitude, :longitude, :websiteUrl,
+                    :startOperationDate)
             ON CONFLICT (user_id) DO UPDATE
             SET nit = EXCLUDED.nit,
                 business_type = EXCLUDED.business_type,
                 registration_status = EXCLUDED.registration_status,
                 latitude = EXCLUDED.latitude,
                 longitude = EXCLUDED.longitude,
+                website_url = EXCLUDED.website_url,
                 start_operation_date = EXCLUDED.start_operation_date
             """;
 
@@ -255,6 +257,7 @@ public class UserRepositoryAdapter implements UserRepository {
         spec = bindNullable(spec, "businessType", user.businessType(), String.class);
         spec = bindNullable(spec, "latitude", user.latitude(), BigDecimal.class);
         spec = bindNullable(spec, "longitude", user.longitude(), BigDecimal.class);
+        spec = bindNullable(spec, "websiteUrl", user.websiteUrl(), String.class);
         spec = bindNullable(spec, "startOperationDate", user.startOperationDate(), LocalDate.class);
         return spec.fetch().rowsUpdated().then();
     }

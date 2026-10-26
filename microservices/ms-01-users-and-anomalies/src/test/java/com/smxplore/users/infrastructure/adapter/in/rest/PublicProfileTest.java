@@ -93,7 +93,20 @@ class PublicProfileTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> profile = profile(response);
         assertThat(profile.get("nit")).isEqualTo("903555666-7");
+        assertThat(profile.get("websiteUrl")).isEqualTo("https://prestadora.example.com");
         assertThat(profile).doesNotContainKeys("dniType", "dniNumber");
+    }
+
+    @Test
+    void updatesAndClearsTheOptionalProviderWebsite() {
+        registerProvider("Prestadora Web", "prestadora.web@example.com", "903555888-9", "3008880004");
+        String token = login("prestadora.web@example.com", PASSWORD);
+
+        Map<?, ?> updated = updateWebsite(token, "https://nueva.example.com");
+        assertThat(profile(updated).get("websiteUrl")).isEqualTo("https://nueva.example.com");
+
+        Map<?, ?> cleared = updateWebsite(token, "");
+        assertThat(profile(cleared).get("websiteUrl")).isNull();
     }
 
     @Test
@@ -163,7 +176,8 @@ class PublicProfileTest {
                         "phone", phone,
                         "password", PASSWORD,
                         "nit", nit,
-                        "businessType", "Agencia de viajes"))
+                        "businessType", "Agencia de viajes",
+                        "websiteUrl", "https://prestadora.example.com"))
                 .retrieve()
                 .toEntity(Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -196,9 +210,24 @@ class PublicProfileTest {
         return client.get().uri("/api/v1/public/users/" + userId).retrieve().toEntity(Map.class);
     }
 
+    private Map<?, ?> updateWebsite(String token, String websiteUrl) {
+        return client.patch()
+                .uri("/api/v1/users/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(Map.of("websiteUrl", websiteUrl))
+                .retrieve()
+                .toEntity(Map.class)
+                .getBody();
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> profile(ResponseEntity<Map> response) {
         return (Map<String, Object>) response.getBody().get("profile");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> profile(Map<?, ?> response) {
+        return (Map<String, Object>) response.get("profile");
     }
 
     private String login(String email, String password) {
