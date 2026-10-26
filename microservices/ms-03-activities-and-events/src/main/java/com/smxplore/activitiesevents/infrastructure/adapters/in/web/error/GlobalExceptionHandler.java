@@ -25,6 +25,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReserv
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTotalException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyActiveReservationsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
@@ -58,6 +59,7 @@ public class GlobalExceptionHandler {
             InvalidActivityStatusTransitionException.class,
             InvalidReservationStatusTransitionException.class,
             CancellationWindowClosedException.class,
+            TooManyActiveReservationsException.class,
             ReviewAlreadyExistsException.class,
             ReviewAlreadyReportedException.class,
             ReviewAlreadyRespondedException.class})

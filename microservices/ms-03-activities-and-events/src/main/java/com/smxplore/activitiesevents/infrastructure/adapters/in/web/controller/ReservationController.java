@@ -1,12 +1,13 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
@@ -59,6 +60,7 @@ public class ReservationController {
     private final RegisterReservationAttendanceUseCasePort registerReservationAttendanceUseCase;
     private final RegisterReservationNoShowUseCasePort registerReservationNoShowUseCase;
     private final ActivityRepositoryPort activityRepository;
+    private final EventRepositoryPort eventRepository;
     private final ReservationWebMapper mapper;
 
     @Value("${app.security.jwt.role-claim:role}")
@@ -133,7 +135,6 @@ public class ReservationController {
     @Operation(summary = "Cancel a reservation (the tourist up to 24 h before the start; staff any time)")
     public Mono<ReservationResponse> cancel(@PathVariable UUID reservationId, @AuthenticationPrincipal Jwt jwt) {
         return consultOneReservationUseCase.handle(reservationId)
-                .switchIfEmpty(Mono.error(new ReservationNotFoundException(reservationId)))
                 .flatMap(reservation -> {
                     var staff = isStaff(jwt, reservation);
                     if (!staff && !isOwner(jwt, reservation)) {
@@ -228,20 +229,24 @@ public class ReservationController {
     }
 
     private Mono<Void> requireItemAccess(Jwt jwt, ReservationItemType itemType, UUID itemId) {
-        if (isAdminOrManager(jwt)) {
-            return Mono.empty();
-        }
-        var subject = subject(jwt);
+        var staff = isAdminOrManager(jwt);
         return switch (itemType) {
             case ACTIVITY -> activityRepository.findById(itemId)
                     .switchIfEmpty(Mono.error(new ActivityNotFoundException(itemId)))
-                    .filter(activity -> activity.getGuideId() != null
-                            && activity.getGuideId().toString().equals(subject))
+                    .filter(activity -> staff || (activity.getGuideId() != null
+                            && activity.getGuideId().toString().equals(subject(jwt))))
                     .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
                             "You can only list reservations of your own activities.")))
                     .then();
-            case EVENT -> Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only administrators or destination managers can list reservations of an event."));
+            case EVENT -> {
+                if (!staff) {
+                    yield Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Only administrators or destination managers can list reservations of an event."));
+                }
+                yield eventRepository.findById(itemId)
+                        .switchIfEmpty(Mono.error(new EventNotFoundException(itemId)))
+                        .then();
+            }
         };
     }
 }

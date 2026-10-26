@@ -17,6 +17,7 @@ public record ReservationEntity(
         UUID touristId,
         ReservationItemType itemType,
         UUID itemId,
+        Instant itemStartsAt,
         BigDecimal unitPrice,
         int numberOfPeople,
         BigDecimal total,

@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemTyp
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -12,6 +13,7 @@ import java.util.UUID;
 /**
  * The total and the unit price are not received from the client: the price
  * comes from the catalog and the total is unit price × number of people.
+ * {@code bookedFor} is validated but the server overrides it with the item start.
  */
 public record ReservationRequest(
         @NotNull UUID touristId,
@@ -20,6 +22,6 @@ public record ReservationRequest(
         @Min(1) int numberOfPeople,
         @NotNull PaymentMethod paymentMethod,
         @NotNull @Future Instant bookedFor,
-        String notes
+        @Size(max = 1000) String notes
 ) {
 }

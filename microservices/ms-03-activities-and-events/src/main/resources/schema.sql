@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS reservations (
     tourist_id       UUID                     NOT NULL,
     item_type        VARCHAR(20)              NOT NULL,
     item_id          UUID                     NOT NULL,
+    item_starts_at   TIMESTAMP WITH TIME ZONE NOT NULL,
     unit_price       NUMERIC(14, 2)           NOT NULL,
     number_of_people INTEGER                  NOT NULL,
     total            NUMERIC(18, 2)           NOT NULL,
@@ -63,20 +64,39 @@ CREATE TABLE IF NOT EXISTS reservations (
     CONSTRAINT reservations_item_type_valid CHECK (item_type IN ('EVENT', 'ACTIVITY'))
 );
 
--- Existing installations: add the single-item columns, then normalise the old rows.
--- This is a no-op once the migration has run (the columns are already NOT NULL).
-ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_type  VARCHAR(20);
-ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_id    UUID;
-ALTER TABLE reservations ADD COLUMN IF NOT EXISTS unit_price NUMERIC(14, 2);
+-- WARNING: one-time destructive migration. It only removes rows that cannot be
+-- represented in the new model (no item). Back up the database before the first
+-- boot against existing data. After the first run the columns are NOT NULL and
+-- this statement matches nothing.
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_type      VARCHAR(20);
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_id        UUID;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS item_starts_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS unit_price     NUMERIC(14, 2);
 
-DELETE FROM reservations WHERE item_type IS NULL OR item_id IS NULL;
-UPDATE reservations SET unit_price = 0 WHERE unit_price IS NULL;
+-- If the old join table still exists, copy its single item into the reservation.
+-- Run this block manually (psql) before the first boot when the table has data:
+--
+--   UPDATE reservations r
+--   SET item_type = i.type, item_id = i.item_id, unit_price = i.price
+--   FROM (SELECT DISTINCT ON (reservation_id) reservation_id, type, item_id, price
+--         FROM reservation_items ORDER BY reservation_id, id) i
+--   WHERE i.reservation_id = r.id AND r.item_type IS NULL;
+
+UPDATE reservations
+SET unit_price = CASE WHEN number_of_people > 0 THEN total / number_of_people ELSE 0 END
+WHERE unit_price IS NULL;
+UPDATE reservations SET item_starts_at = booked_for WHERE item_starts_at IS NULL;
+DELETE FROM reservations
+WHERE item_type IS NULL OR item_id IS NULL OR item_starts_at IS NULL;
+
+UPDATE reservations SET total = unit_price * number_of_people;
 UPDATE reservations SET status = 'CONFIRMED' WHERE status = 'PENDING';
 UPDATE reservations SET status = 'CANCELLED' WHERE status IN ('REJECTED', 'CANCELLATION_REQUESTED');
 
-ALTER TABLE reservations ALTER COLUMN item_type  SET NOT NULL;
-ALTER TABLE reservations ALTER COLUMN item_id    SET NOT NULL;
-ALTER TABLE reservations ALTER COLUMN unit_price SET NOT NULL;
+ALTER TABLE reservations ALTER COLUMN item_type      SET NOT NULL;
+ALTER TABLE reservations ALTER COLUMN item_id        SET NOT NULL;
+ALTER TABLE reservations ALTER COLUMN item_starts_at SET NOT NULL;
+ALTER TABLE reservations ALTER COLUMN unit_price     SET NOT NULL;
 ALTER TABLE reservations ALTER COLUMN status SET DEFAULT 'CONFIRMED';
 
 ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_status_valid;
@@ -89,6 +109,10 @@ ALTER TABLE reservations ADD CONSTRAINT reservations_unit_price_non_negative CHE
 ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_item_type_valid;
 ALTER TABLE reservations ADD CONSTRAINT reservations_item_type_valid CHECK (item_type IN ('EVENT', 'ACTIVITY'));
 
+ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_total_matches_price;
+ALTER TABLE reservations ADD CONSTRAINT reservations_total_matches_price
+    CHECK (total = unit_price * number_of_people);
+
 -- Symbolic reservations have a single item: the join table is gone.
 DROP TABLE IF EXISTS reservation_items;
 
@@ -96,5 +120,6 @@ CREATE INDEX IF NOT EXISTS reservations_tourist_idx ON reservations (tourist_id)
 CREATE INDEX IF NOT EXISTS reservations_status_idx ON reservations (status);
 CREATE INDEX IF NOT EXISTS reservations_guide_idx ON reservations (guide_id);
 CREATE INDEX IF NOT EXISTS reservations_item_idx ON reservations (item_type, item_id, status);
+CREATE INDEX IF NOT EXISTS reservations_tourist_status_idx ON reservations (tourist_id, status);
 
 CREATE SEQUENCE IF NOT EXISTS reservation_code_seq;

@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookin
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationRequestException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyActiveReservationsException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
@@ -24,14 +25,17 @@ import java.util.UUID;
 
 /**
  * Creates a symbolic reservation in a single step: the item is validated and
- * locked, capacity is checked against the people count, the price comes from
- * the catalog and the reservation is stored already CONFIRMED.
+ * locked, capacity is checked against the people count, the price and the start
+ * come from the catalog and the reservation is stored already CONFIRMED.
  * <p>
  * The caller must wrap this use case in a transaction so the item lock is held
  * until the reservation is inserted.
  */
 @RequiredArgsConstructor
 public class CreateReservationUseCase implements CreateReservationUseCasePort {
+
+    /** Anti-abuse rule for a flow without payment: one tourist cannot hold the whole catalog. */
+    static final int MAX_ACTIVE_RESERVATIONS_PER_TOURIST = 5;
 
     private final ReservationRepositoryPort reservationRepo;
     private final ActivityRepositoryPort activityRepo;
@@ -43,6 +47,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .switchIfEmpty(Mono.error(new InvalidReservationRequestException("Reservation cannot be null")))
                 .doOnNext(Reservation::validate)
                 .flatMap(this::resolveItem)
+                .doOnNext(Reservation::validatePricing)
                 .flatMap(reservationRepo::save);
     }
 
@@ -59,7 +64,9 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(activity -> {
                     validateActivity(activity);
                     return validateCapacity(reservation, activity.getMaxCapacity())
-                            .thenReturn(applyPrice(reservation, activity.getPrice(), activity.getGuideId(), null));
+                            .then(Mono.defer(() -> validateActiveReservations(reservation)))
+                            .thenReturn(priced(reservation, activity.getPrice(), activity.getStartsAt(),
+                                    activity.getGuideId(), null));
                 });
     }
 
@@ -69,7 +76,9 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                 .flatMap(event -> {
                     validateEvent(event);
                     return validateCapacity(reservation, event.getMaxCapacity())
-                            .thenReturn(applyPrice(reservation, event.getPrice(), null, event.getManagerId()));
+                            .then(Mono.defer(() -> validateActiveReservations(reservation)))
+                            .thenReturn(priced(reservation, event.getPrice(), event.getStartsAt(),
+                                    null, event.getManagerId()));
                 });
     }
 
@@ -78,10 +87,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
             throw new InvalidReservationItemException(
                     "Activity %s is not published.".formatted(activity.getId()));
         }
-        if (activity.getEndsAt() == null || !activity.getEndsAt().isAfter(Instant.now())) {
-            throw new InvalidBookingDateException(
-                    "Activity %s has already ended.".formatted(activity.getId()));
-        }
+        validateSchedule(activity.getStartsAt(), activity.getEndsAt(), "Activity " + activity.getId());
     }
 
     private void validateEvent(Event event) {
@@ -89,9 +95,15 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
             throw new InvalidReservationItemException(
                     "Event %s is not published.".formatted(event.getId()));
         }
-        if (event.getEndsAt() == null || !event.getEndsAt().isAfter(Instant.now())) {
-            throw new InvalidBookingDateException(
-                    "Event %s has already ended.".formatted(event.getId()));
+        validateSchedule(event.getStartsAt(), event.getEndsAt(), "Event " + event.getId());
+    }
+
+    private void validateSchedule(Instant startsAt, Instant endsAt, String label) {
+        if (startsAt == null || !startsAt.isAfter(Instant.now())) {
+            throw new InvalidBookingDateException("%s has already started.".formatted(label));
+        }
+        if (endsAt == null || !endsAt.isAfter(Instant.now())) {
+            throw new InvalidBookingDateException("%s has already ended.".formatted(label));
         }
     }
 
@@ -108,11 +120,25 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                         : Mono.empty());
     }
 
-    private Reservation applyPrice(Reservation reservation, BigDecimal unitPrice, UUID guideId, UUID providerId) {
-        reservation.changeUnitPrice(unitPrice);
-        reservation.changePrice(unitPrice.multiply(BigDecimal.valueOf(reservation.getNumberOfPeople())));
-        reservation.assignGuide(guideId);
-        reservation.assignProvider(providerId);
-        return reservation;
+    private Mono<Void> validateActiveReservations(Reservation reservation) {
+        return reservationRepo.countActiveByTourist(reservation.getTouristId())
+                .flatMap(active -> active >= MAX_ACTIVE_RESERVATIONS_PER_TOURIST
+                        ? Mono.error(new TooManyActiveReservationsException(
+                                "A tourist cannot have more than %d active reservations."
+                                        .formatted(MAX_ACTIVE_RESERVATIONS_PER_TOURIST)))
+                        : Mono.empty());
+    }
+
+    private Reservation priced(Reservation reservation, BigDecimal unitPrice, Instant startsAt,
+                               UUID guideId, UUID providerId) {
+        var total = unitPrice.multiply(BigDecimal.valueOf(reservation.getNumberOfPeople()));
+        return reservation.toBuilder()
+                .itemStartsAt(startsAt)
+                .unitPrice(unitPrice)
+                .total(total)
+                .bookedFor(startsAt)
+                .guideId(guideId)
+                .providerId(providerId)
+                .build();
     }
 }

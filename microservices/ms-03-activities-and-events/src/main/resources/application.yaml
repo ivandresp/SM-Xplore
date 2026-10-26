@@ -8,6 +8,10 @@ spring:
     url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/activities_events}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
+    pool:
+      initial-size: 5
+      max-size: ${R2DBC_POOL_MAX_SIZE:20}
+      max-acquire-time: 5s
   mongodb:
     uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
   data:

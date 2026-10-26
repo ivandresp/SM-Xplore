@@ -125,7 +125,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 | PATCH | `/api/v1/reservations/{id}/attendance` | Guía de la reserva o staff |
 | PATCH | `/api/v1/reservations/{id}/no-show` | Guía de la reserva o staff |
 
-Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
+Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. El servidor fija `bookedFor` con el inicio del ítem e ignora el valor del cliente. Máximo **5 reservas activas** por turista. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
 
 ## Reseñas
 

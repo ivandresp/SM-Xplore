@@ -35,4 +35,7 @@ public interface ReservationRepositoryPort {
 
     /** People already booked (CONFIRMED) for an event or activity. */
     Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);
+
+    /** Number of CONFIRMED reservations of a tourist, for the anti-abuse cap. */
+    Mono<Long> countActiveByTourist(UUID touristId);
 }

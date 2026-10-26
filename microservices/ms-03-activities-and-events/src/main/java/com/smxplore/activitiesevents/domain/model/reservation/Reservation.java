@@ -21,7 +21,7 @@ import java.util.UUID;
 @Getter
 public class Reservation {
 
-    /** A tourist may cancel up to this long before the booked start. */
+    /** A tourist may cancel up to this long before the item starts. */
     public static final Duration CANCELLATION_WINDOW = Duration.ofHours(24);
 
     @Builder.Default
@@ -29,6 +29,9 @@ public class Reservation {
     private final UUID touristId;
     private final ReservationItemType itemType;
     private final UUID itemId;
+
+    /** Start of the booked event/activity, copied from the catalog when the reservation is created. */
+    private final Instant itemStartsAt;
 
     private BigDecimal unitPrice;
     private final int numberOfPeople;
@@ -42,7 +45,9 @@ public class Reservation {
 
     @Builder.Default
     private final Instant bookedAt = Instant.now();
-    private final Instant bookedFor;
+
+    /** Always the item start: the server overrides whatever the client sends. */
+    private Instant bookedFor;
 
     @Setter
     private String notes;
@@ -55,6 +60,16 @@ public class Reservation {
         validateItem();
         validateNumberOfPeople();
         validateBookingDate();
+        validateTotal();
+    }
+
+    /** Called after the item has been resolved: the schedule and the priced total must be consistent. */
+    public void validatePricing() {
+        if (itemStartsAt == null) {
+            throw new InvalidReservationItemException("The item start is mandatory.");
+        }
+        validateBookingDate();
+        validateTotal();
     }
 
     public void changeUnitPrice(BigDecimal price) {
@@ -67,6 +82,10 @@ public class Reservation {
     public void changePrice(BigDecimal newPrice) {
         validateTotal(newPrice);
         total = newPrice;
+    }
+
+    public void assignBookedFor(Instant bookedFor) {
+        this.bookedFor = bookedFor;
     }
 
     public void assignGuide(UUID guideId) {
@@ -83,7 +102,7 @@ public class Reservation {
 
     /** The tourist path: the 24-hour window applies. Staff cancels through {@link #cancel()}. */
     public void cancelAsTourist(Instant now) {
-        if (bookedFor == null || now.plus(CANCELLATION_WINDOW).isAfter(bookedFor)) {
+        if (itemStartsAt == null || now.plus(CANCELLATION_WINDOW).isAfter(itemStartsAt)) {
             throw new CancellationWindowClosedException(
                     "A reservation can only be cancelled at least %d hours before the start."
                             .formatted(CANCELLATION_WINDOW.toHours()));
@@ -91,12 +110,20 @@ public class Reservation {
         cancel();
     }
 
-    public void registerNoShow() {
+    public void registerNoShow(Instant now) {
+        requireStarted(now, "A no-show can only be registered after the item has started.");
         changeStatus(ReservationStatus.NO_SHOW);
     }
 
-    public void registerAttendance() {
+    public void registerAttendance(Instant now) {
+        requireStarted(now, "Attendance can only be registered after the item has started.");
         changeStatus(ReservationStatus.COMPLETED);
+    }
+
+    private void requireStarted(Instant now, String message) {
+        if (itemStartsAt == null || now.isBefore(itemStartsAt)) {
+            throw new InvalidReservationStatusTransitionException(message);
+        }
     }
 
     private void changeStatus(ReservationStatus target) {
@@ -125,6 +152,17 @@ public class Reservation {
     private void validateNumberOfPeople() {
         if (numberOfPeople <= 0) {
             throw new InvalidNumberOfPeopleException("Number of people must be greater than zero.");
+        }
+    }
+
+    private void validateTotal() {
+        validateTotal(total);
+        if (unitPrice != null) {
+            var expected = unitPrice.multiply(BigDecimal.valueOf(numberOfPeople));
+            if (total.compareTo(expected) != 0) {
+                throw new InvalidReservationTotalException(
+                        "The total must be the unit price times the number of people.");
+            }
         }
     }
 

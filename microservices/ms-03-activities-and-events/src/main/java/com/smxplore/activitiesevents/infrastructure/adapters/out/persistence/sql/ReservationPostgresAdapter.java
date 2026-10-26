@@ -97,6 +97,11 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
                 .defaultIfEmpty(0);
     }
 
+    @Override
+    public Mono<Long> countActiveByTourist(UUID touristId) {
+        return repository.countByTouristIdAndStatus(touristId, ReservationStatus.CONFIRMED);
+    }
+
     private PageRequest page(int limit) {
         return PageRequest.of(0, limit, STABLE_ORDER);
     }
@@ -120,8 +125,8 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
 
     private ReservationEntity withCode(ReservationEntity entity, String code) {
         return new ReservationEntity(entity.id(), entity.touristId(), entity.itemType(), entity.itemId(),
-                entity.unitPrice(), entity.numberOfPeople(), entity.total(), entity.paymentMethod(),
-                entity.status(), entity.bookedAt(), entity.bookedFor(), entity.notes(), entity.providerId(),
-                entity.guideId(), code);
+                entity.itemStartsAt(), entity.unitPrice(), entity.numberOfPeople(), entity.total(),
+                entity.paymentMethod(), entity.status(), entity.bookedAt(), entity.bookedFor(), entity.notes(),
+                entity.providerId(), entity.guideId(), code);
     }
 }

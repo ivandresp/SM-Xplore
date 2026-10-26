@@ -4,10 +4,14 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationW
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyActiveReservationsException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
+import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
@@ -68,12 +72,13 @@ class ReservationUseCasesTest {
     private ConsultReservationsByTouristUseCase consultReservationsByTouristUseCase;
 
     @Test
-    void createConfirmsTheReservationAndUsesTheCatalogPrice() {
+    void createConfirmsTheReservationAndUsesTheCatalogPriceAndStart() {
         var activity = activity(new BigDecimal("50000.00"), 10);
         var reservation = reservation(activity.getId());
         given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
         given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
                 .willReturn(Mono.just(0));
+        given(reservationRepo.countActiveByTourist(any())).willReturn(Mono.just(0L));
         given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         StepVerifier.create(createReservationUseCase.handle(reservation))
@@ -81,8 +86,43 @@ class ReservationUseCasesTest {
                     assertThat(saved.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
                     assertThat(saved.getUnitPrice()).isEqualByComparingTo("50000.00");
                     assertThat(saved.getTotal()).isEqualByComparingTo("100000.00");
+                    assertThat(saved.getBookedFor()).isEqualTo(activity.getStartsAt());
+                    assertThat(saved.getItemStartsAt()).isEqualTo(activity.getStartsAt());
                     assertThat(saved.getGuideId()).isEqualTo(activity.getGuideId());
                 })
+                .verifyComplete();
+    }
+
+    @Test
+    void createSupportsEventsAndCopiesTheManager() {
+        var event = event(new BigDecimal("30000.00"), 4);
+        var reservation = reservationItem(event.getId(), ReservationItemType.EVENT);
+        given(eventRepo.findByIdForUpdate(event.getId())).willReturn(Mono.just(event));
+        given(reservationRepo.sumActivePeopleForItem(event.getId(), ReservationItemType.EVENT))
+                .willReturn(Mono.just(0));
+        given(reservationRepo.countActiveByTourist(any())).willReturn(Mono.just(0L));
+        given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation))
+                .assertNext(saved -> {
+                    assertThat(saved.getTotal()).isEqualByComparingTo("60000.00");
+                    assertThat(saved.getProviderId()).isEqualTo(event.getManagerId());
+                    assertThat(saved.getGuideId()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void createAcceptsTheExactCapacity() {
+        var activity = activity(new BigDecimal("50000.00"), 10);
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+        given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(8));
+        given(reservationRepo.countActiveByTourist(any())).willReturn(Mono.just(0L));
+        given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation(activity.getId())))
+                .assertNext(saved -> assertThat(saved.getStatus()).isEqualTo(ReservationStatus.CONFIRMED))
                 .verifyComplete();
     }
 
@@ -126,6 +166,19 @@ class ReservationUseCasesTest {
     }
 
     @Test
+    void createRejectsItemsThatAlreadyStarted() {
+        var activity = activity(new BigDecimal("50000.00"), 10).toBuilder()
+                .startsAt(Instant.now().minusSeconds(600))
+                .endsAt(Instant.now().plusSeconds(3_600))
+                .build();
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation(activity.getId())))
+                .expectError(InvalidBookingDateException.class)
+                .verify();
+    }
+
+    @Test
     void createRejectsWhenThereIsNotEnoughCapacity() {
         var activity = activity(new BigDecimal("50000.00"), 10);
         given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
@@ -140,9 +193,22 @@ class ReservationUseCasesTest {
     }
 
     @Test
+    void createRejectsTouristsWithTooManyActiveReservations() {
+        var activity = activity(new BigDecimal("50000.00"), 10);
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+        given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(0));
+        given(reservationRepo.countActiveByTourist(any())).willReturn(Mono.just(5L));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation(activity.getId())))
+                .expectError(TooManyActiveReservationsException.class)
+                .verify();
+    }
+
+    @Test
     void touristCanCancelOutsideTheWindow() {
         var reservation = reservation(UUID.randomUUID()).toBuilder()
-                .bookedFor(Instant.now().plusSeconds(48 * 3600))
+                .itemStartsAt(Instant.now().plusSeconds(48 * 3600))
                 .build();
         given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
         given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
@@ -155,7 +221,7 @@ class ReservationUseCasesTest {
     @Test
     void touristCannotCancelInsideTheWindow() {
         var reservation = reservation(UUID.randomUUID()).toBuilder()
-                .bookedFor(Instant.now().plusSeconds(3600))
+                .itemStartsAt(Instant.now().plusSeconds(3600))
                 .build();
         given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
 
@@ -169,7 +235,7 @@ class ReservationUseCasesTest {
     @Test
     void staffCanCancelInsideTheWindow() {
         var reservation = reservation(UUID.randomUUID()).toBuilder()
-                .bookedFor(Instant.now().plusSeconds(3600))
+                .itemStartsAt(Instant.now().plusSeconds(3600))
                 .build();
         given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
         given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
@@ -181,16 +247,41 @@ class ReservationUseCasesTest {
 
     @Test
     void stateChangesRelyOnTheDomainTransitions() {
-        var reservation = givenFound(reservation(ReservationStatus.CONFIRMED));
-
+        var reservation = givenFound(startedReservation());
         StepVerifier.create(registerReservationAttendanceUseCase.handle(reservation.getId()))
                 .assertNext(result -> assertThat(result.getStatus()).isEqualTo(ReservationStatus.COMPLETED))
                 .verifyComplete();
 
-        var noShow = givenFound(reservation(ReservationStatus.CONFIRMED));
+        var noShow = givenFound(startedReservation());
         StepVerifier.create(registerReservationNoShowUseCase.handle(noShow.getId()))
                 .assertNext(result -> assertThat(result.getStatus()).isEqualTo(ReservationStatus.NO_SHOW))
                 .verifyComplete();
+    }
+
+    @Test
+    void attendanceCannotBeRegisteredBeforeTheItemStarts() {
+        var reservation = givenLocked(reservation(UUID.randomUUID()).toBuilder()
+                .itemStartsAt(Instant.now().plusSeconds(3600))
+                .build());
+
+        StepVerifier.create(registerReservationAttendanceUseCase.handle(reservation.getId()))
+                .expectError(InvalidReservationStatusTransitionException.class)
+                .verify();
+
+        verify(reservationRepo, never()).save(any());
+    }
+
+    @Test
+    void terminalStatesCannotChangeAgain() {
+        var reservation = givenLocked(startedReservation().toBuilder()
+                .status(ReservationStatus.CANCELLED)
+                .build());
+
+        StepVerifier.create(registerReservationAttendanceUseCase.handle(reservation.getId()))
+                .expectError(InvalidReservationStatusTransitionException.class)
+                .verify();
+
+        verify(reservationRepo, never()).save(any());
     }
 
     @Test
@@ -222,21 +313,34 @@ class ReservationUseCasesTest {
                 .verifyComplete();
     }
 
+    private Reservation givenLocked(Reservation reservation) {
+        given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
+        return reservation;
+    }
+
     private Reservation givenFound(Reservation reservation) {
         given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
         given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
         return reservation;
     }
 
+    private Reservation startedReservation() {
+        return reservation(ReservationStatus.CONFIRMED).toBuilder()
+                .itemStartsAt(Instant.now().minusSeconds(600))
+                .build();
+    }
+
     private Reservation reservation(UUID itemId) {
+        return reservationItem(itemId, ReservationItemType.ACTIVITY);
+    }
+
+    private Reservation reservationItem(UUID itemId, ReservationItemType itemType) {
         return Reservation.builder()
                 .id(UUID.randomUUID())
                 .touristId(UUID.randomUUID())
-                .itemType(ReservationItemType.ACTIVITY)
+                .itemType(itemType)
                 .itemId(itemId)
-                .unitPrice(new BigDecimal("50000.00"))
                 .numberOfPeople(2)
-                .total(new BigDecimal("100000.00"))
                 .paymentMethod(PaymentMethod.CASH)
                 .status(ReservationStatus.CONFIRMED)
                 .bookedFor(Instant.now().plusSeconds(48 * 3600))
@@ -255,6 +359,21 @@ class ReservationUseCasesTest {
                 .name("Snorkel")
                 .category("Nautical")
                 .status(ActivityStatus.PUBLISHED)
+                .price(price)
+                .maxCapacity(maxCapacity)
+                .startsAt(startsAt)
+                .endsAt(startsAt.plusSeconds(3_600))
+                .build();
+    }
+
+    private Event event(BigDecimal price, int maxCapacity) {
+        var startsAt = Instant.now().plusSeconds(3_600);
+        return Event.builder()
+                .managerId(UUID.randomUUID())
+                .siteId(UUID.randomUUID())
+                .name("Festival")
+                .category("Music")
+                .status(EventStatus.PUBLISHED)
                 .price(price)
                 .maxCapacity(maxCapacity)
                 .startsAt(startsAt)

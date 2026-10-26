@@ -7,6 +7,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterR
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -17,7 +18,7 @@ public class RegisterReservationAttendanceUseCase implements RegisterReservation
     public Mono<Reservation> handle(UUID reservationId) {
         return reservationRepo.findByIdForUpdate(reservationId)
                 .switchIfEmpty(Mono.error(new ReservationNotFoundException(reservationId)))
-                .doOnNext(Reservation::registerAttendance)
+                .doOnNext(reservation -> reservation.registerAttendance(Instant.now()))
                 .flatMap(reservationRepo::save);
     }
 }

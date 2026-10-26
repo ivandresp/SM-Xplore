@@ -11,6 +11,9 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
   - Creación atómica: `POST /api/v1/reservations` recibe `itemType` + `itemId`, bloquea el ítem, valida cupo y guarda en una transacción.
   - El cupo cuenta solo reservas `CONFIRMED`.
   - Cancelación del turista: hasta 24 h antes del inicio; staff sin límite.
+  - `bookedFor` lo fija el servidor con el inicio del ítem; el valor del cliente se ignora.
+  - Asistencia y no-show solo después del inicio.
+  - Máximo 5 reservas activas por turista.
 
 ### Eliminado
 - `PATCH /reservations/{id}/confirm`, `/reject` y `/request-cancellation`.
