@@ -12,6 +12,7 @@ public interface ReservationWebMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "bookedAt", ignore = true)
+    @Mapping(target = "unitPrice", ignore = true)
     @Mapping(target = "total", ignore = true)
     @Mapping(target = "providerId", ignore = true)
     @Mapping(target = "guideId", ignore = true)

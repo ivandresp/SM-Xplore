@@ -2,6 +2,24 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [No publicado] — 2026-10-26
+
+### Cambiado
+- **Reservas simbólicas**: la reserva aparta cupo y nace `CONFIRMED`; el pago se resuelve con la entidad, fuera de la plataforma.
+  - Una reserva = un ítem (`item_type`, `item_id`, `unit_price`); se elimina `reservation_items`.
+  - Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`.
+  - Creación atómica: `POST /api/v1/reservations` recibe `itemType` + `itemId`, bloquea el ítem, valida cupo y guarda en una transacción.
+  - El cupo cuenta solo reservas `CONFIRMED`.
+  - Cancelación del turista: hasta 24 h antes del inicio; staff sin límite.
+
+### Eliminado
+- `PATCH /reservations/{id}/confirm`, `/reject` y `/request-cancellation`.
+- `POST|GET /reservations/{id}/items` y `/reservation-items/**`.
+- Tabla `reservation_items`, sus casos de uso, adaptadores, DTOs y tests.
+
+### Migración
+- `schema.sql` agrega las columnas nuevas, normaliza los estados viejos (`PENDING` → `CONFIRMED`, `REJECTED`/`CANCELLATION_REQUESTED` → `CANCELLED`) y elimina reservas sin ítem. El `DELETE` queda como no-op tras la primera ejecución.
+
 ## [No publicado] — 2026-10-25
 
 ### Añadido

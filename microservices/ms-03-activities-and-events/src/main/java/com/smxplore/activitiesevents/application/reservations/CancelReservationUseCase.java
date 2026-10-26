@@ -7,6 +7,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelRes
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -14,10 +15,16 @@ public class CancelReservationUseCase implements CancelReservationUseCasePort {
     private final ReservationRepositoryPort reservationRepo;
 
     @Override
-    public Mono<Reservation> handle(UUID reservationId) {
+    public Mono<Reservation> handle(UUID reservationId, boolean staff) {
         return reservationRepo.findByIdForUpdate(reservationId)
                 .switchIfEmpty(Mono.error(new ReservationNotFoundException(reservationId)))
-                .doOnNext(Reservation::cancel)
+                .doOnNext(reservation -> {
+                    if (staff) {
+                        reservation.cancel();
+                    } else {
+                        reservation.cancelAsTourist(Instant.now());
+                    }
+                })
                 .flatMap(reservationRepo::save);
     }
 }

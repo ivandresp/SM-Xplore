@@ -6,7 +6,7 @@ import com.smxplore.activitiesevents.domain.model.availability.Availability;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
-import com.smxplore.activitiesevents.domain.ports.repository.ReservationItemRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.availability.ConsultAvailabilityUseCasePort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
@@ -18,7 +18,7 @@ public class ConsultAvailabilityUseCase implements ConsultAvailabilityUseCasePor
 
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;
-    private final ReservationItemRepositoryPort reservationItemRepo;
+    private final ReservationRepositoryPort reservationRepo;
 
     @Override
     public Mono<Availability> handle(UUID itemId, ReservationItemType itemType) {
@@ -33,7 +33,7 @@ public class ConsultAvailabilityUseCase implements ConsultAvailabilityUseCasePor
     }
 
     private Mono<Availability> availability(UUID itemId, ReservationItemType itemType, int maxCapacity) {
-        return reservationItemRepo.sumActivePeopleForItem(itemId, itemType)
+        return reservationRepo.sumActivePeopleForItem(itemId, itemType)
                 .map(reserved -> {
                     var available = Math.max(0, maxCapacity - reserved);
                     return new Availability(itemId, itemType, maxCapacity, reserved, available);

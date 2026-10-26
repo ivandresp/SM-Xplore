@@ -6,7 +6,7 @@ import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
-import com.smxplore.activitiesevents.domain.ports.repository.ReservationItemRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +32,7 @@ class ConsultAvailabilityUseCaseTest {
     private ActivityRepositoryPort activityRepo;
 
     @Mock
-    private ReservationItemRepositoryPort reservationItemRepo;
+    private ReservationRepositoryPort reservationItemRepo;
 
     private ConsultAvailabilityUseCase useCase;
 

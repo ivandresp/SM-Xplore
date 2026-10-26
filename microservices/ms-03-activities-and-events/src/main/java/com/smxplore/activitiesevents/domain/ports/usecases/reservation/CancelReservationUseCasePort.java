@@ -6,5 +6,9 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 public interface CancelReservationUseCasePort {
-    Mono<Reservation> handle(UUID reservationId);
+
+    /**
+     * @param staff when true the 24-hour window is skipped (admin, manager or the guide).
+     */
+    Mono<Reservation> handle(UUID reservationId, boolean staff);
 }

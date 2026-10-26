@@ -66,11 +66,11 @@ public class SecurityConfiguration {
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/activities/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         // Reservations: staff-only global listings; ownership is enforced in the controller
-                        .pathMatchers(HttpMethod.GET, "/api/v1/reservations", "/api/v1/reservation-items")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/reservations")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers("/api/v1/review-reports/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
-                        .pathMatchers("/api/v1/reservations/**", "/api/v1/reservation-items/**").authenticated()
+                        .pathMatchers("/api/v1/reservations/**").authenticated()
                         .anyExchange().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiAuthenticationEntryPoint)

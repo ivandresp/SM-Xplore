@@ -1,7 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
 import com.smxplore.activitiesevents.application.reservations.CancelReservationUseCase;
-import com.smxplore.activitiesevents.application.reservations.ConfirmReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultOneReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByGuideUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByItemUseCase;
@@ -10,11 +9,10 @@ import com.smxplore.activitiesevents.application.reservations.ConsultReservation
 import com.smxplore.activitiesevents.application.reservations.CreateReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.RegisterReservationAttendanceUseCase;
 import com.smxplore.activitiesevents.application.reservations.RegisterReservationNoShowUseCase;
-import com.smxplore.activitiesevents.application.reservations.RejectReservationUseCase;
-import com.smxplore.activitiesevents.application.reservations.RequestReservationCancellationUseCase;
+import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConfirmReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByItemUseCasePort;
@@ -23,8 +21,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultRe
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterReservationAttendanceUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterReservationNoShowUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RejectReservationUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RequestReservationCancellationUseCasePort;
+import com.smxplore.activitiesevents.infrastructure.transaction.TransactionalCreateReservationUseCase;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -38,8 +35,12 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 public class ReservationUseCaseConfiguration {
 
     @Bean
-    public CreateReservationUseCasePort createReservationUseCase(ReservationRepositoryPort reservationRepository) {
-        return new CreateReservationUseCase(reservationRepository);
+    public CreateReservationUseCasePort createReservationUseCase(ReservationRepositoryPort reservationRepository,
+                                                                 ActivityRepositoryPort activityRepository,
+                                                                 EventRepositoryPort eventRepository,
+                                                                 TransactionalOperator transactionalOperator) {
+        var useCase = new CreateReservationUseCase(reservationRepository, activityRepository, eventRepository);
+        return new TransactionalCreateReservationUseCase(useCase, transactionalOperator);
     }
 
     @Bean
@@ -72,31 +73,10 @@ public class ReservationUseCaseConfiguration {
     }
 
     @Bean
-    public ConfirmReservationUseCasePort confirmReservationUseCase(ReservationRepositoryPort reservationRepository,
-                                                                   TransactionalOperator transactionalOperator) {
-        var useCase = new ConfirmReservationUseCase(reservationRepository);
-        return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
-    }
-
-    @Bean
-    public RejectReservationUseCasePort rejectReservationUseCase(ReservationRepositoryPort reservationRepository,
-                                                                 TransactionalOperator transactionalOperator) {
-        var useCase = new RejectReservationUseCase(reservationRepository);
-        return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
-    }
-
-    @Bean
     public CancelReservationUseCasePort cancelReservationUseCase(ReservationRepositoryPort reservationRepository,
                                                                  TransactionalOperator transactionalOperator) {
         var useCase = new CancelReservationUseCase(reservationRepository);
-        return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
-    }
-
-    @Bean
-    public RequestReservationCancellationUseCasePort requestReservationCancellationUseCase(
-            ReservationRepositoryPort reservationRepository, TransactionalOperator transactionalOperator) {
-        var useCase = new RequestReservationCancellationUseCase(reservationRepository);
-        return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
+        return (reservationId, staff) -> transactionalOperator.transactional(useCase.handle(reservationId, staff));
     }
 
     @Bean

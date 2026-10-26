@@ -15,7 +15,7 @@ import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventRequest
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidExpectedAttendanceException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.DifferentProvidersInReservationException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationWindowClosedException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
@@ -24,11 +24,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReserv
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTotalException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.MixedReservationItemTypesException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationItemNotFoundException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationItemsNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyReservationItemsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
@@ -53,8 +49,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({EventNotFoundException.class, ActivityNotFoundException.class,
-            ReservationNotFoundException.class, ReservationItemNotFoundException.class,
-            ReviewNotFoundException.class})
+            ReservationNotFoundException.class, ReviewNotFoundException.class})
     public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.NOT_FOUND, exception.getMessage(), exchange);
     }
@@ -62,8 +57,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({InvalidEventStatusTransitionException.class,
             InvalidActivityStatusTransitionException.class,
             InvalidReservationStatusTransitionException.class,
-            ReservationItemsNotAllowedException.class,
-            TooManyReservationItemsException.class,
+            CancellationWindowClosedException.class,
             ReviewAlreadyExistsException.class,
             ReviewAlreadyReportedException.class,
             ReviewAlreadyRespondedException.class})
@@ -102,8 +96,6 @@ public class GlobalExceptionHandler {
             InvalidReservationTouristException.class,
             InvalidReservationItemException.class,
             InvalidReservationItemPriceException.class,
-            MixedReservationItemTypesException.class,
-            DifferentProvidersInReservationException.class,
             InvalidReviewException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {

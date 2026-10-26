@@ -121,19 +121,11 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 | GET | `/api/v1/reservations/tourists/{touristId}` | El propio turista o staff |
 | GET | `/api/v1/reservations/guides/{guideId}` | El propio guía o staff |
 | GET | `/api/v1/reservations/by-item?itemType=&itemId=` | Guía dueño del ítem o staff (eventos: staff) |
-| PATCH | `/api/v1/reservations/{id}/confirm` | Guía de la reserva o staff |
-| PATCH | `/api/v1/reservations/{id}/reject` | Guía de la reserva o staff |
-| PATCH | `/api/v1/reservations/{id}/cancel` | Dueño o staff |
-| PATCH | `/api/v1/reservations/{id}/request-cancellation` | Dueño o staff |
+| PATCH | `/api/v1/reservations/{id}/cancel` | Dueño (hasta 24 h antes) o staff (siempre) |
 | PATCH | `/api/v1/reservations/{id}/attendance` | Guía de la reserva o staff |
 | PATCH | `/api/v1/reservations/{id}/no-show` | Guía de la reserva o staff |
-| POST | `/api/v1/reservations/{id}/items` | Dueño o staff |
-| POST | `/api/v1/reservations/{id}/items/batch` | Dueño o staff |
-| GET | `/api/v1/reservations/{id}/items` | Dueño, guía o staff |
-| GET | `/api/v1/reservation-items/{id}` | Dueño, guía o staff |
-| GET | `/api/v1/reservation-items?type=` | `ADMIN`, `DESTINATION_MANAGER` |
 
-Reglas: los ítems de una reserva comparten tipo (`EVENT` o `ACTIVITY`); una reserva de evento admite un solo ítem; el precio sale del catálogo, nunca del cliente; las actividades deben ser del mismo guía; solo se reservan ítems publicados, vigentes y con cupo disponible; el total es la suma de precios por persona.
+Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
 
 ## Reseñas
 

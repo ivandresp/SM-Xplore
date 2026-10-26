@@ -1,13 +1,19 @@
 package com.smxplore.activitiesevents.application.reservations;
 
+import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationWindowClosedException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
-import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationStatusTransitionException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationItemException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
+import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
+import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +27,6 @@ import reactor.test.StepVerifier;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,20 +40,17 @@ class ReservationUseCasesTest {
     @Mock
     private ReservationRepositoryPort reservationRepo;
 
+    @Mock
+    private ActivityRepositoryPort activityRepo;
+
+    @Mock
+    private EventRepositoryPort eventRepo;
+
     @InjectMocks
     private CreateReservationUseCase createReservationUseCase;
 
     @InjectMocks
-    private ConfirmReservationUseCase confirmReservationUseCase;
-
-    @InjectMocks
-    private RejectReservationUseCase rejectReservationUseCase;
-
-    @InjectMocks
     private CancelReservationUseCase cancelReservationUseCase;
-
-    @InjectMocks
-    private RequestReservationCancellationUseCase requestReservationCancellationUseCase;
 
     @InjectMocks
     private RegisterReservationAttendanceUseCase registerReservationAttendanceUseCase;
@@ -66,30 +68,32 @@ class ReservationUseCasesTest {
     private ConsultReservationsByTouristUseCase consultReservationsByTouristUseCase;
 
     @Test
-    void createSavesAValidReservation() {
-        var reservation = reservation(ReservationStatus.PENDING);
-        given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
+    void createConfirmsTheReservationAndUsesTheCatalogPrice() {
+        var activity = activity(new BigDecimal("50000.00"), 10);
+        var reservation = reservation(activity.getId());
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+        given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(0));
+        given(reservationRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         StepVerifier.create(createReservationUseCase.handle(reservation))
-                .assertNext(saved -> assertThat(saved.getId()).isEqualTo(reservation.getId()))
+                .assertNext(saved -> {
+                    assertThat(saved.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+                    assertThat(saved.getUnitPrice()).isEqualByComparingTo("50000.00");
+                    assertThat(saved.getTotal()).isEqualByComparingTo("100000.00");
+                    assertThat(saved.getGuideId()).isEqualTo(activity.getGuideId());
+                })
                 .verifyComplete();
-
-        verify(reservationRepo).save(reservation);
     }
 
     @Test
     void createRejectsInvalidReservations() {
-        var withoutTourist = Reservation.builder()
-                .numberOfPeople(2)
-                .total(new BigDecimal("100.00"))
-                .bookedFor(Instant.now().plusSeconds(3600))
-                .build();
-        var withoutPeople = reservation(ReservationStatus.PENDING).toBuilder()
-                .numberOfPeople(0)
-                .build();
-        var bookedInThePast = reservation(ReservationStatus.PENDING).toBuilder()
+        var withoutTourist = reservation(UUID.randomUUID()).toBuilder().touristId(null).build();
+        var withoutPeople = reservation(UUID.randomUUID()).toBuilder().numberOfPeople(0).build();
+        var bookedInThePast = reservation(UUID.randomUUID()).toBuilder()
                 .bookedFor(Instant.now().minusSeconds(3600))
                 .build();
+        var withoutItem = reservation(UUID.randomUUID()).toBuilder().itemId(null).build();
 
         StepVerifier.create(createReservationUseCase.handle(withoutTourist))
                 .expectError(InvalidReservationTouristException.class)
@@ -100,42 +104,93 @@ class ReservationUseCasesTest {
         StepVerifier.create(createReservationUseCase.handle(bookedInThePast))
                 .expectError(InvalidBookingDateException.class)
                 .verify();
+        StepVerifier.create(createReservationUseCase.handle(withoutItem))
+                .expectError(InvalidReservationItemException.class)
+                .verify();
 
         verify(reservationRepo, never()).save(any());
     }
 
     @Test
-    void confirmMovesAPendingReservationToConfirmed() {
-        var reservation = reservation(ReservationStatus.PENDING);
+    void createRejectsUnpublishedItems() {
+        var activity = activity(new BigDecimal("50000.00"), 10).toBuilder()
+                .status(ActivityStatus.DRAFT)
+                .build();
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation(activity.getId())))
+                .expectError(InvalidReservationItemException.class)
+                .verify();
+
+        verify(reservationRepo, never()).save(any());
+    }
+
+    @Test
+    void createRejectsWhenThereIsNotEnoughCapacity() {
+        var activity = activity(new BigDecimal("50000.00"), 10);
+        given(activityRepo.findByIdForUpdate(activity.getId())).willReturn(Mono.just(activity));
+        given(reservationRepo.sumActivePeopleForItem(activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(9));
+
+        StepVerifier.create(createReservationUseCase.handle(reservation(activity.getId())))
+                .expectError(InvalidNumberOfPeopleException.class)
+                .verify();
+
+        verify(reservationRepo, never()).save(any());
+    }
+
+    @Test
+    void touristCanCancelOutsideTheWindow() {
+        var reservation = reservation(UUID.randomUUID()).toBuilder()
+                .bookedFor(Instant.now().plusSeconds(48 * 3600))
+                .build();
         given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
         given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
 
-        StepVerifier.create(confirmReservationUseCase.handle(reservation.getId()))
-                .assertNext(confirmed -> assertThat(confirmed.getStatus()).isEqualTo(ReservationStatus.CONFIRMED))
+        StepVerifier.create(cancelReservationUseCase.handle(reservation.getId(), false))
+                .assertNext(cancelled -> assertThat(cancelled.getStatus()).isEqualTo(ReservationStatus.CANCELLED))
+                .verifyComplete();
+    }
+
+    @Test
+    void touristCannotCancelInsideTheWindow() {
+        var reservation = reservation(UUID.randomUUID()).toBuilder()
+                .bookedFor(Instant.now().plusSeconds(3600))
+                .build();
+        given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
+
+        StepVerifier.create(cancelReservationUseCase.handle(reservation.getId(), false))
+                .expectError(CancellationWindowClosedException.class)
+                .verify();
+
+        verify(reservationRepo, never()).save(any());
+    }
+
+    @Test
+    void staffCanCancelInsideTheWindow() {
+        var reservation = reservation(UUID.randomUUID()).toBuilder()
+                .bookedFor(Instant.now().plusSeconds(3600))
+                .build();
+        given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
+        given(reservationRepo.save(reservation)).willReturn(Mono.just(reservation));
+
+        StepVerifier.create(cancelReservationUseCase.handle(reservation.getId(), true))
+                .assertNext(cancelled -> assertThat(cancelled.getStatus()).isEqualTo(ReservationStatus.CANCELLED))
                 .verifyComplete();
     }
 
     @Test
     void stateChangesRelyOnTheDomainTransitions() {
-        assertTransition(ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED, cancelReservationUseCase::handle);
-        assertTransition(ReservationStatus.CONFIRMED, ReservationStatus.CANCELLATION_REQUESTED,
-                requestReservationCancellationUseCase::handle);
-        assertTransition(ReservationStatus.CONFIRMED, ReservationStatus.COMPLETED,
-                registerReservationAttendanceUseCase::handle);
-        assertTransition(ReservationStatus.CONFIRMED, ReservationStatus.NO_SHOW, registerReservationNoShowUseCase::handle);
-        assertTransition(ReservationStatus.PENDING, ReservationStatus.REJECTED, rejectReservationUseCase::handle);
-    }
+        var reservation = givenFound(reservation(ReservationStatus.CONFIRMED));
 
-    @Test
-    void rejectIsRejectedWhenTheReservationIsAlreadyConfirmed() {
-        var reservation = reservation(ReservationStatus.CONFIRMED);
-        given(reservationRepo.findByIdForUpdate(reservation.getId())).willReturn(Mono.just(reservation));
+        StepVerifier.create(registerReservationAttendanceUseCase.handle(reservation.getId()))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(ReservationStatus.COMPLETED))
+                .verifyComplete();
 
-        StepVerifier.create(rejectReservationUseCase.handle(reservation.getId()))
-                .expectError(InvalidReservationStatusTransitionException.class)
-                .verify();
-
-        verify(reservationRepo, never()).save(any());
+        var noShow = givenFound(reservation(ReservationStatus.CONFIRMED));
+        StepVerifier.create(registerReservationNoShowUseCase.handle(noShow.getId()))
+                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(ReservationStatus.NO_SHOW))
+                .verifyComplete();
     }
 
     @Test
@@ -144,7 +199,7 @@ class ReservationUseCasesTest {
         given(reservationRepo.findByIdForUpdate(reservationId)).willReturn(Mono.empty());
         given(reservationRepo.findById(reservationId)).willReturn(Mono.empty());
 
-        StepVerifier.create(confirmReservationUseCase.handle(reservationId))
+        StepVerifier.create(registerReservationAttendanceUseCase.handle(reservationId))
                 .expectError(ReservationNotFoundException.class)
                 .verify();
         StepVerifier.create(consultOneReservationUseCase.handle(reservationId))
@@ -155,24 +210,15 @@ class ReservationUseCasesTest {
     @Test
     void consultationsDelegateToTheRepository() {
         var touristId = UUID.randomUUID();
-        var reservation = reservation(ReservationStatus.PENDING);
+        var reservation = reservation(ReservationStatus.CONFIRMED);
         given(reservationRepo.findAllByTouristId(touristId, 50)).willReturn(Flux.just(reservation));
-        given(reservationRepo.findAllByStatus(ReservationStatus.PENDING, 50)).willReturn(Flux.just(reservation));
+        given(reservationRepo.findAllByStatus(ReservationStatus.CONFIRMED, 50)).willReturn(Flux.just(reservation));
 
         StepVerifier.create(consultReservationsByTouristUseCase.handle(touristId, 50))
                 .expectNext(reservation)
                 .verifyComplete();
-        StepVerifier.create(consultReservationsByStatusUseCase.handle(ReservationStatus.PENDING, 50))
+        StepVerifier.create(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 50))
                 .expectNext(reservation)
-                .verifyComplete();
-    }
-
-    private void assertTransition(ReservationStatus from, ReservationStatus to,
-                                  Function<UUID, Mono<Reservation>> useCase) {
-        var reservation = givenFound(reservation(from));
-
-        StepVerifier.create(useCase.apply(reservation.getId()))
-                .assertNext(result -> assertThat(result.getStatus()).isEqualTo(to))
                 .verifyComplete();
     }
 
@@ -182,15 +228,37 @@ class ReservationUseCasesTest {
         return reservation;
     }
 
-    private Reservation reservation(ReservationStatus status) {
+    private Reservation reservation(UUID itemId) {
         return Reservation.builder()
                 .id(UUID.randomUUID())
                 .touristId(UUID.randomUUID())
+                .itemType(ReservationItemType.ACTIVITY)
+                .itemId(itemId)
+                .unitPrice(new BigDecimal("50000.00"))
                 .numberOfPeople(2)
-                .total(new BigDecimal("150000.00"))
-                .paymentMethod(PaymentMethod.CARD)
-                .status(status)
-                .bookedFor(Instant.now().plusSeconds(3600))
+                .total(new BigDecimal("100000.00"))
+                .paymentMethod(PaymentMethod.CASH)
+                .status(ReservationStatus.CONFIRMED)
+                .bookedFor(Instant.now().plusSeconds(48 * 3600))
+                .build();
+    }
+
+    private Reservation reservation(ReservationStatus status) {
+        return reservation(UUID.randomUUID()).toBuilder().status(status).build();
+    }
+
+    private Activity activity(BigDecimal price, int maxCapacity) {
+        var startsAt = Instant.now().plusSeconds(3_600);
+        return Activity.builder()
+                .guideId(UUID.randomUUID())
+                .siteId(UUID.randomUUID())
+                .name("Snorkel")
+                .category("Nautical")
+                .status(ActivityStatus.PUBLISHED)
+                .price(price)
+                .maxCapacity(maxCapacity)
+                .startsAt(startsAt)
+                .endsAt(startsAt.plusSeconds(3_600))
                 .build();
     }
 }

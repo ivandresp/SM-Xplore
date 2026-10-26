@@ -1,13 +1,13 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConfirmReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByItemUseCasePort;
@@ -16,8 +16,6 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultRe
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterReservationAttendanceUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RegisterReservationNoShowUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RejectReservationUseCasePort;
-import com.smxplore.activitiesevents.domain.ports.usecases.reservation.RequestReservationCancellationUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReservationResponse;
@@ -57,10 +55,7 @@ public class ReservationController {
     private final ConsultReservationsByTouristUseCasePort consultReservationsByTouristUseCase;
     private final ConsultReservationsByGuideUseCasePort consultReservationsByGuideUseCase;
     private final ConsultReservationsByItemUseCasePort consultReservationsByItemUseCase;
-    private final ConfirmReservationUseCasePort confirmReservationUseCase;
-    private final RejectReservationUseCasePort rejectReservationUseCase;
     private final CancelReservationUseCasePort cancelReservationUseCase;
-    private final RequestReservationCancellationUseCasePort requestReservationCancellationUseCase;
     private final RegisterReservationAttendanceUseCasePort registerReservationAttendanceUseCase;
     private final RegisterReservationNoShowUseCasePort registerReservationNoShowUseCase;
     private final ActivityRepositoryPort activityRepository;
@@ -71,7 +66,7 @@ public class ReservationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a reservation (tourists create their own; admins may book for anyone)")
+    @Operation(summary = "Create a symbolic reservation (tourists create their own; admins may book for anyone)")
     public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
                                             @AuthenticationPrincipal Jwt jwt) {
         if (!isAdmin(jwt) && !subject(jwt).equals(request.touristId().toString())) {
@@ -123,7 +118,7 @@ public class ReservationController {
     }
 
     @GetMapping("/by-item")
-    @Operation(summary = "List the reservations that contain a given event or activity")
+    @Operation(summary = "List the reservations of a given event or activity")
     public Flux<ReservationResponse> findByItem(@RequestParam ReservationItemType itemType,
                                                 @RequestParam UUID itemId,
                                                 @RequestParam(defaultValue = "50") int limit,
@@ -134,36 +129,19 @@ public class ReservationController {
                 .map(mapper::toResponse);
     }
 
-    @PatchMapping("/{reservationId}/confirm")
-    @Operation(summary = "Confirm a pending reservation (its guide or staff)")
-    public Mono<ReservationResponse> confirm(@PathVariable UUID reservationId, @AuthenticationPrincipal Jwt jwt) {
-        return requireReservationOperator(jwt, reservationId)
-                .then(Mono.defer(() -> confirmReservationUseCase.handle(reservationId)))
-                .map(mapper::toResponse);
-    }
-
-    @PatchMapping("/{reservationId}/reject")
-    @Operation(summary = "Reject a pending reservation (its guide or staff)")
-    public Mono<ReservationResponse> reject(@PathVariable UUID reservationId, @AuthenticationPrincipal Jwt jwt) {
-        return requireReservationOperator(jwt, reservationId)
-                .then(Mono.defer(() -> rejectReservationUseCase.handle(reservationId)))
-                .map(mapper::toResponse);
-    }
-
     @PatchMapping("/{reservationId}/cancel")
-    @Operation(summary = "Cancel a reservation (its owner or staff)")
+    @Operation(summary = "Cancel a reservation (the tourist up to 24 h before the start; staff any time)")
     public Mono<ReservationResponse> cancel(@PathVariable UUID reservationId, @AuthenticationPrincipal Jwt jwt) {
-        return requireReservationOwnerOrStaff(jwt, reservationId)
-                .then(Mono.defer(() -> cancelReservationUseCase.handle(reservationId)))
-                .map(mapper::toResponse);
-    }
-
-    @PatchMapping("/{reservationId}/request-cancellation")
-    @Operation(summary = "Request the cancellation of a confirmed reservation (its owner or staff)")
-    public Mono<ReservationResponse> requestCancellation(@PathVariable UUID reservationId,
-                                                         @AuthenticationPrincipal Jwt jwt) {
-        return requireReservationOwnerOrStaff(jwt, reservationId)
-                .then(Mono.defer(() -> requestReservationCancellationUseCase.handle(reservationId)))
+        return consultOneReservationUseCase.handle(reservationId)
+                .switchIfEmpty(Mono.error(new ReservationNotFoundException(reservationId)))
+                .flatMap(reservation -> {
+                    var staff = isStaff(jwt, reservation);
+                    if (!staff && !isOwner(jwt, reservation)) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                                "Only the owner of the reservation can cancel it.");
+                    }
+                    return cancelReservationUseCase.handle(reservationId, staff);
+                })
                 .map(mapper::toResponse);
     }
 
@@ -211,12 +189,25 @@ public class ReservationController {
         if (isAdminOrManager(jwt)) {
             return;
         }
-        var subject = subject(jwt);
-        var isOwner = reservation.getTouristId() != null && reservation.getTouristId().toString().equals(subject);
-        var isGuide = reservation.getGuideId() != null && reservation.getGuideId().toString().equals(subject);
-        if (!isOwner && !isGuide) {
+        if (!isOwner(jwt, reservation) && !isStaff(jwt, reservation)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot access this reservation.");
         }
+    }
+
+    private boolean isOwner(Jwt jwt, Reservation reservation) {
+        return reservation.getTouristId() != null
+                && reservation.getTouristId().toString().equals(subject(jwt));
+    }
+
+    /** The guide of the activity or the manager of the event, plus admins and destination managers. */
+    private boolean isStaff(Jwt jwt, Reservation reservation) {
+        if (isAdminOrManager(jwt)) {
+            return true;
+        }
+        var subject = subject(jwt);
+        var isGuide = reservation.getGuideId() != null && reservation.getGuideId().toString().equals(subject);
+        var isProvider = reservation.getProviderId() != null && reservation.getProviderId().toString().equals(subject);
+        return isGuide || isProvider;
     }
 
     private Mono<Void> requireReservationOperator(Jwt jwt, UUID reservationId) {
@@ -231,21 +222,6 @@ public class ReservationController {
                     if (!isGuide) {
                         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the guide of the reservation can operate it.");
-                    }
-                })
-                .then();
-    }
-
-    private Mono<Void> requireReservationOwnerOrStaff(Jwt jwt, UUID reservationId) {
-        if (isAdminOrManager(jwt)) {
-            return Mono.empty();
-        }
-        return consultOneReservationUseCase.handle(reservationId)
-                .doOnNext(reservation -> {
-                    if (reservation.getTouristId() == null
-                            || !reservation.getTouristId().toString().equals(subject(jwt))) {
-                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                                "Only the owner of the reservation can cancel it.");
                     }
                 })
                 .then();

@@ -79,6 +79,24 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
         return repository.findAllByItem(itemId, type.name(), limit).map(mapper::toDomain);
     }
 
+    @Override
+    public Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type) {
+        var sql = """
+                SELECT COALESCE(SUM(number_of_people), 0) AS reserved
+                FROM reservations
+                WHERE item_id = :itemId
+                  AND item_type = :type
+                  AND status = 'CONFIRMED'
+                """;
+        return template.getDatabaseClient().sql(sql)
+                .bind("itemId", itemId)
+                .bind("type", type.name())
+                .map((row, metadata) -> row.get("reserved", Long.class))
+                .one()
+                .map(Long::intValue)
+                .defaultIfEmpty(0);
+    }
+
     private PageRequest page(int limit) {
         return PageRequest.of(0, limit, STABLE_ORDER);
     }
@@ -97,9 +115,13 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
                 .sql("SELECT nextval('reservation_code_seq')")
                 .map((row, metadata) -> row.get(0, Long.class))
                 .one()
-                .flatMap(sequence -> template.insert(new ReservationEntity(entity.id(), entity.touristId(),
-                        entity.numberOfPeople(), entity.total(), entity.paymentMethod(), entity.status(),
-                        entity.bookedAt(), entity.bookedFor(), entity.notes(), entity.providerId(),
-                        entity.guideId(), "R-" + sequence)));
+                .flatMap(sequence -> template.insert(withCode(entity, "R-" + sequence)));
+    }
+
+    private ReservationEntity withCode(ReservationEntity entity, String code) {
+        return new ReservationEntity(entity.id(), entity.touristId(), entity.itemType(), entity.itemId(),
+                entity.unitPrice(), entity.numberOfPeople(), entity.total(), entity.paymentMethod(),
+                entity.status(), entity.bookedAt(), entity.bookedFor(), entity.notes(), entity.providerId(),
+                entity.guideId(), code);
     }
 }

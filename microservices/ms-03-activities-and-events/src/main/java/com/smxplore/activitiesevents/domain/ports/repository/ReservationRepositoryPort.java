@@ -30,6 +30,9 @@ public interface ReservationRepositoryPort {
     /** Lists the reservations received by a guide; {@code status} is optional (null = any). */
     Flux<Reservation> findAllByGuideId(UUID guideId, ReservationStatus status, int limit);
 
-    /** Lists the reservations that contain a given event, activity or service. */
+    /** Lists the reservations of a given event or activity. */
     Flux<Reservation> findAllByItem(UUID itemId, ReservationItemType type, int limit);
+
+    /** People already booked (CONFIRMED) for an event or activity. */
+    Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);
 }
