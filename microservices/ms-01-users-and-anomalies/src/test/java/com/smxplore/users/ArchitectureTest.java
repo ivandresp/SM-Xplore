@@ -13,29 +13,31 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule domainMustNotDependOnFrameworks = noClasses()
             .that()
-            .resideInAPackage("..identity.domain..")
+            .resideInAPackage("..domain..")
             .should()
             .dependOnClassesThat()
             .resideInAnyPackage(
                     "org.springframework..",
-                    "jakarta.persistence..",
+                    "jakarta..",
                     "org.springframework.data..",
                     "tools.jackson..",
-                    "com.fasterxml..");
+                    "com.fasterxml..",
+                    "reactor..",
+                    "io.r2dbc..");
 
     @ArchTest
     static final ArchRule domainMustNotDependOnApplication = noClasses()
             .that()
-            .resideInAPackage("..identity.domain..")
+            .resideInAPackage("..domain..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..identity.application..");
+            .resideInAPackage("..application..");
 
     @ArchTest
     static final ArchRule applicationMustNotDependOnInfrastructure = noClasses()
             .that()
-            .resideInAPackage("..identity.application..")
+            .resideInAPackage("..application..")
             .should()
             .dependOnClassesThat()
-            .resideInAPackage("..identity.infrastructure..");
+            .resideInAPackage("..infrastructure..");
 }

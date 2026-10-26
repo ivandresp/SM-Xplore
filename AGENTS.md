@@ -4,6 +4,8 @@
 
 SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth and admin user management implemented; reviews and anomalies pending).
 
+The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
+
 All deliverables, user stories, diagrams, and commit messages are in **Spanish**. Code identifiers are English; domain class names follow the Spanish model (`Usuario`, `Guia`, `PrestadoraServicios`).
 
 ## Canonical paths
@@ -14,7 +16,9 @@ All deliverables, user stories, diagrams, and commit messages are in **Spanish**
 | `docs/models/` | Tracked PlantUML + static design images (domain, classes, UC, packages, deployment, DB, E-R) |
 | `docs/requirements/SM-Xplore_SRS.docx` | SRS v2.0 (binary Word; no Markdown source) |
 | `docs/plan/` | RUP plan (`.xlsx`) and team roles |
-| `microservices/ms-01-users-and-anomalies/` | Java 25 + Spring Boot 4.1.2 identity/auth service |
+| `microservices/ms-01-users-and-anomalies/` | Java 25 + Spring Boot 4.1.2 identity/auth service (Spring WebFlux + R2DBC) |
+| `microservices/ms-01-users-and-anomalies/{gradlew,gradle,settings.gradle.kts,build.gradle.kts}` | Self-contained Gradle build root |
+| `microservices/ms-01-users-and-anomalies/docker-compose.yml` | PostgreSQL, MongoDB and Mailpit for ms-01 |
 | `microservices/ms-02...ms-04/` | Placeholder READMEs for the remaining services |
 | `docs/Documento Entregable 1 - SM-Xplore.md` / `.docx` | Final deliverable; no export script, keep both in sync manually |
 
@@ -27,30 +31,33 @@ Path/naming traps:
 
 ## Build, run, test
 
-Java 25 and Gradle 9.5.1 are required. Use the wrapper from the repo root:
+Java 25 and Gradle 9.5.1 are required. The wrapper and build live in the service directory:
 
 ```bash
-docker compose -f microservices/docker-compose.yml up -d
-./gradlew :microservices:ms-01-users-and-anomalies:bootRun
-./gradlew :microservices:ms-01-users-and-anomalies:test
-./gradlew :microservices:ms-01-users-and-anomalies:test --tests "com.smxplore.users.identity.infrastructure.adapter.in.rest.AuthFlowTest"
-./gradlew :microservices:ms-01-users-and-anomalies:check
+cd microservices/ms-01-users-and-anomalies
+docker compose up -d
+./gradlew bootRun
+./gradlew test
+./gradlew test --tests "com.smxplore.users.infrastructure.adapter.in.rest.AuthFlowTest"
+./gradlew check
 ```
 
 - API: `http://localhost:8081`; Swagger: `/swagger-ui.html`; Mailpit: `http://localhost:8025`.
 - Integration tests use Testcontainers and **require Docker**.
 - `check` runs tests, ArchUnit, and Spotless.
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
-- PostgreSQL is the only implemented store. MongoDB is reserved for guide/provider reviews.
+- PostgreSQL is the only implemented store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. MongoDB is reserved for guide/provider reviews.
 
 ## Architecture rules
 
 - Clean/hexagonal: `infrastructure -> application -> domain`.
-- `domain` must not import Spring, Jakarta/JPA, Mongo, or Jackson. ArcUnit enforces this; application must not depend on infrastructure.
-- Application use cases live in `application/service`, implement input ports, and use output ports. Write use cases run inside `TransactionPort` (implemented with `TransactionTemplate`); there is no `@Transactional` in controllers or domain.
-- Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity.
-- Adapters own JPA entities and mappers; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
-- Controllers only translate HTTP ↔ application DTOs. Errors are RFC 9457 `ProblemDetail`.
+- Packages are flat under `com.smxplore.users`: only `domain`, `application`, and `infrastructure` (no `identity` or `shared` split).
+- `domain` must not import Spring, Jakarta, R2DBC, Reactor, Mongo, or Jackson. ArchUnit enforces this; application must not depend on infrastructure.
+- Application use cases live in `application/service`, implement input ports, and use output ports. Ports are reactive (`Mono`/`Flux`) and write use cases run inside `TransactionPort` (implemented with `TransactionalOperator`); there is no `@Transactional` in controllers or domain.
+- Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity. The user identifier is a plain `UUID`; there is no `UserId` wrapper.
+- Adapters own R2DBC SQL/row mapping; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
+- Controllers are Spring WebFlux annotated controllers returning `Mono`/`Flux`. Security is reactive: `SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`, `@EnableReactiveMethodSecurity`. Errors are RFC 9457 `ProblemDetail`.
+- `Role` constants are English (`TOURIST`, `GUIDE`, ...) but `Role.code()` keeps the Spanish wire values used by the database and JWT. API DTOs expose the code as `String`.
 - No Lombok/MapStruct; use records and explicit mappers. Constructor injection only.
 
 ## Domain and planned architecture

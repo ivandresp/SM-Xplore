@@ -68,7 +68,7 @@ Se adoptará un enfoque **multi-modelo** acorde a la naturaleza de los datos:
 
 #### 4.1.4. Framework
 
-- **Spring Boot** para el backend: ofrece inversión de control, seguridad (Spring Security), acceso a datos (JPA/Spring Data) e integración con la pasarela de pagos PSE, OpenStreetMap y OpenMeteo.
+- **Spring Boot** para el backend: ofrece inversión de control, seguridad (Spring Security), acceso a datos reactivo (Spring WebFlux + Spring R2DBC sobre PostgreSQL) e integración con la pasarela de pagos PSE, OpenStreetMap y OpenMeteo.
 - **React** para el frontend: permite construir una interfaz web responsive, moderna y reactiva, con soporte de internacionalización (español/inglés) y consumo de la API REST.
 
 ---

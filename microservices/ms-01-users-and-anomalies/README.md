@@ -7,11 +7,12 @@ Estado actual: identidad, autenticación, perfiles y administración de usuarios
 ## Stack
 
 - Java 25
-- Spring Boot 4.1.2
-- Gradle 9.5.1 (wrapper)
-- PostgreSQL 17 para usuarios
+- Spring Boot 4.1.2 (Spring WebFlux)
+- Spring R2DBC (`DatabaseClient`) sobre PostgreSQL 17 (sin JPA/Hibernate)
+- Flyway para migraciones (usa JDBC únicamente durante el arranque)
 - MongoDB 8 para reseñas (fase siguiente)
 - Mailpit para correo local
+- Gradle 9.5.1 (wrapper dentro de este directorio)
 
 ## Arquitectura
 
@@ -21,26 +22,30 @@ Arquitectura hexagonal / clean architecture:
 infrastructure -> application -> domain
 ```
 
-- `domain`: modelo puro, sin Spring, JPA, Mongo ni Jackson. `Usuario` es la clase base y de ella heredan `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos` y `Admin`, igual que en el diagrama de dominio.
-- `application`: casos de uso, puertos de entrada/salida y DTOs de aplicación. `RoleDetailsView` es solo un DTO de lectura para la API; no es una entidad de dominio.
-- `infrastructure`: controladores REST, adaptadores JPA/Mongo, correo, JWT y configuración.
+- `domain`: modelo puro, sin Spring, Jakarta, R2DBC, Reactor ni Jackson. `Usuario` es la clase base y de ella heredan `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos` y `Admin`, igual que en el diagrama de dominio. Las reglas de contraseña e invitación viven en `domain/policy`.
+- `application`: casos de uso, puertos de entrada/salida y DTOs. Los puertos devuelven `Mono`/`Flux`; los casos de uso se ejecutan dentro de `TransactionPort`, implementado con `TransactionalOperator`.
+- `infrastructure`: controladores WebFlux, DTOs HTTP, adaptadores R2DBC, correo, JWT y configuración. Los controladores devuelven `Mono`/`Flux` y la seguridad es reactiva (`SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`).
 - Las dependencias se verifican con ArchUnit.
-- Los casos de uso se escriben dentro de `TransactionPort`, implementado con `TransactionTemplate`.
 
 ```text
 com.smxplore.users
-├── identity
-│   ├── domain/model, domain/exception
-│   ├── application/port/in, application/port/out, application/service, application/dto
-│   └── infrastructure/adapter/in/rest, adapter/out/persistence/jpa, adapter/out/email, adapter/out/security
-└── shared/infrastructure/{config,security,rest}
+├── domain/{model,exception,policy}
+├── application/{dto,port/in,port/out,service}
+└── infrastructure
+    ├── adapter/in/{rest,dto}
+    ├── adapter/out/{persistence/r2dbc,email,security}
+    ├── config
+    ├── rest
+    └── security
 ```
 
 ## Ejecutar localmente
 
+El build y el `docker-compose.yml` viven en este directorio:
+
 ```bash
-docker compose -f microservices/docker-compose.yml up -d
-./gradlew :microservices:ms-01-users-and-anomalies:bootRun
+docker compose up -d
+./gradlew bootRun
 ```
 
 La API queda en `http://localhost:8081`. Swagger: `http://localhost:8081/swagger-ui.html`.
@@ -50,7 +55,8 @@ Mailpit: `http://localhost:8025`.
 
 | Variable | Default local |
 | --- | --- |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/smxplore_users` |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/smxplore_users` (solo Flyway) |
+| `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/smxplore_users` |
 | `DB_USERNAME` | `smxplore` |
 | `DB_PASSWORD` | `smxplore` |
 | `MAIL_HOST` / `MAIL_PORT` | `localhost` / `1025` |
@@ -124,15 +130,18 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 
 - `sub` contiene el UUID. Si el microservicio de reportes de seguridad espera `id` o `userId`, se debe alinear antes de integrarlo.
 - `providerStatus` solo aparece para prestadoras.
+- `role` usa los códigos en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`), aunque el enum Java esté en inglés y exponga `Role.code()`.
 - `ver` se valida en ms-01 contra `users.auth_version`; otros servicios deben validar firma, `iss`, `aud` y `exp`.
 - El servicio de reportes de seguridad debe confiar en la llave pública publicada en `/.well-known/jwks.json`.
 
 ## Pruebas
 
 ```bash
-./gradlew :microservices:ms-01-users-and-anomalies:test
-./gradlew :microservices:ms-01-users-and-anomalies:test --tests "com.smxplore.users.identity.infrastructure.adapter.in.rest.AuthFlowTest"
-./gradlew :microservices:ms-01-users-and-anomalies:check
+./gradlew test
+./gradlew test --tests "com.smxplore.users.infrastructure.adapter.in.rest.AuthFlowTest"
+./gradlew check
 ```
 
-Las pruebas de integración usan Testcontainers y requieren Docker.
+Las pruebas de integración usan Testcontainers y requieren Docker. La aplicación configura R2DBC con
+`spring.r2dbc.*`; Flyway usa `spring.flyway.url`/`user`/`password` (JDBC) solo para migrar el esquema,
+porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC.
