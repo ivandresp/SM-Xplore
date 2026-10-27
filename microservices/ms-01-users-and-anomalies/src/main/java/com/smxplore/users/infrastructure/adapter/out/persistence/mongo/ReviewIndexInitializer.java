@@ -51,6 +51,12 @@ public class ReviewIndexInitializer implements ApplicationRunner {
                             .on("reported", Sort.Direction.ASC)
                             .on("updatedAt", Sort.Direction.DESC))
                     .block(Duration.ofSeconds(10));
+            indexes.createIndex(new Index()
+                            .named("ix_reviews_ai_flagged")
+                            .on("aiFlagged", Sort.Direction.ASC)
+                            .on("moderationStatus", Sort.Direction.ASC)
+                            .on("createdAt", Sort.Direction.DESC))
+                    .block(Duration.ofSeconds(10));
             LOGGER.info("Índices de reseñas verificados");
         } catch (RuntimeException exception) {
             LOGGER.warn(

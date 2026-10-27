@@ -47,6 +47,7 @@ docker compose up -d
 - `check` runs tests, ArchUnit, and Spotless.
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
 - PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`). Login lockout uses `login_attempts`; MFA uses `mfa_enrollments` and `mfa_recovery_codes`.
+- Review AI filter: `app.reviews.ai-filter.*` (`enabled`, `base-url`/`LITTLELLM_URL`, `api-key`/`LITTLELLM_API_KEY`, `model`, `timeout`, `threshold`, `temperature`/`REVIEW_AI_TEMPERATURE` (default `0.0`, greedy decoding for a stable verdict), `action`, `fail-open`). The adapter calls an OpenAI-compatible `POST /v1/chat/completions`; flagged reviews become `PENDIENTE_REVISION` (or `HIDDEN` with `action=HIDE`) and the assessment is stored on the review document. Tests point it at a local `HttpServer` stub.
 - Security knobs: `app.security.rate-limit.*` (per-IP fixed window on auth endpoints), `app.security.lockout.*` (per-account failures, PostgreSQL-backed), `app.security.mfa.*` (`required-for-admins`, challenge TTL, issuer), `app.security.headers.*` (HSTS off by default, on in `prod`). `SPRING_PROFILES_ACTIVE=prod` loads `application-prod.yml`; `ProductionSecurityValidator` refuses to start with generated JWT keys or the default bootstrap password.
 
 ## Architecture rules
@@ -67,14 +68,14 @@ docker compose up -d
 - 11 level-0 use cases (UC1–UC11) in `docs/models/uc-lvl-0/diagram.puml`. The SRS defines RF01–RF108 with UC/HU/PA traceability.
 - 4 microservices: ms-01 users + anomalies (+ guide/provider reviews), ms-02 security reports, ms-03 activities + events (+ reservations/reviews), ms-04 sites + services (+ reservations/reviews).
 - Polyglot persistence: PostgreSQL (transactional), MongoDB (semi-structured), Neo4j (relations/recommendations). ms-01 uses PostgreSQL for users and MongoDB (`smxplore_reviews`) for guide/provider reviews.
-- Chosen stack: Java 25 + Spring Boot 4.1.2; React + JavaScript/TypeScript for the frontend. External integrations: OpenStreetMap, OpenMeteo, PSE, email/Web Push. UI is Spanish/English.
+- Chosen stack: Java 25 + Spring Boot 4.1.2; React + JavaScript/TypeScript for the frontend. External integrations: OpenStreetMap, OpenMeteo, PSE, email/Web Push, and a locally hosted littleLLM-compatible model for review moderation. UI is Spanish/English.
 - Ley 1581 de 2012 (Colombian data protection) is a hard compliance constraint (admin US5, RNF09).
 
 ## MS-01 remaining work
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with recovery codes and admin enforcement, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation), persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with recovery codes and admin enforcement, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
@@ -90,6 +91,11 @@ Still to design/implement:
    - The per-IP rate limiter is in-memory and per instance; lockout is shared through PostgreSQL. A distributed limiter is only needed if ms-01 scales horizontally.
    - No audit-log or PII retention/ARCO procedure yet (Ley 1581); anonymization on delete is implemented.
    - Recovery codes are issued once per enrollment; regeneration requires disabling and re-enrolling MFA.
+
+4. **Review AI follow-ups**
+   - The adapter assumes littleLLM exposes the OpenAI chat-completions schema; confirm the real contract before deploying.
+   - The filter runs synchronously and fail-open by default. If latency matters, move the assessment to a queue and keep the review `PENDIENTE_REVISION` until it finishes.
+   - Prompt/model quality is not benchmarked; add a labelled sample of positive and negative review bombing to tune `threshold` and categories.
 
 ## JWT contract (ms-01 → ms-02)
 

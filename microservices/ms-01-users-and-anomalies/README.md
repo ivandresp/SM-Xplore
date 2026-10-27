@@ -2,7 +2,7 @@
 
 Servicio encargado de la gestión de **Usuarios** y **Anomalías** de SM-Xplore. Incluye las **Reseñas sobre Guías y Prestadoras de Servicios**.
 
-Estado actual: identidad, autenticación, perfiles, administración de usuarios, reseñas sobre guías y prestadoras, detección y gestión de anomalías, y monitoreo administrativo (Java + Spring Boot).
+Estado actual: identidad, autenticación, perfiles, administración de usuarios, reseñas sobre guías y prestadoras con filtro de IA, detección y gestión de anomalías, y monitoreo administrativo (Java + Spring Boot).
 
 ## Stack
 
@@ -77,6 +77,14 @@ Mailpit: `http://localhost:8025`.
 | `MFA_REQUIRED_FOR_ADMINS` | `false` en desarrollo y pruebas; `true` en `prod` |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
 | `SECURITY_HSTS_ENABLED` | `false` en desarrollo; `true` en `prod` |
+| `REVIEW_AI_ENABLED` | `false`; activa el filtro de reseñas con IA |
+| `LITTLELLM_URL` / `LITTLELLM_API_KEY` | URL y llave del servidor LLM local |
+| `LITTLELLM_MODEL` | `littlellm` |
+| `REVIEW_AI_TIMEOUT` | `PT5S` |
+| `REVIEW_AI_THRESHOLD` | `0.7` |
+| `REVIEW_AI_TEMPERATURE` | `0.0` (muestreo voraz: veredictos estables y reproducibles) |
+| `REVIEW_AI_ACTION` | `PENDING_REVIEW` (`HIDE` para ocultar de inmediato) |
+| `REVIEW_AI_FAIL_OPEN` | `true` |
 | `BOOTSTRAP_ADMIN_ENABLED` | `true` |
 | `BOOTSTRAP_ADMIN_EMAIL` | `admin@smxplore.local` |
 | `BOOTSTRAP_ADMIN_PASSWORD` | `ChangeMe123!` |
@@ -148,6 +156,7 @@ El secreto TOTP se guarda en base32 en `mfa_enrollments` y los códigos de recup
 | GET | `/api/v1/public/reviews` | Público, reseñas visibles de un destino |
 | GET | `/api/v1/public/reviews/summary` | Público, reputación de un destino |
 | GET | `/api/v1/admin/reviews/reported` | ADMIN, cola de moderación |
+| GET | `/api/v1/admin/reviews/ai-flagged` | ADMIN, reseñas retenidas por el filtro de IA |
 | PATCH | `/api/v1/admin/reviews/{id}/moderation` | ADMIN, oculta o mantiene una reseña |
 | GET | `/api/v1/admin/users` | ADMIN |
 | GET | `/api/v1/admin/users/{id}` | ADMIN |
@@ -193,6 +202,21 @@ Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colec
 - El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
 - La reputación devuelve cantidad de reseñas, promedio y distribución de 1 a 5 estrellas.
 
+#### Filtro de reseñas con IA (review bombing)
+
+Cuando `REVIEW_AI_ENABLED=true`, cada reseña con texto se analiza antes de guardarse contra un servidor LLM local
+compatible con la API de chat de OpenAI (`POST /v1/chat/completions`). El adaptador envía `LITTLELLM_URL`, la
+llave en `Authorization: Bearer` (cabecera y prefijo configurables) y el modelo `LITTLELLM_MODEL`.
+
+- El prompt pide un JSON `{"flagged", "score", "categories", "reason"}` y evalúa por igual elogios y ataques coordinados, spam, extorsión y texto genérico.
+- La temperatura por defecto es `REVIEW_AI_TEMPERATURE=0.0`: es una tarea de clasificación, no de generación, así que se usa muestreo voraz para que la misma reseña reciba el mismo veredicto y el umbral no oscile. Súbela solo si el servidor LLM lo exige (rango 0–2).
+- Si `flagged=true` y `score >= REVIEW_AI_THRESHOLD`, la reseña queda en `PENDIENTE_REVISION` (acción `PENDING_REVIEW`) o directamente `HIDDEN` (acción `HIDE`). En ambos casos sale de los listados públicos y de la reputación.
+- El administrador la ve en `GET /api/v1/admin/reviews/ai-flagged` con la puntuación, categorías, motivo y modelo, y la resuelve con el mismo `PATCH /moderation` (`KEEP` la publica, `HIDE` la confirma).
+- El resultado se persiste en la reseña (`aiStatus`, `aiScore`, `aiCategories`, `aiReason`, `aiModel`, `aiCheckedAt`).
+- Si el LLM falla, expira (`REVIEW_AI_TIMEOUT`) o devuelve un formato inválido, la reseña se guarda con `aiStatus=UNAVAILABLE` y se publica cuando `REVIEW_AI_FAIL_OPEN=true`; con `false` la creación responde `503 REVIEW_FILTER_UNAVAILABLE`.
+- Solo se envía el texto de la reseña y la calificación; no se envían datos del turista. El LLM debe correr en la infraestructura del proyecto.
+- Se asume el contrato de chat de OpenAI. Si littleLLM expone otro esquema, solo cambia `LittleLlmReviewAiFilter`; la configuración y el resto del flujo se mantienen.
+
 ### Anomalías (RF99–RF102, Admin US11–US14)
 
 Las anomalías se persisten en PostgreSQL (`anomalies` y `anomaly_thresholds`) y se detectan automáticamente:
@@ -223,7 +247,7 @@ ms-01:
 
 - Usuarios: total, activos, bloqueados, suspendidos, eliminados, por rol, prestadoras aprobadas,
   prestadoras pendientes y altas de los últimos 30 días.
-- Reseñas: totales, visibles, ocultas, reportadas y promedio de las visibles.
+- Reseñas: totales, visibles, ocultas, pendientes del filtro de IA, reportadas y promedio de las visibles.
 - Anomalías: totales, pendientes, resueltas y pendientes por severidad.
 - Disponibilidad: estado agregado y detalle de PostgreSQL y MongoDB.
 
@@ -283,4 +307,5 @@ PostgreSQL y desactivan la detección programada con `app.anomalies.detection.en
 monitoreo levantan PostgreSQL y MongoDB para validar el overview, la disponibilidad y la exportación CSV.
 Las pruebas de seguridad cubren los vectores RFC 6238, el flujo MFA completo (inscripción, desafío, replay y
 recuperación), la obligatoriedad para administradores, el bloqueo por intentos, el límite por IP, las
-cabeceras y el validador del perfil de producción.
+cabeceras y el validador del perfil de producción. Las pruebas del filtro de IA usan un servidor HTTP falso
+que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.

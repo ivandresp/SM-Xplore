@@ -33,6 +33,8 @@ app:
   reviews:
     index-initialization:
       enabled: false
+    ai-filter:
+      enabled: false
   anomalies:
     detection:
       enabled: false

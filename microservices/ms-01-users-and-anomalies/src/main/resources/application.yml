@@ -82,6 +82,20 @@ app:
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:true}
+    ai-filter:
+      enabled: ${REVIEW_AI_ENABLED:false}
+      base-url: ${LITTLELLM_URL:}
+      api-key: ${LITTLELLM_API_KEY:}
+      api-key-header: ${LITTLELLM_API_KEY_HEADER:Authorization}
+      api-key-prefix: ${LITTLELLM_API_KEY_PREFIX:Bearer}
+      model: ${LITTLELLM_MODEL:littlellm}
+      chat-path: ${LITTLELLM_CHAT_PATH:/v1/chat/completions}
+      timeout: ${REVIEW_AI_TIMEOUT:PT5S}
+      threshold: ${REVIEW_AI_THRESHOLD:0.7}
+      temperature: ${REVIEW_AI_TEMPERATURE:0.0}
+      action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
   anomalies:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}

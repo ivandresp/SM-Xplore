@@ -1,6 +1,7 @@
 package com.smxplore.users.infrastructure.adapter.out.persistence.mongo;
 
 import com.smxplore.users.domain.model.Review;
+import com.smxplore.users.domain.model.ReviewAiAssessment;
 import com.smxplore.users.domain.model.ReviewModerationStatus;
 import com.smxplore.users.domain.model.ReviewReport;
 import com.smxplore.users.domain.model.ReviewResponse;
@@ -25,6 +26,14 @@ final class ReviewMongoMapper {
         document.setModeratedBy(review.moderatedBy());
         document.setModeratedAt(review.moderatedAt());
         document.setModerationReason(review.moderationReason());
+        ReviewAiAssessment ai = review.aiAssessment();
+        document.setAiStatus(ai == null ? null : ai.status().name());
+        document.setAiFlagged(review.isAiRetained());
+        document.setAiScore(ai == null ? 0 : ai.score());
+        document.setAiCategories(ai == null ? List.of() : ai.categories());
+        document.setAiReason(ai == null ? null : ai.reason());
+        document.setAiModel(ai == null ? null : ai.model());
+        document.setAiCheckedAt(ai == null ? null : ai.checkedAt());
         document.setResponse(toResponse(review.response()));
         return document;
     }
@@ -48,7 +57,23 @@ final class ReviewMongoMapper {
                                 .toList(),
                 document.getModeratedBy(),
                 document.getModeratedAt(),
-                document.getModerationReason());
+                document.getModerationReason(),
+                toAiAssessment(document),
+                document.isAiFlagged());
+    }
+
+    private ReviewAiAssessment toAiAssessment(ReviewDocument document) {
+        if (document.getAiStatus() == null) {
+            return null;
+        }
+        return new ReviewAiAssessment(
+                ReviewAiAssessment.Status.valueOf(document.getAiStatus()),
+                document.isAiFlagged(),
+                document.getAiScore(),
+                document.getAiCategories(),
+                document.getAiReason(),
+                document.getAiModel(),
+                document.getAiCheckedAt());
     }
 
     private ReviewDocument.Response toResponse(ReviewResponse response) {

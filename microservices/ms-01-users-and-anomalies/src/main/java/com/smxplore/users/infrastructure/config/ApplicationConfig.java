@@ -23,6 +23,7 @@ import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.GetSystemAvailabilityUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
+import com.smxplore.users.application.port.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListAnomaliesUseCase;
 import com.smxplore.users.application.port.in.ListAnomalyThresholdsUseCase;
 import com.smxplore.users.application.port.in.ListAuditEntriesUseCase;
@@ -56,6 +57,7 @@ import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
 import com.smxplore.users.application.port.out.RequestRateSignal;
+import com.smxplore.users.application.port.out.ReviewAiFilter;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
 import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
@@ -89,6 +91,7 @@ import com.smxplore.users.application.service.GetPublicProfileService;
 import com.smxplore.users.application.service.GetReputationSummaryService;
 import com.smxplore.users.application.service.GetSystemAvailabilityService;
 import com.smxplore.users.application.service.GetUserDetailService;
+import com.smxplore.users.application.service.ListAiFlaggedReviewsService;
 import com.smxplore.users.application.service.ListAnomaliesService;
 import com.smxplore.users.application.service.ListAnomalyThresholdsService;
 import com.smxplore.users.application.service.ListAuditEntriesService;
@@ -112,6 +115,7 @@ import com.smxplore.users.application.service.VerifyMfaLoginService;
 import com.smxplore.users.domain.policy.AccountInvitationPolicy;
 import com.smxplore.users.domain.policy.LoginLockoutPolicy;
 import com.smxplore.users.domain.policy.PasswordResetPolicy;
+import com.smxplore.users.domain.policy.ReviewAiPolicy;
 import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
@@ -407,8 +411,18 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public CreateReviewUseCase createReviewUseCase(ReviewRepository reviews, UserRepository users, Clock clock) {
-        return new CreateReviewService(reviews, users, clock);
+    public ReviewAiPolicy reviewAiPolicy(ReviewAiProperties properties) {
+        return new ReviewAiPolicy(properties.threshold(), properties.action(), properties.failOpen());
+    }
+
+    @Bean
+    public CreateReviewUseCase createReviewUseCase(
+            ReviewRepository reviews,
+            UserRepository users,
+            ReviewAiFilter aiFilter,
+            ReviewAiPolicy aiPolicy,
+            Clock clock) {
+        return new CreateReviewService(reviews, users, aiFilter, aiPolicy, clock);
     }
 
     @Bean
@@ -434,6 +448,11 @@ public class ApplicationConfig {
     @Bean
     public ListReportedReviewsUseCase listReportedReviewsUseCase(ReviewRepository reviews) {
         return new ListReportedReviewsService(reviews);
+    }
+
+    @Bean
+    public ListAiFlaggedReviewsUseCase listAiFlaggedReviewsUseCase(ReviewRepository reviews) {
+        return new ListAiFlaggedReviewsService(reviews);
     }
 
     @Bean

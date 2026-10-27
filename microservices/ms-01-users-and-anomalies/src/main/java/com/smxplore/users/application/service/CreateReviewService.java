@@ -1,11 +1,14 @@
 package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.CreateReviewCommand;
+import com.smxplore.users.application.dto.ReviewAiRequest;
 import com.smxplore.users.application.dto.ReviewView;
 import com.smxplore.users.application.port.in.CreateReviewUseCase;
+import com.smxplore.users.application.port.out.ReviewAiFilter;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.DuplicateReviewException;
+import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.PrestadoraServicios;
@@ -14,6 +17,7 @@ import com.smxplore.users.domain.model.Review;
 import com.smxplore.users.domain.model.ReviewTargetType;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Usuario;
+import com.smxplore.users.domain.policy.ReviewAiPolicy;
 import java.time.Clock;
 import java.util.UUID;
 import reactor.core.publisher.Mono;
@@ -22,11 +26,20 @@ public final class CreateReviewService implements CreateReviewUseCase {
 
     private final ReviewRepository reviews;
     private final UserRepository users;
+    private final ReviewAiFilter aiFilter;
+    private final ReviewAiPolicy aiPolicy;
     private final Clock clock;
 
-    public CreateReviewService(ReviewRepository reviews, UserRepository users, Clock clock) {
+    public CreateReviewService(
+            ReviewRepository reviews,
+            UserRepository users,
+            ReviewAiFilter aiFilter,
+            ReviewAiPolicy aiPolicy,
+            Clock clock) {
         this.reviews = reviews;
         this.users = users;
+        this.aiFilter = aiFilter;
+        this.aiPolicy = aiPolicy;
         this.clock = clock;
     }
 
@@ -56,8 +69,23 @@ public final class CreateReviewService implements CreateReviewUseCase {
                             command.rating(),
                             command.comment(),
                             clock.instant());
-                    return reviews.save(review).map(ReviewView::from);
+                    return saveWithAiAssessment(review);
                 });
+    }
+
+    private Mono<ReviewView> saveWithAiAssessment(Review review) {
+        if (review.comment() == null) {
+            return reviews.save(review).map(ReviewView::from);
+        }
+
+        ReviewAiRequest request = new ReviewAiRequest(review.targetType().code(), review.rating(), review.comment());
+        return aiFilter.assess(request).flatMap(assessment -> {
+            if (aiPolicy.shouldRejectOnFailure(assessment)) {
+                return Mono.error(new ReviewFilterUnavailableException());
+            }
+            review.applyAiAssessment(assessment, aiPolicy, clock.instant());
+            return reviews.save(review).map(ReviewView::from);
+        });
     }
 
     private static void validateTarget(Usuario target, ReviewTargetType targetType) {

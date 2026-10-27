@@ -16,6 +16,7 @@ import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
+import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.ReviewNotFoundException;
 import com.smxplore.users.domain.exception.TooManyLoginAttemptsException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
@@ -132,6 +133,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ReviewAlreadyReportedException.class)
     public ResponseEntity<ProblemDetail> handleReviewAlreadyReported(ReviewAlreadyReportedException exception) {
         return problem(HttpStatus.CONFLICT, "REVIEW_ALREADY_REPORTED", exception.getMessage());
+    }
+
+    @ExceptionHandler(ReviewFilterUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(ReviewFilterUnavailableException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "REVIEW_FILTER_UNAVAILABLE", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidPasswordResetTokenException.class)

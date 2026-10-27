@@ -2,6 +2,7 @@ package com.smxplore.users.domain.model;
 
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ValidationException;
+import com.smxplore.users.domain.policy.ReviewAiPolicy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,8 @@ public final class Review {
     private UUID moderatedBy;
     private Instant moderatedAt;
     private String moderationReason;
+    private ReviewAiAssessment aiAssessment;
+    private boolean aiRetained;
 
     private Review(
             String id,
@@ -49,7 +52,9 @@ public final class Review {
             List<ReviewReport> reports,
             UUID moderatedBy,
             Instant moderatedAt,
-            String moderationReason) {
+            String moderationReason,
+            ReviewAiAssessment aiAssessment,
+            boolean aiRetained) {
         if (id == null || id.isBlank()) {
             throw new ValidationException("El identificador de la reseña es obligatorio");
         }
@@ -67,6 +72,8 @@ public final class Review {
         this.moderatedBy = moderatedBy;
         this.moderatedAt = moderatedAt;
         this.moderationReason = normalize(moderationReason);
+        this.aiAssessment = aiAssessment;
+        this.aiRetained = aiRetained;
         this.id = id;
     }
 
@@ -86,7 +93,9 @@ public final class Review {
                 List.of(),
                 null,
                 null,
-                null);
+                null,
+                null,
+                false);
     }
 
     public static Review rehydrate(
@@ -103,7 +112,9 @@ public final class Review {
             List<ReviewReport> reports,
             UUID moderatedBy,
             Instant moderatedAt,
-            String moderationReason) {
+            String moderationReason,
+            ReviewAiAssessment aiAssessment,
+            boolean aiRetained) {
         return new Review(
                 id,
                 touristId,
@@ -118,12 +129,14 @@ public final class Review {
                 reports,
                 moderatedBy,
                 moderatedAt,
-                moderationReason);
+                moderationReason,
+                aiAssessment,
+                aiRetained);
     }
 
     public void respond(UUID responderId, String text, Instant now) {
-        if (moderationStatus == ReviewModerationStatus.HIDDEN) {
-            throw new ValidationException("No se puede responder una reseña oculta");
+        if (moderationStatus != ReviewModerationStatus.VISIBLE) {
+            throw new ValidationException("No se puede responder una reseña que no está visible");
         }
         Instant responseCreatedAt = response == null ? now : response.createdAt();
         this.response = new ReviewResponse(responderId, text, responseCreatedAt, now);
@@ -131,8 +144,8 @@ public final class Review {
     }
 
     public void report(UUID reporterId, String reason, Instant now) {
-        if (moderationStatus == ReviewModerationStatus.HIDDEN) {
-            throw new ValidationException("No se puede reportar una reseña oculta");
+        if (moderationStatus != ReviewModerationStatus.VISIBLE) {
+            throw new ValidationException("No se puede reportar una reseña que no está visible");
         }
         boolean alreadyReported =
                 reports.stream().anyMatch(report -> report.reporterId().equals(reporterId));
@@ -151,6 +164,22 @@ public final class Review {
         this.moderationReason = normalize(reason);
         this.reports.clear();
         this.updatedAt = now;
+    }
+
+    /**
+     * Guarda el resultado del filtro automático y, si la reseña se marca con confianza suficiente, la deja pendiente
+     * de revisión o la oculta según la política configurada.
+     */
+    public void applyAiAssessment(ReviewAiAssessment assessment, ReviewAiPolicy policy, Instant now) {
+        this.aiAssessment = Objects.requireNonNull(assessment, "El resultado del filtro es obligatorio");
+        this.aiRetained = policy.shouldFlag(assessment);
+        if (aiRetained) {
+            this.moderationStatus = policy.action() == ReviewAiAction.HIDE
+                    ? ReviewModerationStatus.HIDDEN
+                    : ReviewModerationStatus.PENDIENTE_REVISION;
+            this.moderationReason = "Filtro automático de reseñas";
+            this.updatedAt = now;
+        }
     }
 
     public boolean isVisible() {
@@ -236,5 +265,13 @@ public final class Review {
 
     public String moderationReason() {
         return moderationReason;
+    }
+
+    public ReviewAiAssessment aiAssessment() {
+        return aiAssessment;
+    }
+
+    public boolean isAiRetained() {
+        return aiRetained;
     }
 }

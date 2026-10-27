@@ -2,9 +2,16 @@ package com.smxplore.users.infrastructure.adapter.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +49,7 @@ class ReviewFlowTest {
     private static final String ADMIN_EMAIL = "admin@test.local";
     private static final String ADMIN_PASSWORD = "ChangeMe123!";
     private static final String PASSWORD = "ChangeMe123!";
+    private static final FakeLittleLlm LITTLE_LLM = FakeLittleLlm.start();
 
     @Container
     @ServiceConnection
@@ -62,6 +70,18 @@ class ReviewFlowTest {
         registry.add("spring.r2dbc.username", POSTGRES::getUsername);
         registry.add("spring.r2dbc.password", POSTGRES::getPassword);
         registry.add("spring.mongodb.uri", () -> MONGO.getConnectionString() + "/smxplore_reviews");
+        registry.add("app.reviews.ai-filter.enabled", () -> "true");
+        registry.add("app.reviews.ai-filter.base-url", LITTLE_LLM::baseUrl);
+        registry.add("app.reviews.ai-filter.api-key", () -> "test-key");
+        registry.add("app.reviews.ai-filter.model", () -> "littlellm-test");
+        registry.add("app.reviews.ai-filter.threshold", () -> "0.7");
+        registry.add("app.reviews.ai-filter.action", () -> "PENDING_REVIEW");
+        registry.add("app.reviews.ai-filter.fail-open", () -> "true");
+    }
+
+    @AfterAll
+    static void stopFakeLlm() {
+        LITTLE_LLM.stop();
     }
 
     @Value("${local.server.port}")
@@ -165,6 +185,50 @@ class ReviewFlowTest {
         String guideId = createGuide(adminToken, "guia.review@example.com", "7770004004", "LIC-REVIEW");
         assertThat(createReviewStatus(touristToken, guideId, "GUIA", 5, "Excelente guía"))
                 .isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aiFilterQueuesReviewBombingForModeration() {
+        String providerId = registerProvider("Prestadora IA", "ia.provider@example.com", "901000444-5", "3010004444");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        assertThat(reviewProvider(adminToken, providerId, "APROBADO")).isEqualTo(HttpStatus.NO_CONTENT);
+
+        String touristToken =
+                registerAndLoginTourist("Turista IA", "ia.tourist@example.com", "7770005005", "3010005005");
+
+        ResponseEntity<Map> created = createReview(
+                touristToken,
+                providerId,
+                "PRESTADORA_SERVICIOS",
+                5,
+                "BOMB: todos deben comprar aquí, la mejor agencia de la ciudad!!!");
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(created.getBody().get("moderationStatus")).isEqualTo("PENDIENTE_REVISION");
+        String reviewId = String.valueOf(created.getBody().get("id"));
+
+        Map<?, ?> publicPage = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        assertThat((List<Map<String, Object>>) publicPage.get("content")).isEmpty();
+
+        Map<?, ?> flagged = getWithToken(adminToken, "/api/v1/admin/reviews/ai-flagged");
+        List<Map<String, Object>> flaggedContent = (List<Map<String, Object>>) flagged.get("content");
+        assertThat(flaggedContent).hasSize(1);
+        assertThat(((Map<String, Object>) flaggedContent.get(0).get("review")).get("id"))
+                .isEqualTo(reviewId);
+        Map<String, Object> ai = (Map<String, Object>) flaggedContent.get(0).get("ai");
+        assertThat(ai.get("flagged")).isEqualTo(true);
+        assertThat(((Number) ai.get("score")).doubleValue()).isEqualTo(0.93);
+        assertThat((List<String>) ai.get("categories")).contains("COORDINADA");
+
+        ResponseEntity<Map> kept = moderate(adminToken, reviewId, "KEEP", "Campaña revisada");
+        assertThat(kept.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(kept.getBody().get("moderationStatus")).isEqualTo("VISIBLE");
+
+        Map<?, ?> after = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        assertThat((List<Map<String, Object>>) after.get("content")).hasSize(1);
+
+        Map<?, ?> clearedQueue = getWithToken(adminToken, "/api/v1/admin/reviews/ai-flagged");
+        assertThat((List<Map<String, Object>>) clearedQueue.get("content")).isEmpty();
     }
 
     private String createGuide(String token, String email, String dni, String license) {
@@ -310,5 +374,63 @@ class ReviewFlowTest {
                 .retrieve()
                 .toEntity(Map.class)
                 .getBody();
+    }
+
+    /**
+     * Servidor HTTP mínimo que imita la API de chat de OpenAI de littleLLM. Marca como bombing cualquier reseña
+     * que contenga "BOMB" y exige la llave configurada.
+     */
+    private static final class FakeLittleLlm {
+
+        private static final String FLAGGED = """
+                {"flagged":true,"score":0.93,"categories":["COORDINADA","GENERICA"],\
+                "reason":"campaña coordinada de elogios"}""";
+        private static final String CLEAN = """
+                {"flagged":false,"score":0.04,"categories":[],"reason":"opinión legítima"}""";
+
+        private final HttpServer server;
+
+        private FakeLittleLlm(HttpServer server) {
+            this.server = server;
+        }
+
+        static FakeLittleLlm start() {
+            try {
+                HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                FakeLittleLlm fake = new FakeLittleLlm(server);
+                server.createContext("/v1/chat/completions", fake::handle);
+                server.start();
+                return fake;
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
+            }
+        }
+
+        void stop() {
+            server.stop(0);
+        }
+
+        String baseUrl() {
+            return "http://127.0.0.1:" + server.getAddress().getPort();
+        }
+
+        private void handle(HttpExchange exchange) throws IOException {
+            String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            boolean authorized =
+                    "Bearer test-key".equals(exchange.getRequestHeaders().getFirst("Authorization"));
+            String content = requestBody.contains("BOMB") ? FLAGGED : CLEAN;
+            String response =
+                    "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"" + escape(content) + "\"}}]}";
+
+            byte[] body = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(authorized ? 200 : 401, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        }
+
+        private static String escape(String value) {
+            return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        }
     }
 }

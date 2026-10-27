@@ -1,9 +1,11 @@
 package com.smxplore.users.infrastructure.adapter.in.rest;
 
+import com.smxplore.users.application.dto.AiFlaggedReviewView;
 import com.smxplore.users.application.dto.ModerateReviewCommand;
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.ReportedReviewView;
 import com.smxplore.users.application.dto.ReviewView;
+import com.smxplore.users.application.port.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListReportedReviewsUseCase;
 import com.smxplore.users.application.port.in.ModerateReviewUseCase;
 import com.smxplore.users.domain.exception.ValidationException;
@@ -29,10 +31,15 @@ import reactor.core.publisher.Mono;
 public class AdminReviewController {
 
     private final ListReportedReviewsUseCase listReportedReviews;
+    private final ListAiFlaggedReviewsUseCase listAiFlaggedReviews;
     private final ModerateReviewUseCase moderateReview;
 
-    public AdminReviewController(ListReportedReviewsUseCase listReportedReviews, ModerateReviewUseCase moderateReview) {
+    public AdminReviewController(
+            ListReportedReviewsUseCase listReportedReviews,
+            ListAiFlaggedReviewsUseCase listAiFlaggedReviews,
+            ModerateReviewUseCase moderateReview) {
         this.listReportedReviews = listReportedReviews;
+        this.listAiFlaggedReviews = listAiFlaggedReviews;
         this.moderateReview = moderateReview;
     }
 
@@ -40,6 +47,12 @@ public class AdminReviewController {
     public Mono<PageResult<ReportedReviewView>> reported(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         return listReportedReviews.list(page, size);
+    }
+
+    @GetMapping("/ai-flagged")
+    public Mono<PageResult<AiFlaggedReviewView>> aiFlagged(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return listAiFlaggedReviews.list(page, size);
     }
 
     @PatchMapping("/{id}/moderation")

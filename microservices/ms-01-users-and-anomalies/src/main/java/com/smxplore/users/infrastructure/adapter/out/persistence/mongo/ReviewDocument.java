@@ -18,7 +18,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
     @CompoundIndex(
             name = "ix_reviews_target",
             def = "{'targetType': 1, 'targetId': 1, 'moderationStatus': 1, 'createdAt': -1}"),
-    @CompoundIndex(name = "ix_reviews_reported", def = "{'reported': 1, 'updatedAt': -1}")
+    @CompoundIndex(name = "ix_reviews_reported", def = "{'reported': 1, 'updatedAt': -1}"),
+    @CompoundIndex(name = "ix_reviews_ai_flagged", def = "{'aiFlagged': 1, 'moderationStatus': 1, 'createdAt': -1}")
 })
 public class ReviewDocument {
 
@@ -39,6 +40,13 @@ public class ReviewDocument {
     private UUID moderatedBy;
     private Instant moderatedAt;
     private String moderationReason;
+    private String aiStatus;
+    private boolean aiFlagged;
+    private double aiScore;
+    private List<String> aiCategories = new ArrayList<>();
+    private String aiReason;
+    private String aiModel;
+    private Instant aiCheckedAt;
 
     public ReviewDocument() {}
 
@@ -160,6 +168,62 @@ public class ReviewDocument {
 
     public void setModerationReason(String moderationReason) {
         this.moderationReason = moderationReason;
+    }
+
+    public String getAiStatus() {
+        return aiStatus;
+    }
+
+    public void setAiStatus(String aiStatus) {
+        this.aiStatus = aiStatus;
+    }
+
+    public boolean isAiFlagged() {
+        return aiFlagged;
+    }
+
+    public void setAiFlagged(boolean aiFlagged) {
+        this.aiFlagged = aiFlagged;
+    }
+
+    public double getAiScore() {
+        return aiScore;
+    }
+
+    public void setAiScore(double aiScore) {
+        this.aiScore = aiScore;
+    }
+
+    public List<String> getAiCategories() {
+        return aiCategories;
+    }
+
+    public void setAiCategories(List<String> aiCategories) {
+        this.aiCategories = aiCategories;
+    }
+
+    public String getAiReason() {
+        return aiReason;
+    }
+
+    public void setAiReason(String aiReason) {
+        this.aiReason = aiReason;
+    }
+
+    public String getAiModel() {
+        return aiModel;
+    }
+
+    public void setAiModel(String aiModel) {
+        this.aiModel = aiModel;
+    }
+
+    public Instant getAiCheckedAt() {
+        return aiCheckedAt;
+    }
+
+    public void setAiCheckedAt(Instant aiCheckedAt) {
+        this.aiCheckedAt = aiCheckedAt;
     }
 
     public static class Response {

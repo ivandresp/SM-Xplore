@@ -88,6 +88,24 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
     }
 
     @Override
+    public Mono<PageResult<Review>> findAiFlagged(int page, int size) {
+        Criteria criteria = Criteria.where("aiFlagged")
+                .is(true)
+                .and("moderationStatus")
+                .in(ReviewModerationStatus.PENDIENTE_REVISION.name(), ReviewModerationStatus.HIDDEN.name());
+        Query query = Query.query(criteria)
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .skip((long) page * size)
+                .limit(size);
+
+        Mono<Long> total = template.count(Query.query(criteria), ReviewDocument.class);
+        Mono<java.util.List<Review>> content =
+                template.find(query, ReviewDocument.class).map(mapper::toDomain).collectList();
+
+        return Mono.zip(total, content).map(tuple -> PageResult.of(tuple.getT2(), page, size, tuple.getT1()));
+    }
+
+    @Override
     public Mono<ReputationSummary> summary(ReviewTargetType targetType, UUID targetId) {
         Criteria criteria = Criteria.where("targetType")
                 .is(targetType.code())
@@ -125,6 +143,9 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
                 ReviewDocument.class);
         Mono<Long> reported =
                 template.count(Query.query(Criteria.where("reported").is(true)), ReviewDocument.class);
+        Mono<Long> pendingAi = template.count(
+                Query.query(Criteria.where("moderationStatus").is(ReviewModerationStatus.PENDIENTE_REVISION.name())),
+                ReviewDocument.class);
 
         Aggregation averageAggregation = Aggregation.newAggregation(
                 Aggregation.match(visibleCriteria),
@@ -133,13 +154,14 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
                 .next()
                 .defaultIfEmpty(new SummaryRow());
 
-        return Mono.zip(total, visible, hidden, reported, summary)
+        return Mono.zip(total, visible, hidden, reported, pendingAi, summary)
                 .map(tuple -> new ReviewStatistics(
                         tuple.getT1(),
                         tuple.getT2(),
                         tuple.getT3(),
+                        tuple.getT5(),
                         tuple.getT4(),
-                        round(tuple.getT5().getAverage())));
+                        round(tuple.getT6().getAverage())));
     }
 
     private static double round(double value) {

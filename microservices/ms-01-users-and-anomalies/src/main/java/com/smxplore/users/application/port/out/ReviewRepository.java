@@ -20,6 +20,8 @@ public interface ReviewRepository {
 
     Mono<PageResult<Review>> findReported(int page, int size);
 
+    Mono<PageResult<Review>> findAiFlagged(int page, int size);
+
     Mono<ReputationSummary> summary(ReviewTargetType targetType, UUID targetId);
 
     Mono<ReviewStatistics> statistics();
