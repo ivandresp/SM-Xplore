@@ -12,6 +12,18 @@ app:
       ttl: PT30M
     account-invitation:
       ttl: PT48H
+    rate-limit:
+      enabled: true
+      requests-per-minute: 120
+    lockout:
+      enabled: true
+      max-attempts: 5
+      window: PT15M
+      duration: PT15M
+    mfa:
+      required-for-admins: false
+      challenge-ttl: PT5M
+      issuer: SM-Xplore
   cors:
     allowed-origins:
       - http://localhost:5173

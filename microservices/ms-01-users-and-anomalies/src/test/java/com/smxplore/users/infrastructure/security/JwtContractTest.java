@@ -52,13 +52,14 @@ class JwtContractTest {
                 "Colombia",
                 clock.instant());
 
-        TokenIssuer.IssuedToken issued = issuer.issue(user).block();
+        TokenIssuer.IssuedToken issued = issuer.issue(user, false).block();
         Jwt jwt = decoder.decode(issued.value()).block();
 
         assertThat(jwt.getSubject()).isEqualTo(user.id().toString());
         assertThat(jwt.getClaimAsString("id")).isEqualTo(user.id().toString());
         assertThat(jwt.getClaimAsString("name")).isEqualTo("Ada Turista");
         assertThat(jwt.getClaimAsString("role")).isEqualTo("TURISTA");
+        assertThat(jwt.getClaimAsBoolean("mfa")).isFalse();
         assertThat(((Number) jwt.getClaim("ver")).longValue()).isZero();
         assertThat(jwt.getAudience()).containsExactly("sm-xplore-services");
         assertThat(jwt.getClaimAsString("iss")).isEqualTo("sm-xplore-ms-01");

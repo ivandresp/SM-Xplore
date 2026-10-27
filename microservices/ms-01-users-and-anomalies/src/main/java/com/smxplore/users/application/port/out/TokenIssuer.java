@@ -6,7 +6,7 @@ import reactor.core.publisher.Mono;
 
 public interface TokenIssuer {
 
-    Mono<IssuedToken> issue(Usuario user);
+    Mono<IssuedToken> issue(Usuario user, boolean mfaVerified);
 
     record IssuedToken(String value, Instant expiresAt) {}
 }

@@ -8,11 +8,16 @@ import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
+import com.smxplore.users.domain.exception.InvalidMfaChallengeException;
+import com.smxplore.users.domain.exception.InvalidMfaCodeException;
 import com.smxplore.users.domain.exception.InvalidPasswordResetTokenException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
+import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
+import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ReviewNotFoundException;
+import com.smxplore.users.domain.exception.TooManyLoginAttemptsException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import java.util.LinkedHashMap;
@@ -21,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +65,18 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ProblemDetail> handleInvalidCredentials(InvalidCredentialsException exception) {
         return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage());
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
+        long retryAfterSeconds = Math.max(1, exception.retryAfter().toSeconds());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle("Too Many Requests");
+        problem.setProperty("code", "TOO_MANY_ATTEMPTS");
+        problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
+                .body(problem);
     }
 
     @ExceptionHandler(InvalidCurrentPasswordException.class)
@@ -119,6 +137,26 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidPasswordResetTokenException.class)
     public ResponseEntity<ProblemDetail> handleInvalidResetToken(InvalidPasswordResetTokenException exception) {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_RESET_TOKEN", exception.getMessage());
+    }
+
+    @ExceptionHandler(MfaAlreadyEnabledException.class)
+    public ResponseEntity<ProblemDetail> handleMfaAlreadyEnabled(MfaAlreadyEnabledException exception) {
+        return problem(HttpStatus.CONFLICT, "MFA_ALREADY_ENABLED", exception.getMessage());
+    }
+
+    @ExceptionHandler(MfaNotEnabledException.class)
+    public ResponseEntity<ProblemDetail> handleMfaNotEnabled(MfaNotEnabledException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "MFA_NOT_ENABLED", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidMfaCodeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidMfaCode(InvalidMfaCodeException exception) {
+        return problem(HttpStatus.UNAUTHORIZED, "INVALID_MFA_CODE", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidMfaChallengeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidMfaChallenge(InvalidMfaChallengeException exception) {
+        return problem(HttpStatus.UNAUTHORIZED, "INVALID_MFA_CHALLENGE", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -2,7 +2,7 @@
 
 ## Project state
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management, guide/provider reviews, anomalies and admin monitoring implemented).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth with MFA, admin user management, guide/provider reviews, anomalies, admin monitoring and access hardening implemented).
 
 The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
 
@@ -46,7 +46,8 @@ docker compose up -d
 - Integration tests use Testcontainers and **require Docker**.
 - `check` runs tests, ArchUnit, and Spotless.
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
-- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`).
+- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`). Login lockout uses `login_attempts`; MFA uses `mfa_enrollments` and `mfa_recovery_codes`.
+- Security knobs: `app.security.rate-limit.*` (per-IP fixed window on auth endpoints), `app.security.lockout.*` (per-account failures, PostgreSQL-backed), `app.security.mfa.*` (`required-for-admins`, challenge TTL, issuer), `app.security.headers.*` (HSTS off by default, on in `prod`). `SPRING_PROFILES_ACTIVE=prod` loads `application-prod.yml`; `ProductionSecurityValidator` refuses to start with generated JWT keys or the default bootstrap password.
 
 ## Architecture rules
 
@@ -73,27 +74,28 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with recovery codes and admin enforcement, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
-1. **Security hardening**
-   - Admin/operator MFA (RNF01).
-   - Rate limiting or brute-force protection.
-   - Self-service password change is done; JWT keys are persisted (env PEM or the dev key store).
-
-2. **Tests and infrastructure**
-   - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
+1. **Tests and delivery**
    - CI and a Dockerfile for the service.
+   - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
 
-3. **Monitoring follow-ups**
+2. **Monitoring follow-ups**
    - PDF export for audit reports (UC6); CSV export is implemented.
    - Cross-service indicators (reservations, sites, activities, events) once ms-03/ms-04 expose their contracts.
+
+3. **Security follow-ups**
+   - The per-IP rate limiter is in-memory and per instance; lockout is shared through PostgreSQL. A distributed limiter is only needed if ms-01 scales horizontally.
+   - No audit-log or PII retention/ARCO procedure yet (Ley 1581); anonymization on delete is implemented.
+   - Recovery codes are issued once per enrollment; regeneration requires disabling and re-enrolling MFA.
 
 ## JWT contract (ms-01 → ms-02)
 
 - RS256 access-only tokens; no refresh endpoint.
-- Claims: `sub` and `id` (same user UUID), `name`, `role`, `ver`, optional `providerStatus`, `iss=sm-xplore-ms-01`, `aud=sm-xplore-services`, `iat`, `exp`, `jti`.
+- Claims: `sub` and `id` (same user UUID), `name`, `role`, `ver`, `mfa` (true only after the second factor), optional `providerStatus`, `iss=sm-xplore-ms-01`, `aud=sm-xplore-services`, `iat`, `exp`, `jti`.
+- MFA challenge tokens (`scope=mfa`, 5 min) are not access tokens; ms-01's access decoder rejects them. Other services must reject any token carrying `scope=mfa`.
 - Public keys: `GET /.well-known/jwks.json`.
 - ms-01 validates `ver` against `users.auth_version` (60 s cache). Other services validate signature, `iss`, `aud`, `exp`.
 - If ms-02 reads the UUID from `id`/`userId` instead of `sub`, align the contract before integration.

@@ -6,15 +6,19 @@ import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.application.port.in.ChangeUserRoleUseCase;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.application.port.in.ClassifyAnomalyUseCase;
+import com.smxplore.users.application.port.in.ConfirmMfaUseCase;
 import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.application.port.in.CreateReviewUseCase;
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
 import com.smxplore.users.application.port.in.DetectAnomaliesUseCase;
+import com.smxplore.users.application.port.in.DisableMfaUseCase;
+import com.smxplore.users.application.port.in.EnrollMfaUseCase;
 import com.smxplore.users.application.port.in.ExportAuditEntriesUseCase;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.application.port.in.GetAdminOverviewUseCase;
 import com.smxplore.users.application.port.in.GetAnomalyUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
+import com.smxplore.users.application.port.in.GetMfaStatusUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.GetSystemAvailabilityUseCase;
@@ -36,15 +40,21 @@ import com.smxplore.users.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.application.port.in.UpdateAnomalyThresholdUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
+import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
+import com.smxplore.users.application.port.out.LoginAttemptRepository;
+import com.smxplore.users.application.port.out.MfaChallengeIssuer;
+import com.smxplore.users.application.port.out.MfaChallengeVerifier;
+import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
+import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
@@ -52,6 +62,7 @@ import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
 import com.smxplore.users.application.port.out.TokenGenerator;
 import com.smxplore.users.application.port.out.TokenHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
+import com.smxplore.users.application.port.out.TotpAuthenticator;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.application.service.AdminResetPasswordService;
@@ -62,14 +73,18 @@ import com.smxplore.users.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.application.service.ChangeUserRoleService;
 import com.smxplore.users.application.service.ChangeUserStatusService;
 import com.smxplore.users.application.service.ClassifyAnomalyService;
+import com.smxplore.users.application.service.ConfirmMfaService;
 import com.smxplore.users.application.service.CreateInternalUserService;
 import com.smxplore.users.application.service.CreateReviewService;
 import com.smxplore.users.application.service.DeleteUserService;
+import com.smxplore.users.application.service.DisableMfaService;
+import com.smxplore.users.application.service.EnrollMfaService;
 import com.smxplore.users.application.service.ExportAuditEntriesService;
 import com.smxplore.users.application.service.ForgotPasswordService;
 import com.smxplore.users.application.service.GetAdminOverviewService;
 import com.smxplore.users.application.service.GetAnomalyService;
 import com.smxplore.users.application.service.GetCurrentUserService;
+import com.smxplore.users.application.service.GetMfaStatusService;
 import com.smxplore.users.application.service.GetPublicProfileService;
 import com.smxplore.users.application.service.GetReputationSummaryService;
 import com.smxplore.users.application.service.GetSystemAvailabilityService;
@@ -79,7 +94,9 @@ import com.smxplore.users.application.service.ListAnomalyThresholdsService;
 import com.smxplore.users.application.service.ListAuditEntriesService;
 import com.smxplore.users.application.service.ListReportedReviewsService;
 import com.smxplore.users.application.service.ListReviewsService;
+import com.smxplore.users.application.service.LoginProtection;
 import com.smxplore.users.application.service.LoginService;
+import com.smxplore.users.application.service.MfaCodeVerifier;
 import com.smxplore.users.application.service.ModerateReviewService;
 import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
@@ -91,8 +108,11 @@ import com.smxplore.users.application.service.ReviewProviderService;
 import com.smxplore.users.application.service.SearchUsersService;
 import com.smxplore.users.application.service.UpdateAnomalyThresholdService;
 import com.smxplore.users.application.service.UpdateProfileService;
+import com.smxplore.users.application.service.VerifyMfaLoginService;
 import com.smxplore.users.domain.policy.AccountInvitationPolicy;
+import com.smxplore.users.domain.policy.LoginLockoutPolicy;
 import com.smxplore.users.domain.policy.PasswordResetPolicy;
+import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -123,13 +143,90 @@ public class ApplicationConfig {
     }
 
     @Bean
+    public LoginProtection loginProtection(
+            LoginAttemptRepository loginAttempts, LockoutProperties properties, Clock clock) {
+        return new LoginProtection(
+                loginAttempts,
+                new LoginLockoutPolicy(properties.maxAttempts(), properties.window(), properties.duration()),
+                properties.enabled(),
+                clock);
+    }
+
+    @Bean
     public LoginUseCase loginUseCase(
             UserRepository users,
             PasswordHasher passwordHasher,
             TokenIssuer tokenIssuer,
             FailedLoginSignal failedLogins,
+            LoginProtection protection,
+            MfaRepository mfa,
+            MfaChallengeIssuer challengeIssuer,
             Clock clock) {
-        return new LoginService(users, passwordHasher, tokenIssuer, failedLogins, clock);
+        return new LoginService(
+                users, passwordHasher, tokenIssuer, failedLogins, protection, mfa, challengeIssuer, clock);
+    }
+
+    @Bean
+    public MfaCodeVerifier mfaCodeVerifier(MfaRepository mfa, TotpAuthenticator totp, TokenHasher tokenHasher) {
+        return new MfaCodeVerifier(mfa, totp, tokenHasher);
+    }
+
+    @Bean
+    public EnrollMfaUseCase enrollMfaUseCase(
+            UserRepository users,
+            MfaRepository mfa,
+            TotpAuthenticator totp,
+            RecoveryCodeGenerator recoveryCodeGenerator,
+            TokenHasher tokenHasher,
+            TransactionPort transactions,
+            Clock clock,
+            MfaProperties properties) {
+        return new EnrollMfaService(
+                users, mfa, totp, recoveryCodeGenerator, tokenHasher, transactions, clock, properties.issuer());
+    }
+
+    @Bean
+    public ConfirmMfaUseCase confirmMfaUseCase(
+            MfaRepository mfa,
+            TotpAuthenticator totp,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            Clock clock) {
+        return new ConfirmMfaService(mfa, totp, transactions, audit, clock);
+    }
+
+    @Bean
+    public DisableMfaUseCase disableMfaUseCase(
+            UserRepository users,
+            MfaRepository mfa,
+            PasswordHasher passwordHasher,
+            MfaCodeVerifier codeVerifier,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            Clock clock) {
+        return new DisableMfaService(users, mfa, passwordHasher, codeVerifier, transactions, audit, clock);
+    }
+
+    @Bean
+    public VerifyMfaLoginUseCase verifyMfaLoginUseCase(
+            UserRepository users,
+            MfaRepository mfa,
+            MfaChallengeVerifier challengeVerifier,
+            MfaCodeVerifier codeVerifier,
+            TokenIssuer tokenIssuer,
+            Clock clock) {
+        return new VerifyMfaLoginService(users, mfa, challengeVerifier, codeVerifier, tokenIssuer, clock);
+    }
+
+    @Bean
+    public GetMfaStatusUseCase getMfaStatusUseCase(MfaRepository mfa) {
+        return new GetMfaStatusService(mfa);
+    }
+
+    @Bean
+    public ProductionSecurityValidator productionSecurityValidator(
+            JwtProperties jwt, BootstrapAdminProperties bootstrapAdmin, CorsProperties cors, MfaProperties mfa) {
+        return new ProductionSecurityValidator(jwt, bootstrapAdmin, cors, mfa);
     }
 
     @Bean

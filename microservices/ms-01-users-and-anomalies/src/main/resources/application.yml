@@ -54,6 +54,21 @@ app:
       ttl: ${PASSWORD_RESET_TTL:PT30M}
     account-invitation:
       ttl: ${ACCOUNT_INVITATION_TTL:PT48H}
+    rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:30}
+    lockout:
+      enabled: ${LOGIN_LOCKOUT_ENABLED:true}
+      max-attempts: ${LOGIN_LOCKOUT_MAX_ATTEMPTS:5}
+      window: ${LOGIN_LOCKOUT_WINDOW:PT15M}
+      duration: ${LOGIN_LOCKOUT_DURATION:PT15M}
+    mfa:
+      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
+      challenge-ttl: ${MFA_CHALLENGE_TTL:PT5M}
+      issuer: ${MFA_ISSUER:SM-Xplore}
+    headers:
+      hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
+      hsts-max-age-days: ${SECURITY_HSTS_MAX_AGE_DAYS:365}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   frontend:

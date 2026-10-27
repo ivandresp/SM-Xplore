@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.infrastructure.config.CorsProperties;
+import com.smxplore.users.infrastructure.config.MfaProperties;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +54,8 @@ public class SecurityConfig {
             ReactiveJwtAuthenticationConverter jwtAuthenticationConverter,
             ServerAuthenticationEntryPoint authenticationEntryPoint,
             ServerAccessDeniedHandler accessDeniedHandler,
-            AuthVersionFilter authVersionFilter) {
+            AuthVersionFilter authVersionFilter,
+            MfaProperties mfaProperties) {
         return http.csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .cors(Customizer.withDefaults())
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -83,6 +85,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(
                         oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .addFilterAfter(authVersionFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .addFilterAfter(new MfaEnrollmentRequiredFilter(mfaProperties), SecurityWebFiltersOrder.AUTHORIZATION)
                 .build();
     }
 

@@ -33,7 +33,7 @@ public class JwtTokenIssuer implements TokenIssuer {
     }
 
     @Override
-    public Mono<IssuedToken> issue(Usuario user) {
+    public Mono<IssuedToken> issue(Usuario user, boolean mfaVerified) {
         return Mono.fromCallable(() -> {
             Instant now = clock.instant();
             Instant expiresAt = now.plus(properties.ttl());
@@ -48,7 +48,8 @@ public class JwtTokenIssuer implements TokenIssuer {
                     .claim("id", user.id().toString())
                     .claim("name", user.fullName())
                     .claim("role", user.role().code())
-                    .claim("ver", user.authVersion());
+                    .claim("ver", user.authVersion())
+                    .claim("mfa", mfaVerified);
 
             if (user instanceof PrestadoraServicios provider) {
                 claims.claim("providerStatus", provider.registrationStatus().name());
