@@ -2,7 +2,7 @@
 
 Servicio encargado de la gestión de **Usuarios** y, más adelante, **Anomalías** de SM-Xplore. Incluye las **Reseñas sobre Guías y Prestadoras de Servicios**.
 
-Estado actual: identidad, autenticación, perfiles y administración de usuarios (Java + Spring Boot). Las reseñas en MongoDB y las anomalías se incorporan en las siguientes fases.
+Estado actual: identidad, autenticación, perfiles, administración de usuarios y reseñas sobre guías y prestadoras (Java + Spring Boot). Las anomalías se incorporan en la siguiente fase.
 
 ## Stack
 
@@ -10,7 +10,7 @@ Estado actual: identidad, autenticación, perfiles y administración de usuarios
 - Spring Boot 4.1.2 (Spring WebFlux)
 - Spring R2DBC (`DatabaseClient`) sobre PostgreSQL 17 (sin JPA/Hibernate)
 - Flyway para migraciones (usa JDBC únicamente durante el arranque)
-- MongoDB 8 para reseñas (fase siguiente)
+- Spring Data MongoDB reactivo para reseñas
 - Mailpit para correo local
 - Gradle 9.5.1 (wrapper dentro de este directorio)
 
@@ -24,7 +24,7 @@ infrastructure -> application -> domain
 
 - `domain`: modelo puro, sin Spring, Jakarta, R2DBC, Reactor ni Jackson. `Usuario` es la clase base y de ella heredan `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos` y `Admin`, igual que en el diagrama de dominio. Las reglas de contraseña e invitación viven en `domain/policy`.
 - `application`: casos de uso, puertos de entrada/salida y DTOs. Los puertos devuelven `Mono`/`Flux`; los casos de uso se ejecutan dentro de `TransactionPort`, implementado con `TransactionalOperator`.
-- `infrastructure`: controladores WebFlux, DTOs HTTP, adaptadores R2DBC, correo, JWT y configuración. Los controladores devuelven `Mono`/`Flux` y la seguridad es reactiva (`SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`).
+- `infrastructure`: controladores WebFlux, DTOs HTTP, adaptadores R2DBC y MongoDB, correo, JWT y configuración. Los controladores devuelven `Mono`/`Flux` y la seguridad es reactiva (`SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`).
 - Las dependencias se verifican con ArchUnit.
 
 ```text
@@ -33,7 +33,7 @@ com.smxplore.users
 ├── application/{dto,port/in,port/out,service}
 └── infrastructure
     ├── adapter/in/{rest,dto}
-    ├── adapter/out/{persistence/r2dbc,email,security}
+    ├── adapter/out/{persistence/r2dbc,persistence/mongo,email,security}
     ├── config
     ├── rest
     └── security
@@ -59,6 +59,7 @@ Mailpit: `http://localhost:8025`.
 | `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/smxplore_users` |
 | `DB_USERNAME` | `smxplore` |
 | `DB_PASSWORD` | `smxplore` |
+| `MONGODB_URI` | `mongodb://smxplore:smxplore@localhost:27017/smxplore_reviews?authSource=admin` |
 | `MAIL_HOST` / `MAIL_PORT` | `localhost` / `1025` |
 | `JWT_ISSUER` | `sm-xplore-ms-01` |
 | `JWT_AUDIENCE` | `sm-xplore-services` |
@@ -98,6 +99,13 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 | PATCH | `/api/v1/users/me` | Autenticado |
 | PUT | `/api/v1/users/me/password` | Autenticado |
 | GET | `/api/v1/public/users/{id}` | Público, solo guías activos y prestadoras aprobadas |
+| POST | `/api/v1/reviews` | TURISTA, crea una reseña de guía o prestadora |
+| POST | `/api/v1/reviews/{id}/response` | GUÍA o PRESTADORA, responde su propia reseña |
+| POST | `/api/v1/reviews/{id}/report` | Autenticado, reporta una reseña |
+| GET | `/api/v1/public/reviews` | Público, reseñas visibles de un destino |
+| GET | `/api/v1/public/reviews/summary` | Público, reputación de un destino |
+| GET | `/api/v1/admin/reviews/reported` | ADMIN, cola de moderación |
+| PATCH | `/api/v1/admin/reviews/{id}/moderation` | ADMIN, oculta o mantiene una reseña |
 | GET | `/api/v1/admin/users` | ADMIN |
 | GET | `/api/v1/admin/users/{id}` | ADMIN |
 | POST | `/api/v1/admin/users` | ADMIN, crea guía/gestora/admin con invitación |
@@ -120,6 +128,17 @@ campo se devuelve en el perfil administrativo y en el perfil público de la pres
 
 - `PATCH /api/v1/admin/users/{id}/role` recibe el nuevo `role` y los datos exigidos por ese rol (`dniType`/`dniNumber` para turista o guía, `license` para guía, `nit` para prestadora o gestora, etc.). Migra la fila de perfil, conserva la identidad de la cuenta e invalida los JWT anteriores incrementando `authVersion`.
 - `DELETE /api/v1/admin/users/{id}` aplica una baja lógica: deja la cuenta en estado `ELIMINADO`, reemplaza nombre, correo, teléfono, documento/NIT, licencia y contraseña por valores anónimos, invalida tokens de recuperación y conserva el registro para trazabilidad. No permite eliminar la propia cuenta ni al último administrador activo.
+
+### Reseñas
+
+Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colección `reviews`):
+
+- Solo un turista puede crearlas, con calificación de 1 a 5 y comentario opcional.
+- `targetType` acepta `GUIA` o `PRESTADORA_SERVICIOS`, y `targetId` es el UUID del perfil reseñado.
+- Solo se reseñan guías activos y prestadoras aprobadas; hay una reseña por turista y destino (índice único).
+- El destino puede responder una vez y cualquier usuario autenticado puede reportar la reseña.
+- El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
+- La reputación devuelve cantidad de reseñas, promedio y distribución de 1 a 5 estrellas.
 
 ## Contrato JWT para otros microservicios
 
@@ -157,4 +176,5 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 
 Las pruebas de integración usan Testcontainers y requieren Docker. La aplicación configura R2DBC con
 `spring.r2dbc.*`; Flyway usa `spring.flyway.url`/`user`/`password` (JDBC) solo para migrar el esquema,
-porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC.
+porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC. Las pruebas de
+reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`.

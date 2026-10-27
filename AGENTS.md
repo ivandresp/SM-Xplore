@@ -2,7 +2,7 @@
 
 ## Project state
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth and admin user management implemented; reviews and anomalies pending).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management and guide/provider reviews implemented; anomalies pending).
 
 The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
 
@@ -46,7 +46,7 @@ docker compose up -d
 - Integration tests use Testcontainers and **require Docker**.
 - `check` runs tests, ArchUnit, and Spotless.
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
-- PostgreSQL is the only implemented store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. MongoDB is reserved for guide/provider reviews.
+- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`).
 
 ## Architecture rules
 
@@ -55,7 +55,7 @@ docker compose up -d
 - `domain` must not import Spring, Jakarta, R2DBC, Reactor, Mongo, or Jackson. ArchUnit enforces this; application must not depend on infrastructure.
 - Application use cases live in `application/service`, implement input ports, and use output ports. Ports are reactive (`Mono`/`Flux`) and write use cases run inside `TransactionPort` (implemented with `TransactionalOperator`); there is no `@Transactional` in controllers or domain.
 - Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity. The user identifier is a plain `UUID`; there is no `UserId` wrapper.
-- Adapters own R2DBC SQL/row mapping; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
+- Adapters own R2DBC SQL/row mapping and Mongo document mapping; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
 - Controllers are Spring WebFlux annotated controllers returning `Mono`/`Flux`. Security is reactive: `SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`, `@EnableReactiveMethodSecurity`. Errors are RFC 9457 `ProblemDetail`.
 - `Role` constants are English (`TOURIST`, `GUIDE`, ...) but `Role.code()` keeps the Spanish wire values used by the database and JWT. API DTOs expose the code as `String`.
 - No Lombok/MapStruct; use records and explicit mappers. Constructor injection only.
@@ -65,7 +65,7 @@ docker compose up -d
 - 5 roles: Turista, Guía Turístico, Prestadora de Servicios, Gestora de Destinos, Admin. `Usuario` is the base concept in `docs/models/domain/diagram.puml`.
 - 11 level-0 use cases (UC1–UC11) in `docs/models/uc-lvl-0/diagram.puml`. The SRS defines RF01–RF108 with UC/HU/PA traceability.
 - 4 microservices: ms-01 users + anomalies (+ guide/provider reviews), ms-02 security reports, ms-03 activities + events (+ reservations/reviews), ms-04 sites + services (+ reservations/reviews).
-- Polyglot persistence: PostgreSQL (transactional), MongoDB (semi-structured), Neo4j (relations/recommendations). ms-01 uses PostgreSQL for users and MongoDB later for reviews.
+- Polyglot persistence: PostgreSQL (transactional), MongoDB (semi-structured), Neo4j (relations/recommendations). ms-01 uses PostgreSQL for users and MongoDB (`smxplore_reviews`) for guide/provider reviews.
 - Chosen stack: Java 25 + Spring Boot 4.1.2; React + JavaScript/TypeScript for the frontend. External integrations: OpenStreetMap, OpenMeteo, PSE, email/Web Push. UI is Spanish/English.
 - Ley 1581 de 2012 (Colombian data protection) is a hard compliance constraint (admin US5, RNF09).
 
@@ -73,32 +73,23 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
-1. **Guide/provider reviews in MongoDB** (RF69–RF75, RF77)
-   - Add Spring Data MongoDB and the `smxplore_reviews` database.
-   - `Review` document, indexes, repository adapter, and mapping.
-   - Create/read reviews, guide/provider responses, report, moderation, and reputation summary.
-   - Enforce one review per tourist per target.
-   - Only guide/provider reviews belong in ms-01; other review targets belong to their owning services.
-   - Integration tests with a MongoDB Testcontainer.
-
-2. **Anomalies** (RF99–RF102, Admin US11–US14)
+1. **Anomalies** (RF99–RF102, Admin US11–US14)
    - Table and API for anomalies.
    - Classify by severity and mark as resolved.
    - Configurable alert thresholds.
    - Detection hooks for suspicious access, service downtime, and request spikes.
 
-3. **Security hardening**
+2. **Security hardening**
    - Admin/operator MFA (RNF01).
    - Rate limiting or brute-force protection.
    - Self-service password change is done; JWT keys are persisted (env PEM or the dev key store).
 
-4. **Tests and infrastructure**
+3. **Tests and infrastructure**
    - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
-   - MongoDB tests and index creation/migration.
    - CI and a Dockerfile for the service.
 
 ## JWT contract (ms-01 → ms-02)

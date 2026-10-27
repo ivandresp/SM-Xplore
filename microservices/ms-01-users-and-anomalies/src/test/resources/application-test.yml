@@ -18,6 +18,9 @@ app:
   frontend:
     base-url: http://localhost:5173
     reset-password-path: /reset-password
+  reviews:
+    index-initialization:
+      enabled: false
 
 spring:
   mail:

@@ -7,6 +7,7 @@ palantir-java-format = "2.102.0"
 [libraries]
 spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
 spring-boot-data-r2dbc = { module = "org.springframework.boot:spring-boot-starter-data-r2dbc" }
+spring-boot-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb-reactive" }
 spring-boot-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 spring-boot-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
 spring-boot-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
@@ -23,6 +24,7 @@ postgresql = { module = "org.postgresql:postgresql" }
 r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-mongodb = { module = "org.testcontainers:testcontainers-mongodb" }
 testcontainers-r2dbc = { module = "org.testcontainers:testcontainers-r2dbc" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 

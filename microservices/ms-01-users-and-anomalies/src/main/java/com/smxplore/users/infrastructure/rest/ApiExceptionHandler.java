@@ -1,6 +1,7 @@
 package com.smxplore.users.infrastructure.rest;
 
 import com.smxplore.users.domain.exception.AccountNotActiveException;
+import com.smxplore.users.domain.exception.DuplicateReviewException;
 import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
@@ -8,6 +9,8 @@ import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
 import com.smxplore.users.domain.exception.InvalidPasswordResetTokenException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
+import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
+import com.smxplore.users.domain.exception.ReviewNotFoundException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import java.util.LinkedHashMap;
@@ -84,6 +87,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleUserNotFound(UserNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(ReviewNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleReviewNotFound(ReviewNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateReviewException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateReview(DuplicateReviewException exception) {
+        return problem(HttpStatus.CONFLICT, "DUPLICATE_REVIEW", exception.getMessage());
+    }
+
+    @ExceptionHandler(ReviewAlreadyReportedException.class)
+    public ResponseEntity<ProblemDetail> handleReviewAlreadyReported(ReviewAlreadyReportedException exception) {
+        return problem(HttpStatus.CONFLICT, "REVIEW_ALREADY_REPORTED", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidPasswordResetTokenException.class)

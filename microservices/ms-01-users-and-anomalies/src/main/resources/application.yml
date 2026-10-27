@@ -22,6 +22,10 @@ spring:
           auth: false
           starttls:
             enable: false
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://smxplore:smxplore@localhost:27017/smxplore_reviews?authSource=admin}
+    representation:
+      uuid: standard
 
 server:
   port: ${SERVER_PORT:8081}
@@ -60,3 +64,6 @@ app:
     email: ${BOOTSTRAP_ADMIN_EMAIL:admin@smxplore.local}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:ChangeMe123!}
     full-name: ${BOOTSTRAP_ADMIN_NAME:Administrador SM-Xplore}
+  reviews:
+    index-initialization:
+      enabled: ${REVIEW_INDEX_INIT:true}

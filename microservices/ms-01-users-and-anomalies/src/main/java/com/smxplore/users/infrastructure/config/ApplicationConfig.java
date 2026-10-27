@@ -6,16 +6,23 @@ import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.application.port.in.ChangeUserRoleUseCase;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
+import com.smxplore.users.application.port.in.CreateReviewUseCase;
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
+import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
 import com.smxplore.users.application.port.in.ListAuditEntriesUseCase;
+import com.smxplore.users.application.port.in.ListReportedReviewsUseCase;
+import com.smxplore.users.application.port.in.ListReviewsUseCase;
 import com.smxplore.users.application.port.in.LoginUseCase;
+import com.smxplore.users.application.port.in.ModerateReviewUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
+import com.smxplore.users.application.port.in.ReportReviewUseCase;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
+import com.smxplore.users.application.port.in.RespondReviewUseCase;
 import com.smxplore.users.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
@@ -25,6 +32,7 @@ import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
+import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.TokenGenerator;
 import com.smxplore.users.application.port.out.TokenHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
@@ -37,16 +45,23 @@ import com.smxplore.users.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.application.service.ChangeUserRoleService;
 import com.smxplore.users.application.service.ChangeUserStatusService;
 import com.smxplore.users.application.service.CreateInternalUserService;
+import com.smxplore.users.application.service.CreateReviewService;
 import com.smxplore.users.application.service.DeleteUserService;
 import com.smxplore.users.application.service.ForgotPasswordService;
 import com.smxplore.users.application.service.GetCurrentUserService;
 import com.smxplore.users.application.service.GetPublicProfileService;
+import com.smxplore.users.application.service.GetReputationSummaryService;
 import com.smxplore.users.application.service.GetUserDetailService;
 import com.smxplore.users.application.service.ListAuditEntriesService;
+import com.smxplore.users.application.service.ListReportedReviewsService;
+import com.smxplore.users.application.service.ListReviewsService;
 import com.smxplore.users.application.service.LoginService;
+import com.smxplore.users.application.service.ModerateReviewService;
 import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
+import com.smxplore.users.application.service.ReportReviewService;
 import com.smxplore.users.application.service.ResetPasswordService;
+import com.smxplore.users.application.service.RespondReviewService;
 import com.smxplore.users.application.service.ReviewProviderService;
 import com.smxplore.users.application.service.SearchUsersService;
 import com.smxplore.users.application.service.UpdateProfileService;
@@ -242,5 +257,41 @@ public class ApplicationConfig {
     public BootstrapAdminUseCase bootstrapAdminUseCase(
             UserRepository users, PasswordHasher passwordHasher, TransactionPort transactions, Clock clock) {
         return new BootstrapAdminService(users, passwordHasher, transactions, clock);
+    }
+
+    @Bean
+    public CreateReviewUseCase createReviewUseCase(ReviewRepository reviews, UserRepository users, Clock clock) {
+        return new CreateReviewService(reviews, users, clock);
+    }
+
+    @Bean
+    public ListReviewsUseCase listReviewsUseCase(ReviewRepository reviews) {
+        return new ListReviewsService(reviews);
+    }
+
+    @Bean
+    public GetReputationSummaryUseCase getReputationSummaryUseCase(ReviewRepository reviews) {
+        return new GetReputationSummaryService(reviews);
+    }
+
+    @Bean
+    public RespondReviewUseCase respondReviewUseCase(ReviewRepository reviews, Clock clock) {
+        return new RespondReviewService(reviews, clock);
+    }
+
+    @Bean
+    public ReportReviewUseCase reportReviewUseCase(ReviewRepository reviews, Clock clock) {
+        return new ReportReviewService(reviews, clock);
+    }
+
+    @Bean
+    public ListReportedReviewsUseCase listReportedReviewsUseCase(ReviewRepository reviews) {
+        return new ListReportedReviewsService(reviews);
+    }
+
+    @Bean
+    public ModerateReviewUseCase moderateReviewUseCase(
+            ReviewRepository reviews, AuditTrailRecorder auditTrailRecorder, Clock clock) {
+        return new ModerateReviewService(reviews, auditTrailRecorder, clock);
     }
 }

@@ -18,6 +18,7 @@ dependencies {
 
     implementation(libs.spring.boot.webflux)
     implementation(libs.spring.boot.data.r2dbc)
+    implementation(libs.spring.boot.data.mongodb)
     implementation(libs.spring.boot.security)
     implementation(libs.spring.boot.validation)
     implementation(libs.spring.boot.flyway)
@@ -35,6 +36,7 @@ dependencies {
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.spring.security.test)
     testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.mongodb)
     testImplementation(libs.testcontainers.r2dbc)
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.archunit.junit5)
