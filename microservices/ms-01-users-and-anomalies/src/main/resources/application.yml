@@ -67,3 +67,7 @@ app:
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:true}
+  anomalies:
+    detection:
+      enabled: ${ANOMALY_DETECTION_ENABLED:true}
+      interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}

@@ -21,6 +21,9 @@ app:
   reviews:
     index-initialization:
       enabled: false
+  anomalies:
+    detection:
+      enabled: false
 
 spring:
   mail:

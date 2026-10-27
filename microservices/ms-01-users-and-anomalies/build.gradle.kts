@@ -35,6 +35,7 @@ dependencies {
     testImplementation(libs.spring.boot.test)
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.spring.security.test)
+    testImplementation(libs.reactor.test)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.mongodb)
     testImplementation(libs.testcontainers.r2dbc)

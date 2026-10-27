@@ -1,8 +1,8 @@
 # Microservicio #1: Usuarios y Anomalías
 
-Servicio encargado de la gestión de **Usuarios** y, más adelante, **Anomalías** de SM-Xplore. Incluye las **Reseñas sobre Guías y Prestadoras de Servicios**.
+Servicio encargado de la gestión de **Usuarios** y **Anomalías** de SM-Xplore. Incluye las **Reseñas sobre Guías y Prestadoras de Servicios**.
 
-Estado actual: identidad, autenticación, perfiles, administración de usuarios y reseñas sobre guías y prestadoras (Java + Spring Boot). Las anomalías se incorporan en la siguiente fase.
+Estado actual: identidad, autenticación, perfiles, administración de usuarios, reseñas sobre guías y prestadoras, y detección y gestión de anomalías (Java + Spring Boot).
 
 ## Stack
 
@@ -24,7 +24,7 @@ infrastructure -> application -> domain
 
 - `domain`: modelo puro, sin Spring, Jakarta, R2DBC, Reactor ni Jackson. `Usuario` es la clase base y de ella heredan `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos` y `Admin`, igual que en el diagrama de dominio. Las reglas de contraseña e invitación viven en `domain/policy`.
 - `application`: casos de uso, puertos de entrada/salida y DTOs. Los puertos devuelven `Mono`/`Flux`; los casos de uso se ejecutan dentro de `TransactionPort`, implementado con `TransactionalOperator`.
-- `infrastructure`: controladores WebFlux, DTOs HTTP, adaptadores R2DBC y MongoDB, correo, JWT y configuración. Los controladores devuelven `Mono`/`Flux` y la seguridad es reactiva (`SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`).
+- `infrastructure`: controladores WebFlux, DTOs HTTP, adaptadores R2DBC y MongoDB, monitoreo, correo, JWT y configuración. Los controladores devuelven `Mono`/`Flux` y la seguridad es reactiva (`SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`).
 - Las dependencias se verifican con ArchUnit.
 
 ```text
@@ -32,8 +32,8 @@ com.smxplore.users
 ├── domain/{model,exception,policy}
 ├── application/{dto,port/in,port/out,service}
 └── infrastructure
-    ├── adapter/in/{rest,dto}
-    ├── adapter/out/{persistence/r2dbc,persistence/mongo,email,security}
+    ├── adapter/in/{rest,dto,web}
+    ├── adapter/out/{persistence/r2dbc,persistence/mongo,monitoring,email,security}
     ├── config
     ├── rest
     └── security
@@ -60,6 +60,8 @@ Mailpit: `http://localhost:8025`.
 | `DB_USERNAME` | `smxplore` |
 | `DB_PASSWORD` | `smxplore` |
 | `MONGODB_URI` | `mongodb://smxplore:smxplore@localhost:27017/smxplore_reviews?authSource=admin` |
+| `ANOMALY_DETECTION_ENABLED` | `true` |
+| `ANOMALY_DETECTION_INTERVAL_MS` | `30000` |
 | `MAIL_HOST` / `MAIL_PORT` | `localhost` / `1025` |
 | `JWT_ISSUER` | `sm-xplore-ms-01` |
 | `JWT_AUDIENCE` | `sm-xplore-services` |
@@ -115,6 +117,13 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
+| GET | `/api/v1/admin/anomalies` | ADMIN, lista y filtra anomalías |
+| GET | `/api/v1/admin/anomalies/{id}` | ADMIN, detalle de una anomalía |
+| PATCH | `/api/v1/admin/anomalies/{id}/severity` | ADMIN, reclasifica por severidad |
+| PATCH | `/api/v1/admin/anomalies/{id}/resolve` | ADMIN, marca la anomalía como resuelta |
+| POST | `/api/v1/admin/anomalies/detect` | ADMIN, fuerza una evaluación de umbrales |
+| GET | `/api/v1/admin/anomaly-thresholds` | ADMIN, umbrales de detección |
+| PUT | `/api/v1/admin/anomaly-thresholds/{type}` | ADMIN, actualiza un umbral |
 | GET | `/.well-known/jwks.json` | Público |
 | GET | `/actuator/health` | Público |
 
@@ -139,6 +148,29 @@ Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colec
 - El destino puede responder una vez y cualquier usuario autenticado puede reportar la reseña.
 - El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
 - La reputación devuelve cantidad de reseñas, promedio y distribución de 1 a 5 estrellas.
+
+### Anomalías (RF99–RF102, Admin US11–US14)
+
+Las anomalías se persisten en PostgreSQL (`anomalies` y `anomaly_thresholds`) y se detectan automáticamente:
+
+- **Accesos sospechosos** (`ACCESO_SOSPECHOSO`): inicios de sesión fallidos dentro de una ventana.
+- **Caída de servicio** (`CAIDA_SERVICIO`): verificaciones consecutivas fallidas de PostgreSQL o MongoDB.
+- **Pico de solicitudes** (`PICO_SOLICITUDES`): solicitudes HTTP dentro de una ventana.
+
+Los umbrales por defecto son 5 fallos en 300 segundos para accesos, 2 verificaciones fallidas para
+disponibilidad y 300 solicitudes en 60 segundos para picos. El administrador puede cambiarlos por tipo con
+`PUT /api/v1/admin/anomaly-thresholds/{type}`, incluyendo la severidad con la que nace la anomalía.
+
+Cada anomalía nace en estado `DETECTADA`; el administrador puede reclasificarla (`BAJA`, `MEDIA`, `ALTA`,
+`CRITICA`) y resolverla con una nota. Una anomalía resuelta no se vuelve a resolver y la clasificación y la
+resolución quedan auditadas (`ANOMALIA_CLASIFICADA`, `ANOMALIA_RESUELTA`, `UMBRAL_ANOMALIA_ACTUALIZADO`).
+La detección corre cada 30 segundos y también se puede disparar con `POST /api/v1/admin/anomalies/detect`.
+
+Los contadores de fallos y solicitudes viven en memoria de cada instancia, por lo que la detección es local;
+en un despliegue con varias réplicas cada una evalúa sus propias señales. Los umbrales y las anomalías sí son
+globales porque se guardan en PostgreSQL. La verificación de disponibilidad consulta las dependencias desde
+el propio servicio, así que una caída total de PostgreSQL no puede registrarse a sí misma; para ese caso se
+recomienda un monitor externo que consuma la API.
 
 ## Contrato JWT para otros microservicios
 
@@ -177,4 +209,5 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 Las pruebas de integración usan Testcontainers y requieren Docker. La aplicación configura R2DBC con
 `spring.r2dbc.*`; Flyway usa `spring.flyway.url`/`user`/`password` (JDBC) solo para migrar el esquema,
 porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC. Las pruebas de
-reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`.
+reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`. Las pruebas de anomalías usan
+PostgreSQL y desactivan la detección programada con `app.anomalies.detection.enabled=false`.

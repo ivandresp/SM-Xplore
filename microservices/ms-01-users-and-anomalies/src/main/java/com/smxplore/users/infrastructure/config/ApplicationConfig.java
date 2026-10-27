@@ -5,14 +5,19 @@ import com.smxplore.users.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.application.port.in.ChangeUserRoleUseCase;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
+import com.smxplore.users.application.port.in.ClassifyAnomalyUseCase;
 import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.application.port.in.CreateReviewUseCase;
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
+import com.smxplore.users.application.port.in.DetectAnomaliesUseCase;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
+import com.smxplore.users.application.port.in.GetAnomalyUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
+import com.smxplore.users.application.port.in.ListAnomaliesUseCase;
+import com.smxplore.users.application.port.in.ListAnomalyThresholdsUseCase;
 import com.smxplore.users.application.port.in.ListAuditEntriesUseCase;
 import com.smxplore.users.application.port.in.ListReportedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListReviewsUseCase;
@@ -22,36 +27,48 @@ import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.application.port.in.ReportReviewUseCase;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
+import com.smxplore.users.application.port.in.ResolveAnomalyUseCase;
 import com.smxplore.users.application.port.in.RespondReviewUseCase;
 import com.smxplore.users.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
+import com.smxplore.users.application.port.in.UpdateAnomalyThresholdUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
+import com.smxplore.users.application.port.out.AnomalyRepository;
+import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
+import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
+import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewRepository;
+import com.smxplore.users.application.port.out.ServiceHealthSignal;
 import com.smxplore.users.application.port.out.TokenGenerator;
 import com.smxplore.users.application.port.out.TokenHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.application.service.AdminResetPasswordService;
+import com.smxplore.users.application.service.AnomalyDetectionService;
 import com.smxplore.users.application.service.AuditTrailRecorder;
 import com.smxplore.users.application.service.BootstrapAdminService;
 import com.smxplore.users.application.service.ChangeOwnPasswordService;
 import com.smxplore.users.application.service.ChangeUserRoleService;
 import com.smxplore.users.application.service.ChangeUserStatusService;
+import com.smxplore.users.application.service.ClassifyAnomalyService;
 import com.smxplore.users.application.service.CreateInternalUserService;
 import com.smxplore.users.application.service.CreateReviewService;
 import com.smxplore.users.application.service.DeleteUserService;
 import com.smxplore.users.application.service.ForgotPasswordService;
+import com.smxplore.users.application.service.GetAnomalyService;
 import com.smxplore.users.application.service.GetCurrentUserService;
 import com.smxplore.users.application.service.GetPublicProfileService;
 import com.smxplore.users.application.service.GetReputationSummaryService;
 import com.smxplore.users.application.service.GetUserDetailService;
+import com.smxplore.users.application.service.ListAnomaliesService;
+import com.smxplore.users.application.service.ListAnomalyThresholdsService;
 import com.smxplore.users.application.service.ListAuditEntriesService;
 import com.smxplore.users.application.service.ListReportedReviewsService;
 import com.smxplore.users.application.service.ListReviewsService;
@@ -61,9 +78,11 @@ import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
 import com.smxplore.users.application.service.ReportReviewService;
 import com.smxplore.users.application.service.ResetPasswordService;
+import com.smxplore.users.application.service.ResolveAnomalyService;
 import com.smxplore.users.application.service.RespondReviewService;
 import com.smxplore.users.application.service.ReviewProviderService;
 import com.smxplore.users.application.service.SearchUsersService;
+import com.smxplore.users.application.service.UpdateAnomalyThresholdService;
 import com.smxplore.users.application.service.UpdateProfileService;
 import com.smxplore.users.domain.policy.AccountInvitationPolicy;
 import com.smxplore.users.domain.policy.PasswordResetPolicy;
@@ -98,8 +117,12 @@ public class ApplicationConfig {
 
     @Bean
     public LoginUseCase loginUseCase(
-            UserRepository users, PasswordHasher passwordHasher, TokenIssuer tokenIssuer, Clock clock) {
-        return new LoginService(users, passwordHasher, tokenIssuer, clock);
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            TokenIssuer tokenIssuer,
+            FailedLoginSignal failedLogins,
+            Clock clock) {
+        return new LoginService(users, passwordHasher, tokenIssuer, failedLogins, clock);
     }
 
     @Bean
@@ -293,5 +316,59 @@ public class ApplicationConfig {
     public ModerateReviewUseCase moderateReviewUseCase(
             ReviewRepository reviews, AuditTrailRecorder auditTrailRecorder, Clock clock) {
         return new ModerateReviewService(reviews, auditTrailRecorder, clock);
+    }
+
+    @Bean
+    public ListAnomaliesUseCase listAnomaliesUseCase(AnomalyRepository anomalies) {
+        return new ListAnomaliesService(anomalies);
+    }
+
+    @Bean
+    public GetAnomalyUseCase getAnomalyUseCase(AnomalyRepository anomalies) {
+        return new GetAnomalyService(anomalies);
+    }
+
+    @Bean
+    public ClassifyAnomalyUseCase classifyAnomalyUseCase(
+            AnomalyRepository anomalies,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ClassifyAnomalyService(anomalies, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public ResolveAnomalyUseCase resolveAnomalyUseCase(
+            AnomalyRepository anomalies,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ResolveAnomalyService(anomalies, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public ListAnomalyThresholdsUseCase listAnomalyThresholdsUseCase(
+            AnomalyThresholdRepository thresholds, Clock clock) {
+        return new ListAnomalyThresholdsService(thresholds, clock);
+    }
+
+    @Bean
+    public UpdateAnomalyThresholdUseCase updateAnomalyThresholdUseCase(
+            AnomalyThresholdRepository thresholds,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new UpdateAnomalyThresholdService(thresholds, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public DetectAnomaliesUseCase detectAnomaliesUseCase(
+            AnomalyRepository anomalies,
+            AnomalyThresholdRepository thresholds,
+            FailedLoginSignal failedLogins,
+            RequestRateSignal requestRate,
+            ServiceHealthSignal health,
+            Clock clock) {
+        return new AnomalyDetectionService(anomalies, thresholds, failedLogins, requestRate, health, clock);
     }
 }

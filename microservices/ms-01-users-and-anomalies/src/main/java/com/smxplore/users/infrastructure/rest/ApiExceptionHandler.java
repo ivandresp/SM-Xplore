@@ -1,6 +1,8 @@
 package com.smxplore.users.infrastructure.rest;
 
 import com.smxplore.users.domain.exception.AccountNotActiveException;
+import com.smxplore.users.domain.exception.AnomalyAlreadyResolvedException;
+import com.smxplore.users.domain.exception.AnomalyNotFoundException;
 import com.smxplore.users.domain.exception.DuplicateReviewException;
 import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
@@ -92,6 +94,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ReviewNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleReviewNotFound(ReviewNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(AnomalyNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleAnomalyNotFound(AnomalyNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "ANOMALY_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(AnomalyAlreadyResolvedException.class)
+    public ResponseEntity<ProblemDetail> handleAnomalyAlreadyResolved(AnomalyAlreadyResolvedException exception) {
+        return problem(HttpStatus.CONFLICT, "ANOMALY_ALREADY_RESOLVED", exception.getMessage());
     }
 
     @ExceptionHandler(DuplicateReviewException.class)

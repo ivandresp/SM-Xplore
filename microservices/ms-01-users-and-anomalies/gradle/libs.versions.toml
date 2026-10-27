@@ -17,6 +17,7 @@ spring-boot-oauth2-resource-server = { module = "org.springframework.boot:spring
 spring-boot-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
+reactor-test = { module = "io.projectreactor:reactor-test" }
 springdoc-webflux-ui = { module = "org.springdoc:springdoc-openapi-starter-webflux-ui", version.ref = "springdoc" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }

@@ -2,7 +2,7 @@
 
 ## Project state
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management and guide/provider reviews implemented; anomalies pending).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management, guide/provider reviews and anomalies implemented).
 
 The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
 
@@ -46,7 +46,7 @@ docker compose up -d
 - Integration tests use Testcontainers and **require Docker**.
 - `check` runs tests, ArchUnit, and Spotless.
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
-- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`).
+- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`).
 
 ## Architecture rules
 
@@ -73,22 +73,16 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
-1. **Anomalies** (RF99–RF102, Admin US11–US14)
-   - Table and API for anomalies.
-   - Classify by severity and mark as resolved.
-   - Configurable alert thresholds.
-   - Detection hooks for suspicious access, service downtime, and request spikes.
-
-2. **Security hardening**
+1. **Security hardening**
    - Admin/operator MFA (RNF01).
    - Rate limiting or brute-force protection.
    - Self-service password change is done; JWT keys are persisted (env PEM or the dev key store).
 
-3. **Tests and infrastructure**
+2. **Tests and infrastructure**
    - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
    - CI and a Dockerfile for the service.
 
