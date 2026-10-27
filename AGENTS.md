@@ -40,6 +40,8 @@ docker compose up -d
 ./gradlew test
 ./gradlew test --tests "com.smxplore.users.infrastructure.adapter.in.rest.AuthFlowTest"
 ./gradlew check
+docker compose --profile full up -d --build   # imagen + stack completo
+docker compose --profile full down
 ```
 
 - API: `http://localhost:8081`; Swagger: `/swagger-ui.html`; Mailpit: `http://localhost:8025`.
@@ -75,13 +77,13 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with recovery codes and admin enforcement, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation), persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with recovery codes and admin enforcement, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation), a multi-stage Docker image with a Compose `full` profile, GitHub Actions CI (verification plus image smoke test), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
 1. **Tests and delivery**
-   - CI and a Dockerfile for the service.
    - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
+   - CI builds and smoke-tests the image but does not publish it; add a registry push when the deployment target is chosen.
 
 2. **Monitoring follow-ups**
    - PDF export for audit reports (UC6); CSV export is implemented.

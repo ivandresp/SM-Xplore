@@ -13,6 +13,7 @@ Estado actual: identidad, autenticación, perfiles, administración de usuarios,
 - Spring Data MongoDB reactivo para reseñas
 - Mailpit para correo local
 - Gradle 9.5.1 (wrapper dentro de este directorio)
+- Docker (imagen multi-etapa) y Docker Compose (perfil `full`)
 
 ## Arquitectura
 
@@ -50,6 +51,34 @@ docker compose up -d
 
 La API queda en `http://localhost:8081`. Swagger: `http://localhost:8081/swagger-ui.html`.
 Mailpit: `http://localhost:8025`.
+
+### Docker
+
+El `Dockerfile` es multi-etapa (JDK 25 para compilar con el wrapper, JRE 25 sin privilegios para ejecutar) y el perfil
+`full` de Compose levanta el servicio junto con PostgreSQL, MongoDB y Mailpit:
+
+```bash
+docker compose --profile full up -d --build
+curl http://localhost:8081/actuator/health
+docker compose --profile full logs -f ms-01
+docker compose --profile full down
+```
+
+- La imagen se etiqueta como `smxplore/ms-01:local`, corre como el usuario `app` (sin privilegios), escucha en `8081`
+  y publica un `HEALTHCHECK` contra `/actuator/health`.
+- El contenedor arranca con el perfil `dev`, así que genera sus llaves JWT en `/app/.local/jwt/keys.pem`. Para
+  producción usa `SPRING_PROFILES_ACTIVE=prod` con las variables de `application-prod.yml`
+  (`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`, `BOOTSTRAP_ADMIN_*`, CORS) o monta el almacén de llaves en `/app/.local/jwt`.
+- `docker compose up -d` sin perfil sigue levantando sólo la infraestructura para `./gradlew bootRun`.
+
+### Integración continua
+
+`.github/workflows/ms-01-ci.yml` se ejecuta en cada push o pull request que toque el servicio:
+
+1. `verify`: JDK 25 y `./gradlew check` (pruebas con Testcontainers, ArchUnit y Spotless), con los reportes publicados
+   como artefacto.
+2. `docker`: construye la imagen con Buildx y caché de GitHub Actions, levanta el stack con el perfil `full` y espera a
+   que `/actuator/health` responda `UP`; si falla, imprime los logs del contenedor.
 
 ### Variables principales
 
@@ -309,3 +338,6 @@ Las pruebas de seguridad cubren los vectores RFC 6238, el flujo MFA completo (in
 recuperación), la obligatoriedad para administradores, el bloqueo por intentos, el límite por IP, las
 cabeceras y el validador del perfil de producción. Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
+
+El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
+construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

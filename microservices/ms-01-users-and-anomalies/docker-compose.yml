@@ -40,6 +40,35 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Servicio completo (perfil "full"): docker compose --profile full up -d --build
+  ms-01:
+    profiles: ["full"]
+    image: smxplore/ms-01:local
+    container_name: smxplore-ms-01
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
+      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
+      DB_USERNAME: smxplore
+      DB_PASSWORD: smxplore
+      MONGODB_URI: mongodb://smxplore:smxplore@mongodb:27017/smxplore_reviews?authSource=admin
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      SERVER_PORT: "8081"
+      FRONTEND_BASE_URL: http://localhost:5173
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
 volumes:
   smxplore-postgres-data:
   smxplore-mongodb-data:
