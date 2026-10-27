@@ -2,7 +2,7 @@
 
 Servicio encargado de la gestión de **Usuarios** y **Anomalías** de SM-Xplore. Incluye las **Reseñas sobre Guías y Prestadoras de Servicios**.
 
-Estado actual: identidad, autenticación, perfiles, administración de usuarios, reseñas sobre guías y prestadoras, y detección y gestión de anomalías (Java + Spring Boot).
+Estado actual: identidad, autenticación, perfiles, administración de usuarios, reseñas sobre guías y prestadoras, detección y gestión de anomalías, y monitoreo administrativo (Java + Spring Boot).
 
 ## Stack
 
@@ -117,6 +117,9 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
+| GET | `/api/v1/admin/audit-logs/export` | ADMIN, reporte CSV de auditoría |
+| GET | `/api/v1/admin/monitoring/overview` | ADMIN, indicadores de usuarios, reseñas y anomalías |
+| GET | `/api/v1/admin/monitoring/availability` | ADMIN, disponibilidad de PostgreSQL y MongoDB |
 | GET | `/api/v1/admin/anomalies` | ADMIN, lista y filtra anomalías |
 | GET | `/api/v1/admin/anomalies/{id}` | ADMIN, detalle de una anomalía |
 | PATCH | `/api/v1/admin/anomalies/{id}/severity` | ADMIN, reclasifica por severidad |
@@ -172,6 +175,28 @@ globales porque se guardan en PostgreSQL. La verificación de disponibilidad con
 el propio servicio, así que una caída total de PostgreSQL no puede registrarse a sí misma; para ese caso se
 recomienda un monitor externo que consuma la API.
 
+### Monitoreo administrativo (Admin US9, US10 y US16)
+
+`GET /api/v1/admin/monitoring/overview` devuelve, en una sola llamada, los indicadores que pertenecen a
+ms-01:
+
+- Usuarios: total, activos, bloqueados, suspendidos, eliminados, por rol, prestadoras aprobadas,
+  prestadoras pendientes y altas de los últimos 30 días.
+- Reseñas: totales, visibles, ocultas, reportadas y promedio de las visibles.
+- Anomalías: totales, pendientes, resueltas y pendientes por severidad.
+- Disponibilidad: estado agregado y detalle de PostgreSQL y MongoDB.
+
+`GET /api/v1/admin/monitoring/availability` permite consultar solo la disponibilidad, con el estado y la
+latencia en milisegundos de cada componente. Ninguna de las dos consultas modifica el contador de fallos que
+alimenta la detección de `CAIDA_SERVICIO`.
+
+`GET /api/v1/admin/audit-logs/export` genera un CSV UTF-8 (con BOM para Excel) de hasta 10 000 entradas,
+respetando los mismos filtros del listado: actor, acción, usuario afectado y rango de fechas. El archivo
+incluye fecha, actor, rol, acción, usuario afectado y detalles.
+
+Las métricas de reservas, sitios, actividades y eventos pertenecen a ms-03/ms-04 y todavía no se agregan en
+este overview. La exportación PDF de reportes (UC6) sigue pendiente; por ahora el reporte se entrega en CSV.
+
 ## Contrato JWT para otros microservicios
 
 Tokens RS256, access-only, sin refresh token. Claims relevantes:
@@ -210,4 +235,5 @@ Las pruebas de integración usan Testcontainers y requieren Docker. La aplicaci�
 `spring.r2dbc.*`; Flyway usa `spring.flyway.url`/`user`/`password` (JDBC) solo para migrar el esquema,
 porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC. Las pruebas de
 reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`. Las pruebas de anomalías usan
-PostgreSQL y desactivan la detección programada con `app.anomalies.detection.enabled=false`.
+PostgreSQL y desactivan la detección programada con `app.anomalies.detection.enabled=false`. Las pruebas de
+monitoreo levantan PostgreSQL y MongoDB para validar el overview, la disponibilidad y la exportación CSV.

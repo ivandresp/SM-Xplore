@@ -2,6 +2,7 @@ package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.UserSearchCriteria;
+import com.smxplore.users.application.dto.UserStatistics;
 import com.smxplore.users.application.dto.UserSummaryView;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.model.Admin;
@@ -12,11 +13,14 @@ import com.smxplore.users.domain.model.PrestadoraServicios;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.Usuario;
+import io.r2dbc.spi.Row;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -115,13 +119,36 @@ public class UserRepositoryAdapter implements UserRepository {
             "DELETE FROM destination_manager_profiles WHERE user_id = :userId";
     private static final String DELETE_ADMIN_PROFILE = "DELETE FROM admin_profiles WHERE user_id = :userId";
 
+    private static final String USER_STATISTICS = """
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE status = 'ACTIVO') AS active,
+                   COUNT(*) FILTER (WHERE status = 'BLOQUEADO') AS blocked,
+                   COUNT(*) FILTER (WHERE status = 'SUSPENDIDO') AS suspended,
+                   COUNT(*) FILTER (WHERE status = 'ELIMINADO') AS deleted,
+                   COUNT(*) FILTER (WHERE role = 'TURISTA') AS tourists,
+                   COUNT(*) FILTER (WHERE role = 'GUIA') AS guides,
+                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS') AS providers,
+                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS' AND id IN (
+                       SELECT user_id FROM provider_profiles WHERE registration_status = 'APROBADO'
+                   )) AS approved_providers,
+                   COUNT(*) FILTER (WHERE role = 'GESTORA_DESTINOS') AS destination_managers,
+                   COUNT(*) FILTER (WHERE role = 'ADMIN') AS admins,
+                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS' AND id IN (
+                       SELECT user_id FROM provider_profiles WHERE registration_status = 'PENDIENTE'
+                   )) AS pending_providers,
+                   COUNT(*) FILTER (WHERE signed_up_at >= :since) AS new_users
+            FROM users
+            """;
+
     private final DatabaseClient databaseClient;
     private final UserSummaryQuery summaryQuery;
+    private final Clock clock;
     private final UserPersistenceMapper mapper = new UserPersistenceMapper();
 
-    public UserRepositoryAdapter(DatabaseClient databaseClient) {
+    public UserRepositoryAdapter(DatabaseClient databaseClient, Clock clock) {
         this.databaseClient = databaseClient;
         this.summaryQuery = new UserSummaryQuery(databaseClient);
+        this.clock = clock;
     }
 
     @Override
@@ -165,6 +192,29 @@ public class UserRepositoryAdapter implements UserRepository {
                 .sql("SELECT count(*) AS total FROM users WHERE role = :role AND status = 'ACTIVO'")
                 .bind("role", role.code())
                 .map((row, metadata) -> row.get("total", Long.class))
+                .one();
+    }
+
+    @Override
+    public Mono<UserStatistics> statistics() {
+        OffsetDateTime since = OffsetDateTime.ofInstant(clock.instant().minus(30, ChronoUnit.DAYS), ZoneOffset.UTC);
+        return databaseClient
+                .sql(USER_STATISTICS)
+                .bind("since", since)
+                .map((row, metadata) -> new UserStatistics(
+                        count(row, "total"),
+                        count(row, "active"),
+                        count(row, "blocked"),
+                        count(row, "suspended"),
+                        count(row, "deleted"),
+                        count(row, "tourists"),
+                        count(row, "guides"),
+                        count(row, "providers"),
+                        count(row, "approved_providers"),
+                        count(row, "destination_managers"),
+                        count(row, "admins"),
+                        count(row, "pending_providers"),
+                        count(row, "new_users")))
                 .one();
     }
 
@@ -355,5 +405,10 @@ public class UserRepositoryAdapter implements UserRepository {
     private static <T> Mono<T> missingProfile(String role, UUID userId) {
         return Mono.error(
                 new IllegalStateException("No se encontró el perfil de " + role + " para el usuario " + userId));
+    }
+
+    private static long count(Row row, String column) {
+        Long value = row.get(column, Long.class);
+        return value == null ? 0 : value;
     }
 }

@@ -2,6 +2,7 @@ package com.smxplore.users.application.port.out;
 
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.UserSearchCriteria;
+import com.smxplore.users.application.dto.UserStatistics;
 import com.smxplore.users.application.dto.UserSummaryView;
 import com.smxplore.users.domain.model.Email;
 import com.smxplore.users.domain.model.Role;
@@ -20,6 +21,8 @@ public interface UserRepository {
     Mono<PageResult<UserSummaryView>> search(UserSearchCriteria criteria);
 
     Mono<Long> countActiveByRole(Role role);
+
+    Mono<UserStatistics> statistics();
 
     Mono<Usuario> save(Usuario user);
 

@@ -1,8 +1,11 @@
 package com.smxplore.users.infrastructure.adapter.out.monitoring;
 
+import com.smxplore.users.application.dto.ComponentAvailability;
 import com.smxplore.users.application.dto.ServiceHealthStatus;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
+import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -13,11 +16,13 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 /**
- * Comprueba que PostgreSQL y MongoDB respondan. Si una dependencia falla dos veces seguidas, la detección la reporta
- * como {@code CAIDA_SERVICIO}. La comprobación se ejecuta únicamente cuando la detección la solicita.
+ * Comprueba que PostgreSQL y MongoDB respondan.
+ *
+ * <p>{@link #check()} alimenta la detección de anomalías y acumula fallos consecutivos; {@link #checkComponents()}
+ * devuelve el estado de cada dependencia para el panel administrativo sin alterar ese contador.
  */
 @Component
-public class ReactiveServiceHealthProbe implements ServiceHealthSignal {
+public class ReactiveServiceHealthProbe implements ServiceHealthSignal, SystemAvailabilityProbe {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
     private static final int MAX_DETAIL_LENGTH = 800;
@@ -39,22 +44,34 @@ public class ReactiveServiceHealthProbe implements ServiceHealthSignal {
                 .onErrorResume(error -> Mono.fromSupplier(() -> unexpectedFailure(error)));
     }
 
+    @Override
+    public Mono<List<ComponentAvailability>> checkComponents() {
+        return Mono.zip(checkPostgres(), checkMongo())
+                .map(tuple -> List.of(toAvailability(tuple.getT1()), toAvailability(tuple.getT2())))
+                .timeout(TIMEOUT.plusSeconds(1))
+                .onErrorResume(error -> Mono.fromSupplier(() -> unverified(error)));
+    }
+
     private Mono<ComponentStatus> checkPostgres() {
-        return databaseClient
-                .sql("SELECT 1")
-                .fetch()
-                .one()
-                .timeout(TIMEOUT)
-                .map(row -> ComponentStatus.available("PostgreSQL"))
-                .onErrorResume(error -> Mono.just(ComponentStatus.unavailable("PostgreSQL", message(error))));
+        Mono<Void> operation = databaseClient.sql("SELECT 1").fetch().one().then();
+        return timed("PostgreSQL", operation);
     }
 
     private Mono<ComponentStatus> checkMongo() {
-        return mongoTemplate
-                .executeCommand(new Document("ping", 1))
-                .timeout(TIMEOUT)
-                .map(document -> ComponentStatus.available("MongoDB"))
-                .onErrorResume(error -> Mono.just(ComponentStatus.unavailable("MongoDB", message(error))));
+        Mono<Void> operation =
+                mongoTemplate.executeCommand(new Document("ping", 1)).then();
+        return timed("MongoDB", operation);
+    }
+
+    private Mono<ComponentStatus> timed(String component, Mono<Void> operation) {
+        return Mono.defer(() -> {
+            long started = System.nanoTime();
+            return operation
+                    .timeout(TIMEOUT)
+                    .thenReturn(ComponentStatus.available(component, elapsedMillis(started)))
+                    .onErrorResume(error ->
+                            Mono.just(ComponentStatus.unavailable(component, elapsedMillis(started), message(error))));
+        });
     }
 
     private ServiceHealthStatus aggregate(ComponentStatus postgres, ComponentStatus mongo) {
@@ -79,6 +96,21 @@ public class ReactiveServiceHealthProbe implements ServiceHealthSignal {
                 failures, truncate("No se pudo verificar la disponibilidad: " + message(error)));
     }
 
+    private static List<ComponentAvailability> unverified(Throwable error) {
+        String detail = truncate("No se pudo verificar la disponibilidad: " + message(error));
+        return List.of(
+                new ComponentAvailability("PostgreSQL", false, 0, detail),
+                new ComponentAvailability("MongoDB", false, 0, detail));
+    }
+
+    private static ComponentAvailability toAvailability(ComponentStatus status) {
+        return new ComponentAvailability(status.component(), status.available(), status.latencyMs(), status.detail());
+    }
+
+    private static long elapsedMillis(long started) {
+        return Duration.ofNanos(System.nanoTime() - started).toMillis();
+    }
+
     private static String message(Throwable error) {
         Throwable root = error;
         while (root.getCause() != null && root.getCause() != root) {
@@ -95,14 +127,14 @@ public class ReactiveServiceHealthProbe implements ServiceHealthSignal {
         return value.substring(0, MAX_DETAIL_LENGTH);
     }
 
-    private record ComponentStatus(boolean available, String detail) {
+    private record ComponentStatus(String component, boolean available, long latencyMs, String detail) {
 
-        static ComponentStatus available(String component) {
-            return new ComponentStatus(true, component + " disponible");
+        static ComponentStatus available(String component, long latencyMs) {
+            return new ComponentStatus(component, true, latencyMs, component + " disponible");
         }
 
-        static ComponentStatus unavailable(String component, String message) {
-            return new ComponentStatus(false, component + ": " + message);
+        static ComponentStatus unavailable(String component, long latencyMs, String message) {
+            return new ComponentStatus(component, false, latencyMs, component + ": " + message);
         }
     }
 }

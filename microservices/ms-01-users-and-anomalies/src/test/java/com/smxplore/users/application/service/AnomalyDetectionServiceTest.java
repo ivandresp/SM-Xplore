@@ -3,6 +3,7 @@ package com.smxplore.users.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.smxplore.users.application.dto.AnomalySearchCriteria;
+import com.smxplore.users.application.dto.AnomalyStatistics;
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.ServiceHealthStatus;
 import com.smxplore.users.application.port.out.AnomalyRepository;
@@ -231,6 +232,11 @@ class AnomalyDetectionServiceTest {
         @Override
         public Mono<PageResult<Anomaly>> search(AnomalySearchCriteria criteria) {
             return Mono.error(new UnsupportedOperationException("No usado en la prueba"));
+        }
+
+        @Override
+        public Mono<AnomalyStatistics> statistics() {
+            return Mono.just(new AnomalyStatistics(0, 0, 0, 0, 0, 0, 0));
         }
     }
 

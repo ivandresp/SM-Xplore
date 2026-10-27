@@ -1,6 +1,7 @@
 package com.smxplore.users.application.port.out;
 
 import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.ReviewStatistics;
 import com.smxplore.users.domain.model.ReputationSummary;
 import com.smxplore.users.domain.model.Review;
 import com.smxplore.users.domain.model.ReviewTargetType;
@@ -20,4 +21,6 @@ public interface ReviewRepository {
     Mono<PageResult<Review>> findReported(int page, int size);
 
     Mono<ReputationSummary> summary(ReviewTargetType targetType, UUID targetId);
+
+    Mono<ReviewStatistics> statistics();
 }

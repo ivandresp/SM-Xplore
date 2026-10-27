@@ -2,7 +2,7 @@
 
 ## Project state
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management, guide/provider reviews and anomalies implemented).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth, admin user management, guide/provider reviews, anomalies and admin monitoring implemented).
 
 The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
 
@@ -73,7 +73,7 @@ docker compose up -d
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), persistence, tests, ArchUnit, and Spotless.
 
 Still to design/implement:
 
@@ -85,6 +85,10 @@ Still to design/implement:
 2. **Tests and infrastructure**
    - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
    - CI and a Dockerfile for the service.
+
+3. **Monitoring follow-ups**
+   - PDF export for audit reports (UC6); CSV export is implemented.
+   - Cross-service indicators (reservations, sites, activities, events) once ms-03/ms-04 expose their contracts.
 
 ## JWT contract (ms-01 → ms-02)
 

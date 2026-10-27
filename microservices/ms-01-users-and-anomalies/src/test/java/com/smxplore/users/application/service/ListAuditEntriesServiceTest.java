@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 class ListAuditEntriesServiceTest {
@@ -40,6 +41,11 @@ class ListAuditEntriesServiceTest {
             public Mono<PageResult<AuditEntry>> search(AuditSearchCriteria candidate) {
                 assertThat(candidate).isEqualTo(criteria);
                 return Mono.just(PageResult.of(List.of(entry), 1, 20, 21));
+            }
+
+            @Override
+            public Flux<AuditEntry> export(AuditSearchCriteria candidate, int limit) {
+                return Flux.empty();
             }
         };
 

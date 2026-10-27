@@ -1,6 +1,7 @@
 package com.smxplore.users.infrastructure.adapter.out.persistence.mongo;
 
 import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.ReviewStatistics;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.domain.exception.DuplicateReviewException;
 import com.smxplore.users.domain.model.ReputationSummary;
@@ -112,6 +113,37 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
         return Mono.zip(summary, distribution)
                 .map(tuple -> new ReputationSummary(
                         tuple.getT1().getCount(), tuple.getT1().getAverage(), tuple.getT2()));
+    }
+
+    @Override
+    public Mono<ReviewStatistics> statistics() {
+        Criteria visibleCriteria = Criteria.where("moderationStatus").is(ReviewModerationStatus.VISIBLE.name());
+        Mono<Long> total = template.count(new Query(), ReviewDocument.class);
+        Mono<Long> visible = template.count(Query.query(visibleCriteria), ReviewDocument.class);
+        Mono<Long> hidden = template.count(
+                Query.query(Criteria.where("moderationStatus").is(ReviewModerationStatus.HIDDEN.name())),
+                ReviewDocument.class);
+        Mono<Long> reported =
+                template.count(Query.query(Criteria.where("reported").is(true)), ReviewDocument.class);
+
+        Aggregation averageAggregation = Aggregation.newAggregation(
+                Aggregation.match(visibleCriteria),
+                Aggregation.group().avg("rating").as("average").count().as("count"));
+        Mono<SummaryRow> summary = template.aggregate(averageAggregation, COLLECTION, SummaryRow.class)
+                .next()
+                .defaultIfEmpty(new SummaryRow());
+
+        return Mono.zip(total, visible, hidden, reported, summary)
+                .map(tuple -> new ReviewStatistics(
+                        tuple.getT1(),
+                        tuple.getT2(),
+                        tuple.getT3(),
+                        tuple.getT4(),
+                        round(tuple.getT5().getAverage())));
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private Map<Integer, Long> toDistribution(java.util.List<RatingCountRow> rows) {

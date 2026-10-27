@@ -1,10 +1,12 @@
 package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc.anomaly;
 
 import com.smxplore.users.application.dto.AnomalySearchCriteria;
+import com.smxplore.users.application.dto.AnomalyStatistics;
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.domain.model.Anomaly;
 import com.smxplore.users.domain.model.AnomalyType;
+import io.r2dbc.spi.Row;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -52,6 +54,17 @@ public class AnomalyRepositoryAdapter implements AnomalyRepository {
                          ELSE 3
                      END,
                      detected_at DESC
+            """;
+
+    private static final String STATISTICS = """
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE status = 'DETECTADA') AS open_count,
+                   COUNT(*) FILTER (WHERE status = 'RESUELTA') AS resolved,
+                   COUNT(*) FILTER (WHERE status = 'DETECTADA' AND severity = 'CRITICA') AS open_critical,
+                   COUNT(*) FILTER (WHERE status = 'DETECTADA' AND severity = 'ALTA') AS open_high,
+                   COUNT(*) FILTER (WHERE status = 'DETECTADA' AND severity = 'MEDIA') AS open_medium,
+                   COUNT(*) FILTER (WHERE status = 'DETECTADA' AND severity = 'BAJA') AS open_low
+            FROM anomalies
             """;
 
     private final DatabaseClient databaseClient;
@@ -118,6 +131,21 @@ public class AnomalyRepositoryAdapter implements AnomalyRepository {
                 .map(tuple -> PageResult.of(tuple.getT2(), criteria.page(), criteria.size(), tuple.getT1()));
     }
 
+    @Override
+    public Mono<AnomalyStatistics> statistics() {
+        return databaseClient
+                .sql(STATISTICS)
+                .map((row, metadata) -> new AnomalyStatistics(
+                        count(row, "total"),
+                        count(row, "open_count"),
+                        count(row, "resolved"),
+                        count(row, "open_critical"),
+                        count(row, "open_high"),
+                        count(row, "open_medium"),
+                        count(row, "open_low")))
+                .one();
+    }
+
     private static GenericExecuteSpec bindFilters(GenericExecuteSpec spec, AnomalySearchCriteria criteria) {
         spec = bindNullable(
                 spec,
@@ -141,5 +169,10 @@ public class AnomalyRepositoryAdapter implements AnomalyRepository {
 
     private static OffsetDateTime toOffsetDateTime(Instant instant) {
         return AnomalyPersistenceMapper.toOffsetDateTime(instant);
+    }
+
+    private static long count(Row row, String column) {
+        Long value = row.get(column, Long.class);
+        return value == null ? 0 : value;
     }
 }

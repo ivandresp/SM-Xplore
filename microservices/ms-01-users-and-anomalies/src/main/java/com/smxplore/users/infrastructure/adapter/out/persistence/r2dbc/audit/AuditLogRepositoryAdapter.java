@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.r2dbc.core.DatabaseClient.GenericExecuteSpec;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
 
@@ -76,6 +77,15 @@ public class AuditLogRepositoryAdapter implements AuditLogRepository {
 
         return total.zipWith(content)
                 .map(tuple -> PageResult.of(tuple.getT2(), criteria.page(), criteria.size(), tuple.getT1()));
+    }
+
+    @Override
+    public Flux<AuditEntry> export(AuditSearchCriteria criteria, int limit) {
+        String sql = SELECT + FILTERS + " ORDER BY occurred_at DESC LIMIT :limit";
+        return bindFilters(databaseClient.sql(sql), criteria)
+                .bind("limit", limit)
+                .map((row, metadata) -> mapper.toDomain(row))
+                .all();
     }
 
     private static GenericExecuteSpec bindFilters(GenericExecuteSpec spec, AuditSearchCriteria criteria) {

@@ -10,11 +10,14 @@ import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.application.port.in.CreateReviewUseCase;
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
 import com.smxplore.users.application.port.in.DetectAnomaliesUseCase;
+import com.smxplore.users.application.port.in.ExportAuditEntriesUseCase;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
+import com.smxplore.users.application.port.in.GetAdminOverviewUseCase;
 import com.smxplore.users.application.port.in.GetAnomalyUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
+import com.smxplore.users.application.port.in.GetSystemAvailabilityUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
 import com.smxplore.users.application.port.in.ListAnomaliesUseCase;
 import com.smxplore.users.application.port.in.ListAnomalyThresholdsUseCase;
@@ -45,6 +48,7 @@ import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
+import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
 import com.smxplore.users.application.port.out.TokenGenerator;
 import com.smxplore.users.application.port.out.TokenHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
@@ -61,11 +65,14 @@ import com.smxplore.users.application.service.ClassifyAnomalyService;
 import com.smxplore.users.application.service.CreateInternalUserService;
 import com.smxplore.users.application.service.CreateReviewService;
 import com.smxplore.users.application.service.DeleteUserService;
+import com.smxplore.users.application.service.ExportAuditEntriesService;
 import com.smxplore.users.application.service.ForgotPasswordService;
+import com.smxplore.users.application.service.GetAdminOverviewService;
 import com.smxplore.users.application.service.GetAnomalyService;
 import com.smxplore.users.application.service.GetCurrentUserService;
 import com.smxplore.users.application.service.GetPublicProfileService;
 import com.smxplore.users.application.service.GetReputationSummaryService;
+import com.smxplore.users.application.service.GetSystemAvailabilityService;
 import com.smxplore.users.application.service.GetUserDetailService;
 import com.smxplore.users.application.service.ListAnomaliesService;
 import com.smxplore.users.application.service.ListAnomalyThresholdsService;
@@ -178,6 +185,26 @@ public class ApplicationConfig {
     @Bean
     public ListAuditEntriesUseCase listAuditEntriesUseCase(AuditLogRepository auditLogRepository) {
         return new ListAuditEntriesService(auditLogRepository);
+    }
+
+    @Bean
+    public ExportAuditEntriesUseCase exportAuditEntriesUseCase(AuditLogRepository auditLogRepository, Clock clock) {
+        return new ExportAuditEntriesService(auditLogRepository, clock);
+    }
+
+    @Bean
+    public GetAdminOverviewUseCase getAdminOverviewUseCase(
+            UserRepository users,
+            ReviewRepository reviews,
+            AnomalyRepository anomalies,
+            SystemAvailabilityProbe availability,
+            Clock clock) {
+        return new GetAdminOverviewService(users, reviews, anomalies, availability, clock);
+    }
+
+    @Bean
+    public GetSystemAvailabilityUseCase getSystemAvailabilityUseCase(SystemAvailabilityProbe probe, Clock clock) {
+        return new GetSystemAvailabilityService(probe, clock);
     }
 
     @Bean
