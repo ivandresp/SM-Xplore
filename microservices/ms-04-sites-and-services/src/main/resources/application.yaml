@@ -1,0 +1,76 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: ms-04-sites-and-services
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/smxplore?replicaSet=rs0}
+    auto-index-creation: false
+  r2dbc:
+    url: ${POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/smxplore}
+    username: ${POSTGRES_USER:smxplore}
+    password: ${POSTGRES_PASSWORD:change-me}
+    pool:
+      max-size: ${POSTGRES_POOL_SIZE:20}
+      initial-size: ${POSTGRES_POOL_INITIAL_SIZE:2}
+      max-idle-time: ${POSTGRES_MAX_IDLE_TIME:30m}
+  sql:
+    init:
+      mode: ${SQL_INIT_MODE:always}
+      schema-locations: classpath:schema.sql
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      user-id-claim: ${JWT_USER_ID_CLAIM:userId}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+  outbox:
+    enabled: ${OUTBOX_ENABLED:true}
+    producer: ${OUTBOX_PRODUCER:ms-04}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
+    initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
+    max-backoff: ${OUTBOX_MAX_BACKOFF:1m}
+
+  catalog:
+    seed-enabled: ${CATALOG_SEED_ENABLED:false}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: ${HEALTH_SHOW_DETAILS:never}
+  metrics:
+    tags:
+      application: ${spring.application.name}

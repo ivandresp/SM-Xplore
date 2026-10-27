@@ -1,0 +1,104 @@
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - smxplore-net
+
+  mongo-init:
+    image: mongo:7.0
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - "try { rs.status() } catch (e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) }"
+    networks:
+      - smxplore-net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smxplore}
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - smxplore-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8084}:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-smxplore}?replicaSet=rs0
+      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-smxplore}
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWK_SET_URI: ${JWK_SET_URI:-}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      JWT_ISSUER: ${JWT_ISSUER:-}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
+      JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
+      JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      OUTBOX_PRODUCER: ${OUTBOX_PRODUCER:-ms-04}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
+      OUTBOX_INITIAL_BACKOFF: ${OUTBOX_INITIAL_BACKOFF:-1s}
+      OUTBOX_MAX_BACKOFF: ${OUTBOX_MAX_BACKOFF:-1m}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-true}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-true}
+    networks:
+      - smxplore-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  smxplore-net:
+    external: true
+    name: smxplore-net
+
+volumes:
+  mongo_data:
+  postgres_data:

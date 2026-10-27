@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/catalog.category.changed.v1.json",
+  "title": "catalog.category.changed.v1",
+  "allOf": [
+    {
+      "$ref": "./envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "catalog.category.changed"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "categoryId",
+            "name",
+            "scope",
+            "parentId",
+            "updatedAt"
+          ],
+          "properties": {
+            "categoryId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "enum": ["GENERAL", "SITE", "ACTIVITY", "EVENT", "SERVICE"]
+            },
+            "parentId": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

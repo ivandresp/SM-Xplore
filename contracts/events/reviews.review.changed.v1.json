@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/reviews.review.changed.v1.json",
+  "title": "reviews.review.changed.v1",
+  "allOf": [
+    {
+      "$ref": "./envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "reviews.review.changed"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "reviewId",
+            "touristId",
+            "itemType",
+            "itemId",
+            "rating",
+            "status",
+            "updatedAt"
+          ],
+          "properties": {
+            "reviewId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "touristId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "itemType": {
+              "enum": ["SITE", "ACTIVITY", "EVENT", "SERVICE"]
+            },
+            "itemId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "rating": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "status": {
+              "enum": ["PUBLISHED", "HIDDEN", "DELETED"]
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+app:
+  outbox:
+    enabled: false
+  security:
+    jwt:
+      public-key-location: classpath:keys/test-public.pem
+      issuer: https://ms-04.local
+      audience: ""
+      user-id-claim: userId
+      role-claim: role
+      name-claim: name
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    com.smxplore.sitesandservices: INFO
+    org.springframework.data.mongodb: WARN
+    org.springframework.r2dbc: WARN

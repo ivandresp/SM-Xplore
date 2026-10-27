@@ -1,0 +1,18 @@
+{
+  "eventId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "eventType": "catalog.site.changed",
+  "eventVersion": 1,
+  "occurredAt": "2026-10-26T02:00:00Z",
+  "aggregateId": "22222222-2222-2222-2222-222222222201",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-04",
+  "payload": {
+    "siteId": "22222222-2222-2222-2222-222222222201",
+    "name": "Playa Rosa",
+    "categoryId": "11111111-1111-1111-1111-111111111102",
+    "latitude": 10.391,
+    "longitude": -75.479,
+    "status": "PUBLISHED",
+    "updatedAt": "2026-10-26T02:00:00Z"
+  }
+}

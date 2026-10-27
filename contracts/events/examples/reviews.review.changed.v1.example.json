@@ -1,0 +1,18 @@
+{
+  "eventId": "9f1c2f7e-9f6e-4d7e-9f4c-2f7e9f6e4d7e",
+  "eventType": "reviews.review.changed",
+  "eventVersion": 1,
+  "occurredAt": "2026-10-26T02:00:00Z",
+  "aggregateId": "77777777-7777-7777-7777-777777777701",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-03",
+  "payload": {
+    "reviewId": "77777777-7777-7777-7777-777777777701",
+    "touristId": "66666666-6666-6666-6666-666666666601",
+    "itemType": "EVENT",
+    "itemId": "44444444-4444-4444-4444-444444444402",
+    "rating": 5,
+    "status": "PUBLISHED",
+    "updatedAt": "2026-10-26T02:00:00Z"
+  }
+}

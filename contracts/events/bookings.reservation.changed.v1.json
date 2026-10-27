@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/bookings.reservation.changed.v1.json",
+  "title": "bookings.reservation.changed.v1",
+  "description": "Shared booking event. ms-05 does NOT consume it and does not create RESERVO edges.",
+  "allOf": [
+    {
+      "$ref": "./envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "bookings.reservation.changed"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "reservationId",
+            "touristId",
+            "status",
+            "items",
+            "updatedAt"
+          ],
+          "properties": {
+            "reservationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "touristId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]
+            },
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["itemType", "itemId", "people", "total"],
+                "properties": {
+                  "itemType": {
+                    "enum": ["ACTIVITY", "EVENT", "SERVICE"]
+                  },
+                  "itemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "people": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "total": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}
