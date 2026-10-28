@@ -1,0 +1,3 @@
+# El wrapper y los scripts de shell deben conservar LF al clonar en Windows.
+gradlew text eol=lf
+*.sh text eol=lf

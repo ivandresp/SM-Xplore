@@ -46,7 +46,9 @@ jobs:
 
       - name: Ejecutar check (pruebas, ArchUnit y Spotless)
         working-directory: ${{ env.SERVICE_DIR }}
-        run: ./gradlew check --no-daemon --console=plain
+        run: |
+          chmod +x gradlew
+          ./gradlew check --no-daemon --console=plain
 
       - name: Publicar reportes de pruebas
         if: always()
