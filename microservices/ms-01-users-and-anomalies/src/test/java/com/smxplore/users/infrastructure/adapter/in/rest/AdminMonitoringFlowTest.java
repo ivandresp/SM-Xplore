@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -284,5 +286,15 @@ class AdminMonitoringFlowTest {
 
     private static long number(Map<?, ?> source, String key) {
         return ((Number) source.get(key)).longValue();
+    }
+
+    @BeforeAll
+    static void verifyMongoIsReachable() {
+        ContainerDiagnostics.verifyMongoReachable(MONGO);
+    }
+
+    @AfterAll
+    static void dumpMongoLogs() {
+        ContainerDiagnostics.dumpMongoLogs(MONGO, "admin-monitoring");
     }
 }

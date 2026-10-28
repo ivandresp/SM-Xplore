@@ -89,6 +89,18 @@ jobs:
           MESSAGE="$(tr '\n' '|' < /tmp/diagnostico.txt | cut -c1-6000 | sed 's/%/%25/g; s/::/: /g')"
           echo "::error title=Diagnóstico CI::${MESSAGE}"
 
+      - name: Anotar logs de los contenedores
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          if compgen -G "build/container-logs/*.log" > /dev/null; then
+            MESSAGE="$(for file in build/container-logs/*.log; do
+              echo "== $(basename "$file") =="
+              tail -n 30 "$file"
+            done | tr '\n' '|' | cut -c1-6000 | sed 's/%/%25/g; s/::/: /g')"
+            echo "::error title=Logs de contenedores::${MESSAGE}"
+          fi
+
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4

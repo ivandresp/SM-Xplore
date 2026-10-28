@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -81,7 +82,13 @@ class ReviewFlowTest {
 
     @AfterAll
     static void stopFakeLlm() {
+        ContainerDiagnostics.dumpMongoLogs(MONGO, "review-flow");
         LITTLE_LLM.stop();
+    }
+
+    @BeforeAll
+    static void verifyMongoIsReachable() {
+        ContainerDiagnostics.verifyMongoReachable(MONGO);
     }
 
     @Value("${local.server.port}")
