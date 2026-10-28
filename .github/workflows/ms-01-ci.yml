@@ -48,7 +48,25 @@ jobs:
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
           chmod +x gradlew
-          ./gradlew check --no-daemon --console=plain
+          mkdir -p build
+          set -o pipefail
+          ./gradlew check --no-daemon --console=plain 2>&1 | tee build/check.log
+
+      - name: Anotar los fallos de la verificación
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          if [ -f build/check.log ]; then
+            grep -E "FAILED|error:" build/check.log | tail -n 15 | while IFS= read -r line; do
+              line="${line//%/%25}"
+              line="${line//::/ }"
+              echo "::error title=Verificación ms-01::${line}"
+            done
+            echo "## Fallos de la verificación" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 40 build/check.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publicar reportes de pruebas
         if: always()
