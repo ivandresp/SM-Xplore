@@ -1,0 +1,18 @@
+﻿2026-10-28T18:32:45.2397218Z ##[group]Run ./gradlew check --no-daemon --console=plain
+2026-10-28T18:32:45.2398127Z [36;1m./gradlew check --no-daemon --console=plain[0m
+2026-10-28T18:32:45.2584089Z shell: /usr/bin/bash -e {0}
+2026-10-28T18:32:45.2584564Z env:
+2026-10-28T18:32:45.2585030Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:45.2585677Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:45.2586348Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2587254Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2588233Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-28T18:32:45.2588683Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-28T18:32:45.2589104Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-28T18:32:45.2589529Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-28T18:32:45.2590160Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-28T18:32:45.2590905Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-28T18:32:45.2591372Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-28T18:32:45.2591758Z ##[endgroup]
+2026-10-28T18:32:45.2713967Z /home/runner/work/_temp/2b195387-df9a-49fa-aab4-1a6fb33c1011.sh: line 1: ./gradlew: Permission denied
+2026-10-28T18:32:45.2724845Z ##[error]Process completed with exit code 126.

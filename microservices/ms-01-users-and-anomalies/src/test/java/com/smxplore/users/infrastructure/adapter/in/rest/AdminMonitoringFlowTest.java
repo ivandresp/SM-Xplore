@@ -49,7 +49,7 @@ class AdminMonitoringFlowTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
 
     @Container
-    static final MongoDBContainer MONGO = new MongoDBContainer("mongo:8.0");
+    static final MongoDBContainer MONGO = new MongoDBContainer("mongo:8.2");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {

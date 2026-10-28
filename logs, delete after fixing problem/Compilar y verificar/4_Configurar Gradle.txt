@@ -1,0 +1,42 @@
+﻿2026-10-28T18:32:42.4221397Z ##[group]Run gradle/actions/setup-gradle@v4
+2026-10-28T18:32:42.4221866Z with:
+2026-10-28T18:32:42.4222146Z   cache-disabled: false
+2026-10-28T18:32:42.4222467Z   cache-read-only: true
+2026-10-28T18:32:42.4222782Z   cache-write-only: false
+2026-10-28T18:32:42.4223117Z   cache-overwrite-existing: false
+2026-10-28T18:32:42.4223472Z   cache-cleanup: on-success
+2026-10-28T18:32:42.4223866Z   gradle-home-cache-includes: caches
+notifications
+
+2026-10-28T18:32:42.4224452Z   add-job-summary: always
+2026-10-28T18:32:42.4224847Z   add-job-summary-as-pr-comment: never
+2026-10-28T18:32:42.4225231Z   dependency-graph: disabled
+2026-10-28T18:32:42.4225630Z   dependency-graph-report-dir: dependency-graph-reports
+2026-10-28T18:32:42.4226091Z   dependency-graph-continue-on-failure: true
+2026-10-28T18:32:42.4226536Z   build-scan-publish: false
+2026-10-28T18:32:42.4226868Z   validate-wrappers: true
+2026-10-28T18:32:42.4227326Z   allow-snapshot-wrappers: false
+2026-10-28T18:32:42.4228089Z   gradle-home-cache-strict-match: false
+2026-10-28T18:32:42.4228687Z   workflow-job-context: null
+2026-10-28T18:32:42.4232898Z   github-token: ***
+2026-10-28T18:32:42.4233305Z env:
+2026-10-28T18:32:42.4233716Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:42.4234310Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:42.4234862Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.4235482Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.4235978Z ##[endgroup]
+2026-10-28T18:32:44.0570523Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-10-28T18:32:44.0573791Z ##[group]Restore Gradle state from cache
+2026-10-28T18:32:44.1304541Z Gradle User Home cache not found. Will initialize empty.
+2026-10-28T18:32:44.1306404Z ##[endgroup]
+2026-10-28T18:32:44.3739973Z Fetched 10 of 68 checksums
+2026-10-28T18:32:44.4971496Z Fetched 20 of 68 checksums
+2026-10-28T18:32:44.7576828Z Fetched 30 of 68 checksums
+2026-10-28T18:32:44.8728897Z Fetched 40 of 68 checksums
+2026-10-28T18:32:44.9887694Z Fetched 50 of 68 checksums
+2026-10-28T18:32:45.1214217Z Fetched 60 of 68 checksums
+2026-10-28T18:32:45.2199589Z Fetched 68 of 68 checksums
+2026-10-28T18:32:45.2201527Z ##[group]All Gradle Wrapper jars are valid
+2026-10-28T18:32:45.2203784Z ✓ Found known Gradle Wrapper JAR files:
+2026-10-28T18:32:45.2205895Z   497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7 microservices/ms-01-users-and-anomalies/gradle/wrapper/gradle-wrapper.jar
+2026-10-28T18:32:45.2208868Z ##[endgroup]

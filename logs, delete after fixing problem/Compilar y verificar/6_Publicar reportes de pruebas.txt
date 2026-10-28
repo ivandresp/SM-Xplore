@@ -1,0 +1,30 @@
+﻿2026-10-28T18:32:45.2846322Z ##[group]Run actions/upload-artifact@v4
+2026-10-28T18:32:45.2846682Z with:
+2026-10-28T18:32:45.2846919Z   name: ms-01-test-reports
+2026-10-28T18:32:45.2847637Z   path: microservices/ms-01-users-and-anomalies/build/reports/tests/test
+microservices/ms-01-users-and-anomalies/build/test-results/test
+
+2026-10-28T18:32:45.2848674Z   if-no-files-found: ignore
+2026-10-28T18:32:45.2848960Z   retention-days: 7
+2026-10-28T18:32:45.2849215Z   compression-level: 6
+2026-10-28T18:32:45.2849473Z   overwrite: false
+2026-10-28T18:32:45.2849739Z   include-hidden-files: false
+2026-10-28T18:32:45.2850024Z env:
+2026-10-28T18:32:45.2850304Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:45.2850698Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:45.2851128Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2851722Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2852241Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-28T18:32:45.2852651Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-28T18:32:45.2853001Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-28T18:32:45.2853360Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-28T18:32:45.2853894Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-28T18:32:45.2854480Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-28T18:32:45.2854868Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-28T18:32:45.2855194Z ##[endgroup]
+2026-10-28T18:32:45.4673816Z (node:2458) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T18:32:45.4676120Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T18:32:45.4729445Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-28T18:32:45.4733247Z The least common ancestor is /home/runner/work/SM-Xplore/SM-Xplore/microservices/ms-01-users-and-anomalies/build. This will be the root directory of the artifact
+2026-10-28T18:32:45.4735221Z No files were found with the provided path: microservices/ms-01-users-and-anomalies/build/reports/tests/test
+2026-10-28T18:32:45.4736746Z microservices/ms-01-users-and-anomalies/build/test-results/test. No artifacts will be uploaded.

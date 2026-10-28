@@ -46,9 +46,6 @@ jobs:
 
       - name: Ejecutar check (pruebas, ArchUnit y Spotless)
         working-directory: ${{ env.SERVICE_DIR }}
-        env:
-          LOGGING_FILE_NAME: build/test-application.log
-          TESTCONTAINERS_RYUK_DISABLED: "true"
         run: |
           chmod +x gradlew
           mkdir -p build
@@ -71,23 +68,6 @@ jobs:
             tail -n 40 build/check.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      - name: Diagnosticar contenedores
-        if: failure()
-        run: |
-          {
-            echo "Disco: $(df -h / | tail -1 | awk '{print $4 " libres de " $2}')"
-            echo "Memoria: $(free -m | awk 'NR==2 {print $7 " MB disponibles de " $2 " MB"}')"
-            echo "Contenedores:"
-            docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}' || true
-            for container in $(docker ps -aq --filter ancestor=mongo:8.0); do
-              echo "Mongo $(docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}}' "$container"):"
-              echo "Puertos: $(docker port "$container" || true)"
-              docker logs "$container" 2>&1 | tail -n 20 || true
-            done
-          } > /tmp/diagnostico.txt 2>&1 || true
-          MESSAGE="$(tr '\n' '|' < /tmp/diagnostico.txt | cut -c1-6000 | sed 's/%/%25/g; s/::/: /g')"
-          echo "::error title=Diagnóstico CI::${MESSAGE}"
 
       - name: Anotar logs de los contenedores
         if: failure()

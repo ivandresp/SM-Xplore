@@ -17,7 +17,7 @@ services:
       retries: 10
 
   mongodb:
-    image: mongo:8.0
+    image: mongo:8.2
     container_name: smxplore-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: smxplore

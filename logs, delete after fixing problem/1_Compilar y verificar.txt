@@ -1,0 +1,258 @@
+﻿2026-10-28T18:32:38.7645235Z Current runner version: '2.338.0'
+2026-10-28T18:32:38.7673325Z ##[group]Runner Image Provisioner
+2026-10-28T18:32:38.7674351Z Hosted Compute Agent
+2026-10-28T18:32:38.7675103Z Version: 20261021.618
+2026-10-28T18:32:38.7675950Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-28T18:32:38.7676831Z Build Date: 2026-10-21T00:45:21Z
+2026-10-28T18:32:38.7677627Z Worker ID: {a0d2f96f-8f34-4793-96d9-b325c72b814f}
+2026-10-28T18:32:38.7678984Z Region: eastus
+2026-10-28T18:32:38.7679637Z Cloud: Azure
+2026-10-28T18:32:38.7680337Z ##[endgroup]
+2026-10-28T18:32:38.7681984Z ##[group]Operating System
+2026-10-28T18:32:38.7683052Z Ubuntu
+2026-10-28T18:32:38.7684137Z 26.04.1
+2026-10-28T18:32:38.7685111Z LTS
+2026-10-28T18:32:38.7686172Z ##[endgroup]
+2026-10-28T18:32:38.7687096Z ##[group]Runner Image
+2026-10-28T18:32:38.7688555Z Image: ubuntu-26.04
+2026-10-28T18:32:38.7689270Z Version: 20261012.163.1
+2026-10-28T18:32:38.7690828Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261012.163/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-28T18:32:38.7692647Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261012.163
+2026-10-28T18:32:38.7693820Z ##[endgroup]
+2026-10-28T18:32:38.7695067Z ##[group]GITHUB_TOKEN Permissions
+2026-10-28T18:32:38.7697442Z Contents: read
+2026-10-28T18:32:38.7698823Z Metadata: read
+2026-10-28T18:32:38.7699537Z ##[endgroup]
+2026-10-28T18:32:38.7701874Z Secret source: Actions
+2026-10-28T18:32:38.7703035Z Cache mode: write
+2026-10-28T18:32:38.7704399Z Prepare workflow directory
+2026-10-28T18:32:38.8135155Z Prepare all required actions
+2026-10-28T18:32:38.8188463Z Getting action download info
+2026-10-28T18:32:39.0015956Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-28T18:32:39.3486762Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-28T18:32:39.5531043Z Download action repository 'gradle/actions@v4' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
+2026-10-28T18:32:40.0015538Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-28T18:32:40.2455571Z Complete job name: Compilar y verificar
+2026-10-28T18:32:40.3575298Z ##[group]Run actions/checkout@v4
+2026-10-28T18:32:40.3576366Z with:
+2026-10-28T18:32:40.3576911Z   repository: ivandresp/SM-Xplore
+2026-10-28T18:32:40.3586238Z   token: ***
+2026-10-28T18:32:40.3586756Z   ssh-strict: true
+2026-10-28T18:32:40.3587275Z   ssh-user: git
+2026-10-28T18:32:40.3587950Z   persist-credentials: true
+2026-10-28T18:32:40.3588578Z   clean: true
+2026-10-28T18:32:40.3589125Z   sparse-checkout-cone-mode: true
+2026-10-28T18:32:40.3589880Z   fetch-depth: 1
+2026-10-28T18:32:40.3590403Z   fetch-tags: false
+2026-10-28T18:32:40.3590961Z   show-progress: true
+2026-10-28T18:32:40.3591515Z   lfs: false
+2026-10-28T18:32:40.3592011Z   submodules: false
+2026-10-28T18:32:40.3592554Z   set-safe-directory: true
+2026-10-28T18:32:40.3593215Z   allow-unsafe-pr-checkout: false
+2026-10-28T18:32:40.3594211Z env:
+2026-10-28T18:32:40.3594861Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:40.3595781Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:40.3596560Z ##[endgroup]
+2026-10-28T18:32:40.7169452Z Syncing repository: ivandresp/SM-Xplore
+2026-10-28T18:32:40.7181446Z ##[group]Getting Git version info
+2026-10-28T18:32:40.7182822Z Working directory is '/home/runner/work/SM-Xplore/SM-Xplore'
+2026-10-28T18:32:40.7186211Z [command]/usr/bin/git version
+2026-10-28T18:32:40.7188763Z git version 2.55.0
+2026-10-28T18:32:40.7241379Z ##[endgroup]
+2026-10-28T18:32:40.7253489Z Temporarily overriding HOME='/home/runner/work/_temp/514e88ea-00be-49f0-a78e-3637f17cbb47' before making global git config changes
+2026-10-28T18:32:40.7260247Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-28T18:32:40.7264453Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/SM-Xplore/SM-Xplore
+2026-10-28T18:32:40.7354384Z Deleting the contents of '/home/runner/work/SM-Xplore/SM-Xplore'
+2026-10-28T18:32:40.7368766Z ##[group]Initializing the repository
+2026-10-28T18:32:40.7371203Z [command]/usr/bin/git init /home/runner/work/SM-Xplore/SM-Xplore
+2026-10-28T18:32:40.7490899Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-28T18:32:40.7496191Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-28T18:32:40.7500888Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-28T18:32:40.7504041Z hint: call:
+2026-10-28T18:32:40.7506045Z hint:
+2026-10-28T18:32:40.7508758Z hint: 	git config --global init.defaultBranch <name>
+2026-10-28T18:32:40.7511573Z hint:
+2026-10-28T18:32:40.7514068Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-28T18:32:40.7518602Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-28T18:32:40.7522026Z hint:
+2026-10-28T18:32:40.7524357Z hint: 	git branch -m <name>
+2026-10-28T18:32:40.7526907Z hint:
+2026-10-28T18:32:40.7530293Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-28T18:32:40.7535000Z Initialized empty Git repository in /home/runner/work/SM-Xplore/SM-Xplore/.git/
+2026-10-28T18:32:40.7644065Z [command]/usr/bin/git remote add origin https://github.com/ivandresp/SM-Xplore
+2026-10-28T18:32:40.7652443Z ##[endgroup]
+2026-10-28T18:32:40.7656144Z ##[group]Disabling automatic garbage collection
+2026-10-28T18:32:40.7659392Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-28T18:32:40.7666144Z ##[endgroup]
+2026-10-28T18:32:40.7669543Z ##[group]Setting up auth
+2026-10-28T18:32:40.7672399Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-28T18:32:40.7699969Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-28T18:32:40.8378805Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-28T18:32:40.8423688Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-28T18:32:40.8752730Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-28T18:32:40.8792509Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-28T18:32:40.9096499Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-28T18:32:40.9140200Z ##[endgroup]
+2026-10-28T18:32:40.9142544Z ##[group]Fetching the repository
+2026-10-28T18:32:40.9152927Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9877d5c670269d741fd46f69e5927e1ec91f7629:refs/remotes/origin/micro-users
+2026-10-28T18:32:42.0600240Z From https://github.com/ivandresp/SM-Xplore
+2026-10-28T18:32:42.0602572Z  * [new ref]         9877d5c670269d741fd46f69e5927e1ec91f7629 -> origin/micro-users
+2026-10-28T18:32:42.0606005Z ##[endgroup]
+2026-10-28T18:32:42.0607088Z ##[group]Determining the checkout info
+2026-10-28T18:32:42.0610972Z ##[endgroup]
+2026-10-28T18:32:42.0618472Z [command]/usr/bin/git sparse-checkout disable
+2026-10-28T18:32:42.0681923Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-28T18:32:42.0720317Z ##[group]Checking out the ref
+2026-10-28T18:32:42.0723852Z [command]/usr/bin/git checkout --progress --force -B micro-users refs/remotes/origin/micro-users
+2026-10-28T18:32:42.1184586Z Switched to a new branch 'micro-users'
+2026-10-28T18:32:42.1187196Z branch 'micro-users' set up to track 'origin/micro-users'.
+2026-10-28T18:32:42.1196238Z ##[endgroup]
+2026-10-28T18:32:42.1255696Z [command]/usr/bin/git log -1 --format=%H
+2026-10-28T18:32:42.1283994Z 9877d5c670269d741fd46f69e5927e1ec91f7629
+2026-10-28T18:32:42.1635676Z ##[group]Run actions/setup-java@v4
+2026-10-28T18:32:42.1636156Z with:
+2026-10-28T18:32:42.1636482Z   distribution: temurin
+2026-10-28T18:32:42.1636850Z   java-version: 25
+2026-10-28T18:32:42.1637179Z   java-package: jdk
+2026-10-28T18:32:42.1637522Z   check-latest: false
+2026-10-28T18:32:42.1638192Z   server-id: github
+2026-10-28T18:32:42.1638555Z   server-username: GITHUB_ACTOR
+2026-10-28T18:32:42.1638958Z   server-password: GITHUB_TOKEN
+2026-10-28T18:32:42.1639345Z   overwrite-settings: true
+2026-10-28T18:32:42.1639705Z   job-status: success
+2026-10-28T18:32:42.1643191Z   token: ***
+2026-10-28T18:32:42.1643508Z env:
+2026-10-28T18:32:42.1643881Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:42.1644366Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:42.1644791Z ##[endgroup]
+2026-10-28T18:32:42.3573232Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-28T18:32:42.3582487Z ##[group]Installed distributions
+2026-10-28T18:32:42.3615142Z Resolved Java 25.0.4+1 from tool-cache
+2026-10-28T18:32:42.3615939Z Setting Java 25.0.4+1 as the default
+2026-10-28T18:32:42.3626935Z (node:2392) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T18:32:42.3628711Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T18:32:42.3632049Z Creating toolchains.xml for JDK version 25 from temurin
+2026-10-28T18:32:42.3707737Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-28T18:32:42.3708485Z 
+2026-10-28T18:32:42.3708741Z Java configuration:
+2026-10-28T18:32:42.3709341Z   Distribution: temurin
+2026-10-28T18:32:42.3709941Z   Version: 25.0.4+1
+2026-10-28T18:32:42.3710776Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.3711484Z 
+2026-10-28T18:32:42.3712256Z ##[endgroup]
+2026-10-28T18:32:42.3730026Z Creating settings.xml with server-id: github
+2026-10-28T18:32:42.3764299Z Writing to /home/runner/.m2/settings.xml
+2026-10-28T18:32:42.4221426Z ##[group]Run gradle/actions/setup-gradle@v4
+2026-10-28T18:32:42.4221871Z with:
+2026-10-28T18:32:42.4222150Z   cache-disabled: false
+2026-10-28T18:32:42.4222470Z   cache-read-only: true
+2026-10-28T18:32:42.4222785Z   cache-write-only: false
+2026-10-28T18:32:42.4223121Z   cache-overwrite-existing: false
+2026-10-28T18:32:42.4223476Z   cache-cleanup: on-success
+2026-10-28T18:32:42.4223879Z   gradle-home-cache-includes: caches
+notifications
+
+2026-10-28T18:32:42.4224458Z   add-job-summary: always
+2026-10-28T18:32:42.4224853Z   add-job-summary-as-pr-comment: never
+2026-10-28T18:32:42.4225234Z   dependency-graph: disabled
+2026-10-28T18:32:42.4225633Z   dependency-graph-report-dir: dependency-graph-reports
+2026-10-28T18:32:42.4226119Z   dependency-graph-continue-on-failure: true
+2026-10-28T18:32:42.4226539Z   build-scan-publish: false
+2026-10-28T18:32:42.4226872Z   validate-wrappers: true
+2026-10-28T18:32:42.4227330Z   allow-snapshot-wrappers: false
+2026-10-28T18:32:42.4228177Z   gradle-home-cache-strict-match: false
+2026-10-28T18:32:42.4228691Z   workflow-job-context: null
+2026-10-28T18:32:42.4232904Z   github-token: ***
+2026-10-28T18:32:42.4233310Z env:
+2026-10-28T18:32:42.4233720Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:42.4234318Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:42.4234867Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.4235487Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.4235982Z ##[endgroup]
+2026-10-28T18:32:44.0570833Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-10-28T18:32:44.0573814Z ##[group]Restore Gradle state from cache
+2026-10-28T18:32:44.1304594Z Gradle User Home cache not found. Will initialize empty.
+2026-10-28T18:32:44.1306414Z ##[endgroup]
+2026-10-28T18:32:44.3740077Z Fetched 10 of 68 checksums
+2026-10-28T18:32:44.4971541Z Fetched 20 of 68 checksums
+2026-10-28T18:32:44.7576899Z Fetched 30 of 68 checksums
+2026-10-28T18:32:44.8728955Z Fetched 40 of 68 checksums
+2026-10-28T18:32:44.9888062Z Fetched 50 of 68 checksums
+2026-10-28T18:32:45.1214263Z Fetched 60 of 68 checksums
+2026-10-28T18:32:45.2199637Z Fetched 68 of 68 checksums
+2026-10-28T18:32:45.2201538Z ##[group]All Gradle Wrapper jars are valid
+2026-10-28T18:32:45.2203797Z ✓ Found known Gradle Wrapper JAR files:
+2026-10-28T18:32:45.2205907Z   497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7 microservices/ms-01-users-and-anomalies/gradle/wrapper/gradle-wrapper.jar
+2026-10-28T18:32:45.2208877Z ##[endgroup]
+2026-10-28T18:32:45.2397233Z ##[group]Run ./gradlew check --no-daemon --console=plain
+2026-10-28T18:32:45.2398132Z [36;1m./gradlew check --no-daemon --console=plain[0m
+2026-10-28T18:32:45.2584101Z shell: /usr/bin/bash -e {0}
+2026-10-28T18:32:45.2584568Z env:
+2026-10-28T18:32:45.2585034Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:45.2585681Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:45.2586351Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2587258Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2588237Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-28T18:32:45.2588686Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-28T18:32:45.2589106Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-28T18:32:45.2589532Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-28T18:32:45.2590213Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-28T18:32:45.2590908Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-28T18:32:45.2591374Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-28T18:32:45.2591761Z ##[endgroup]
+2026-10-28T18:32:45.2713999Z /home/runner/work/_temp/2b195387-df9a-49fa-aab4-1a6fb33c1011.sh: line 1: ./gradlew: Permission denied
+2026-10-28T18:32:45.2724857Z ##[error]Process completed with exit code 126.
+2026-10-28T18:32:45.2846333Z ##[group]Run actions/upload-artifact@v4
+2026-10-28T18:32:45.2846685Z with:
+2026-10-28T18:32:45.2846922Z   name: ms-01-test-reports
+2026-10-28T18:32:45.2847642Z   path: microservices/ms-01-users-and-anomalies/build/reports/tests/test
+microservices/ms-01-users-and-anomalies/build/test-results/test
+
+2026-10-28T18:32:45.2848677Z   if-no-files-found: ignore
+2026-10-28T18:32:45.2848962Z   retention-days: 7
+2026-10-28T18:32:45.2849217Z   compression-level: 6
+2026-10-28T18:32:45.2849481Z   overwrite: false
+2026-10-28T18:32:45.2849742Z   include-hidden-files: false
+2026-10-28T18:32:45.2850026Z env:
+2026-10-28T18:32:45.2850307Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:45.2850700Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:45.2851130Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2851725Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:45.2852278Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-28T18:32:45.2852654Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-28T18:32:45.2853003Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-28T18:32:45.2853362Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-28T18:32:45.2853897Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-28T18:32:45.2854482Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-28T18:32:45.2854870Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-28T18:32:45.2855196Z ##[endgroup]
+2026-10-28T18:32:45.4673870Z (node:2458) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T18:32:45.4676130Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T18:32:45.4729472Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-28T18:32:45.4733289Z The least common ancestor is /home/runner/work/SM-Xplore/SM-Xplore/microservices/ms-01-users-and-anomalies/build. This will be the root directory of the artifact
+2026-10-28T18:32:45.4735233Z No files were found with the provided path: microservices/ms-01-users-and-anomalies/build/reports/tests/test
+2026-10-28T18:32:45.4736766Z microservices/ms-01-users-and-anomalies/build/test-results/test. No artifacts will be uploaded.
+2026-10-28T18:32:45.5160000Z Post job cleanup.
+2026-10-28T18:32:45.7871440Z In post-action step
+2026-10-28T18:32:45.7880602Z Cache is read-only: will not save state for use in subsequent builds.
+2026-10-28T18:32:45.7886109Z Generating Job Summary
+2026-10-28T18:32:45.7908794Z Completed post-action step
+2026-10-28T18:32:45.8188227Z Post job cleanup.
+2026-10-28T18:32:45.9701988Z (node:2482) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T18:32:45.9703367Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T18:32:45.9942806Z Post job cleanup.
+2026-10-28T18:32:46.0907832Z [command]/usr/bin/git version
+2026-10-28T18:32:46.0961617Z git version 2.55.0
+2026-10-28T18:32:46.1001919Z Temporarily overriding HOME='/home/runner/work/_temp/bf4eed2b-2375-4a18-870a-57f510127a1d' before making global git config changes
+2026-10-28T18:32:46.1003536Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-28T18:32:46.1006939Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/SM-Xplore/SM-Xplore
+2026-10-28T18:32:46.1052676Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-28T18:32:46.1093422Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-28T18:32:46.1581445Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-28T18:32:46.1619767Z http.https://github.com/.extraheader
+2026-10-28T18:32:46.1630688Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-28T18:32:46.1710943Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-28T18:32:46.2071787Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-28T18:32:46.2121902Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-28T18:32:46.2643191Z Cleaning up orphan processes
+2026-10-28T18:32:46.3176444Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

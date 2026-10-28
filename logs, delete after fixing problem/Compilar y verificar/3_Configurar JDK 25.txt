@@ -1,0 +1,33 @@
+﻿2026-10-28T18:32:42.1635644Z ##[group]Run actions/setup-java@v4
+2026-10-28T18:32:42.1636150Z with:
+2026-10-28T18:32:42.1636478Z   distribution: temurin
+2026-10-28T18:32:42.1636829Z   java-version: 25
+2026-10-28T18:32:42.1637175Z   java-package: jdk
+2026-10-28T18:32:42.1637518Z   check-latest: false
+2026-10-28T18:32:42.1638184Z   server-id: github
+2026-10-28T18:32:42.1638551Z   server-username: GITHUB_ACTOR
+2026-10-28T18:32:42.1638955Z   server-password: GITHUB_TOKEN
+2026-10-28T18:32:42.1639342Z   overwrite-settings: true
+2026-10-28T18:32:42.1639702Z   job-status: success
+2026-10-28T18:32:42.1643187Z   token: ***
+2026-10-28T18:32:42.1643505Z env:
+2026-10-28T18:32:42.1643877Z   SERVICE_DIR: microservices/ms-01-users-and-anomalies
+2026-10-28T18:32:42.1644362Z   IMAGE_NAME: smxplore/ms-01:local
+2026-10-28T18:32:42.1644788Z ##[endgroup]
+2026-10-28T18:32:42.3573158Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-28T18:32:42.3582380Z ##[group]Installed distributions
+2026-10-28T18:32:42.3615117Z Resolved Java 25.0.4+1 from tool-cache
+2026-10-28T18:32:42.3615924Z Setting Java 25.0.4+1 as the default
+2026-10-28T18:32:42.3626911Z (node:2392) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T18:32:42.3628691Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T18:32:42.3632026Z Creating toolchains.xml for JDK version 25 from temurin
+2026-10-28T18:32:42.3707711Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-28T18:32:42.3708472Z 
+2026-10-28T18:32:42.3708732Z Java configuration:
+2026-10-28T18:32:42.3709327Z   Distribution: temurin
+2026-10-28T18:32:42.3709926Z   Version: 25.0.4+1
+2026-10-28T18:32:42.3710762Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+2026-10-28T18:32:42.3711471Z 
+2026-10-28T18:32:42.3712241Z ##[endgroup]
+2026-10-28T18:32:42.3730005Z Creating settings.xml with server-id: github
+2026-10-28T18:32:42.3764228Z Writing to /home/runner/.m2/settings.xml
