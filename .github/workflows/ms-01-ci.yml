@@ -56,24 +56,7 @@ jobs:
         if: failure()
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
-          if compgen -G "build/test-results/test/TEST-*.xml" > /dev/null; then
-            python3 - <<'PY'
-            import glob, re, xml.etree.ElementTree as ET
-
-            def clean(text):
-                text = (text or "").replace("%", "%25").replace("::", ": ")
-                return " ".join(text.split())[:400]
-
-            for path in sorted(glob.glob("build/test-results/test/TEST-*.xml")):
-                tree = ET.parse(path)
-                for case in tree.iter("testcase"):
-                    for failure in list(case.findall("failure")) + list(case.findall("error")):
-                        message = clean(failure.get("message") or failure.text)
-                        title = clean(f"{case.get('classname')}.{case.get('name')}")
-                        print(f"::error title={title}::{message}")
-                        break
-            PY
-          fi
+          python3 "$GITHUB_WORKSPACE/.github/scripts/annotate_failures.py" || true
           if [ -f build/check.log ]; then
             grep -E "FAILED|error:" build/check.log | tail -n 15 | while IFS= read -r line; do
               line="${line//%/%25}"
