@@ -38,7 +38,14 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .pathMatchers(
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/actuator/info",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**",
+                                "/actuator/prometheus"
+                        ).permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/**").authenticated()
                         .pathMatchers(HttpMethod.POST, "/api/v1/categories", "/api/v1/zones", "/api/v1/sites")
@@ -59,6 +66,12 @@ public class SecurityConfiguration {
                         .hasAnyRole("PRESTADORA_SERVICIOS", "GESTORA_DESTINOS", "ADMIN")
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/reviews/*/status")
                         .hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/reservations")
+                        .hasRole("TURISTA")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/admin/outbox/reprocess")
+                        .hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/reservations/*/status")
+                        .hasAnyRole("TURISTA", "PRESTADORA_SERVICIOS", "ADMIN")
                         .anyExchange().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiAuthenticationEntryPoint)
@@ -113,7 +126,12 @@ public class SecurityConfiguration {
                 .filter(origin -> !origin.isBlank())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-Correlation-Id",
+                "Idempotency-Key"
+        ));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

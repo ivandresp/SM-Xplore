@@ -19,6 +19,9 @@ public class OutboxProperties {
     private int maxAttempts = 20;
     private Duration initialBackoff = Duration.ofSeconds(1);
     private Duration maxBackoff = Duration.ofMinutes(1);
+    private Duration leaseDuration = Duration.ofMinutes(3);
+    private int retentionDays = 30;
+    private long retentionIntervalMs = 3_600_000;
 
     @PostConstruct
     public void validate() {
@@ -27,6 +30,8 @@ public class OutboxProperties {
         validateBatchSize();
         validateMaxAttempts();
         validateBackoffs();
+        validateLeaseDuration();
+        validateRetention();
     }
 
     private void validateProducer() {
@@ -60,6 +65,21 @@ public class OutboxProperties {
                 || maxBackoff.compareTo(initialBackoff) < 0) {
             throw new IllegalStateException(
                     "app.outbox initial/max backoff must be positive and max >= initial");
+        }
+    }
+
+    private void validateLeaseDuration() {
+        if (leaseDuration == null || leaseDuration.isNegative() || leaseDuration.isZero()) {
+            throw new IllegalStateException("app.outbox.lease-duration must be positive");
+        }
+    }
+
+    private void validateRetention() {
+        if (retentionDays < 1) {
+            throw new IllegalStateException("app.outbox.retention-days must be >= 1");
+        }
+        if (retentionIntervalMs < 1) {
+            throw new IllegalStateException("app.outbox.retention-interval-ms must be >= 1");
         }
     }
 }

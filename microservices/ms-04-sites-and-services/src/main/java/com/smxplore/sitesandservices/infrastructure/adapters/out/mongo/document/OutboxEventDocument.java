@@ -30,4 +30,6 @@ public class OutboxEventDocument {
     private Instant createdAt;
     private Instant publishedAt;
     private String lastError;
+    private String lockedBy;
+    private Instant lockedUntil;
 }

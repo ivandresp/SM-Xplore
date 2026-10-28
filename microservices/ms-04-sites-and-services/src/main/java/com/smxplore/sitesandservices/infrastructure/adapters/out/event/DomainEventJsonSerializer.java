@@ -1,4 +1,4 @@
-package com.smxplore.sitesandservices.infrastructure.adapters.out.mongo;
+package com.smxplore.sitesandservices.infrastructure.adapters.out.event;
 
 import com.smxplore.sitesandservices.domain.exception.DomainStateException;
 import com.smxplore.sitesandservices.domain.model.event.DomainEvent;

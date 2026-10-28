@@ -5,10 +5,13 @@ import com.smxplore.sitesandservices.domain.exception.DomainValidationException;
 import com.smxplore.sitesandservices.domain.exception.DuplicateReviewException;
 import com.smxplore.sitesandservices.domain.exception.ForbiddenOperationException;
 import com.smxplore.sitesandservices.domain.exception.InvalidJwtException;
+import com.smxplore.sitesandservices.domain.exception.ReservationConflictException;
+import com.smxplore.sitesandservices.domain.exception.ReservationLimitException;
 import com.smxplore.sitesandservices.domain.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -73,6 +76,34 @@ public class GlobalExceptionHandler {
     ) {
         return error(HttpStatus.CONFLICT, "Conflicting resource",
                 "A resource with the same unique data already exists.", exchange);
+    }
+
+    @ExceptionHandler(ReservationConflictException.class)
+    public ResponseEntity<ProblemDetail> handleReservationConflict(
+            ReservationConflictException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.CONFLICT, "Reservation conflict", exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReservationLimitException.class)
+    public ResponseEntity<ProblemDetail> handleReservationLimit(
+            ReservationLimitException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, "Reservation limit reached",
+                exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrity(
+            DataIntegrityViolationException exception,
+            ServerWebExchange exchange
+    ) {
+        log.warn("Data integrity error while processing {}",
+                exchange.getRequest().getPath().value(), exception);
+        return error(HttpStatus.CONFLICT, "Conflicting resource",
+                "The request conflicts with existing data.", exchange);
     }
 
     @ExceptionHandler(DomainValidationException.class)
@@ -163,8 +194,8 @@ public class GlobalExceptionHandler {
             ServerWebExchange exchange
     ) {
         log.error("Persistence error while processing {}", exchange.getRequest().getPath().value(), exception);
-        return error(HttpStatus.SERVICE_UNAVAILABLE, "Catalog temporarily unavailable",
-                "The catalog database is temporarily unavailable. Please try again later.", exchange);
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "Service temporarily unavailable",
+                "The database is temporarily unavailable. Please try again later.", exchange);
     }
 
     @ExceptionHandler(Exception.class)

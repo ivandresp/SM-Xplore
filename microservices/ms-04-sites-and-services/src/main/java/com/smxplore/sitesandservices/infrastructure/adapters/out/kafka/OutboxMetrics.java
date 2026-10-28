@@ -21,6 +21,14 @@ public class OutboxMetrics {
         counter("catalog.outbox.failed", "event_type", eventType).increment();
     }
 
+    public void bookingPublished(String eventType) {
+        counter("booking.outbox.published", "event_type", eventType).increment();
+    }
+
+    public void bookingFailed(String eventType) {
+        counter("booking.outbox.failed", "event_type", eventType).increment();
+    }
+
     private Counter counter(String name, String... tags) {
         return Counter.builder(name).tags(tags).register(meterRegistry);
     }

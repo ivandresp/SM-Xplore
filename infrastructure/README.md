@@ -56,7 +56,7 @@ docker compose down -v
   herramientas del host.
 - `kafka-ui` permite ver topics, consumer groups, lag y DLQ.
 
-Topics de fase 2 (ms-05 ya implementa los consumidores; ms-03/ms-04 aún deben publicarlos):
+Topics de fase 2 (ms-05 ya implementa los consumidores; ms-04 ya publica catálogo, reseñas y reservas de servicios; ms-03 sigue pendiente):
 
 | Topic | Productor | Consumidor ms-05 |
 |---|---|---|
@@ -66,7 +66,7 @@ Topics de fase 2 (ms-05 ya implementa los consumidores; ms-03/ms-04 aún deben p
 | `activities.event.changed` | ms-03 | sí |
 | `activities.activity.changed` | ms-03 | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
-| `bookings.reservation.changed` | ms-03 | **no** (ms-05 no usa reservas) |
+| `bookings.reservation.changed` | ms-03 / ms-04 | **no** (ms-05 no usa reservas) |
 
 ms-05 crea `<topic>.dlq` para los mensajes que no puede procesar. En desarrollo los topics se
 autocreatan; en producción deben crearse de forma controlada. La decisión de excluir `RESERVO`

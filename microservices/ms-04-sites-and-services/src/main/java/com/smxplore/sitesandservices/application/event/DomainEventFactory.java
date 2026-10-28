@@ -3,6 +3,7 @@ package com.smxplore.sitesandservices.application.event;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.event.DomainEvent;
 import com.smxplore.sitesandservices.domain.model.event.EventTypes;
+import com.smxplore.sitesandservices.domain.model.reservation.Reservation;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -54,6 +56,34 @@ public class DomainEventFactory {
         payload.put("status", service.status().name());
         payload.put("updatedAt", service.updatedAt().toString());
         return event(EventTypes.CATALOG_SERVICE_CHANGED, service.serviceId(), correlationId, payload);
+    }
+
+    public DomainEvent reservationChanged(Reservation reservation, String correlationId) {
+        List<Map<String, Object>> items = reservation.items().stream()
+                .map(item -> {
+                    Map<String, Object> payloadItem = new LinkedHashMap<>();
+                    payloadItem.put("itemType", "SERVICE");
+                    payloadItem.put("itemId", item.serviceId().toString());
+                    payloadItem.put("providerId", item.providerId().toString());
+                    payloadItem.put("serviceName", item.serviceName());
+                    payloadItem.put("people", item.people());
+                    payloadItem.put("total", item.total());
+                    return payloadItem;
+                })
+                .toList();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("reservationId", reservation.reservationId().toString());
+        payload.put("touristId", reservation.touristId().toString());
+        payload.put("bookedFor", reservation.bookedFor().toString());
+        payload.put("status", reservation.status().name());
+        payload.put("items", items);
+        payload.put("updatedAt", reservation.updatedAt().toString());
+        return event(
+                EventTypes.BOOKINGS_RESERVATION_CHANGED,
+                reservation.reservationId(),
+                correlationId,
+                payload
+        );
     }
 
     public DomainEvent reviewChanged(Review review, String correlationId) {

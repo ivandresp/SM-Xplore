@@ -1,6 +1,7 @@
 package com.smxplore.sitesandservices.infrastructure.adapters.out.mongo;
 
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.CategoryDocument;
+import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.NotificationDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.OutboxEventDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ServiceDocument;
@@ -65,7 +66,18 @@ public class MongoIndexInitializer {
                         .createIndex(new Index()
                                 .on("status", Sort.Direction.ASC)
                                 .on("nextAttemptAt", Sort.Direction.ASC)
-                                .on("occurredAt", Sort.Direction.ASC))
+                                .on("occurredAt", Sort.Direction.ASC)),
+                mongoTemplate.indexOps(NotificationDocument.class)
+                        .createIndex(new Index()
+                                .on("recipientId", Sort.Direction.ASC)
+                                .on("createdAt", Sort.Direction.DESC)),
+                mongoTemplate.indexOps(NotificationDocument.class)
+                        .createIndex(new Index()
+                                .on("recipientId", Sort.Direction.ASC)
+                                .on("readAt", Sort.Direction.ASC)),
+                mongoTemplate.indexOps(NotificationDocument.class)
+                        .createIndex(new Index()
+                                .on("reservationId", Sort.Direction.ASC))
         );
         Mono.when(operations).block(Duration.ofSeconds(30));
     }

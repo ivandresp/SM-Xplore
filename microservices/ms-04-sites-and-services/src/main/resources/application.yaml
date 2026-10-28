@@ -28,6 +28,13 @@ spring:
       acks: all
       properties:
         enable.idempotence: true
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:ms-04-notifications}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:latest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      missing-topics-fatal: false
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
@@ -51,9 +58,24 @@ app:
     max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
     initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
     max-backoff: ${OUTBOX_MAX_BACKOFF:1m}
+    lease-duration: ${OUTBOX_LEASE_DURATION:3m}
+    retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
 
   catalog:
     seed-enabled: ${CATALOG_SEED_ENABLED:false}
+
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+
+  bookings:
+    zone-id: ${BOOKINGS_ZONE_ID:America/Bogota}
+    max-active-per-tourist: ${BOOKINGS_MAX_ACTIVE_PER_TOURIST:5}
+    max-creations-per-minute: ${BOOKINGS_MAX_CREATIONS_PER_MINUTE:10}
+    max-advance-days: ${BOOKINGS_MAX_ADVANCE_DAYS:365}
+    auto-complete-enabled: ${BOOKINGS_AUTO_COMPLETE_ENABLED:true}
+    completion-interval-ms: ${BOOKINGS_COMPLETION_INTERVAL_MS:60000}
+    completion-batch-size: ${BOOKINGS_COMPLETION_BATCH_SIZE:100}
 
 springdoc:
   api-docs:
@@ -62,11 +84,23 @@ springdoc:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
 
 management:
+  defaults:
+    metrics:
+      export:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
   endpoint:
+    metrics:
+      access: read-only
+    prometheus:
+      access: read-only
     health:
       probes:
         enabled: true

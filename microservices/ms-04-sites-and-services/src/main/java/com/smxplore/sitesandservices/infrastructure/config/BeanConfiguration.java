@@ -5,11 +5,21 @@ import com.smxplore.sitesandservices.application.catalog.CategoryGetService;
 import com.smxplore.sitesandservices.application.catalog.CategoryListService;
 import com.smxplore.sitesandservices.application.catalog.CategoryUpdateService;
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
+import com.smxplore.sitesandservices.application.notification.NotificationAccess;
+import com.smxplore.sitesandservices.application.notification.NotificationCreateService;
+import com.smxplore.sitesandservices.application.notification.NotificationListService;
+import com.smxplore.sitesandservices.application.notification.NotificationMarkReadService;
 import com.smxplore.sitesandservices.application.review.ReviewChangeStatusService;
 import com.smxplore.sitesandservices.application.review.ReviewCreateService;
 import com.smxplore.sitesandservices.application.review.ReviewGetService;
 import com.smxplore.sitesandservices.application.review.ReviewListService;
 import com.smxplore.sitesandservices.application.review.ReviewRespondService;
+import com.smxplore.sitesandservices.application.reservation.ReservationAvailabilityService;
+import com.smxplore.sitesandservices.application.reservation.ReservationChangeStatusService;
+import com.smxplore.sitesandservices.application.reservation.ReservationCompletionService;
+import com.smxplore.sitesandservices.application.reservation.ReservationCreateService;
+import com.smxplore.sitesandservices.application.reservation.ReservationGetService;
+import com.smxplore.sitesandservices.application.reservation.ReservationListService;
 import com.smxplore.sitesandservices.application.review.ReviewSummaryService;
 import com.smxplore.sitesandservices.application.service.ServiceChangeStatusService;
 import com.smxplore.sitesandservices.application.service.ServiceCreateService;
@@ -24,6 +34,9 @@ import com.smxplore.sitesandservices.application.site.SiteListService;
 import com.smxplore.sitesandservices.application.site.SiteUpdateService;
 import com.smxplore.sitesandservices.application.support.CatalogAccess;
 import com.smxplore.sitesandservices.application.support.CatalogLookup;
+import com.smxplore.sitesandservices.application.support.ReservationAccess;
+import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
+import com.smxplore.sitesandservices.application.support.ReservationPolicy;
 import com.smxplore.sitesandservices.application.support.TransactionalOutboxWriter;
 import com.smxplore.sitesandservices.application.zone.ZoneChangeStatusService;
 import com.smxplore.sitesandservices.application.zone.ZoneCreateService;
@@ -31,23 +44,30 @@ import com.smxplore.sitesandservices.application.zone.ZoneGetService;
 import com.smxplore.sitesandservices.application.zone.ZoneListService;
 import com.smxplore.sitesandservices.application.zone.ZoneUpdateService;
 import com.smxplore.sitesandservices.domain.ports.in.AssignSiteZoneUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ChangeReservationStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeReviewStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeServiceStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeSiteStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeZoneStatusUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.CheckReservationAvailabilityUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateCategoryUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.CreateReservationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetCategoryUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.GetReservationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewSummaryUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListCategoriesUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ListNotificationsUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ListReservationsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListReviewsUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.MarkNotificationReadUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListServicesUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListSitesUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListZonesUseCase;
@@ -57,7 +77,11 @@ import com.smxplore.sitesandservices.domain.ports.in.UpdateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.out.CategoryRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.NotificationRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReservationOutboxPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReservationRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReservationTransactionPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.SiteRepositoryPort;
@@ -434,5 +458,146 @@ public class BeanConfiguration {
     @Bean
     public GetReviewSummaryUseCase getReviewSummaryUseCase(ReviewRepositoryPort reviewRepository) {
         return new ReviewSummaryService(reviewRepository);
+    }
+
+    @Bean
+    public ReservationAccess reservationAccess() {
+        return new ReservationAccess();
+    }
+
+    @Bean
+    public NotificationAccess notificationAccess() {
+        return new NotificationAccess();
+    }
+
+    @Bean
+    public NotificationCreateService notificationCreateService(
+            NotificationRepositoryPort notificationRepository,
+            Clock clock
+    ) {
+        return new NotificationCreateService(notificationRepository, clock);
+    }
+
+    @Bean
+    public ListNotificationsUseCase listNotificationsUseCase(
+            NotificationRepositoryPort notificationRepository,
+            NotificationAccess access
+    ) {
+        return new NotificationListService(notificationRepository, access);
+    }
+
+    @Bean
+    public MarkNotificationReadUseCase markNotificationReadUseCase(
+            NotificationRepositoryPort notificationRepository,
+            NotificationAccess access,
+            Clock clock
+    ) {
+        return new NotificationMarkReadService(notificationRepository, access, clock);
+    }
+
+    @Bean
+    public ReservationAvailabilityPolicy reservationAvailabilityPolicy(
+            BookingProperties properties
+    ) {
+        return new ReservationAvailabilityPolicy(properties.zone());
+    }
+
+    @Bean
+    public ReservationPolicy reservationPolicy(BookingProperties properties) {
+        return new ReservationPolicy(
+                properties.getMaxActivePerTourist(),
+                properties.getMaxCreationsPerMinute(),
+                properties.getMaxAdvanceDays()
+        );
+    }
+
+    @Bean
+    public CreateReservationUseCase createReservationUseCase(
+            ServiceRepositoryPort serviceRepository,
+            ReservationRepositoryPort reservationRepository,
+            ReservationTransactionPort transaction,
+            ReservationOutboxPort outbox,
+            ReservationAvailabilityPolicy availabilityPolicy,
+            ReservationAccess access,
+            DomainEventFactory eventFactory,
+            ReservationPolicy policy,
+            Clock clock
+    ) {
+        return new ReservationCreateService(
+                serviceRepository,
+                reservationRepository,
+                transaction,
+                outbox,
+                availabilityPolicy,
+                access,
+                eventFactory,
+                policy,
+                clock
+        );
+    }
+
+    @Bean
+    public GetReservationUseCase getReservationUseCase(
+            ReservationRepositoryPort reservationRepository,
+            ReservationAccess access
+    ) {
+        return new ReservationGetService(reservationRepository, access);
+    }
+
+    @Bean
+    public ListReservationsUseCase listReservationsUseCase(
+            ReservationRepositoryPort reservationRepository,
+            ReservationAccess access
+    ) {
+        return new ReservationListService(reservationRepository, access);
+    }
+
+    @Bean
+    public ChangeReservationStatusUseCase changeReservationStatusUseCase(
+            ReservationRepositoryPort reservationRepository,
+            ReservationTransactionPort transaction,
+            ReservationOutboxPort outbox,
+            ReservationAccess access,
+            DomainEventFactory eventFactory,
+            Clock clock
+    ) {
+        return new ReservationChangeStatusService(
+                reservationRepository,
+                transaction,
+                outbox,
+                access,
+                eventFactory,
+                clock
+        );
+    }
+
+    @Bean
+    public CheckReservationAvailabilityUseCase checkReservationAvailabilityUseCase(
+            ServiceRepositoryPort serviceRepository,
+            ReservationRepositoryPort reservationRepository,
+            ReservationAvailabilityPolicy availabilityPolicy,
+            Clock clock
+    ) {
+        return new ReservationAvailabilityService(
+                serviceRepository,
+                reservationRepository,
+                availabilityPolicy,
+                clock
+        );
+    }
+
+    @Bean
+    public ReservationCompletionService reservationCompletionService(
+            ReservationRepositoryPort reservationRepository,
+            ChangeReservationStatusUseCase changeStatusUseCase,
+            BookingProperties properties,
+            Clock clock
+    ) {
+        return new ReservationCompletionService(
+                reservationRepository,
+                changeStatusUseCase,
+                properties.getCompletionBatchSize(),
+                clock
+        );
     }
 }

@@ -13,10 +13,11 @@ public class KafkaOutboxPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public Mono<Void> publish(OutboxEventDocument event) {
-        return Mono.fromFuture(kafkaTemplate.send(
-                        event.getEventType(),
-                        event.getAggregateId(),
-                        event.getEventJson()))
+        return publish(event.getEventType(), event.getAggregateId(), event.getEventJson());
+    }
+
+    public Mono<Void> publish(String eventType, String aggregateId, String eventJson) {
+        return Mono.fromFuture(kafkaTemplate.send(eventType, aggregateId, eventJson))
                 .then();
     }
 }

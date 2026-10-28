@@ -13,13 +13,16 @@ import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
 import com.smxplore.sitesandservices.domain.model.common.ContentStatus;
 import com.smxplore.sitesandservices.domain.model.event.DomainEvent;
+import com.smxplore.sitesandservices.domain.model.reservation.Reservation;
+import com.smxplore.sitesandservices.domain.model.reservation.ReservationItem;
+import com.smxplore.sitesandservices.domain.model.reservation.ReservationStatus;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.review.ReviewStatus;
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
-import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.DomainEventJsonSerializer;
+import com.smxplore.sitesandservices.infrastructure.adapters.out.event.DomainEventJsonSerializer;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -59,7 +62,8 @@ class EventContractTest {
                 "catalog.category.changed", factory.categoryChanged(category(), "corr-1"),
                 "catalog.site.changed", factory.siteChanged(site(), "corr-2"),
                 "catalog.service.changed", factory.serviceChanged(service(), "corr-3"),
-                "reviews.review.changed", factory.reviewChanged(review(), "corr-4")
+                "reviews.review.changed", factory.reviewChanged(review(), "corr-4"),
+                "bookings.reservation.changed", factory.reservationChanged(reservation(), "corr-5")
         );
 
         for (Map.Entry<String, DomainEvent> entry : events.entrySet()) {
@@ -90,7 +94,8 @@ class EventContractTest {
                 "catalog.category.changed",
                 "catalog.site.changed",
                 "catalog.service.changed",
-                "reviews.review.changed"
+                "reviews.review.changed",
+                "bookings.reservation.changed"
         );
     }
 
@@ -116,7 +121,8 @@ class EventContractTest {
                 "catalog.category.changed",
                 "catalog.site.changed",
                 "catalog.service.changed",
-                "reviews.review.changed")) {
+                "reviews.review.changed",
+                "bookings.reservation.changed")) {
             String fileName = eventType + ".v1.json";
             schemas.put(eventType, schemaFactory.getSchema(
                     SchemaLocation.of(BASE_IRI + fileName),
@@ -196,6 +202,36 @@ class EventContractTest {
                 .build();
         service.validate();
         return service;
+    }
+
+    private Reservation reservation() {
+        ReservationItem item = ReservationItem.builder()
+                .reservationItemId(UUID.fromString("88888888-8888-8888-8888-888888888801"))
+                .serviceId(UUID.fromString("55555555-5555-5555-5555-555555555501"))
+                .serviceName("Restaurante del Mar")
+                .providerId(UUID.fromString("66666666-6666-6666-6666-666666666602"))
+                .providerName("Prestadora de prueba")
+                .serviceType("RESTAURANT")
+                .unitPrice(new BigDecimal("50000.00"))
+                .people(2)
+                .total(new BigDecimal("100000.00"))
+                .position(0)
+                .build();
+        Reservation reservation = Reservation.builder()
+                .reservationId(UUID.fromString("99999999-9999-9999-9999-999999999901"))
+                .touristId(UUID.fromString("66666666-6666-6666-6666-666666666601"))
+                .touristName("Ana")
+                .status(ReservationStatus.CONFIRMED)
+                .total(new BigDecimal("100000.00"))
+                .bookedFor(NOW.plusSeconds(3600))
+                .notes("Mesa junto a la ventana")
+                .items(List.of(item))
+                .createdAt(NOW)
+                .updatedAt(NOW)
+                .confirmedAt(NOW)
+                .build();
+        reservation.validate();
+        return reservation;
     }
 
     private Review review() {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://smxplore.local/contracts/events/bookings.reservation.changed.v1.json",
   "title": "bookings.reservation.changed.v1",
-  "description": "Shared booking event. ms-05 does NOT consume it and does not create RESERVO edges.",
+  "description": "Shared booking event. ms-03 publishes activity/event reservations and ms-04 publishes service reservations. ms-05 does NOT consume it and does not create RESERVO edges.",
   "allOf": [
     {
       "$ref": "./envelope.v1.json"
@@ -31,6 +31,10 @@
               "type": "string",
               "format": "uuid"
             },
+            "bookedFor": {
+              "type": "string",
+              "format": "date-time"
+            },
             "status": {
               "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]
             },
@@ -47,6 +51,13 @@
                   "itemId": {
                     "type": "string",
                     "format": "uuid"
+                  },
+                  "providerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "serviceName": {
+                    "type": "string"
                   },
                   "people": {
                     "type": "integer",

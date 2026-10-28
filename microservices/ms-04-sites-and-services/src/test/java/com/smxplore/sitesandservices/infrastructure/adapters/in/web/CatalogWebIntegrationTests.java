@@ -86,8 +86,15 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         assertThat(reviews.total()).isEqualTo(1);
         assertThat(reviews.content().getFirst().response()).isNotBlank();
 
+        List<String> aggregateIds = List.of(
+                category.categoryId().toString(),
+                site.siteId().toString(),
+                service.serviceId().toString(),
+                review.reviewId().toString()
+        );
         List<OutboxEventDocument> pending = mongoTemplate.find(
-                        Query.query(Criteria.where("status").is("PENDING")),
+                        Query.query(Criteria.where("status").is("PENDING")
+                                .and("aggregateId").in(aggregateIds)),
                         OutboxEventDocument.class)
                 .collectList()
                 .block();
@@ -134,6 +141,13 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         webTestClient.get().uri("/api/v1/sites")
                 .exchange()
                 .expectStatus().isUnauthorized();
+
+        webTestClient.get().uri("/actuator/health")
+                .exchange()
+                .expectStatus().isOk();
+        webTestClient.get().uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     private CategoryResponse createCategory(UUID managerId) {

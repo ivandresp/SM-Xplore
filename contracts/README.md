@@ -57,7 +57,7 @@ Todos los eventos comparten el sobre de `envelope.v1.json`:
 | `activities.event.changed` | ms-03 | sí |
 | `activities.activity.changed` | ms-03 | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
-| `bookings.reservation.changed` | ms-03 | **no** |
+| `bookings.reservation.changed` | ms-03 / ms-04 | **no** |
 
 `reviews.review.changed` lo publica ms-03 para actividades/eventos y ms-04 para sitios y
 servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin distinguir el
@@ -66,12 +66,18 @@ productor. El sobre conserva `producer` para trazabilidad.
 `bookings.reservation.changed` se mantiene porque notificaciones y analítica lo usan, pero
 **ms-05 no lo consume**. La recomendación no usa reservas: ver
 `microservices/ms-05-recommendations/docs/adr/0002-no-reservation-signal.md`.
+ms-03 lo publica para actividades/eventos y ms-04 para reservas de servicios
+(`payload.items[].itemType=SERVICE`). ms-04 también lo consume con el grupo
+`ms-04-notifications` para alimentar la bandeja de notificaciones; usa `eventId` para deduplicar.
+Los campos `payload.bookedFor` y `payload.items[].providerId/serviceName` son opcionales y
+aditivos para ese consumidor.
 
 Estado de fase 2:
 
 - ms-05 ya consume los seis topics marcados con “sí”.
-- ms-03 y ms-04 todavía no tienen outbox ni publican estos eventos en sus ramas. Los tests de
-  ms-05 publican los fixtures directamente en Kafka para validar el contrato y la proyección.
+- ms-04 ya publica catálogo, reseñas y reservas de servicios desde su outbox. ms-03 sigue
+  pendiente. Los tests de ms-05 publican los fixtures directamente en Kafka para validar el
+  contrato y la proyección.
 - La key de cada mensaje debe ser el `aggregateId`. ms-05 rechaza una key distinta si viene
   informada.
 - Los errores de contrato van a `<topic>.dlq`.

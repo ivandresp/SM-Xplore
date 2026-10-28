@@ -6,6 +6,7 @@ public final class EventTypes {
     public static final String CATALOG_SERVICE_CHANGED = "catalog.service.changed";
     public static final String CATALOG_CATEGORY_CHANGED = "catalog.category.changed";
     public static final String REVIEWS_REVIEW_CHANGED = "reviews.review.changed";
+    public static final String BOOKINGS_RESERVATION_CHANGED = "bookings.reservation.changed";
 
     private EventTypes() {
     }

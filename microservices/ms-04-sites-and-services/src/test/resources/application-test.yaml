@@ -1,6 +1,8 @@
 app:
   outbox:
     enabled: false
+  notifications:
+    enabled: false
   security:
     jwt:
       public-key-location: classpath:keys/test-public.pem

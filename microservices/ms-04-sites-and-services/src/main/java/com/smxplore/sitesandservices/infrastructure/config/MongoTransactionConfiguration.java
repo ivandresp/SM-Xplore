@@ -2,6 +2,7 @@ package com.smxplore.sitesandservices.infrastructure.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.mongodb.ReactiveMongoDatabaseFactory;
 import org.springframework.data.mongodb.ReactiveMongoTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -16,8 +17,9 @@ public class MongoTransactionConfiguration {
         return new ReactiveMongoTransactionManager(databaseFactory);
     }
 
-    @Bean
-    public TransactionalOperator transactionalOperator(
+    @Bean("mongoTransactionalOperator")
+    @Primary
+    public TransactionalOperator mongoTransactionalOperator(
             ReactiveMongoTransactionManager transactionManager
     ) {
         return TransactionalOperator.create(transactionManager);
