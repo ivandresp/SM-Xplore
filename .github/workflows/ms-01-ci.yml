@@ -46,6 +46,8 @@ jobs:
 
       - name: Ejecutar check (pruebas, ArchUnit y Spotless)
         working-directory: ${{ env.SERVICE_DIR }}
+        env:
+          LOGGING_FILE_NAME: build/test-application.log
         run: |
           chmod +x gradlew
           mkdir -p build
@@ -57,6 +59,13 @@ jobs:
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
           python3 "$GITHUB_WORKSPACE/.github/scripts/annotate_failures.py" || true
+          if [ -f build/test-application.log ]; then
+            grep -E "ERROR|Exception|Caused by" build/test-application.log | tail -n 8 | while IFS= read -r line; do
+              line="${line//%/%25}"
+              line="${line//::/ }"
+              echo "::error title=Log de la aplicación::${line}"
+            done
+          fi
           if [ -f build/check.log ]; then
             grep -E "FAILED|error:" build/check.log | tail -n 15 | while IFS= read -r line; do
               line="${line//%/%25}"
