@@ -47,6 +47,11 @@ class ListAuditEntriesServiceTest {
             public Flux<AuditEntry> export(AuditSearchCriteria candidate, int limit) {
                 return Flux.empty();
             }
+
+            @Override
+            public Mono<Long> deleteOccurredBefore(Instant cutoff) {
+                return Mono.just(0L);
+            }
         };
 
         PageResult<AuditEntryView> result =

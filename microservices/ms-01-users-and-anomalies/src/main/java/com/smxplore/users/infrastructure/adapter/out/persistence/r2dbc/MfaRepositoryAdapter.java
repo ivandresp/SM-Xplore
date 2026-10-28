@@ -155,6 +155,15 @@ public class MfaRepositoryAdapter implements MfaRepository {
                 .map(updated -> updated > 0);
     }
 
+    @Override
+    public Mono<Long> deleteUsedRecoveryCodesBefore(Instant cutoff) {
+        return databaseClient
+                .sql("DELETE FROM mfa_recovery_codes WHERE used_at IS NOT NULL AND used_at < :cutoff")
+                .bind("cutoff", toOffsetDateTime(cutoff))
+                .fetch()
+                .rowsUpdated();
+    }
+
     private static GenericExecuteSpec bindNullable(GenericExecuteSpec spec, String name, Object value, Class<?> type) {
         return value == null ? spec.bindNull(name, type) : spec.bind(name, value);
     }

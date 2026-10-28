@@ -2,6 +2,7 @@ package com.smxplore.users.infrastructure.adapter.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -139,6 +140,15 @@ class AdminMonitoringFlowTest {
                 .contains("auditoria-");
         assertThat(export.getBody()).contains("fecha,actor,rol,accion,usuarioAfectado,detalles");
         assertThat(export.getBody()).contains("PRESTADORA_APROBADA");
+
+        ResponseEntity<byte[]> pdf = exportAuditPdf(adminToken, "?action=PRESTADORA_APROBADA");
+        assertThat(pdf.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(pdf.getHeaders().getContentType()).isNotNull();
+        assertThat(pdf.getHeaders().getContentType().toString()).startsWith("application/pdf");
+        assertThat(pdf.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
+                .contains("auditoria-")
+                .contains(".pdf\"");
+        assertThat(new String(pdf.getBody(), 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
     }
 
     @Test
@@ -255,6 +265,14 @@ class AdminMonitoringFlowTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .retrieve()
                 .toEntity(String.class);
+    }
+
+    private ResponseEntity<byte[]> exportAuditPdf(String token, String query) {
+        return client.get()
+                .uri("/api/v1/admin/audit-logs/export/pdf" + query)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .retrieve()
+                .toEntity(byte[].class);
     }
 
     private HttpStatusCode getStatus(String token, String uri) {

@@ -48,6 +48,7 @@ import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
+import com.smxplore.users.application.port.out.AuditPdfRenderer;
 import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
@@ -81,6 +82,7 @@ import com.smxplore.users.application.service.ClassifyAnomalyService;
 import com.smxplore.users.application.service.ConfirmMfaService;
 import com.smxplore.users.application.service.CreateInternalUserService;
 import com.smxplore.users.application.service.CreateReviewService;
+import com.smxplore.users.application.service.DataRetentionService;
 import com.smxplore.users.application.service.DeleteUserService;
 import com.smxplore.users.application.service.DisableMfaService;
 import com.smxplore.users.application.service.EnrollMfaService;
@@ -123,6 +125,7 @@ import com.smxplore.users.domain.policy.PasswordResetPolicy;
 import com.smxplore.users.domain.policy.ReviewAiPolicy;
 import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
+import java.time.Duration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -327,8 +330,25 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public ExportAuditEntriesUseCase exportAuditEntriesUseCase(AuditLogRepository auditLogRepository, Clock clock) {
-        return new ExportAuditEntriesService(auditLogRepository, clock);
+    public DataRetentionService dataRetentionService(
+            PasswordResetTokenRepository resetTokens,
+            LoginAttemptRepository loginAttempts,
+            MfaRepository mfa,
+            AuditLogRepository auditLog,
+            RetentionProperties retention) {
+        return new DataRetentionService(
+                resetTokens,
+                loginAttempts,
+                mfa,
+                auditLog,
+                Duration.ofDays(retention.authArtifactsDays()),
+                Duration.ofDays(retention.auditLogDays()));
+    }
+
+    @Bean
+    public ExportAuditEntriesUseCase exportAuditEntriesUseCase(
+            AuditLogRepository auditLogRepository, AuditPdfRenderer auditPdfRenderer, Clock clock) {
+        return new ExportAuditEntriesService(auditLogRepository, auditPdfRenderer, clock);
     }
 
     @Bean

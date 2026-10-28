@@ -101,3 +101,8 @@ app:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}
       interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
+  retention:
+    enabled: ${RETENTION_ENABLED:true}
+    auth-artifacts-days: ${RETENTION_AUTH_ARTIFACTS_DAYS:30}
+    audit-log-days: ${RETENTION_AUDIT_LOG_DAYS:1825}
+    cron: "${RETENTION_CRON:0 30 3 * * *}"

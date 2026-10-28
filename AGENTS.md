@@ -15,6 +15,7 @@ All deliverables, user stories, diagrams, and commit messages are in **Spanish**
 | `docs/user-stories/<role>/us.md` | User stories, one file per role |
 | `docs/models/` | Tracked PlantUML + static design images (domain, classes, UC, packages, deployment, DB, E-R) |
 | `docs/requirements/SM-Xplore_SRS.docx` | SRS v2.0 (binary Word; no Markdown source) |
+| `docs/legal/POLITICA-RETENCION-Y-ARCO.md` | Retención de datos y procedimiento ARCO (Ley 1581) |
 | `docs/plan/` | RUP plan (`.xlsx`) and team roles |
 | `microservices/ms-01-users-and-anomalies/` | Java 25 + Spring Boot 4.1.2 identity/auth service (Spring WebFlux + R2DBC) |
 | `microservices/ms-01-users-and-anomalies/{gradlew,gradle,settings.gradle.kts,build.gradle.kts}` | Self-contained Gradle build root |
@@ -50,6 +51,7 @@ docker compose --profile full down
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
 - PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`). Login lockout uses `login_attempts`; MFA uses `mfa_enrollments` and `mfa_recovery_codes`.
 - Review AI filter: `app.reviews.ai-filter.*` (`enabled`, `base-url`/`LITTLELLM_URL`, `api-key`/`LITTLELLM_API_KEY`, `model`, `timeout`, `threshold`, `temperature`/`REVIEW_AI_TEMPERATURE` (default `0.0`, greedy decoding for a stable verdict), `action`, `fail-open`). The adapter calls an OpenAI-compatible `POST /v1/chat/completions`; flagged reviews become `PENDIENTE_REVISION` (or `HIDDEN` with `action=HIDE`) and the assessment is stored on the review document. Tests point it at a local `HttpServer` stub.
+- Data retention: `app.retention.*` (`enabled`, `auth-artifacts-days` 30, `audit-log-days` 1825, `cron`). `RetentionScheduler` purges expired reset tokens, login attempts, used recovery codes and old audit entries daily; the legal procedure lives in `docs/legal/POLITICA-RETENCION-Y-ARCO.md`.
 - Security knobs: `app.security.rate-limit.*` (per-IP fixed window on auth endpoints), `app.security.lockout.*` (per-account failures, PostgreSQL-backed), `app.security.mfa.*` (`required-for-admins`, challenge TTL, issuer, `secret-key`/`MFA_SECRET_KEY` for TOTP encryption at rest), `app.security.headers.*` (HSTS off by default, on in `prod`). `SPRING_PROFILES_ACTIVE=prod` loads `application-prod.yml`; `ProductionSecurityValidator` refuses to start with generated JWT keys or the default bootstrap password, and `MfaSecretCipherConfig` refuses to start without `MFA_SECRET_KEY` outside `dev`/`test`.
 
 ## Architecture rules
@@ -77,21 +79,18 @@ docker compose --profile full down
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV export), security hardening (TOTP MFA with hashed recovery codes, AES-GCM encrypted TOTP secrets, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation, logout via `auth_version` revocation, recovery-code rotation), a multi-stage Docker image with a Compose `full` profile (read-only root, no capabilities), GitHub Actions CI (verification, Trivy image scan and image smoke test) plus Dependabot, persistence, tests, ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV and PDF export), data retention (daily purge of expired auth artifacts and old audit entries, `app.retention.*`, policy in `docs/legal/POLITICA-RETENCION-Y-ARCO.md`), security hardening (TOTP MFA with hashed recovery codes, AES-GCM encrypted TOTP secrets, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation, logout via `auth_version` revocation, recovery-code rotation), a multi-stage Docker image with a Compose `full` profile (read-only root, no capabilities), GitHub Actions CI (verification, Trivy image scan and image smoke test) plus Dependabot, persistence, tests (including a Mailpit password-reset E2E), ArchUnit, and Spotless.
 
 Still to design/implement:
 
 1. **Tests and delivery**
-   - Password-reset E2E with Mailpit token capture (admin, provisioning, 401/403, duplicate email/DNI/NIT, and public-profile tests already exist).
    - CI builds and smoke-tests the image but does not publish it; add a registry push when the deployment target is chosen.
 
 2. **Monitoring follow-ups**
-   - PDF export for audit reports (UC6); CSV export is implemented.
    - Cross-service indicators (reservations, sites, activities, events) once ms-03/ms-04 expose their contracts.
 
 3. **Security follow-ups**
    - The per-IP rate limiter is in-memory and per instance; lockout is shared through PostgreSQL. A distributed limiter is only needed if ms-01 scales horizontally.
-   - No audit-log or PII retention/ARCO procedure yet (Ley 1581); anonymization on delete is implemented.
    - JWT keys are static (no `kid` rotation/keyring). Reset tokens and MFA secrets are single-key; rotating `MFA_SECRET_KEY` requires re-encrypting `mfa_enrollments`.
    - Logout revokes `auth_version`, which ms-01 enforces immediately; ms-02–ms-04 only validate signature/exp until they consult `ver`.
 

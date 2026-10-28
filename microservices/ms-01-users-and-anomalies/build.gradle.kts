@@ -27,6 +27,7 @@ dependencies {
     implementation(libs.spring.boot.oauth2.resource.server)
     implementation(libs.springdoc.webflux.ui)
     implementation(libs.caffeine)
+    implementation(libs.openpdf)
 
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.r2dbc.postgresql)

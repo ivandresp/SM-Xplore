@@ -12,6 +12,7 @@ Estado actual: identidad, autenticación, perfiles, administración de usuarios,
 - Flyway para migraciones (usa JDBC únicamente durante el arranque)
 - Spring Data MongoDB reactivo para reseñas
 - Mailpit para correo local
+- OpenPDF para los reportes de auditoría en PDF
 - Gradle 9.5.1 (wrapper dentro de este directorio)
 - Docker (imagen multi-etapa) y Docker Compose (perfil `full`)
 
@@ -110,6 +111,9 @@ docker compose --profile full down
 | `MFA_REQUIRED_FOR_ADMINS` | `false` en desarrollo y pruebas; `true` en `prod` |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
 | `MFA_SECRET_KEY` | Vacía en desarrollo (llave local); obligatoria fuera de desarrollo: 32 bytes en Base64 |
+| `RETENTION_ENABLED` | `true` |
+| `RETENTION_AUTH_ARTIFACTS_DAYS` | `30` |
+| `RETENTION_AUDIT_LOG_DAYS` | `1825` (cinco años) |
 | `SECURITY_HSTS_ENABLED` | `false` en desarrollo; `true` en `prod` |
 | `REVIEW_AI_ENABLED` | `false`; activa el filtro de reseñas con IA |
 | `LITTLELLM_URL` / `LITTLELLM_API_KEY` | URL y llave del servidor LLM local |
@@ -174,6 +178,18 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 `application-prod.yml` desactiva el administrador inicial, exige llaves JWT explícitas, activa MFA para administradores y HSTS, apaga Swagger, oculta los detalles de salud y habilita el apagado ordenado. `ProductionSecurityValidator` impide arrancar con llaves generadas o con la contraseña de bootstrap por defecto.
 
+## Retención de datos y ARCO (Ley 1581)
+
+La política completa está en [`docs/legal/POLITICA-RETENCION-Y-ARCO.md`](../../docs/legal/POLITICA-RETENCION-Y-ARCO.md).
+La aplicación aplica estas reglas todos los días a las 03:30 (`RetentionScheduler`):
+
+- Artefactos de autenticación con más de `RETENTION_AUTH_ARTIFACTS_DAYS` (30 por defecto): tokens de restablecimiento,
+  contadores de intentos fallidos y códigos de recuperación ya usados.
+- Entradas de auditoría con más de `RETENTION_AUDIT_LOG_DAYS` (1825 por defecto, cinco años).
+
+La baja de una cuenta anonimiza sus datos personales, invalida sus sesiones y conserva reseñas y auditoría sin
+asociarlas a una persona identificable. Los plazos y el horario se cambian por variables de entorno sin recompilar.
+
 ## Endpoints implementados
 
 | Método | Ruta | Acceso |
@@ -212,6 +228,7 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
 | GET | `/api/v1/admin/audit-logs/export` | ADMIN, reporte CSV de auditoría |
+| GET | `/api/v1/admin/audit-logs/export/pdf` | ADMIN, reporte PDF de auditoría (UC6) |
 | GET | `/api/v1/admin/monitoring/overview` | ADMIN, indicadores de usuarios, reseñas y anomalías |
 | GET | `/api/v1/admin/monitoring/availability` | ADMIN, disponibilidad de PostgreSQL y MongoDB |
 | GET | `/api/v1/admin/anomalies` | ADMIN, lista y filtra anomalías |
@@ -303,8 +320,11 @@ alimenta la detección de `CAIDA_SERVICIO`.
 respetando los mismos filtros del listado: actor, acción, usuario afectado y rango de fechas. El archivo
 incluye fecha, actor, rol, acción, usuario afectado y detalles.
 
+`GET /api/v1/admin/audit-logs/export/pdf` entrega el mismo reporte en PDF tamaño carta horizontal, con encabezado
+(fecha de generación, filtros y cantidad de registros), tabla de auditoría y numeración de páginas (UC6).
+
 Las métricas de reservas, sitios, actividades y eventos pertenecen a ms-03/ms-04 y todavía no se agregan en
-este overview. La exportación PDF de reportes (UC6) sigue pendiente; por ahora el reporte se entrega en CSV.
+este overview.
 
 ## Contrato JWT para otros microservicios
 
@@ -348,11 +368,13 @@ Las pruebas de integración usan Testcontainers y requieren Docker. La aplicaci�
 porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFactory` R2DBC. Las pruebas de
 reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`. Las pruebas de anomalías usan
 PostgreSQL y desactivan la detección programada con `app.anomalies.detection.enabled=false`. Las pruebas de
-monitoreo levantan PostgreSQL y MongoDB para validar el overview, la disponibilidad y la exportación CSV.
+monitoreo levantan PostgreSQL y MongoDB para validar el overview, la disponibilidad y las exportaciones CSV y PDF.
 Las pruebas de seguridad cubren los vectores RFC 6238, el flujo MFA completo (inscripción, desafío, replay y
 recuperación), la obligatoriedad para administradores, el bloqueo por intentos, el límite por IP, las
 cabeceras y el validador del perfil de producción. Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
+`PasswordResetMailpitTest` levanta un Mailpit real, recupera el correo de restablecimiento por su API y comprueba
+que el enlace cambia la contraseña y que el token no se puede reutilizar.
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

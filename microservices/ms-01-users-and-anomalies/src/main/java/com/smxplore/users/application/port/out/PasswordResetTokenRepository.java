@@ -12,4 +12,9 @@ public interface PasswordResetTokenRepository {
     Mono<PasswordResetToken> findByTokenHash(String tokenHash);
 
     Mono<Void> invalidateAllForUser(UUID userId, Instant now);
+
+    /**
+     * Elimina los tokens creados antes del corte. Devuelve la cantidad de filas borradas.
+     */
+    Mono<Long> deleteCreatedBefore(Instant cutoff);
 }

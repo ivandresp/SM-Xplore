@@ -57,10 +57,28 @@ public class AdminAuditController {
         return exportAuditEntries.export(criteria).map(AdminAuditController::csvResponse);
     }
 
+    @GetMapping("/export/pdf")
+    public Mono<ResponseEntity<byte[]>> exportPdf(
+            @RequestParam(required = false) UUID actorId,
+            @RequestParam(required = false) AuditAction action,
+            @RequestParam(required = false) UUID targetUserId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
+        AuditSearchCriteria criteria = new AuditSearchCriteria(actorId, action, targetUserId, from, to, 0, 100);
+        return exportAuditEntries.exportPdf(criteria).map(AdminAuditController::pdfResponse);
+    }
+
     private static ResponseEntity<byte[]> csvResponse(AuditReport report) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + report.filename() + "\"")
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .body(report.content());
+    }
+
+    private static ResponseEntity<byte[]> pdfResponse(AuditReport report) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + report.filename() + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
                 .body(report.content());
     }
 }

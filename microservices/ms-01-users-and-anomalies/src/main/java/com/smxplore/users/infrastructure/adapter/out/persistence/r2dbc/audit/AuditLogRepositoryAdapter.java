@@ -88,6 +88,15 @@ public class AuditLogRepositoryAdapter implements AuditLogRepository {
                 .all();
     }
 
+    @Override
+    public Mono<Long> deleteOccurredBefore(java.time.Instant cutoff) {
+        return databaseClient
+                .sql("DELETE FROM audit_logs WHERE occurred_at < :cutoff")
+                .bind("cutoff", toOffsetDateTime(cutoff))
+                .fetch()
+                .rowsUpdated();
+    }
+
     private static GenericExecuteSpec bindFilters(GenericExecuteSpec spec, AuditSearchCriteria criteria) {
         spec = bindNullable(spec, "actorId", criteria.actorId(), UUID.class);
         spec = bindNullable(

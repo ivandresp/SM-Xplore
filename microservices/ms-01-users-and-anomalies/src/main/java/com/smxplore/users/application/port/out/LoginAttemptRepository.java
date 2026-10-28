@@ -19,4 +19,9 @@ public interface LoginAttemptRepository {
     Mono<Duration> recordFailure(Email email, Instant now, LoginLockoutPolicy policy);
 
     Mono<Void> clear(Email email);
+
+    /**
+     * Elimina los contadores cuyo último fallo es anterior al corte. Devuelve la cantidad de filas borradas.
+     */
+    Mono<Long> deleteLastFailedBefore(Instant cutoff);
 }

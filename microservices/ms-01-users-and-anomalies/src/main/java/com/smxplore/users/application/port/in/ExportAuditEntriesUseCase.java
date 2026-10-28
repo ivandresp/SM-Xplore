@@ -7,4 +7,6 @@ import reactor.core.publisher.Mono;
 public interface ExportAuditEntriesUseCase {
 
     Mono<AuditReport> export(AuditSearchCriteria criteria);
+
+    Mono<AuditReport> exportPdf(AuditSearchCriteria criteria);
 }

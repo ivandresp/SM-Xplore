@@ -74,6 +74,15 @@ public class PasswordResetTokenRepositoryAdapter implements PasswordResetTokenRe
                 .then();
     }
 
+    @Override
+    public Mono<Long> deleteCreatedBefore(Instant cutoff) {
+        return databaseClient
+                .sql("DELETE FROM password_reset_tokens WHERE created_at < :cutoff")
+                .bind("cutoff", toOffsetDateTime(cutoff))
+                .fetch()
+                .rowsUpdated();
+    }
+
     private static GenericExecuteSpec bindNullable(GenericExecuteSpec spec, String name, Object value, Class<?> type) {
         return value == null ? spec.bindNull(name, type) : spec.bind(name, value);
     }

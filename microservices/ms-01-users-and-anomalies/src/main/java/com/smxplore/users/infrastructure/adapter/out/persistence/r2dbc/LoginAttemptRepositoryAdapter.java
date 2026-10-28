@@ -89,6 +89,15 @@ public class LoginAttemptRepositoryAdapter implements LoginAttemptRepository {
                 .then();
     }
 
+    @Override
+    public Mono<Long> deleteLastFailedBefore(Instant cutoff) {
+        return databaseClient
+                .sql("DELETE FROM login_attempts WHERE last_failed_at < :cutoff")
+                .bind("cutoff", toOffsetDateTime(cutoff))
+                .fetch()
+                .rowsUpdated();
+    }
+
     private static Duration remaining(OffsetDateTime lockedUntil, Instant now) {
         if (lockedUntil == null) {
             return Duration.ZERO;

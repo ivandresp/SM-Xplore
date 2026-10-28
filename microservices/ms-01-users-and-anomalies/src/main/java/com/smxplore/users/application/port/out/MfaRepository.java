@@ -25,4 +25,9 @@ public interface MfaRepository {
      * Consume un código de recuperación. Devuelve {@code true} si existía y no había sido usado.
      */
     Mono<Boolean> consumeRecoveryCode(UUID userId, String codeHash, Instant now);
+
+    /**
+     * Elimina los códigos de recuperación ya usados antes del corte. Devuelve la cantidad de filas borradas.
+     */
+    Mono<Long> deleteUsedRecoveryCodesBefore(Instant cutoff);
 }
