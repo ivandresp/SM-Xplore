@@ -13,10 +13,12 @@ import com.smxplore.users.domain.exception.AccountNotActiveException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.model.Email;
 import com.smxplore.users.domain.model.MfaEnrollment;
+import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
 
 public final class LoginService implements LoginUseCase {
@@ -29,6 +31,11 @@ public final class LoginService implements LoginUseCase {
     private final MfaRepository mfa;
     private final MfaChallengeIssuer challengeIssuer;
     private final Clock clock;
+    /**
+     * Hash señuelo para que un correo inexistente tarde lo mismo que una contraseña incorrecta y no se pueda enumerar
+     * por tiempos de respuesta. Se calcula una sola vez al arrancar para que la primera consulta también tarde igual.
+     */
+    private final PasswordHash dummyPasswordHash;
 
     public LoginService(
             UserRepository users,
@@ -47,6 +54,8 @@ public final class LoginService implements LoginUseCase {
         this.mfa = mfa;
         this.challengeIssuer = challengeIssuer;
         this.clock = clock;
+        this.dummyPasswordHash =
+                passwordHasher.hash(UUID.randomUUID().toString()).block();
     }
 
     @Override
@@ -55,8 +64,10 @@ public final class LoginService implements LoginUseCase {
         return protection
                 .ensureNotLocked(email)
                 .then(Mono.defer(() -> users.findByEmail(email)))
-                .switchIfEmpty(Mono.defer(
-                        () -> failedLogins.record().then(Mono.<Usuario>error(InvalidCredentialsException::new))))
+                .switchIfEmpty(Mono.defer(() -> passwordHasher
+                        .matches(command.rawPassword(), dummyPasswordHash)
+                        .then(failedLogins.record())
+                        .then(Mono.<Usuario>error(InvalidCredentialsException::new))))
                 .flatMap(user -> passwordHasher
                         .matches(command.rawPassword(), user.passwordHash())
                         .flatMap(matches -> {

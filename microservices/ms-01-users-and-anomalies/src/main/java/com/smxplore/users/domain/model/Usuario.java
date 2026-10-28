@@ -59,6 +59,14 @@ public abstract sealed class Usuario permits Turista, Guia, PrestadoraServicios,
         this.updatedAt = now;
     }
 
+    /**
+     * Invalida todos los tokens ya emitidos para la cuenta incrementando la versión de autenticación.
+     */
+    public final void revokeSessions(Instant now) {
+        this.authVersion++;
+        this.updatedAt = now;
+    }
+
     public final void changeStatus(UserStatus newStatus, Instant now) {
         if (newStatus == status) {
             return;

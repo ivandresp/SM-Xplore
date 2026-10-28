@@ -5,6 +5,7 @@ import com.smxplore.users.application.dto.UpdateProfileCommand;
 import com.smxplore.users.application.dto.UserView;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
+import com.smxplore.users.application.port.in.LogoutUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.infrastructure.adapter.in.dto.ChangePasswordRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.UpdateProfileRequest;
@@ -15,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,14 +31,17 @@ public class UserController {
     private final GetCurrentUserUseCase getCurrentUser;
     private final UpdateProfileUseCase updateProfile;
     private final ChangeOwnPasswordUseCase changeOwnPassword;
+    private final LogoutUseCase logout;
 
     public UserController(
             GetCurrentUserUseCase getCurrentUser,
             UpdateProfileUseCase updateProfile,
-            ChangeOwnPasswordUseCase changeOwnPassword) {
+            ChangeOwnPasswordUseCase changeOwnPassword,
+            LogoutUseCase logout) {
         this.getCurrentUser = getCurrentUser;
         this.updateProfile = updateProfile;
         this.changeOwnPassword = changeOwnPassword;
+        this.logout = logout;
     }
 
     @GetMapping("/me")
@@ -67,6 +72,12 @@ public class UserController {
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest request) {
         return changeOwnPassword.change(
                 userId(jwt), new ChangePasswordCommand(request.currentPassword(), request.newPassword()));
+    }
+
+    @PostMapping("/me/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> logout(@AuthenticationPrincipal Jwt jwt) {
+        return logout.logout(userId(jwt));
     }
 
     private static UUID userId(Jwt jwt) {

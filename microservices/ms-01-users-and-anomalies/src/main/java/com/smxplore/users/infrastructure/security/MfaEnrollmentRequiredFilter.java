@@ -55,6 +55,7 @@ public class MfaEnrollmentRequiredFilter implements WebFilter {
         String path = exchange.getRequest().getPath().value();
         return path.startsWith("/api/v1/users/me/mfa")
                 || path.equals("/api/v1/users/me")
+                || path.equals("/api/v1/users/me/logout")
                 || path.startsWith("/api/v1/auth")
                 || path.startsWith("/api/v1/public")
                 || path.startsWith("/actuator")

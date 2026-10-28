@@ -141,9 +141,28 @@ class MfaFlowTest {
                         null))
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
 
+        @SuppressWarnings("unchecked")
+        List<String> regeneratedCodes = (List<String>) post(
+                        "/api/v1/users/me/mfa/recovery-codes",
+                        Map.of("password", PASSWORD, "code", recoveryCodes.get(2)),
+                        verifiedToken)
+                .get("codes");
+        assertThat(regeneratedCodes).hasSize(10).doesNotContainAnyElementsOf(recoveryCodes);
+
+        Map<String, Object> oldCodeChallenge = login();
+        assertThat(postStatus(
+                        "/api/v1/auth/mfa/verify",
+                        Map.of(
+                                "challengeToken",
+                                (String) oldCodeChallenge.get("mfaChallengeToken"),
+                                "code",
+                                recoveryCodes.get(1)),
+                        null))
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+
         assertThat(postStatus(
                         "/api/v1/users/me/mfa/disable",
-                        Map.of("password", PASSWORD, "code", recoveryCodes.get(1)),
+                        Map.of("password", PASSWORD, "code", regeneratedCodes.get(0)),
                         verifiedToken))
                 .isEqualTo(HttpStatus.NO_CONTENT);
 

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 class ProductionSecurityValidatorTest {
 
-    private static final MfaProperties MFA = new MfaProperties(true, Duration.ofMinutes(5), "SM-Xplore");
+    private static final MfaProperties MFA = new MfaProperties(true, Duration.ofMinutes(5), "SM-Xplore", null);
     private static final CorsProperties CORS = new CorsProperties(List.of("https://app.smxplore.com"));
 
     @Test

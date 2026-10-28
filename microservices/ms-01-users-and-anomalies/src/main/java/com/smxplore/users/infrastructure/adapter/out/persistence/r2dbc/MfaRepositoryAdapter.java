@@ -2,6 +2,7 @@ package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.domain.model.MfaEnrollment;
+import com.smxplore.users.infrastructure.security.MfaSecretCipher;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -55,9 +56,11 @@ public class MfaRepositoryAdapter implements MfaRepository {
     private static final String DELETE_ENROLLMENT = "DELETE FROM mfa_enrollments WHERE user_id = :userId";
 
     private final DatabaseClient databaseClient;
+    private final MfaSecretCipher secretCipher;
 
-    public MfaRepositoryAdapter(DatabaseClient databaseClient) {
+    public MfaRepositoryAdapter(DatabaseClient databaseClient, MfaSecretCipher secretCipher) {
         this.databaseClient = databaseClient;
+        this.secretCipher = secretCipher;
     }
 
     @Override
@@ -65,14 +68,21 @@ public class MfaRepositoryAdapter implements MfaRepository {
         return databaseClient
                 .sql(SELECT_BY_USER)
                 .bind("userId", userId)
-                .map((row, metadata) -> new MfaEnrollment(
-                        row.get("user_id", UUID.class),
-                        row.get("secret", String.class),
-                        Boolean.TRUE.equals(row.get("enabled", Boolean.class)),
-                        row.get("last_used_step", Long.class),
-                        toInstant(row.get("created_at", OffsetDateTime.class)),
-                        toInstant(row.get("confirmed_at", OffsetDateTime.class))))
-                .one();
+                .map((row, metadata) -> {
+                    String stored = row.get("secret", String.class);
+                    MfaEnrollment enrollment = new MfaEnrollment(
+                            row.get("user_id", UUID.class),
+                            secretCipher.decrypt(stored),
+                            Boolean.TRUE.equals(row.get("enabled", Boolean.class)),
+                            row.get("last_used_step", Long.class),
+                            toInstant(row.get("created_at", OffsetDateTime.class)),
+                            toInstant(row.get("confirmed_at", OffsetDateTime.class)));
+                    return new Loaded(enrollment, !MfaSecretCipher.isEncrypted(stored));
+                })
+                .one()
+                .flatMap(loaded -> loaded.legacy()
+                        ? save(loaded.enrollment()).thenReturn(loaded.enrollment())
+                        : Mono.just(loaded.enrollment()));
     }
 
     @Override
@@ -80,7 +90,7 @@ public class MfaRepositoryAdapter implements MfaRepository {
         GenericExecuteSpec spec = databaseClient
                 .sql(UPSERT)
                 .bind("userId", enrollment.userId())
-                .bind("secret", enrollment.secret())
+                .bind("secret", secretCipher.encrypt(enrollment.secret()))
                 .bind("enabled", enrollment.enabled())
                 .bind("createdAt", toOffsetDateTime(enrollment.createdAt()));
         spec = bindNullable(spec, "lastUsedStep", enrollment.lastUsedStep(), Long.class);
@@ -156,4 +166,9 @@ public class MfaRepositoryAdapter implements MfaRepository {
     private static Instant toInstant(OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
+
+    /**
+     * Envoltorio para saber si el secreto leído venía en texto plano y debe re-cifrarse.
+     */
+    private record Loaded(MfaEnrollment enrollment, boolean legacy) {}
 }

@@ -67,8 +67,19 @@ services:
       FRONTEND_BASE_URL: http://localhost:5173
     ports:
       - "8081:8081"
+    # Endurecimiento: sistema de archivos de sólo lectura, sin capacidades y con /tmp en memoria.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - smxplore-ms-01-keys:/app/.local
     restart: unless-stopped
 
 volumes:
   smxplore-postgres-data:
   smxplore-mongodb-data:
+  smxplore-ms-01-keys:

@@ -65,7 +65,8 @@ docker compose --profile full down
 ```
 
 - La imagen se etiqueta como `smxplore/ms-01:local`, corre como el usuario `app` (sin privilegios), escucha en `8081`
-  y publica un `HEALTHCHECK` contra `/actuator/health`.
+  y publica un `HEALTHCHECK` contra `/actuator/health`. El contenedor usa el sistema de archivos de sólo lectura, sin
+  capacidades (`cap_drop: ALL`) y con `no-new-privileges`; sólo `/app/.local` (llaves JWT y MFA) y `/tmp` son escribibles.
 - El contenedor arranca con el perfil `dev`, así que genera sus llaves JWT en `/app/.local/jwt/keys.pem`. Para
   producción usa `SPRING_PROFILES_ACTIVE=prod` con las variables de `application-prod.yml`
   (`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`, `BOOTSTRAP_ADMIN_*`, CORS) o monta el almacén de llaves en `/app/.local/jwt`.
@@ -77,8 +78,11 @@ docker compose --profile full down
 
 1. `verify`: JDK 25 y `./gradlew check` (pruebas con Testcontainers, ArchUnit y Spotless), con los reportes publicados
    como artefacto.
-2. `docker`: construye la imagen con Buildx y caché de GitHub Actions, levanta el stack con el perfil `full` y espera a
+2. `docker`: construye la imagen con Buildx y caché de GitHub Actions, la analiza con Trivy (falla ante
+   vulnerabilidades `CRITICAL`/`HIGH` con corrección disponible), levanta el stack con el perfil `full` y espera a
    que `/actuator/health` responda `UP`; si falla, imprime los logs del contenedor.
+
+`/.github/dependabot.yml` propone actualizaciones semanales de Gradle, GitHub Actions y la imagen base.
 
 ### Variables principales
 
@@ -105,6 +109,7 @@ docker compose --profile full down
 | `LOGIN_LOCKOUT_WINDOW` / `LOGIN_LOCKOUT_DURATION` | `PT15M` |
 | `MFA_REQUIRED_FOR_ADMINS` | `false` en desarrollo y pruebas; `true` en `prod` |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
+| `MFA_SECRET_KEY` | Vacía en desarrollo (llave local); obligatoria fuera de desarrollo: 32 bytes en Base64 |
 | `SECURITY_HSTS_ENABLED` | `false` en desarrollo; `true` en `prod` |
 | `REVIEW_AI_ENABLED` | `false`; activa el filtro de reseñas con IA |
 | `LITTLELLM_URL` / `LITTLELLM_API_KEY` | URL y llave del servidor LLM local |
@@ -140,6 +145,8 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 - La detección de anomalías sigue registrando los fallos por separado: el bloqueo es preventivo, la anomalía es diagnóstica.
 - El bloqueo se aplica por cuenta existente y responde `429`, así que un atacante que conozca un correo puede provocar un bloqueo temporal o inferir que la cuenta existe. El límite por IP reduce ese abuso; si se necesita evitar por completo, conviene añadir un captcha o un desafío progresivo.
 - **Cabeceras**: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`. HSTS solo se emite con `SECURITY_HSTS_ENABLED=true`, cuando el servicio está detrás de TLS.
+- **Enumeración por tiempos**: un correo inexistente también ejecuta una comparación BCrypt señuelo, así que el inicio de sesión tarda lo mismo exista o no la cuenta.
+- **Cierre de sesión**: `POST /api/v1/users/me/logout` incrementa `auth_version` y descarta la versión cacheada, de modo que los tokens ya emitidos dejan de valer de inmediato en ms-01. Al ser tokens sin estado, otros servicios los aceptarán hasta su `exp`; el contrato JWT pide validar `ver` contra ms-01 si necesitan revocación inmediata.
 
 ## Autenticación multifactor (RNF01)
 
@@ -155,7 +162,13 @@ El desafío es un JWT con `scope=mfa` y `MFA_CHALLENGE_TTL` de vigencia; el deco
 
 Con `MFA_REQUIRED_FOR_ADMINS=true`, un administrador sin MFA recibe `403` con `code=MFA_ENROLLMENT_REQUIRED` en todo salvo su perfil y la propia inscripción. El token de acceso incluye `mfa=false` hasta que complete el segundo factor.
 
-El secreto TOTP se guarda en base32 en `mfa_enrollments` y los códigos de recuperación como hash SHA-256. Protege los respaldos de PostgreSQL y, en producción, considera cifrar la columna del secreto con una llave gestionada fuera de la base de datos.
+El secreto TOTP se cifra con AES-GCM antes de guardarse en `mfa_enrollments`; la llave se toma de
+`MFA_SECRET_KEY` (32 bytes en Base64) o, en desarrollo, de `.local/mfa/secret.key`. Los códigos de recuperación se
+guardan como hash SHA-256. Protege los respaldos de PostgreSQL y la llave fuera de la base de datos.
+
+Los códigos de recuperación se pueden rotar sin desactivar el segundo factor con
+`POST /api/v1/users/me/mfa/recovery-codes` (contraseña + código TOTP): invalida los anteriores y devuelve 10 nuevos.
+La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 ## Perfil `prod`
 
@@ -175,9 +188,11 @@ El secreto TOTP se guarda en base32 en `mfa_enrollments` y los códigos de recup
 | POST | `/api/v1/users/me/mfa/enroll` | Autenticado, genera secreto TOTP y códigos de recuperación |
 | POST | `/api/v1/users/me/mfa/confirm` | Autenticado, activa el segundo factor |
 | POST | `/api/v1/users/me/mfa/disable` | Autenticado, exige contraseña y código |
+| POST | `/api/v1/users/me/mfa/recovery-codes` | Autenticado, rota los códigos de recuperación |
 | GET | `/api/v1/users/me` | Autenticado |
 | PATCH | `/api/v1/users/me` | Autenticado |
 | PUT | `/api/v1/users/me/password` | Autenticado |
+| POST | `/api/v1/users/me/logout` | Autenticado, revoca todos los tokens de la cuenta |
 | GET | `/api/v1/public/users/{id}` | Público, solo guías activos y prestadoras aprobadas |
 | POST | `/api/v1/reviews` | TURISTA, crea una reseña de guía o prestadora |
 | POST | `/api/v1/reviews/{id}/response` | GUÍA o PRESTADORA, responde su propia reseña |

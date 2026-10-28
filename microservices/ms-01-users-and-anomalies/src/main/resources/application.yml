@@ -66,6 +66,7 @@ app:
       required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
       challenge-ttl: ${MFA_CHALLENGE_TTL:PT5M}
       issuer: ${MFA_ISSUER:SM-Xplore}
+      secret-key: ${MFA_SECRET_KEY:}
     headers:
       hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
       hsts-max-age-days: ${SECURITY_HSTS_MAX_AGE_DAYS:365}

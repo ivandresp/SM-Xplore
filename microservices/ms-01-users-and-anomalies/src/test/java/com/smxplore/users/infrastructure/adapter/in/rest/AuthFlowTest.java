@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -98,6 +99,65 @@ class AuthFlowTest {
 
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(me.getBody().get("email")).isEqualTo("ada@example.com");
+    }
+
+    @Test
+    void logoutRevokesTheIssuedTokens() {
+        ResponseEntity<Map> registration = client.post()
+                .uri("/api/v1/auth/register/turista")
+                .body(Map.of(
+                        "fullName", "Luisa Logout",
+                        "email", "logout@example.com",
+                        "phone", "3009998877",
+                        "password", "ChangeMe123!",
+                        "dniType", "CC",
+                        "dniNumber", "9998887776",
+                        "preferredLanguage", "es",
+                        "nationality", "Colombia"))
+                .retrieve()
+                .toEntity(Map.class);
+        assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<Map> login = client.post()
+                .uri("/api/v1/auth/login")
+                .body(Map.of("email", "logout@example.com", "password", "ChangeMe123!"))
+                .retrieve()
+                .toEntity(Map.class);
+        String accessToken = String.valueOf(login.getBody().get("accessToken"));
+
+        ResponseEntity<Map> me = client.get()
+                .uri("/api/v1/users/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .toEntity(Map.class);
+        assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<Void> logout = client.post()
+                .uri("/api/v1/users/me/logout")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .toBodilessEntity();
+        assertThat(logout.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        HttpStatusCode afterLogout = client.get()
+                .uri("/api/v1/users/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .exchange((request, response) -> response.getStatusCode());
+        assertThat(afterLogout).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        ResponseEntity<Map> secondLogin = client.post()
+                .uri("/api/v1/auth/login")
+                .body(Map.of("email", "logout@example.com", "password", "ChangeMe123!"))
+                .retrieve()
+                .toEntity(Map.class);
+        String freshToken = String.valueOf(secondLogin.getBody().get("accessToken"));
+
+        ResponseEntity<Map> afterSecondLogin = client.get()
+                .uri("/api/v1/users/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + freshToken)
+                .retrieve()
+                .toEntity(Map.class);
+        assertThat(afterSecondLogin.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test

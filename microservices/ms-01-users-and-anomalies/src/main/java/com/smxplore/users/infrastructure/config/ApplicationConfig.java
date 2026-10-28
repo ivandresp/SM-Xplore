@@ -30,7 +30,9 @@ import com.smxplore.users.application.port.in.ListAuditEntriesUseCase;
 import com.smxplore.users.application.port.in.ListReportedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListReviewsUseCase;
 import com.smxplore.users.application.port.in.LoginUseCase;
+import com.smxplore.users.application.port.in.LogoutUseCase;
 import com.smxplore.users.application.port.in.ModerateReviewUseCase;
+import com.smxplore.users.application.port.in.RegenerateRecoveryCodesUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.application.port.in.ReportReviewUseCase;
@@ -46,6 +48,7 @@ import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
@@ -99,8 +102,10 @@ import com.smxplore.users.application.service.ListReportedReviewsService;
 import com.smxplore.users.application.service.ListReviewsService;
 import com.smxplore.users.application.service.LoginProtection;
 import com.smxplore.users.application.service.LoginService;
+import com.smxplore.users.application.service.LogoutService;
 import com.smxplore.users.application.service.MfaCodeVerifier;
 import com.smxplore.users.application.service.ModerateReviewService;
+import com.smxplore.users.application.service.RegenerateRecoveryCodesService;
 import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
 import com.smxplore.users.application.service.ReportReviewService;
@@ -223,6 +228,29 @@ public class ApplicationConfig {
     }
 
     @Bean
+    public RegenerateRecoveryCodesUseCase regenerateRecoveryCodesUseCase(
+            UserRepository users,
+            MfaRepository mfa,
+            PasswordHasher passwordHasher,
+            RecoveryCodeGenerator recoveryCodeGenerator,
+            TokenHasher tokenHasher,
+            MfaCodeVerifier codeVerifier,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            Clock clock) {
+        return new RegenerateRecoveryCodesService(
+                users,
+                mfa,
+                passwordHasher,
+                recoveryCodeGenerator,
+                tokenHasher,
+                codeVerifier,
+                transactions,
+                audit,
+                clock);
+    }
+
+    @Bean
     public GetMfaStatusUseCase getMfaStatusUseCase(MfaRepository mfa) {
         return new GetMfaStatusService(mfa);
     }
@@ -236,6 +264,16 @@ public class ApplicationConfig {
     @Bean
     public GetCurrentUserUseCase getCurrentUserUseCase(UserRepository users) {
         return new GetCurrentUserService(users);
+    }
+
+    @Bean
+    public LogoutUseCase logoutUseCase(
+            UserRepository users,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            AuthVersionEvictor evictor,
+            Clock clock) {
+        return new LogoutService(users, transactions, audit, evictor, clock);
     }
 
     @Bean

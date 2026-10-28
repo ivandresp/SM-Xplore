@@ -6,7 +6,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Inscripción TOTP de un usuario. El secreto se guarda en base32 y sólo se muestra al usuario durante la inscripción.
+ * Inscripción TOTP de un usuario. En el dominio el secreto viaja en base32 y sólo se muestra al usuario durante la
+ * inscripción; el adaptador de persistencia lo cifra con AES-GCM antes de guardarlo.
  */
 public record MfaEnrollment(
         UUID userId, String secret, boolean enabled, Long lastUsedStep, Instant createdAt, Instant confirmedAt) {
