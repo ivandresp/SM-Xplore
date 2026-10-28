@@ -18,11 +18,8 @@ for path in sorted(glob.glob("build/test-results/test/TEST-*.xml")):
             continue
         message = clean(failures[0].get("message") or failures[0].text)
         stack = failures[0].text or ""
-        cause = next(
-            (line.strip() for line in stack.splitlines() if line.strip().startswith("Caused by")),
-            "",
-        )
-        if cause:
-            message = clean(f"{message} | {cause}")
+        causes = [line.strip() for line in stack.splitlines() if line.strip().startswith("Caused by")]
+        if causes:
+            message = clean(f"{message} | " + " | ".join(causes[:3]))
         title = clean(f"{case.get('classname')}.{case.get('name')}")
         print(f"::error title={title}::{message}")
