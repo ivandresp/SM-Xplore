@@ -4,6 +4,7 @@ springdoc = "3.2.0"
 archunit = "1.5.1"
 palantir-java-format = "2.102.0"
 openpdf = "2.2.5"
+scram = "3.3"
 
 [libraries]
 spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
@@ -23,6 +24,8 @@ springdoc-webflux-ui = { module = "org.springdoc:springdoc-openapi-starter-webfl
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
 openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
+scram-client = { module = "com.ongres.scram:scram-client", version.ref = "scram" }
+scram-common = { module = "com.ongres.scram:scram-common", version.ref = "scram" }
 postgresql = { module = "org.postgresql:postgresql" }
 r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }

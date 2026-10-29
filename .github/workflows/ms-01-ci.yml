@@ -121,6 +121,8 @@ jobs:
         with:
           image-ref: ${{ env.IMAGE_NAME }}
           format: table
+          scanners: vuln
+          timeout: "15m"
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"

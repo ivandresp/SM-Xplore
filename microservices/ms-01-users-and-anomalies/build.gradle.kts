@@ -33,6 +33,12 @@ dependencies {
     runtimeOnly(libs.r2dbc.postgresql)
     runtimeOnly(libs.flyway.postgresql)
 
+    // Fuerza scram 3.3: la 3.2 tiene CVE-2026-53712 (downgrade de autenticación SCRAM).
+    constraints {
+        implementation(libs.scram.client)
+        implementation(libs.scram.common)
+    }
+
     testImplementation(libs.spring.boot.test)
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.spring.security.test)
