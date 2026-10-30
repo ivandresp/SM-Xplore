@@ -1,0 +1,44 @@
+## Perfil de producción: sin valores por defecto de desarrollo y con verificaciones de arranque.
+app:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+  security:
+    jwt:
+      allow-generated-keys: false
+    mfa:
+      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:true}
+    headers:
+      hsts-enabled: ${SECURITY_HSTS_ENABLED:true}
+  reviews:
+    index-initialization:
+      enabled: ${REVIEW_INDEX_INIT:false}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+server:
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+logging:
+  level:
+    root: INFO
+    com.smxplore: INFO

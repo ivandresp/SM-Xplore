@@ -1,0 +1,159 @@
+## Integración continua de ms-01: compilación, pruebas con Testcontainers, ArchUnit y Spotless,
+## además del build de la imagen Docker y un smoke test del contenedor contra PostgreSQL y MongoDB.
+
+name: ms-01 CI
+
+on:
+  push:
+    branches: [main, micro-users]
+    paths:
+      - "microservices/ms-01-users-and-anomalies/**"
+      - ".github/workflows/ms-01-ci.yml"
+  pull_request:
+    paths:
+      - "microservices/ms-01-users-and-anomalies/**"
+      - ".github/workflows/ms-01-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ms-01-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SERVICE_DIR: microservices/ms-01-users-and-anomalies
+  IMAGE_NAME: smxplore/ms-01:local
+
+jobs:
+  verify:
+    name: Compilar y verificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ejecutar check (pruebas, ArchUnit y Spotless)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          chmod +x gradlew
+          mkdir -p build
+          set -o pipefail
+          ./gradlew check --no-daemon --console=plain 2>&1 | tee build/check.log
+
+      - name: Anotar los fallos de la verificación
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          python3 "$GITHUB_WORKSPACE/.github/scripts/annotate_failures.py" || true
+          if [ -f build/check.log ]; then
+            grep -E "FAILED|error:" build/check.log | tail -n 15 | while IFS= read -r line; do
+              line="${line//%/%25}"
+              line="${line//::/ }"
+              echo "::error title=Verificación ms-01::${line}"
+            done
+            echo "## Fallos de la verificación" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 40 build/check.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Anotar logs de los contenedores
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          if compgen -G "build/container-logs/*.log" > /dev/null; then
+            MESSAGE="$(for file in build/container-logs/*.log; do
+              echo "== $(basename "$file") =="
+              tail -n 30 "$file"
+            done | tr '\n' '|' | cut -c1-6000 | sed 's/%/%25/g; s/::/: /g')"
+            echo "::error title=Logs de contenedores::${MESSAGE}"
+          fi
+
+      - name: Publicar reportes de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ms-01-test-reports
+          path: |
+            ${{ env.SERVICE_DIR }}/build/reports/tests/test
+            ${{ env.SERVICE_DIR }}/build/test-results/test
+          if-no-files-found: ignore
+          retention-days: 7
+
+  docker:
+    name: Imagen Docker y smoke test
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          file: ${{ env.SERVICE_DIR }}/Dockerfile
+          tags: ${{ env.IMAGE_NAME }}
+          load: true
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Analizar la imagen con Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          format: table
+          scanners: vuln
+          timeout: "15m"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Levantar el servicio con su infraestructura
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          docker compose up -d postgres mongodb mailpit
+          docker compose --profile full up -d --no-build --wait --wait-timeout 300
+
+      - name: Verificar el estado del servicio
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
+              echo "ms-01 respondió UP en el intento ${attempt}"
+              curl -fsS http://localhost:8081/actuator/health
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ms-01 no respondió UP; se muestran los logs del contenedor"
+          docker compose --profile full logs ms-01
+          exit 1
+
+      - name: Mostrar logs si algo falló
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: docker compose --profile full logs --no-color
+
+      - name: Apagar el stack
+        if: always()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: docker compose --profile full down -v --remove-orphans

@@ -1,0 +1,39 @@
+[versions]
+spring-boot = "4.1.2"
+springdoc = "3.2.0"
+archunit = "1.5.1"
+palantir-java-format = "2.102.0"
+openpdf = "2.2.5"
+scram = "3.3"
+
+[libraries]
+spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
+spring-boot-data-r2dbc = { module = "org.springframework.boot:spring-boot-starter-data-r2dbc" }
+spring-boot-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb-reactive" }
+spring-boot-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
+spring-boot-mail = { module = "org.springframework.boot:spring-boot-starter-mail" }
+spring-boot-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server" }
+spring-boot-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+reactor-test = { module = "io.projectreactor:reactor-test" }
+springdoc-webflux-ui = { module = "org.springdoc:springdoc-openapi-starter-webflux-ui", version.ref = "springdoc" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
+openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
+scram-client = { module = "com.ongres.scram:scram-client", version.ref = "scram" }
+scram-common = { module = "com.ongres.scram:scram-common", version.ref = "scram" }
+postgresql = { module = "org.postgresql:postgresql" }
+r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql" }
+flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-mongodb = { module = "org.testcontainers:testcontainers-mongodb" }
+testcontainers-r2dbc = { module = "org.testcontainers:testcontainers-r2dbc" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spotless = { id = "com.diffplug.spotless", version = "8.10.4" }
