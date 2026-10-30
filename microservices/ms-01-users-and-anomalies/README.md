@@ -180,7 +180,7 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 ## Retención de datos y ARCO (Ley 1581)
 
-La política completa está en [`docs/legal/POLITICA-RETENCION-Y-ARCO.md`](../../docs/legal/POLITICA-RETENCION-Y-ARCO.md).
+La política completa (finalidades, plazos, procedimiento ARCO y canal de atención) se entrega con la documentación del proyecto, fuera de este repositorio.
 La aplicación aplica estas reglas todos los días a las 03:30 (`RetentionScheduler`):
 
 - Artefactos de autenticación con más de `RETENTION_AUTH_ARTIFACTS_DAYS` (30 por defecto): tokens de restablecimiento,

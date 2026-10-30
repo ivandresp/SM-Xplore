@@ -15,19 +15,16 @@ All deliverables, user stories, diagrams, and commit messages are in **Spanish**
 | `docs/user-stories/<role>/us.md` | User stories, one file per role |
 | `docs/models/` | Tracked PlantUML + static design images (domain, classes, UC, packages, deployment, DB, E-R) |
 | `docs/requirements/SM-Xplore_SRS.docx` | SRS v2.0 (binary Word; no Markdown source) |
-| `docs/legal/POLITICA-RETENCION-Y-ARCO.md` | Retención de datos y procedimiento ARCO (Ley 1581) |
 | `docs/plan/` | RUP plan (`.xlsx`) and team roles |
 | `microservices/ms-01-users-and-anomalies/` | Java 25 + Spring Boot 4.1.2 identity/auth service (Spring WebFlux + R2DBC) |
 | `microservices/ms-01-users-and-anomalies/{gradlew,gradle,settings.gradle.kts,build.gradle.kts}` | Self-contained Gradle build root |
 | `microservices/ms-01-users-and-anomalies/docker-compose.yml` | PostgreSQL, MongoDB and Mailpit for ms-01 |
 | `microservices/ms-02...ms-04/` | Placeholder READMEs for the remaining services |
-| `docs/Documento Entregable 1 - SM-Xplore.md` / `.docx` | Final deliverable; no export script, keep both in sync manually |
 
 Path/naming traps:
 
-- Diagram sources live in `docs/models/` (English), **not** `docs/modelos/`. `docs/modelos/` only contains untracked, stale PNG renders under `_render/`; the deliverable Markdown still links to `docs/modelos/...`.
+- Diagram sources live in `docs/models/` (English), **not** `docs/modelos/`. The old `docs/modelos/` tree and its PNG renders were removed from the repo; `_render/` and `/docs/modelos/` are gitignored so renders stay local.
 - The folder on disk is `docs/requirements/` (lowercase). Links using `docs/Requirements/` work on Windows but break on case-sensitive systems.
-- `docs/Documento Entregable 1 (6).md` is the assignment template/rubric, not the final deliverable.
 - Files are UTF-8. Windows PowerShell 5 output often shows mojibake (`GuÃ­a`, `ReseÃ±as`); use the Read tool or set `[Console]::OutputEncoding` before "fixing" accents that are actually fine.
 
 ## Build, run, test
@@ -51,7 +48,7 @@ docker compose --profile full down
 - Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
 - PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`). Login lockout uses `login_attempts`; MFA uses `mfa_enrollments` and `mfa_recovery_codes`.
 - Review AI filter: `app.reviews.ai-filter.*` (`enabled`, `base-url`/`LITTLELLM_URL`, `api-key`/`LITTLELLM_API_KEY`, `model`, `timeout`, `threshold`, `temperature`/`REVIEW_AI_TEMPERATURE` (default `0.0`, greedy decoding for a stable verdict), `action`, `fail-open`). The adapter calls an OpenAI-compatible `POST /v1/chat/completions`; flagged reviews become `PENDIENTE_REVISION` (or `HIDDEN` with `action=HIDE`) and the assessment is stored on the review document. Tests point it at a local `HttpServer` stub.
-- Data retention: `app.retention.*` (`enabled`, `auth-artifacts-days` 30, `audit-log-days` 1825, `cron`). `RetentionScheduler` purges expired reset tokens, login attempts, used recovery codes and old audit entries daily; the legal procedure lives in `docs/legal/POLITICA-RETENCION-Y-ARCO.md`.
+- Data retention: `app.retention.*` (`enabled`, `auth-artifacts-days` 30, `audit-log-days` 1825, `cron`). `RetentionScheduler` purges expired reset tokens, login attempts, used recovery codes and old audit entries daily; the legal procedure (ARCO) is delivered with the project documentation outside this repo.
 - Security knobs: `app.security.rate-limit.*` (per-IP fixed window on auth endpoints), `app.security.lockout.*` (per-account failures, PostgreSQL-backed), `app.security.mfa.*` (`required-for-admins`, challenge TTL, issuer, `secret-key`/`MFA_SECRET_KEY` for TOTP encryption at rest), `app.security.headers.*` (HSTS off by default, on in `prod`). `SPRING_PROFILES_ACTIVE=prod` loads `application-prod.yml`; `ProductionSecurityValidator` refuses to start with generated JWT keys or the default bootstrap password, and `MfaSecretCipherConfig` refuses to start without `MFA_SECRET_KEY` outside `dev`/`test`.
 
 ## Architecture rules
@@ -79,7 +76,7 @@ docker compose --profile full down
 
 Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV and PDF export), data retention (daily purge of expired auth artifacts and old audit entries, `app.retention.*`, policy in `docs/legal/POLITICA-RETENCION-Y-ARCO.md`), security hardening (TOTP MFA with hashed recovery codes, AES-GCM encrypted TOTP secrets, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation, logout via `auth_version` revocation, recovery-code rotation), a multi-stage Docker image with a Compose `full` profile (read-only root, no capabilities), GitHub Actions CI (verification, Trivy image scan and image smoke test) plus Dependabot, persistence, tests (including a Mailpit password-reset E2E), ArchUnit, and Spotless.
+Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV and PDF export), data retention (daily purge of expired auth artifacts and old audit entries, `app.retention.*`, policy delivered outside this repo), security hardening (TOTP MFA with hashed recovery codes, AES-GCM encrypted TOTP secrets, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation, logout via `auth_version` revocation, recovery-code rotation), a multi-stage Docker image with a Compose `full` profile (read-only root, no capabilities), GitHub Actions CI (verification, Trivy image scan and image smoke test) plus Dependabot, persistence, tests (including a Mailpit password-reset E2E), ArchUnit, and Spotless.
 
 Still to design/implement:
 
@@ -113,8 +110,8 @@ Still to design/implement:
 
 - All diagrams are PlantUML (`.puml`), except the DB (`postgre.jpg`, `mongoDB.png`, `neo4j.png`) and E-R (`model.png`) images, which are static.
 - No `plantuml.jar` is vendored and there is no render script/CI. Render manually with Java:
-  `java -jar plantuml.jar -charset UTF-8 -o docs/modelos/_render/domain docs/models/domain/diagram.puml`
-- Renders under `docs/modelos/_render/` are older than the `.puml` sources and only cover `domain`, `uc-lvl-0`, and `uc-lvl-1`. `classes`, `packages`, and `deployment` have no renders.
+  `java -jar plantuml.jar -charset UTF-8 -o docs/models/_render/domain docs/models/domain/diagram.puml`
+- Renders are local artifacts: `_render/` is gitignored, so never commit PNGs.
 - UC level-1 folders hold a combined `diagram.puml` plus per-actor `<actor>-diagrama.puml`. Naming is inconsistent: `administrar-anomalias/` and `gestionar-destino/` use `diagrama.puml`, and actor slugs vary (`gestoras-*` for Gestora de Destinos). Follow the existing files.
 - `gestionar-reseñas/` uses a real UTF-8 `ñ`; do not confuse it with `gestionar-reservas/`.
 - When adding/removing diagrams, update `docs/models/README.md` and `docs/models/uc-lvl-1/README.md`.
