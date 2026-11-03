@@ -1,6 +1,8 @@
 package com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper;
 
 import com.smxplore.sitesandservices.domain.model.notification.Notification;
+import com.smxplore.sitesandservices.domain.model.notification.NotificationContact;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.notification.NotificationContactResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.notification.NotificationResponse;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +21,14 @@ public class NotificationWebMapper {
                 notification.message(),
                 notification.createdAt(),
                 notification.readAt()
+        );
+    }
+
+    public NotificationContactResponse toResponse(NotificationContact contact) {
+        return new NotificationContactResponse(
+                contact.userId(),
+                contact.email(),
+                contact.updatedAt()
         );
     }
 }

@@ -51,6 +51,15 @@ services:
     networks:
       - smxplore-net
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    networks:
+      - smxplore-net
+
   app:
     build:
       context: .
@@ -73,6 +82,10 @@ services:
       KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-ms-04-notifications}
       KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-latest}
       NOTIFICATIONS_ENABLED: ${NOTIFICATIONS_ENABLED:-true}
+      NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
+      NOTIFICATIONS_EMAIL_FROM: ${NOTIFICATIONS_EMAIL_FROM:-no-reply@smxplore.local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       JWK_SET_URI: ${JWK_SET_URI:-}
       JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
       JWT_ISSUER: ${JWT_ISSUER:-}

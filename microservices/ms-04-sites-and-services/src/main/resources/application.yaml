@@ -40,6 +40,17 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:
       missing-topics-fatal: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
@@ -72,6 +83,10 @@ app:
 
   notifications:
     enabled: ${NOTIFICATIONS_ENABLED:true}
+    email:
+      enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}
+      from: ${NOTIFICATIONS_EMAIL_FROM:no-reply@smxplore.local}
+      subject-prefix: ${NOTIFICATIONS_EMAIL_SUBJECT_PREFIX:[SM-Xplore] }
 
   bookings:
     zone-id: ${BOOKINGS_ZONE_ID:America/Bogota}
@@ -93,6 +108,11 @@ management:
     metrics:
       export:
         enabled: true
+  health:
+    # El correo es un canal secundario best-effort: que SMTP esté caído no debe
+    # marcar el servicio como DOWN.
+    mail:
+      enabled: false
   prometheus:
     metrics:
       export:

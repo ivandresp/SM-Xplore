@@ -3,8 +3,10 @@ package com.smxplore.sitesandservices.application.notification;
 import com.smxplore.sitesandservices.domain.model.common.UserRole;
 import com.smxplore.sitesandservices.domain.model.notification.Notification;
 import com.smxplore.sitesandservices.domain.model.notification.NotificationType;
+import com.smxplore.sitesandservices.domain.ports.out.NotificationDeliveryPort;
 import com.smxplore.sitesandservices.domain.ports.out.NotificationRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -20,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RequiredArgsConstructor
 public class NotificationCreateService {
 
@@ -27,6 +30,7 @@ public class NotificationCreateService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC);
 
     private final NotificationRepositoryPort notificationRepository;
+    private final NotificationDeliveryPort notificationDelivery;
     private final Clock clock;
 
     public Mono<Void> handle(ReservationChangedMessage message) {
@@ -71,8 +75,23 @@ public class NotificationCreateService {
         }
 
         return Flux.fromIterable(notifications)
-                .concatMap(notificationRepository::saveIfAbsent)
+                .concatMap(notification -> notificationRepository.saveIfAbsent(notification)
+                        .flatMap(inserted -> inserted
+                                ? delivery(notification)
+                                : Mono.empty()))
                 .then();
+    }
+
+    private Mono<Void> delivery(Notification notification) {
+        return notificationDelivery.deliver(notification)
+                .onErrorResume(exception -> {
+                    log.warn(
+                            "Notification {} for recipient {} was stored in the inbox but not delivered: {}",
+                            notification.notificationId(),
+                            notification.recipientId(),
+                            exception.getMessage());
+                    return Mono.empty();
+                });
     }
 
     private Notification notification(

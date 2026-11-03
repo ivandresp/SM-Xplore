@@ -27,7 +27,7 @@ public class MongoNotificationRepositoryAdapter implements NotificationRepositor
     private final MongoNotificationMapper mapper;
 
     @Override
-    public Mono<Void> saveIfAbsent(Notification notification) {
+    public Mono<Boolean> saveIfAbsent(Notification notification) {
         Query query = Query.query(Criteria.where("_id")
                 .is(notification.notificationId().toString()));
         Update update = new Update()
@@ -39,7 +39,8 @@ public class MongoNotificationRepositoryAdapter implements NotificationRepositor
                 .setOnInsert("title", notification.title())
                 .setOnInsert("message", notification.message())
                 .setOnInsert("createdAt", notification.createdAt());
-        return mongoTemplate.upsert(query, update, NotificationDocument.class).then();
+        return mongoTemplate.upsert(query, update, NotificationDocument.class)
+                .map(result -> result.getUpsertedId() != null || result.getModifiedCount() > 0);
     }
 
     @Override

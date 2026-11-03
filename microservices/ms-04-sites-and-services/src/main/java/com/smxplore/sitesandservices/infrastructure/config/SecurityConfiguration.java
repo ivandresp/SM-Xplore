@@ -62,9 +62,21 @@ public class SecurityConfiguration {
                         .hasAnyRole("PRESTADORA_SERVICIOS", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/reviews")
                         .hasRole("TURISTA")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/reviews/*/reports")
+                        .hasRole("TURISTA")
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/reviews/reports/*")
+                        .hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/reviews/*/response")
                         .hasAnyRole("PRESTADORA_SERVICIOS", "GESTORA_DESTINOS", "ADMIN")
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/reviews/*/status")
+                        .hasRole("ADMIN")
+                        .pathMatchers(
+                                HttpMethod.PUT,
+                                "/api/v1/admin/notification-contacts/**")
+                        .hasRole("ADMIN")
+                        .pathMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/admin/notification-contacts/**")
                         .hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/reservations")
                         .hasRole("TURISTA")

@@ -114,6 +114,7 @@ Base `smxplore` (configurable con `MONGO_DATABASE`). Colecciones:
 - `reviews`
 - `review_reports`
 - `notifications`
+- `notification_contacts`
 - `outbox_event`
 
 MongoDB debe ejecutarse como **replica set** para soportar transacciones. El `docker-compose.yml`
@@ -221,6 +222,8 @@ una red o puerto privado.
 | PATCH | `/api/v1/reservations/{id}/status` | turista dueño (cancelar), prestadora o `ADMIN` | Cancelar o completar |
 | GET | `/api/v1/notifications?unreadOnly=&page=&size=` | autenticado | Bandeja del usuario actual |
 | PATCH | `/api/v1/notifications/{id}/read` | destinatario o `ADMIN` | Marcar notificación como leída |
+| PUT | `/api/v1/admin/notification-contacts/{userId}` | `ADMIN` | Alta o cambio del correo de un destinatario |
+| DELETE | `/api/v1/admin/notification-contacts/{userId}` | `ADMIN` | Baja del correo de un destinatario |
 | POST | `/api/v1/admin/outbox/reprocess` | `ADMIN` | Resetear eventos `FAILED` a `PENDING` |
 
 Filtros disponibles:
@@ -350,6 +353,14 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `KAFKA_CONSUMER_GROUP_ID` | `ms-04-notifications` | Grupo del consumidor de notificaciones |
 | `KAFKA_AUTO_OFFSET_RESET` | `latest` | Offset inicial del consumidor |
 | `NOTIFICATIONS_ENABLED` | `true` | Activa el consumidor y la bandeja |
+| `NOTIFICATIONS_EMAIL_ENABLED` | `false` | Replica cada notificación nueva al correo del destinatario |
+| `NOTIFICATIONS_EMAIL_FROM` | `no-reply@smxplore.local` | Remitente del correo |
+| `NOTIFICATIONS_EMAIL_SUBJECT_PREFIX` | `[SM-Xplore] ` | Prefijo del asunto |
+| `SMTP_HOST` | `localhost` (compose: `mailpit`) | Servidor SMTP |
+| `SMTP_PORT` | `1025` | Puerto SMTP (Mailpit por defecto) |
+| `SMTP_AUTH` | `false` | Autenticación SMTP |
+| `SMTP_STARTTLS` | `false` | STARTTLS |
+| `MAILPIT_UI_PORT` | `8025` | Bandeja web de Mailpit en Compose |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | PEM local/test |
 | `JWT_ISSUER` | vacío | Issuer esperado |
@@ -401,6 +412,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
    Health:  http://localhost:8084/actuator/health
    Mongo:   localhost:27017
    Postgres localhost:5432
+   Mailpit: http://localhost:8025
    ```
 
 ## Pruebas
@@ -409,7 +421,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **57 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **64 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
@@ -439,12 +451,14 @@ Cubre:
 - dos relays concurrentes publican cada evento una sola vez;
 - retención de outbox y reproceso administrativo de eventos `FAILED`;
 - consumo Kafka de reservas, bandeja de notificaciones, idempotencia y marcado como leída;
+- entrega por correo de las notificaciones nuevas, alta y baja del contacto, y silencio cuando el
+  canal está apagado o el destinatario no tiene correo;
 - `/actuator/prometheus` accesible sin JWT y OpenAPI con `bearerAuth`.
 
 La operación diaria está descrita en `docs/runbook.md` (arranque, Flyway, outbox, capacidad,
-incidencias, copias y restauración) y el escenario de carga en `loadtest/booking-flow.js` (k6).
+notificaciones, incidencias, copias y restauración) y el escenario de carga en
+`loadtest/booking-flow.js` (k6).
 
 ## Pendiente
 
-- Entrega real de notificaciones por correo/push (hoy existe bandeja interna).
 - Reindex/lectura paginada para ms-05.

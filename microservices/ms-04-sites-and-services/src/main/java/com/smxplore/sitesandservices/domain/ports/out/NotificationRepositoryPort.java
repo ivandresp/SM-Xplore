@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public interface NotificationRepositoryPort {
 
-    Mono<Void> saveIfAbsent(Notification notification);
+    Mono<Boolean> saveIfAbsent(Notification notification);
 
     Mono<Notification> findById(UUID notificationId);
 

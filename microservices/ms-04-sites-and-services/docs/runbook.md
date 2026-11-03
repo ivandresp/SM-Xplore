@@ -74,6 +74,9 @@ reinicie. No borre filas de `flyway_schema_history`.
 - `GET /actuator/metrics`, `GET /actuator/prometheus` (expuestos en modo solo lectura).
 - En incidentes, arranque con `HEALTH_SHOW_DETAILS=always` para ver el estado de
   PostgreSQL, MongoDB y el disco.
+- El indicador de salud de correo está desactivado (`management.health.mail.enabled=false`):
+  SMTP es un canal secundario y su caída no debe marcar el servicio como `DOWN`. Para
+  vigilarlo, use un chequeo externo contra el puerto SMTP.
 - Señales de alerta: `outbox` con pendientes crecientes, errores 409 de capacidad,
   latencia de `/api/v1/reservations` y tasa de 5xx en el actuator.
 
@@ -118,7 +121,35 @@ FROM reservation_outbox WHERE status = 'FAILED' ORDER BY occurred_at DESC LIMIT 
 - La bandeja interna (`/api/v1/notifications`) es la fuente de verdad para el usuario;
   un evento de Kafka perdido no rompe la API pero deja al usuario sin aviso.
 
-## 7. Capacidad, cupo por turno y overbooking
+## 7. Notificaciones por correo
+
+La bandeja interna se escribe siempre. El correo es un canal **secundario y best-effort**:
+
+- `NOTIFICATIONS_EMAIL_ENABLED=false` por defecto; con `true` cada notificación nueva se
+  replica al correo del destinatario.
+- El destinatario se busca en `notification_contacts` (Mongo). Sin contacto no se envía y
+  solo queda el `debug` en el log; no es un error.
+- Alta y baja del contacto (solo `ADMIN`):
+
+  ```bash
+  curl -X PUT http://localhost:8084/api/v1/admin/notification-contacts/<userId> \
+       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+       -d '{"email":"turista@example.com"}'
+  curl -X DELETE http://localhost:8084/api/v1/admin/notification-contacts/<userId> \
+       -H "Authorization: Bearer $TOKEN"
+  ```
+
+- SMTP se configura con `SMTP_HOST`, `SMTP_PORT`, `SMTP_AUTH`, `SMTP_STARTTLS`. En Compose
+  hay un Mailpit (`axllent/mailpit:v1.27`) con la bandeja web en `http://localhost:8025`.
+- Un fallo del servidor SMTP **no** revierte la bandeja: el error se registra como `warn`
+  (`... was stored in the inbox but not delivered`) y la notificación sigue disponible en
+  `/api/v1/notifications`. Para reenviar, reintroduzca el evento en el outbox o vuelva a
+  emitir el cambio de estado.
+- Si el correo sale duplicado, revise que el evento no se haya publicado dos veces: el
+  outbox garantiza un evento por transición y `saveIfAbsent` evita repetir el envío en
+  replays con el mismo `eventId`.
+
+## 8. Capacidad, cupo por turno y overbooking
 
 Reglas vigentes (validadas en `ReservationCreateService`):
 
@@ -148,7 +179,7 @@ Los snapshots (`siteName`, `zoneName`, `zoneStatus`, `categoryName`) se refresca
 renombrar el sitio, la zona o la categoría; el sitio se revalida en cada reserva, así
 que despublicarlo bloquea reservas nuevas de inmediato.
 
-## 8. Incidencias frecuentes
+## 9. Incidencias frecuentes
 
 | Síntoma | Causa probable | Acción |
 |---|---|---|
@@ -160,7 +191,7 @@ que despublicarlo bloquea reservas nuevas de inmediato.
 | Reservas duplicadas | se reutilizó `Idempotency-Key` con otro cuerpo | es un `409` esperado; documentar la llave por operación |
 | Notificaciones no llegan | consumidor detenido o grupo con offset viejo | revisar logs del grupo y el inbox del usuario |
 
-## 9. Copias y restauración
+## 10. Copias y restauración
 
 ```bash
 # PostgreSQL
@@ -176,7 +207,7 @@ Tras restaurar, arranque la aplicación: Flyway valida el esquema y no vuelve a 
 migraciones ya registradas. Restaure siempre PostgreSQL y MongoDB del mismo corte;
 los eventos del outbox referencia ambos almacenes.
 
-## 10. Pruebas de carga
+## 11. Pruebas de carga
 
 El escenario de humo está en `microservices/ms-04-sites-and-services/loadtest/booking-flow.js`
 (k6). Mide listado de catálogo, consulta de disponibilidad y creación de reservas con

@@ -6,6 +6,7 @@ import com.smxplore.sitesandservices.application.catalog.CategoryListService;
 import com.smxplore.sitesandservices.application.catalog.CategoryUpdateService;
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
 import com.smxplore.sitesandservices.application.notification.NotificationAccess;
+import com.smxplore.sitesandservices.application.notification.NotificationContactService;
 import com.smxplore.sitesandservices.application.notification.NotificationCreateService;
 import com.smxplore.sitesandservices.application.notification.NotificationListService;
 import com.smxplore.sitesandservices.application.notification.NotificationMarkReadService;
@@ -85,6 +86,8 @@ import com.smxplore.sitesandservices.domain.ports.in.UpdateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.out.CategoryRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.NotificationContactRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.NotificationDeliveryPort;
 import com.smxplore.sitesandservices.domain.ports.out.NotificationRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationOutboxPort;
@@ -529,9 +532,19 @@ public class BeanConfiguration {
     @Bean
     public NotificationCreateService notificationCreateService(
             NotificationRepositoryPort notificationRepository,
+            NotificationDeliveryPort notificationDelivery,
             Clock clock
     ) {
-        return new NotificationCreateService(notificationRepository, clock);
+        return new NotificationCreateService(notificationRepository, notificationDelivery, clock);
+    }
+
+    @Bean
+    public NotificationContactService notificationContactService(
+            NotificationContactRepositoryPort contactRepository,
+            CatalogAccess access,
+            Clock clock
+    ) {
+        return new NotificationContactService(contactRepository, access, clock);
     }
 
     @Bean
