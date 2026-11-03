@@ -127,7 +127,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Analizar la imagen con Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
+        # Fijado al commit de v0.36.0: los tags de trivy-action se han reescrito en ataques de cadena de suministro.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.IMAGE_NAME }}
           format: table
