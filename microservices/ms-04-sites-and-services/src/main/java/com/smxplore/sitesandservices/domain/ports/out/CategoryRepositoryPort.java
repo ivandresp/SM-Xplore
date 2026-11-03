@@ -5,6 +5,7 @@ import com.smxplore.sitesandservices.domain.model.catalog.CategoryFilter;
 import com.smxplore.sitesandservices.domain.model.common.PageResult;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public interface CategoryRepositoryPort {
@@ -14,4 +15,6 @@ public interface CategoryRepositoryPort {
     Mono<Category> findById(UUID categoryId);
 
     Mono<PageResult<Category>> findAll(CategoryFilter filter);
+
+    Mono<PageResult<Category>> findUpdatedSince(Instant updatedSince, int page, int size);
 }

@@ -23,16 +23,34 @@ public class DomainEventFactory {
     private final Clock clock;
 
     public DomainEvent categoryChanged(Category category, String correlationId) {
+        return event(
+                EventTypes.CATALOG_CATEGORY_CHANGED,
+                category.categoryId(),
+                correlationId,
+                categoryPayload(category)
+        );
+    }
+
+    public Map<String, Object> categoryPayload(Category category) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("categoryId", category.categoryId().toString());
         payload.put("name", category.name());
         payload.put("scope", category.scope().name());
         payload.put("parentId", category.parentId() == null ? null : category.parentId().toString());
         payload.put("updatedAt", category.updatedAt().toString());
-        return event(EventTypes.CATALOG_CATEGORY_CHANGED, category.categoryId(), correlationId, payload);
+        return payload;
     }
 
     public DomainEvent siteChanged(Site site, String correlationId) {
+        return event(
+                EventTypes.CATALOG_SITE_CHANGED,
+                site.siteId(),
+                correlationId,
+                sitePayload(site)
+        );
+    }
+
+    public Map<String, Object> sitePayload(Site site) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("siteId", site.siteId().toString());
         payload.put("name", site.name());
@@ -41,10 +59,19 @@ public class DomainEventFactory {
         payload.put("longitude", site.longitude());
         payload.put("status", site.status().name());
         payload.put("updatedAt", site.updatedAt().toString());
-        return event(EventTypes.CATALOG_SITE_CHANGED, site.siteId(), correlationId, payload);
+        return payload;
     }
 
     public DomainEvent serviceChanged(Service service, String correlationId) {
+        return event(
+                EventTypes.CATALOG_SERVICE_CHANGED,
+                service.serviceId(),
+                correlationId,
+                servicePayload(service)
+        );
+    }
+
+    public Map<String, Object> servicePayload(Service service) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("serviceId", service.serviceId().toString());
         payload.put("siteId", service.siteId().toString());
@@ -55,7 +82,7 @@ public class DomainEventFactory {
         payload.put("longitude", service.longitude());
         payload.put("status", service.status().name());
         payload.put("updatedAt", service.updatedAt().toString());
-        return event(EventTypes.CATALOG_SERVICE_CHANGED, service.serviceId(), correlationId, payload);
+        return payload;
     }
 
     public DomainEvent reservationChanged(Reservation reservation, String correlationId) {

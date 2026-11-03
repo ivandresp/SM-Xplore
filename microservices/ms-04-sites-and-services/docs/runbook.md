@@ -226,3 +226,34 @@ Umbrales por defecto: `p(95) < 800ms` y errores `< 1%`. Durante la prueba vigile
   `maxCapacity`/`capacity` antes de la corrida.
 - CPU y memoria del contenedor (`docker stats`), recordando que el límite real del
   servicio son las escrituras transaccionales, no las lecturas del catálogo.
+
+## 12. Reindexado del catálogo para ms-05
+
+ms-05 (recomendaciones) mantiene una proyección Neo4j del catálogo. Para reconstruirla desde
+cero sin depender de Kafka, este servicio expone un feed administrativo que entrega las mismas
+piezas que publican los eventos `catalog.category.changed`, `catalog.site.changed` y
+`catalog.service.changed`.
+
+```bash
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8084/api/v1/admin/catalog/export?entity=SITES&page=0&size=200"
+```
+
+La respuesta trae `content` (cada elemento con `eventType`, `aggregateId`, `updatedAt` y `payload`),
+`page`, `size`, `total`, `hasNext` y `updatedSince`. Reglas de uso:
+
+- Solo `ADMIN` puede llamarlo; ms-05 debe usar una credencial de servicio con ese rol.
+- `entity` es obligatorio (`CATEGORIES`, `SITES`, `SERVICES`) y `size` no puede pasar de 200.
+- Itere con `page` mientras `hasNext` sea `true`; la página se ordena por `updatedAt` y `_id`
+  ascendentes para que el recorrido sea estable.
+- `updatedSince` (ISO-8601) filtra por `updatedAt >= valor`; sirva para reanudar un recorrido
+  interrumpido sin releer todo el catálogo.
+- Cuando termine el recorrido, ms-05 se suscribe a los topics de Kafka: los eventos posteriores
+  llegan por esa vía y el feed deja de ser necesario.
+- El feed **no** abre transacción ni bloquea escrituras: si el catálogo cambia durante el
+  recorrido, el evento incremental correspondiente llega por Kafka (o se recoge repitiendo la
+  última página con `updatedSince`).
+
+Para verificar el contrato desde el propio servicio, los tests
+`CatalogExportWebIntegrationTests` comparan el `eventType` y el `payload` del feed con el esquema
+de los eventos.

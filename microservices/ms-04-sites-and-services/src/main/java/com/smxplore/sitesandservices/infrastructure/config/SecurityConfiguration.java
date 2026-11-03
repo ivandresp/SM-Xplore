@@ -47,6 +47,8 @@ public class SecurityConfiguration {
                                 "/actuator/prometheus"
                         ).permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/admin/catalog/export")
+                        .hasRole("ADMIN")
                         .pathMatchers(HttpMethod.GET, "/api/v1/**").authenticated()
                         .pathMatchers(HttpMethod.POST, "/api/v1/categories", "/api/v1/zones", "/api/v1/sites")
                         .hasAnyRole("GESTORA_DESTINOS", "ADMIN")

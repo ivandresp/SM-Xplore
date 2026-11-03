@@ -225,6 +225,7 @@ una red o puerto privado.
 | PUT | `/api/v1/admin/notification-contacts/{userId}` | `ADMIN` | Alta o cambio del correo de un destinatario |
 | DELETE | `/api/v1/admin/notification-contacts/{userId}` | `ADMIN` | Baja del correo de un destinatario |
 | POST | `/api/v1/admin/outbox/reprocess` | `ADMIN` | Resetear eventos `FAILED` a `PENDING` |
+| GET | `/api/v1/admin/catalog/export?entity=&updatedSince=&page=&size=` | `ADMIN` | Feed de reindexado con el payload de los eventos de catálogo |
 
 Filtros disponibles:
 
@@ -236,6 +237,12 @@ Filtros disponibles:
 - Reservas: `touristId`, `providerId`, `serviceId`, `status`, `from`, `to`, `page`, `size`.
   El turista solo ve las suyas y la prestadora solo las que incluyen sus servicios.
 - Notificaciones: `unreadOnly`, `page`, `size`; siempre se limita al usuario autenticado.
+- Exportación de catálogo: `entity` (`CATEGORIES`, `SITES`, `SERVICES`, obligatorio), `updatedSince` (ISO-8601, opcional), `page`, `size` (máximo 200).
+
+El feed `GET /api/v1/admin/catalog/export` existe para que ms-05 reconstruya su proyección desde cero:
+devuelve páginas del catálogo con **el mismo `eventType`, `aggregateId` y `payload`** que publican los
+eventos de Kafka, así que el consumidor reutiliza el mismo código de proyección. Cuando `hasNext` es
+`false`, ms-05 pasa a consumir los eventos incrementales.
 
 Ejemplo de creación (requiere header `Idempotency-Key`):
 
@@ -421,7 +428,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **64 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **67 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
@@ -453,6 +460,7 @@ Cubre:
 - consumo Kafka de reservas, bandeja de notificaciones, idempotencia y marcado como leída;
 - entrega por correo de las notificaciones nuevas, alta y baja del contacto, y silencio cuando el
   canal está apagado o el destinatario no tiene correo;
+- feed de reindexado del catálogo con el payload de los eventos, filtro incremental y solo `ADMIN`;
 - `/actuator/prometheus` accesible sin JWT y OpenAPI con `bearerAuth`.
 
 La operación diaria está descrita en `docs/runbook.md` (arranque, Flyway, outbox, capacidad,
@@ -461,4 +469,5 @@ notificaciones, incidencias, copias y restauración) y el escenario de carga en
 
 ## Pendiente
 
-- Reindex/lectura paginada para ms-05.
+- ms-05 todavía no consume el feed `GET /api/v1/admin/catalog/export` ni los eventos de este
+  servicio: cuando lo haga, el arranque en frío recorre el feed y después continúa con Kafka.

@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -52,8 +53,25 @@ public class MongoCategoryRepositoryAdapter implements CategoryRepositoryPort {
                 .map(tuple -> new PageResult<>(tuple.getT2(), filter.page(), filter.size(), tuple.getT1()));
     }
 
-    private Query query(CategoryFilter filter) {
-        Criteria criteria = new Criteria();
+    @Override
+    public Mono<PageResult<Category>> findUpdatedSince(Instant updatedSince, int page, int size) {
+        Query query = updatedSince == null
+                ? new Query()
+                : Query.query(Criteria.where("updatedAt").gte(updatedSince));
+        Query pageQuery = Query.of(query)
+                .with(PageRequest.of(page, size,
+                        Sort.by(Sort.Direction.ASC, "updatedAt").and(Sort.by(Sort.Direction.ASC, "_id"))));
+
+        Mono<Long> total = mongoTemplate.count(query, CategoryDocument.class);
+        Mono<java.util.List<Category>> content = mongoTemplate.find(pageQuery, CategoryDocument.class)
+                .map(mapper::toDomain)
+                .collectList();
+
+        return Mono.zip(total, content)
+                .map(tuple -> new PageResult<>(tuple.getT2(), page, size, tuple.getT1()));
+    }
+
+    private Query query(CategoryFilter filter) {        Criteria criteria = new Criteria();
         if (filter.scope() != null) {
             criteria.and("scope").is(filter.scope().name());
         }

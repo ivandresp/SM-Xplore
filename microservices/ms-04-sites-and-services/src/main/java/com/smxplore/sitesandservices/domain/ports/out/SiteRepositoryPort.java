@@ -6,6 +6,7 @@ import com.smxplore.sitesandservices.domain.model.site.SiteFilter;
 import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public interface SiteRepositoryPort {
@@ -15,6 +16,8 @@ public interface SiteRepositoryPort {
     Mono<Site> findById(UUID siteId);
 
     Mono<PageResult<Site>> findAll(SiteFilter filter);
+
+    Mono<PageResult<Site>> findUpdatedSince(Instant updatedSince, int page, int size);
 
     Mono<Void> updateZoneSnapshot(UUID zoneId, String zoneName, ZoneStatus zoneStatus);
 

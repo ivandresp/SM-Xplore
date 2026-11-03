@@ -1,5 +1,6 @@
 package com.smxplore.sitesandservices.infrastructure.config;
 
+import com.smxplore.sitesandservices.application.catalog.CatalogExportService;
 import com.smxplore.sitesandservices.application.catalog.CategoryCreateService;
 import com.smxplore.sitesandservices.application.catalog.CategoryGetService;
 import com.smxplore.sitesandservices.application.catalog.CategoryListService;
@@ -61,6 +62,7 @@ import com.smxplore.sitesandservices.domain.ports.in.CreateReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateZoneUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ExportCatalogUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetCategoryUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReputationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReservationUseCase;
@@ -516,6 +518,23 @@ public class BeanConfiguration {
                 outboxWriter,
                 eventFactory,
                 clock
+        );
+    }
+
+    @Bean
+    public ExportCatalogUseCase exportCatalogUseCase(
+            CategoryRepositoryPort categoryRepository,
+            SiteRepositoryPort siteRepository,
+            ServiceRepositoryPort serviceRepository,
+            DomainEventFactory eventFactory,
+            CatalogAccess access
+    ) {
+        return new CatalogExportService(
+                categoryRepository,
+                siteRepository,
+                serviceRepository,
+                eventFactory,
+                access
         );
     }
 

@@ -1,5 +1,7 @@
 package com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper;
 
+import com.smxplore.sitesandservices.domain.model.catalog.CatalogExportItem;
+import com.smxplore.sitesandservices.domain.model.catalog.CatalogExportPage;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.review.ReputationMetrics;
@@ -9,6 +11,8 @@ import com.smxplore.sitesandservices.domain.model.review.ReviewSummary;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.Zone;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.catalog.CatalogExportItemResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.catalog.CatalogExportPageResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category.CategoryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
@@ -165,6 +169,26 @@ public class CatalogWebMapper {
                 slot.opensAt(),
                 slot.closesAt(),
                 slot.capacity()
+        );
+    }
+
+    public CatalogExportItemResponse toResponse(CatalogExportItem item) {
+        return new CatalogExportItemResponse(
+                item.eventType(),
+                item.aggregateId(),
+                item.updatedAt(),
+                item.payload()
+        );
+    }
+
+    public CatalogExportPageResponse toResponse(CatalogExportPage page) {
+        return new CatalogExportPageResponse(
+                page.content().stream().map(this::toResponse).toList(),
+                page.page(),
+                page.size(),
+                page.total(),
+                page.hasNext(),
+                page.updatedSince()
         );
     }
 

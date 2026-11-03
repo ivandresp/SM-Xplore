@@ -16,6 +16,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -53,6 +54,24 @@ public class MongoServiceRepositoryAdapter implements ServiceRepositoryPort {
 
         return Mono.zip(total, content)
                 .map(tuple -> new PageResult<>(tuple.getT2(), filter.page(), filter.size(), tuple.getT1()));
+    }
+
+    @Override
+    public Mono<PageResult<Service>> findUpdatedSince(Instant updatedSince, int page, int size) {
+        Query query = updatedSince == null
+                ? new Query()
+                : Query.query(Criteria.where("updatedAt").gte(updatedSince));
+        Query pageQuery = Query.of(query)
+                .with(PageRequest.of(page, size,
+                        Sort.by(Sort.Direction.ASC, "updatedAt").and(Sort.by(Sort.Direction.ASC, "_id"))));
+
+        Mono<Long> total = mongoTemplate.count(query, ServiceDocument.class);
+        Mono<List<Service>> content = mongoTemplate.find(pageQuery, ServiceDocument.class)
+                .map(mapper::toDomain)
+                .collectList();
+
+        return Mono.zip(total, content)
+                .map(tuple -> new PageResult<>(tuple.getT2(), page, size, tuple.getT1()));
     }
 
     @Override
