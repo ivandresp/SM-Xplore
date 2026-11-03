@@ -6,11 +6,13 @@ import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.review.CatalogTarget;
 import com.smxplore.sitesandservices.domain.model.review.Review;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReport;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.Zone;
 import com.smxplore.sitesandservices.domain.ports.out.CategoryRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReviewReportRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.SiteRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ZoneRepositoryPort;
@@ -27,6 +29,7 @@ public class CatalogLookup {
     private final SiteRepositoryPort siteRepository;
     private final ServiceRepositoryPort serviceRepository;
     private final ReviewRepositoryPort reviewRepository;
+    private final ReviewReportRepositoryPort reviewReportRepository;
 
     public Mono<Category> category(UUID categoryId) {
         if (categoryId == null) {
@@ -66,6 +69,14 @@ public class CatalogLookup {
         }
         return reviewRepository.findById(reviewId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Review", reviewId)));
+    }
+
+    public Mono<ReviewReport> reviewReport(UUID reportId) {
+        if (reportId == null) {
+            return Mono.error(new InvalidCatalogException("reportId is required"));
+        }
+        return reviewReportRepository.findById(reportId)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("ReviewReport", reportId)));
     }
 
     public Mono<SiteContext> siteContext(UUID categoryId, UUID zoneId) {

@@ -13,6 +13,10 @@ import com.smxplore.sitesandservices.application.review.ReviewChangeStatusServic
 import com.smxplore.sitesandservices.application.review.ReviewCreateService;
 import com.smxplore.sitesandservices.application.review.ReviewGetService;
 import com.smxplore.sitesandservices.application.review.ReviewListService;
+import com.smxplore.sitesandservices.application.review.ReviewReportCreateService;
+import com.smxplore.sitesandservices.application.review.ReviewReportListService;
+import com.smxplore.sitesandservices.application.review.ReviewReportResolveService;
+import com.smxplore.sitesandservices.application.review.ReviewReputationService;
 import com.smxplore.sitesandservices.application.review.ReviewRespondService;
 import com.smxplore.sitesandservices.application.reservation.ReservationAvailabilityService;
 import com.smxplore.sitesandservices.application.reservation.ReservationChangeStatusService;
@@ -57,6 +61,7 @@ import com.smxplore.sitesandservices.domain.ports.in.CreateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetCategoryUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.GetReputationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReservationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewSummaryUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewUseCase;
@@ -64,6 +69,7 @@ import com.smxplore.sitesandservices.domain.ports.in.GetServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListCategoriesUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ListReviewReportsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListNotificationsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListReservationsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListReviewsUseCase;
@@ -71,6 +77,8 @@ import com.smxplore.sitesandservices.domain.ports.in.MarkNotificationReadUseCase
 import com.smxplore.sitesandservices.domain.ports.in.ListServicesUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListSitesUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListZonesUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ReportReviewUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ResolveReviewReportUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.RespondToReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateCategoryUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateServiceUseCase;
@@ -82,6 +90,7 @@ import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationOutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationTransactionPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReviewReportRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.SiteRepositoryPort;
@@ -111,14 +120,16 @@ public class BeanConfiguration {
             ZoneRepositoryPort zoneRepository,
             SiteRepositoryPort siteRepository,
             ServiceRepositoryPort serviceRepository,
-            ReviewRepositoryPort reviewRepository
+            ReviewRepositoryPort reviewRepository,
+            ReviewReportRepositoryPort reviewReportRepository
     ) {
         return new CatalogLookup(
                 categoryRepository,
                 zoneRepository,
                 siteRepository,
                 serviceRepository,
-                reviewRepository
+                reviewRepository,
+                reviewReportRepository
         );
     }
 
@@ -460,6 +471,49 @@ public class BeanConfiguration {
     @Bean
     public GetReviewSummaryUseCase getReviewSummaryUseCase(ReviewRepositoryPort reviewRepository) {
         return new ReviewSummaryService(reviewRepository);
+    }
+
+    @Bean
+    public GetReputationUseCase getReputationUseCase(ReviewRepositoryPort reviewRepository) {
+        return new ReviewReputationService(reviewRepository);
+    }
+
+    @Bean
+    public ReportReviewUseCase reportReviewUseCase(
+            ReviewReportRepositoryPort reviewReportRepository,
+            CatalogLookup lookup,
+            Clock clock
+    ) {
+        return new ReviewReportCreateService(reviewReportRepository, lookup, clock);
+    }
+
+    @Bean
+    public ListReviewReportsUseCase listReviewReportsUseCase(
+            ReviewReportRepositoryPort reviewReportRepository,
+            CatalogAccess access
+    ) {
+        return new ReviewReportListService(reviewReportRepository, access);
+    }
+
+    @Bean
+    public ResolveReviewReportUseCase resolveReviewReportUseCase(
+            ReviewReportRepositoryPort reviewReportRepository,
+            ReviewRepositoryPort reviewRepository,
+            CatalogLookup lookup,
+            CatalogAccess access,
+            TransactionalOutboxWriter outboxWriter,
+            DomainEventFactory eventFactory,
+            Clock clock
+    ) {
+        return new ReviewReportResolveService(
+                reviewReportRepository,
+                reviewRepository,
+                lookup,
+                access,
+                outboxWriter,
+                eventFactory,
+                clock
+        );
     }
 
     @Bean

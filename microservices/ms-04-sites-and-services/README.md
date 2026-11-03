@@ -28,6 +28,7 @@ Primera entrega implementada:
 - CRUD y consultas de categorías, zonas, sitios, servicios y reseñas.
 - Filtros por zona, categoría, sitio, prestadora, estado, tipo y texto.
 - Reseñas con respuesta del propietario y moderación administrativa.
+- Reportes de reseñas con resolución administrativa y métricas de reputación por sitio o servicio.
 - Eventos Kafka versionados según `contracts/events/`.
 - Outbox con relay, reintentos y métricas, tanto en MongoDB como en PostgreSQL.
 - Tests de contrato y tests de integración con Testcontainers.
@@ -111,6 +112,7 @@ Base `smxplore` (configurable con `MONGO_DATABASE`). Colecciones:
 - `sites`
 - `services`
 - `reviews`
+- `review_reports`
 - `notifications`
 - `outbox_event`
 
@@ -171,6 +173,13 @@ Reglas:
   zona ≤50, nombre de servicio y de prestadora ≤150, tipo de servicio ≤50, nombre del turista ≤150,
   notas ≤1000 y motivo de cancelación ≤500. Los DTO (`@Size`) y el dominio aplican el mismo límite,
   así que una reserva no puede fallar después con `value too long for type character varying`.
+- Cualquier usuario autenticado puede reportar una reseña ajena (nunca la propia ni una borrada) una
+  sola vez; el reporte nace `OPEN` con un motivo (`SPAM`, `OFFENSIVE`, `FALSE_INFORMATION`,
+  `PERSONAL_DATA`, `OTHER`). Al `ACCEPTED` la reseña pasa a `HIDDEN` y se publica
+  `reviews.review.changed`; `DISMISSED` la deja intacta. Un reporte resuelto no se puede volver a
+  resolver.
+- `GET /api/v1/reviews/reputation` agrega solo reseñas `PUBLISHED`: promedio, conteo, respuestas,
+  tasa de respuesta, ocultas, distribución 1–5 y fecha de la última reseña.
 
 ## API
 
@@ -200,6 +209,10 @@ una red o puerto privado.
 | POST | `/api/v1/reviews/{id}/response` | `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN` | Responder reseña |
 | PATCH | `/api/v1/reviews/{id}/status` | `ADMIN` | Moderar reseña |
 | GET | `/api/v1/reviews/summary?itemType=&itemId=` | autenticado | Promedio y número de reseñas |
+| GET | `/api/v1/reviews/reputation?itemType=&itemId=` | autenticado | Métricas de reputación (distribución, respuestas, ocultas) |
+| POST | `/api/v1/reviews/{id}/reports` | autenticado (no el autor) | Reportar una reseña |
+| GET | `/api/v1/reviews/reports?status=&reviewId=&page=&size=` | `ADMIN` | Listar reportes de reseñas |
+| PATCH | `/api/v1/reviews/reports/{id}` | `ADMIN` | Aceptar o descartar un reporte |
 | GET | `/api/v1/reviews` | autenticado | Listar reseñas |
 | POST | `/api/v1/reservations` | `TURISTA` | Crear reserva confirmada de hasta 10 servicios de una prestadora |
 | GET | `/api/v1/reservations/availability?serviceId=&bookedFor=&people=` | autenticado | Consultar cupos disponibles |
@@ -216,6 +229,7 @@ Filtros disponibles:
 - Servicios: `categoryId`, `zoneId`, `siteId`, `providerId`, `status`, `type`, `search`, `page`, `size`.
 - Zonas: `status`, `type`, `search`, `page`, `size`.
 - Reseñas: `itemType`, `itemId`, `touristId`, `status`, `page`, `size`.
+- Reportes: `status`, `reviewId`, `page`, `size`.
 - Reservas: `touristId`, `providerId`, `serviceId`, `status`, `from`, `to`, `page`, `size`.
   El turista solo ve las suyas y la prestadora solo las que incluyen sus servicios.
 - Notificaciones: `unreadOnly`, `page`, `size`; siempre se limita al usuario autenticado.
@@ -395,7 +409,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **53 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **57 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
@@ -416,6 +430,8 @@ Cubre:
 - auto-completado de reservas pasadas y emisión del evento `COMPLETED`;
 - disponibilidad de fechas pasadas y validación de reglas de propiedad y roles;
 - rechazo de reseñas duplicadas e ítems de reserva repetidos;
+- reporte de reseña ajena, duplicado (`409`), autorreporte (`403`), resolución administrativa que
+  oculta la reseña y métricas de reputación agregadas;
 - listado paginado de reservas con carga de ítems en una sola consulta por página;
 - persistencia de zonas y reservas en PostgreSQL, y catálogo/notificaciones en MongoDB;
 - eventos de outbox y su serialización contra los JSON Schema;
@@ -432,4 +448,3 @@ incidencias, copias y restauración) y el escenario de carga en `loadtest/bookin
 
 - Entrega real de notificaciones por correo/push (hoy existe bandeja interna).
 - Reindex/lectura paginada para ms-05.
-- Moderación/reportes de reseñas y métricas de reputación.

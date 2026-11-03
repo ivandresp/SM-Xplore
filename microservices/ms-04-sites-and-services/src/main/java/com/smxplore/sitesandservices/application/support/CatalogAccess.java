@@ -49,6 +49,12 @@ public class CatalogAccess {
                 : Mono.error(new ForbiddenOperationException("Only the service owner can modify it"));
     }
 
+    public Mono<Actor> requireAdmin(Actor actor) {
+        return actor.isAdmin()
+                ? Mono.just(actor)
+                : Mono.error(new ForbiddenOperationException("Only an administrator can moderate reviews"));
+    }
+
     public Mono<Review> requireAdmin(Review review, Actor actor) {
         return actor.isAdmin()
                 ? Mono.just(review)

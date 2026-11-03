@@ -4,6 +4,7 @@ import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.common.ContentStatus;
 import com.smxplore.sitesandservices.domain.model.review.Review;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReport;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.Zone;
@@ -12,6 +13,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category.UpdateCategoryRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ChangeReviewStatusRequest;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.CreateReviewReportRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.CreateReviewRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.RespondReviewRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.service.CreateServiceRequest;
@@ -204,6 +206,14 @@ public class CatalogRequestMapper {
         return Review.builder()
                 .reviewId(reviewId)
                 .status(request.status())
+                .build();
+    }
+
+    public ReviewReport toDomain(UUID reviewId, CreateReviewReportRequest request) {
+        return ReviewReport.builder()
+                .reviewId(reviewId)
+                .reason(request.reason())
+                .details(request.details())
                 .build();
     }
 

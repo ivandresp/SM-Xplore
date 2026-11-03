@@ -6,6 +6,7 @@ import com.smxplore.sitesandservices.domain.model.review.ReviewFilter;
 import com.smxplore.sitesandservices.domain.model.review.ReviewStatus;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeReviewStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateReviewUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.GetReputationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewSummaryUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListReviewsUseCase;
@@ -13,6 +14,7 @@ import com.smxplore.sitesandservices.domain.ports.in.RespondToReviewUseCase;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.PageResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ChangeReviewStatusRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.CreateReviewRequest;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.RespondReviewRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewSummaryResponse;
@@ -53,6 +55,7 @@ public class ReviewController {
     private final GetReviewUseCase getUseCase;
     private final ListReviewsUseCase listUseCase;
     private final GetReviewSummaryUseCase summaryUseCase;
+    private final GetReputationUseCase reputationUseCase;
     private final CatalogRequestMapper requestMapper;
     private final CatalogWebMapper webMapper;
     private final JwtUserResolver jwtUserResolver;
@@ -111,6 +114,15 @@ public class ReviewController {
             @RequestParam UUID itemId
     ) {
         return summaryUseCase.handle(itemType, itemId).map(webMapper::toResponse);
+    }
+
+    @GetMapping("/reputation")
+    @Operation(summary = "Get the reputation metrics for a site or service")
+    public Mono<ReputationResponse> reputation(
+            @RequestParam ItemType itemType,
+            @RequestParam UUID itemId
+    ) {
+        return reputationUseCase.handle(itemType, itemId).map(webMapper::toResponse);
     }
 
     @GetMapping("/{reviewId}")

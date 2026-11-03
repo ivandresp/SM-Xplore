@@ -2,6 +2,7 @@ package com.smxplore.sitesandservices.domain.ports.out;
 
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.common.PageResult;
+import com.smxplore.sitesandservices.domain.model.review.ReputationMetrics;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.review.ReviewFilter;
 import com.smxplore.sitesandservices.domain.model.review.ReviewSummary;
@@ -20,4 +21,6 @@ public interface ReviewRepositoryPort {
     Mono<PageResult<Review>> findAll(ReviewFilter filter);
 
     Mono<ReviewSummary> summarize(ItemType itemType, UUID itemId);
+
+    Mono<ReputationMetrics> reputation(ItemType itemType, UUID itemId);
 }

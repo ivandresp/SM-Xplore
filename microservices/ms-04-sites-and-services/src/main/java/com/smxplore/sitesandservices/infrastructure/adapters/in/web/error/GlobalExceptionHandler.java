@@ -4,6 +4,7 @@ import com.smxplore.sitesandservices.domain.exception.DomainStateException;
 import com.smxplore.sitesandservices.domain.exception.DomainValidationException;
 import com.smxplore.sitesandservices.domain.exception.DuplicateReviewException;
 import com.smxplore.sitesandservices.domain.exception.ForbiddenOperationException;
+import com.smxplore.sitesandservices.domain.exception.DuplicateReviewReportException;
 import com.smxplore.sitesandservices.domain.exception.InvalidJwtException;
 import com.smxplore.sitesandservices.domain.exception.ReservationConflictException;
 import com.smxplore.sitesandservices.domain.exception.ReservationLimitException;
@@ -67,6 +68,14 @@ public class GlobalExceptionHandler {
             ServerWebExchange exchange
     ) {
         return error(HttpStatus.CONFLICT, "Duplicate review", exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(DuplicateReviewReportException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateReviewReport(
+            DuplicateReviewReportException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.CONFLICT, "Duplicate review report", exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

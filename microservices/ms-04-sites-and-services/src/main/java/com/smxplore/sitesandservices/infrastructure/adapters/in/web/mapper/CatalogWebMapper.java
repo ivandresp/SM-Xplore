@@ -2,13 +2,17 @@ package com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper;
 
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
+import com.smxplore.sitesandservices.domain.model.review.ReputationMetrics;
 import com.smxplore.sitesandservices.domain.model.review.Review;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReport;
 import com.smxplore.sitesandservices.domain.model.review.ReviewSummary;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.Zone;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category.CategoryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewReportResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewSummaryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.service.ServiceResponse;
@@ -120,6 +124,38 @@ public class CatalogWebMapper {
                 summary.itemId(),
                 summary.averageRating(),
                 summary.reviewCount()
+        );
+    }
+
+    public ReviewReportResponse toResponse(ReviewReport report) {
+        return new ReviewReportResponse(
+                report.reportId(),
+                report.reviewId(),
+                report.itemType(),
+                report.itemId(),
+                report.reportedBy(),
+                report.reportedByName(),
+                report.reason(),
+                report.details(),
+                report.status(),
+                report.createdAt(),
+                report.resolvedAt(),
+                report.resolvedBy(),
+                report.resolution()
+        );
+    }
+
+    public ReputationResponse toResponse(ReputationMetrics metrics) {
+        return new ReputationResponse(
+                metrics.itemType(),
+                metrics.itemId(),
+                metrics.averageRating(),
+                metrics.reviewCount(),
+                metrics.responseCount(),
+                metrics.responseRate(),
+                metrics.hiddenCount(),
+                metrics.ratingDistribution(),
+                metrics.lastReviewAt()
         );
     }
 

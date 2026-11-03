@@ -6,6 +6,9 @@ import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.common.ContentStatus;
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.review.Review;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReport;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReportReason;
+import com.smxplore.sitesandservices.domain.model.review.ReviewReportStatus;
 import com.smxplore.sitesandservices.domain.model.review.ReviewStatus;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
@@ -14,6 +17,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.CategoryDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ProviderSnapshotDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewDocument;
+import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewReportDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ServiceDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.SiteDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.SiteSnapshotDocument;
@@ -188,6 +192,46 @@ public class MongoCatalogMapper {
                 .build();
         review.validate();
         return review;
+    }
+
+    public ReviewReportDocument toDocument(ReviewReport report) {
+        return ReviewReportDocument.builder()
+                .id(report.reportId().toString())
+                .reviewId(report.reviewId().toString())
+                .itemType(report.itemType().name())
+                .itemId(report.itemId().toString())
+                .reportedBy(report.reportedBy().toString())
+                .reportedByName(report.reportedByName())
+                .reason(report.reason().name())
+                .details(report.details())
+                .status(report.status().name())
+                .createdAt(report.createdAt())
+                .resolvedAt(report.resolvedAt())
+                .resolvedBy(report.resolvedBy() == null ? null : report.resolvedBy().toString())
+                .resolution(report.resolution())
+                .build();
+    }
+
+    public ReviewReport toDomain(ReviewReportDocument document) {
+        ReviewReport report = ReviewReport.builder()
+                .reportId(UUID.fromString(document.getId()))
+                .reviewId(UUID.fromString(document.getReviewId()))
+                .itemType(ItemType.valueOf(document.getItemType()))
+                .itemId(UUID.fromString(document.getItemId()))
+                .reportedBy(UUID.fromString(document.getReportedBy()))
+                .reportedByName(document.getReportedByName())
+                .reason(ReviewReportReason.valueOf(document.getReason()))
+                .details(document.getDetails())
+                .status(ReviewReportStatus.valueOf(document.getStatus()))
+                .createdAt(document.getCreatedAt())
+                .resolvedAt(document.getResolvedAt())
+                .resolvedBy(document.getResolvedBy() == null
+                        ? null
+                        : UUID.fromString(document.getResolvedBy()))
+                .resolution(document.getResolution())
+                .build();
+        report.validate();
+        return report;
     }
 
     private ZoneSnapshotDocument zoneSnapshot(UUID zoneId, String zoneName, ZoneStatus status) {

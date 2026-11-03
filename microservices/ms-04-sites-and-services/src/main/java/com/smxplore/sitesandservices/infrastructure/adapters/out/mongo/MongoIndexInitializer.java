@@ -4,6 +4,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.NotificationDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.OutboxEventDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewDocument;
+import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewReportDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ServiceDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.SiteDocument;
 import jakarta.annotation.PostConstruct;
@@ -62,6 +63,19 @@ public class MongoIndexInitializer {
                                 .on("itemId", Sort.Direction.ASC)
                                 .on("status", Sort.Direction.ASC)
                                 .on("createdAt", Sort.Direction.DESC)),
+                mongoTemplate.indexOps(ReviewReportDocument.class)
+                        .createIndex(new Index()
+                                .on("reviewId", Sort.Direction.ASC)
+                                .on("reportedBy", Sort.Direction.ASC)
+                                .unique()),
+                mongoTemplate.indexOps(ReviewReportDocument.class)
+                        .createIndex(new Index()
+                                .on("status", Sort.Direction.ASC)
+                                .on("createdAt", Sort.Direction.DESC)),
+                mongoTemplate.indexOps(ReviewReportDocument.class)
+                        .createIndex(new Index()
+                                .on("reviewId", Sort.Direction.ASC)
+                                .on("status", Sort.Direction.ASC)),
                 mongoTemplate.indexOps(OutboxEventDocument.class)
                         .createIndex(new Index()
                                 .on("status", Sort.Direction.ASC)
