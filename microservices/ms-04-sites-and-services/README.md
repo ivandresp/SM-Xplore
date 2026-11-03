@@ -126,7 +126,11 @@ Base `smxplore` (configurable con `POSTGRES_DB`). Tablas:
 - `reservation_items`
 - `reservation_outbox`
 
-El esquema se crea desde `src/main/resources/schema.sql` con `spring.sql.init.mode=always`.
+El esquema se versiona con **Flyway** en `src/main/resources/db/migration`: `V1` crea el esquema
+base y `V2` normaliza las reservas heredadas y publica sus eventos. Flyway abre su propia conexión
+JDBC (`spring.flyway.url`, variable `POSTGRES_JDBC_URL`) porque la aplicación trabaja con R2DBC; en
+bases creadas con el antiguo `schema.sql` la primera migración se baselinea
+(`FLYWAY_BASELINE_ON_MIGRATE`) y todas las sentencias son idempotentes (`IF NOT EXISTS`).
 `reservations` y `reservation_items` implementan las tablas `Reserva` y `ReservaItem` del modelo
 relacional físico.
 
@@ -139,9 +143,9 @@ Reglas:
 - Una reserva puede tener **máximo 10 ítems** y todos deben pertenecer a **una sola prestadora**.
   La regla se aplica al crear; las reservas históricas multi-prestadora se mantienen legibles.
 - Toda reserva se crea directamente en `CONFIRMED`: no requiere aceptación manual. `PENDING` se
-  conserva solo por compatibilidad con datos heredados y el contrato compartido; `schema.sql`
-  normaliza las filas `PENDING` existentes a `CONFIRMED`. Esa normalización es una migración de
-  datos y no emite un evento nuevo: si existen proyecciones de consumidores, deben reconciliarse.
+  conserva solo por compatibilidad con el contrato compartido; la migración `V2` normaliza las filas
+  `PENDING` heredadas y emite un `bookings.reservation.changed` por cada una a través del outbox, de
+  modo que ms-05 y la bandeja de notificaciones se reconcilian sin intervención manual.
 - No hay expiración automática de reservas `CONFIRMED`: el cupo se libera cuando el turista o la
   prestadora la cancelan, o cuando el job de auto-completado la pasa a `COMPLETED` después de la
   fecha reservada.
@@ -152,11 +156,21 @@ Reglas:
 - Una reserva no puede crearse con más de `max-advance-days` de anticipación (365 por defecto).
 - La capacidad máxima del servicio (`Service.maxCapacity`) se evalúa **por día local**, usando
   `app.bookings.zone-id` (por defecto `America/Bogota`).
+- Cada franja de `Service.availability` puede declarar `capacity` (cupo del turno). Si la reserva cae
+  en una franja con cupo, se aplican los dos topes —día y turno— y gana el más restrictivo; la
+  respuesta `409` indica `in the selected time slot` cuando el turno es el que limita.
 - La fecha/hora reservada debe caer dentro de alguna franja de `Service.availability`. Si el
   servicio no tiene franjas configuradas, se permite cualquier horario.
 - El servicio debe estar `PUBLISHED` y su zona no puede estar `INACTIVE`.
+- El **sitio** del servicio se consulta en el momento de reservar: si ya no existe la reserva falla
+  con `SITE_NOT_AVAILABLE` y si está despublicado con `SITE_NOT_PUBLISHED`, aunque el servicio siga
+  `PUBLISHED`. Al renombrar un sitio se refresca el snapshot `site.name` de todos sus servicios.
 - `POST /api/v1/reservations` requiere `Idempotency-Key`: el mismo key con el mismo payload
   devuelve la reserva existente; el mismo key con otro payload responde `409`.
+- Los textos que viajan a PostgreSQL respetan el ancho de su columna: nombre de zona ≤100, tipo de
+  zona ≤50, nombre de servicio y de prestadora ≤150, tipo de servicio ≤50, nombre del turista ≤150,
+  notas ≤1000 y motivo de cancelación ≤500. Los DTO (`@Size`) y el dominio aplican el mismo límite,
+  así que una reserva no puede fallar después con `value too long for type character varying`.
 
 ## API
 
@@ -313,6 +327,9 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `SERVER_PORT` | `8080` | Puerto interno |
 | `MONGODB_URI` | `mongodb://localhost:27017/smxplore?replicaSet=rs0` | Mongo con replica set |
 | `POSTGRES_R2DBC_URL` | `r2dbc:postgresql://localhost:5432/smxplore` | PostgreSQL R2DBC |
+| `POSTGRES_JDBC_URL` | `jdbc:postgresql://localhost:5432/smxplore` | Conexión JDBC que usa Flyway |
+| `FLYWAY_ENABLED` | `true` | Ejecuta las migraciones al arrancar |
+| `FLYWAY_BASELINE_ON_MIGRATE` | `true` | Baselinea bases creadas con el antiguo `schema.sql` |
 | `POSTGRES_USER` | `smxplore` | Usuario PostgreSQL |
 | `POSTGRES_PASSWORD` | `change-me` | Contraseña PostgreSQL |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka |
@@ -378,7 +395,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **44 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **53 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
@@ -408,13 +425,11 @@ Cubre:
 - consumo Kafka de reservas, bandeja de notificaciones, idempotencia y marcado como leída;
 - `/actuator/prometheus` accesible sin JWT y OpenAPI con `bearerAuth`.
 
+La operación diaria está descrita en `docs/runbook.md` (arranque, Flyway, outbox, capacidad,
+incidencias, copias y restauración) y el escenario de carga en `loadtest/booking-flow.js` (k6).
+
 ## Pendiente
 
-- Migraciones versionadas (Flyway/Liquibase) y migración con eventos de datos heredados.
-- Alinear límites de columnas/tipos con validaciones de DTOs y datos de catálogo.
-- Consistencia de snapshots de zona/sitio y chequeo del estado del sitio al reservar.
-- Capacidad por turno además de la capacidad diaria.
 - Entrega real de notificaciones por correo/push (hoy existe bandeja interna).
 - Reindex/lectura paginada para ms-05.
 - Moderación/reportes de reseñas y métricas de reputación.
-- Pruebas de carga y runbook operativo.

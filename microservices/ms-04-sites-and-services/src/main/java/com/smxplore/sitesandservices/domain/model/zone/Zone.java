@@ -13,6 +13,9 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 public final class Zone {
 
+    public static final int MAX_NAME_LENGTH = 100;
+    public static final int MAX_TYPE_LENGTH = 50;
+
     private final UUID zoneId;
     private final UUID managerId;
     private final String name;
@@ -27,6 +30,7 @@ public final class Zone {
         validateZoneId(zoneId);
         validateManagerId(managerId);
         validateName(name);
+        validateType(type);
         validateStatus(status);
         validateCreatedAt(createdAt);
         validateUpdatedAt(updatedAt);
@@ -48,6 +52,17 @@ public final class Zone {
     private static void validateName(String name) {
         if (name == null || name.isBlank()) {
             throw new InvalidCatalogException("zone name is required");
+        }
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new InvalidCatalogException(
+                    "zone name cannot exceed " + MAX_NAME_LENGTH + " characters");
+        }
+    }
+
+    private static void validateType(String type) {
+        if (type != null && type.length() > MAX_TYPE_LENGTH) {
+            throw new InvalidCatalogException(
+                    "zone type cannot exceed " + MAX_TYPE_LENGTH + " characters");
         }
     }
 

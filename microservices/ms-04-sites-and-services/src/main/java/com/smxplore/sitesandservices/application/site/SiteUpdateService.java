@@ -7,6 +7,7 @@ import com.smxplore.sitesandservices.application.support.TransactionalOutboxWrit
 import com.smxplore.sitesandservices.domain.model.common.Actor;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateSiteUseCase;
+import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.SiteRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
@@ -18,6 +19,7 @@ import java.time.Instant;
 public class SiteUpdateService implements UpdateSiteUseCase {
 
     private final SiteRepositoryPort siteRepository;
+    private final ServiceRepositoryPort serviceRepository;
     private final CatalogLookup lookup;
     private final CatalogAccess access;
     private final TransactionalOutboxWriter outboxWriter;
@@ -50,7 +52,19 @@ public class SiteUpdateService implements UpdateSiteUseCase {
                                     siteRepository.save(updated),
                                     eventFactory::siteChanged,
                                     correlationId
-                            );
+                            ).flatMap(saved -> refreshServiceSnapshots(existing, saved));
                         }));
+    }
+
+    /**
+     * Los servicios guardan el nombre del sitio como snapshot. Si el sitio se renombra,
+     * hay que refrescar ese snapshot para que catálogo, reseñas y reservas no muestren
+     * el nombre anterior.
+     */
+    private Mono<Site> refreshServiceSnapshots(Site previous, Site saved) {
+        if (previous.name().equals(saved.name())) {
+            return Mono.just(saved);
+        }
+        return serviceRepository.updateSiteSnapshot(saved.siteId(), saved.name()).thenReturn(saved);
     }
 }

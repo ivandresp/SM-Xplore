@@ -209,7 +209,8 @@ public class CatalogRequestMapper {
 
     private List<AvailabilitySlot> availability(List<AvailabilitySlotRequest> slots) {
         return slots.stream()
-                .map(slot -> new AvailabilitySlot(slot.dayOfWeek(), slot.opensAt(), slot.closesAt()))
+                .map(slot -> new AvailabilitySlot(
+                        slot.dayOfWeek(), slot.opensAt(), slot.closesAt(), slot.capacity()))
                 .toList();
     }
 }

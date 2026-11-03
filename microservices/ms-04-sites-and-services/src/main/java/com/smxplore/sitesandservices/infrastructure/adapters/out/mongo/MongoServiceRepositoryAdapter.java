@@ -65,6 +65,13 @@ public class MongoServiceRepositoryAdapter implements ServiceRepositoryPort {
     }
 
     @Override
+    public Mono<Void> updateSiteSnapshot(UUID siteId, String siteName) {
+        Query query = Query.query(Criteria.where("site.id").is(siteId.toString()));
+        Update update = new Update().set("site.name", siteName);
+        return mongoTemplate.updateMulti(query, update, ServiceDocument.class).then();
+    }
+
+    @Override
     public Mono<Void> updateCategorySnapshot(UUID categoryId, String categoryName) {
         Query query = Query.query(Criteria.where("categoryId").is(categoryId.toString()));
         Update update = new Update().set("categoryName", categoryName);

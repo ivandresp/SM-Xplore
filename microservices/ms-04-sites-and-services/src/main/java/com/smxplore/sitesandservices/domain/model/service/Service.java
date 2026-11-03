@@ -19,6 +19,11 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 public final class Service {
 
+    public static final int MAX_NAME_LENGTH = 150;
+    public static final int MAX_PROVIDER_NAME_LENGTH = 150;
+    public static final int MAX_SNAPSHOT_NAME_LENGTH = 150;
+    public static final int MAX_TYPE_LENGTH = 50;
+
     private final UUID serviceId;
     private final UUID providerId;
     private final String providerName;
@@ -80,6 +85,7 @@ public final class Service {
         if (providerName == null || providerName.isBlank()) {
             throw new InvalidCatalogException("service providerName is required");
         }
+        requireMaxLength(providerName, MAX_PROVIDER_NAME_LENGTH, "service providerName");
     }
 
     private static void validateSite(UUID siteId, String siteName) {
@@ -89,6 +95,7 @@ public final class Service {
         if (siteName == null || siteName.isBlank()) {
             throw new InvalidCatalogException("service siteName is required");
         }
+        requireMaxLength(siteName, MAX_SNAPSHOT_NAME_LENGTH, "service siteName");
     }
 
     private static void validateZone(UUID zoneId, String zoneName, ZoneStatus zoneStatus) {
@@ -98,6 +105,7 @@ public final class Service {
         if (zoneName == null || zoneName.isBlank()) {
             throw new InvalidCatalogException("service zoneName is required");
         }
+        requireMaxLength(zoneName, MAX_SNAPSHOT_NAME_LENGTH, "service zoneName");
         if (zoneStatus == null) {
             throw new InvalidCatalogException("service zoneStatus is required");
         }
@@ -110,17 +118,27 @@ public final class Service {
         if (categoryName == null || categoryName.isBlank()) {
             throw new InvalidCatalogException("service categoryName is required");
         }
+        requireMaxLength(categoryName, MAX_SNAPSHOT_NAME_LENGTH, "service categoryName");
     }
 
     private static void validateName(String name) {
         if (name == null || name.isBlank()) {
             throw new InvalidCatalogException("service name is required");
         }
+        requireMaxLength(name, MAX_NAME_LENGTH, "service name");
     }
 
     private static void validateType(String type) {
         if (type == null || type.isBlank()) {
             throw new InvalidCatalogException("service type is required");
+        }
+        requireMaxLength(type, MAX_TYPE_LENGTH, "service type");
+    }
+
+    private static void requireMaxLength(String value, int maxLength, String field) {
+        if (value.length() > maxLength) {
+            throw new InvalidCatalogException(
+                    field + " cannot exceed " + maxLength + " characters");
         }
     }
 

@@ -127,7 +127,8 @@ public class CatalogWebMapper {
         return new AvailabilitySlotResponse(
                 slot.dayOfWeek(),
                 slot.opensAt(),
-                slot.closesAt()
+                slot.closesAt(),
+                slot.capacity()
         );
     }
 

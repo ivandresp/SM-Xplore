@@ -14,6 +14,10 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 public final class ReservationItem {
 
+    public static final int MAX_SERVICE_NAME_LENGTH = 150;
+    public static final int MAX_PROVIDER_NAME_LENGTH = 150;
+    public static final int MAX_SERVICE_TYPE_LENGTH = 50;
+
     private final UUID reservationItemId;
     private final UUID serviceId;
     private final String serviceName;
@@ -56,6 +60,7 @@ public final class ReservationItem {
         if (serviceName == null || serviceName.isBlank()) {
             throw new InvalidCatalogException("reservation item serviceName is required");
         }
+        requireMaxLength(serviceName, MAX_SERVICE_NAME_LENGTH, "reservation item serviceName");
     }
 
     private static void validateProvider(UUID providerId, String providerName) {
@@ -65,11 +70,20 @@ public final class ReservationItem {
         if (providerName == null || providerName.isBlank()) {
             throw new InvalidCatalogException("reservation item providerName is required");
         }
+        requireMaxLength(providerName, MAX_PROVIDER_NAME_LENGTH, "reservation item providerName");
     }
 
     private static void validateServiceType(String serviceType) {
         if (serviceType == null || serviceType.isBlank()) {
             throw new InvalidCatalogException("reservation item serviceType is required");
+        }
+        requireMaxLength(serviceType, MAX_SERVICE_TYPE_LENGTH, "reservation item serviceType");
+    }
+
+    private static void requireMaxLength(String value, int maxLength, String field) {
+        if (value.length() > maxLength) {
+            throw new InvalidCatalogException(
+                    field + " cannot exceed " + maxLength + " characters");
         }
     }
 

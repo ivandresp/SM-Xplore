@@ -203,6 +203,56 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
+    @Test
+    void refreshesTheServiceSnapshotWhenTheSiteIsRenamed() {
+        UUID managerId = UUID.randomUUID();
+        UUID providerId = UUID.randomUUID();
+
+        CategoryResponse category = createCategory(managerId);
+        ZoneResponse zone = createZone(managerId);
+        SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
+        ServiceResponse service = createService(
+                providerId, category.categoryId(), zone.zoneId(), site.siteId());
+        assertThat(service.siteName()).isEqualTo(site.name());
+
+        SiteResponse renamed = renameSite(managerId, site, "Playa renombrada");
+        assertThat(renamed.name()).isEqualTo("Playa renombrada");
+
+        ServiceResponse reloaded = clientFor(managerId, "GESTORA_DESTINOS")
+                .get().uri("/api/v1/services/" + service.serviceId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(ServiceResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(reloaded).isNotNull();
+        assertThat(reloaded.siteName()).isEqualTo("Playa renombrada");
+    }
+
+    private SiteResponse renameSite(UUID managerId, SiteResponse site, String newName) {
+        return clientFor(managerId, "GESTORA_DESTINOS")
+                .put().uri("/api/v1/sites/" + site.siteId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "name":"%s",
+                          "description":"Un sitio de prueba",
+                          "categoryId":"%s",
+                          "zoneId":"%s",
+                          "latitude":10.39,
+                          "longitude":-75.47,
+                          "photosUrls":["https://example.com/site.jpg"],
+                          "maxCapacity":100,
+                          "availability":[{"dayOfWeek":"MONDAY","opensAt":"09:00:00","closesAt":"17:00:00"}]
+                        }
+                        """.formatted(newName, site.categoryId(), site.zoneId()))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(SiteResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
     private ServiceResponse createService(
             UUID providerId,
             UUID categoryId,

@@ -8,6 +8,7 @@ import com.smxplore.sitesandservices.domain.model.common.UserRole;
 import com.smxplore.sitesandservices.domain.model.reservation.Reservation;
 import com.smxplore.sitesandservices.domain.model.reservation.ReservationItem;
 import com.smxplore.sitesandservices.domain.model.service.Service;
+import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
 import com.smxplore.sitesandservices.domain.ports.in.CreateReservationUseCase;
 import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
@@ -98,12 +99,13 @@ class ReservationOutboxClaimIntegrationTests extends AbstractMongoPostgresIntegr
 
     private Service publishedService() {
         Instant now = Instant.now();
+        Site site = persistPublishedSite("Sitio claim");
         Service service = Service.builder()
                 .serviceId(UUID.randomUUID())
                 .providerId(UUID.randomUUID())
                 .providerName("Prestadora claim")
-                .siteId(UUID.randomUUID())
-                .siteName("Sitio claim")
+                .siteId(site.siteId())
+                .siteName(site.name())
                 .zoneId(UUID.randomUUID())
                 .zoneName("Zona claim")
                 .zoneStatus(ZoneStatus.ACTIVE)

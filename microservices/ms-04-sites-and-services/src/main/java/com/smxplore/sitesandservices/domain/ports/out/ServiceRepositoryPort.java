@@ -18,6 +18,8 @@ public interface ServiceRepositoryPort {
 
     Mono<Void> updateZoneSnapshot(UUID zoneId, String zoneName, ZoneStatus zoneStatus);
 
+    Mono<Void> updateSiteSnapshot(UUID siteId, String siteName);
+
     Mono<Void> updateCategorySnapshot(UUID categoryId, String categoryName);
 
     Mono<Boolean> existsById(UUID serviceId);

@@ -218,6 +218,7 @@ public class MongoCatalogMapper {
                         .dayOfWeek(slot.dayOfWeek().name())
                         .opensAt(slot.opensAt().toString())
                         .closesAt(slot.closesAt().toString())
+                        .capacity(slot.capacity())
                         .build())
                 .toList();
     }
@@ -230,7 +231,8 @@ public class MongoCatalogMapper {
                 .map(slot -> new AvailabilitySlot(
                         DayOfWeek.valueOf(slot.getDayOfWeek()),
                         LocalTime.parse(slot.getOpensAt()),
-                        LocalTime.parse(slot.getClosesAt())
+                        LocalTime.parse(slot.getClosesAt()),
+                        slot.getCapacity()
                 ))
                 .toList();
     }

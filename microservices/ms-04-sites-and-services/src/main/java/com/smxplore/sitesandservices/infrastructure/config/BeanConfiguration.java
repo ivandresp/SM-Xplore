@@ -266,6 +266,7 @@ public class BeanConfiguration {
     @Bean
     public UpdateSiteUseCase updateSiteUseCase(
             SiteRepositoryPort siteRepository,
+            ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
             CatalogAccess access,
             TransactionalOutboxWriter outboxWriter,
@@ -274,6 +275,7 @@ public class BeanConfiguration {
     ) {
         return new SiteUpdateService(
                 siteRepository,
+                serviceRepository,
                 lookup,
                 access,
                 outboxWriter,
@@ -514,6 +516,7 @@ public class BeanConfiguration {
     @Bean
     public CreateReservationUseCase createReservationUseCase(
             ServiceRepositoryPort serviceRepository,
+            SiteRepositoryPort siteRepository,
             ReservationRepositoryPort reservationRepository,
             ReservationTransactionPort transaction,
             ReservationOutboxPort outbox,
@@ -525,6 +528,7 @@ public class BeanConfiguration {
     ) {
         return new ReservationCreateService(
                 serviceRepository,
+                siteRepository,
                 reservationRepository,
                 transaction,
                 outbox,

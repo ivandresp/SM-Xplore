@@ -3,6 +3,7 @@ package com.smxplore.sitesandservices.application.reservation;
 import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
 import com.smxplore.sitesandservices.domain.exception.InvalidCatalogException;
 import com.smxplore.sitesandservices.domain.exception.ResourceNotFoundException;
+import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.reservation.ReservationAvailability;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.ports.in.CheckReservationAvailabilityUseCase;
@@ -52,23 +53,40 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
                     people,
                     0,
                     false,
-                    ReservationAvailabilityPolicy.BOOKED_FOR_IN_PAST
+                    ReservationAvailabilityPolicy.BOOKED_FOR_IN_PAST,
+                    service.maxCapacity()
             ));
         }
         String problem = availabilityPolicy.availabilityProblem(service, bookedFor);
         if (problem != null) {
-            return Mono.just(result(service, bookedFor, people, 0, false, problem));
+            return Mono.just(result(service, bookedFor, people, 0, false, problem, service.maxCapacity()));
         }
-        Instant from = availabilityPolicy.dayStart(bookedFor);
-        Instant to = availabilityPolicy.dayEnd(bookedFor);
-        return reservationRepository.reservedPeople(service.serviceId(), from, to)
-                .map(reserved -> {
-                    int remaining = Math.max(0, service.maxCapacity() - reserved);
-                    boolean available = people <= remaining;
+        AvailabilitySlot slot = availabilityPolicy.slotFor(service, bookedFor);
+        Integer slotCapacity = slot == null ? null : slot.capacity();
+        Mono<Integer> reservedToday = reservationRepository.reservedPeople(
+                service.serviceId(),
+                availabilityPolicy.dayStart(bookedFor),
+                availabilityPolicy.dayEnd(bookedFor));
+        Mono<Integer> reservedInSlot = slotCapacity == null
+                ? Mono.just(0)
+                : reservationRepository.reservedPeople(
+                        service.serviceId(),
+                        availabilityPolicy.slotStart(bookedFor, slot),
+                        availabilityPolicy.slotEnd(bookedFor, slot));
+        return Mono.zip(reservedToday, reservedInSlot)
+                .map(tuple -> {
+                    int dailyRemaining = Math.max(0, service.maxCapacity() - tuple.getT1());
+                    int slotRemaining = slotCapacity == null
+                            ? Integer.MAX_VALUE
+                            : Math.max(0, slotCapacity - tuple.getT2());
+                    boolean slotIsTheLimit = slotRemaining < dailyRemaining;
+                    int capacity = slotIsTheLimit ? slotCapacity : service.maxCapacity();
+                    int reserved = slotIsTheLimit ? tuple.getT2() : tuple.getT1();
+                    boolean available = people <= Math.min(dailyRemaining, slotRemaining);
                     String reason = available
                             ? null
                             : ReservationAvailabilityPolicy.INSUFFICIENT_CAPACITY;
-                    return result(service, bookedFor, people, reserved, available, reason);
+                    return result(service, bookedFor, people, reserved, available, reason, capacity);
                 });
     }
 
@@ -78,7 +96,8 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
             int people,
             int reservedPeople,
             boolean available,
-            String reason
+            String reason,
+            int capacity
     ) {
         return new ReservationAvailability(
                 service.serviceId(),
@@ -86,7 +105,7 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
                 service.providerId(),
                 bookedFor,
                 availabilityPolicy.serviceDate(bookedFor),
-                service.maxCapacity(),
+                capacity,
                 reservedPeople,
                 people,
                 available,

@@ -16,4 +16,5 @@ public class AvailabilitySlotDocument {
     private String dayOfWeek;
     private String opensAt;
     private String closesAt;
+    private Integer capacity;
 }

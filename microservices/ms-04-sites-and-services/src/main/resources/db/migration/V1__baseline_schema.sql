@@ -1,3 +1,7 @@
+-- Esquema base de ms-04: zonas y reservas en PostgreSQL.
+-- Se mantiene idempotente (IF NOT EXISTS) para que Flyway pueda baselinear
+-- bases creadas con el antiguo schema.sql sin duplicar objetos.
+
 CREATE TABLE IF NOT EXISTS zones (
     zone_id UUID PRIMARY KEY,
     manager_id UUID NOT NULL,
@@ -46,12 +50,6 @@ CREATE INDEX IF NOT EXISTS reservations_capacity_idx ON reservations (booked_for
 CREATE UNIQUE INDEX IF NOT EXISTS reservations_idempotency_idx
     ON reservations (tourist_id, idempotency_key)
     WHERE idempotency_key IS NOT NULL;
-
--- Las reservas nuevas nacen CONFIRMED. Normaliza reservas PENDING de versiones anteriores.
-UPDATE reservations
-SET status = 'CONFIRMED',
-    confirmed_at = COALESCE(confirmed_at, updated_at)
-WHERE status = 'PENDING';
 
 CREATE TABLE IF NOT EXISTS reservation_items (
     reservation_item_id UUID PRIMARY KEY,

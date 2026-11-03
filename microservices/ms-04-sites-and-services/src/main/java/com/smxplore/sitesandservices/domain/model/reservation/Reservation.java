@@ -20,6 +20,11 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 public final class Reservation {
 
+    public static final int MAX_TOURIST_NAME_LENGTH = 150;
+    public static final int MAX_NOTES_LENGTH = 1000;
+    public static final int MAX_CANCELLATION_REASON_LENGTH = 500;
+    public static final int MAX_IDEMPOTENCY_KEY_LENGTH = 100;
+
     private final UUID reservationId;
     private final UUID touristId;
     private final String touristName;
@@ -116,6 +121,11 @@ public final class Reservation {
         if (touristName == null || touristName.isBlank()) {
             throw new InvalidCatalogException("reservation touristName is required");
         }
+        if (touristName.length() > MAX_TOURIST_NAME_LENGTH) {
+            throw new InvalidCatalogException(
+                    "reservation touristName cannot exceed " + MAX_TOURIST_NAME_LENGTH
+                            + " characters");
+        }
     }
 
     private static void validateStatus(ReservationStatus status) {
@@ -173,15 +183,18 @@ public final class Reservation {
     }
 
     private static void validateNotes(String notes) {
-        if (notes != null && notes.length() > 1000) {
-            throw new InvalidCatalogException("reservation notes cannot exceed 1000 characters");
+        if (notes != null && notes.length() > MAX_NOTES_LENGTH) {
+            throw new InvalidCatalogException(
+                    "reservation notes cannot exceed " + MAX_NOTES_LENGTH + " characters");
         }
     }
 
     private static void validateCancellationReason(String cancellationReason) {
-        if (cancellationReason != null && cancellationReason.length() > 500) {
+        if (cancellationReason != null
+                && cancellationReason.length() > MAX_CANCELLATION_REASON_LENGTH) {
             throw new InvalidCatalogException(
-                    "reservation cancellationReason cannot exceed 500 characters");
+                    "reservation cancellationReason cannot exceed "
+                            + MAX_CANCELLATION_REASON_LENGTH + " characters");
         }
     }
 
@@ -192,9 +205,10 @@ public final class Reservation {
         if (idempotencyKey.isBlank()) {
             throw new InvalidCatalogException("reservation idempotencyKey cannot be blank");
         }
-        if (idempotencyKey.length() > 100) {
+        if (idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
             throw new InvalidCatalogException(
-                    "reservation idempotencyKey cannot exceed 100 characters");
+                    "reservation idempotencyKey cannot exceed "
+                            + MAX_IDEMPOTENCY_KEY_LENGTH + " characters");
         }
         if (requestFingerprint == null || requestFingerprint.length() != 64) {
             throw new InvalidCatalogException(

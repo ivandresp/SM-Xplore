@@ -38,6 +38,17 @@ class DomainModelValidationTest {
     }
 
     @Test
+    void rejectsAnAvailabilitySlotWithANonPositiveCapacity() {
+        assertThatThrownBy(() -> new AvailabilitySlot(
+                DayOfWeek.MONDAY,
+                LocalTime.of(9, 0),
+                LocalTime.of(18, 0),
+                0
+        )).isInstanceOf(InvalidCatalogException.class)
+                .hasMessageContaining("capacity");
+    }
+
+    @Test
     void rejectsAnInvalidCategoryParent() {
         UUID categoryId = UUID.randomUUID();
         Category category = Category.builder()

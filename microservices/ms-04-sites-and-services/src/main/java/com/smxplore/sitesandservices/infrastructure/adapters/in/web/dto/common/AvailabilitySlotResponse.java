@@ -6,6 +6,7 @@ import java.time.LocalTime;
 public record AvailabilitySlotResponse(
         DayOfWeek dayOfWeek,
         LocalTime opensAt,
-        LocalTime closesAt
+        LocalTime closesAt,
+        Integer capacity
 ) {
 }

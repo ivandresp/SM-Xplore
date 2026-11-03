@@ -18,6 +18,9 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 public final class Site {
 
+    public static final int MAX_NAME_LENGTH = 150;
+    public static final int MAX_SNAPSHOT_NAME_LENGTH = 150;
+
     private final UUID siteId;
     private final UUID managerId;
     private final String name;
@@ -72,6 +75,10 @@ public final class Site {
         if (name == null || name.isBlank()) {
             throw new InvalidCatalogException("site name is required");
         }
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new InvalidCatalogException(
+                    "site name cannot exceed " + MAX_NAME_LENGTH + " characters");
+        }
     }
 
     private static void validateCategory(UUID categoryId, String categoryName) {
@@ -81,6 +88,7 @@ public final class Site {
         if (categoryName == null || categoryName.isBlank()) {
             throw new InvalidCatalogException("site categoryName is required");
         }
+        requireSnapshotNameLength(categoryName, "site categoryName");
     }
 
     private static void validateZone(UUID zoneId, String zoneName, ZoneStatus zoneStatus) {
@@ -90,8 +98,16 @@ public final class Site {
         if (zoneName == null || zoneName.isBlank()) {
             throw new InvalidCatalogException("site zoneName is required");
         }
+        requireSnapshotNameLength(zoneName, "site zoneName");
         if (zoneStatus == null) {
             throw new InvalidCatalogException("site zoneStatus is required");
+        }
+    }
+
+    private static void requireSnapshotNameLength(String value, String field) {
+        if (value.length() > MAX_SNAPSHOT_NAME_LENGTH) {
+            throw new InvalidCatalogException(
+                    field + " cannot exceed " + MAX_SNAPSHOT_NAME_LENGTH + " characters");
         }
     }
 

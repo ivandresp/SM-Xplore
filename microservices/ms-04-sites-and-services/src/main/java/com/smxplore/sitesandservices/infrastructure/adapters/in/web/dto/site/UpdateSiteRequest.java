@@ -1,5 +1,6 @@
 package com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.site;
 
+import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotRequest;
 
 import jakarta.validation.Valid;
@@ -8,12 +9,13 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 import java.util.UUID;
 
 public record UpdateSiteRequest(
-        @NotBlank String name,
+        @NotBlank @Size(max = Site.MAX_NAME_LENGTH) String name,
         String description,
         @NotNull UUID categoryId,
         @NotNull UUID zoneId,
