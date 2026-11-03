@@ -432,7 +432,7 @@ Resultado actual: **67 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
-- `mongo:7.0` en replica set.
+- `mongo:8.2` en replica set.
 - `postgres:16-alpine`.
 - `apache/kafka:4.1.0` para los tests de outbox.
 
@@ -466,6 +466,16 @@ Cubre:
 La operación diaria está descrita en `docs/runbook.md` (arranque, Flyway, outbox, capacidad,
 notificaciones, incidencias, copias y restauración) y el escenario de carga en
 `loadtest/booking-flow.js` (k6).
+
+La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en los push a `main`,
+`microservicios` y la rama de ms-04, y en los pull request que toquen el servicio:
+
+- job `verify`: JDK 25, `./gradlew test bootJar`, anotaciones `::error` con el primer fallo de cada
+  prueba y artefactos con los reportes.
+- job `docker`: construye la imagen, la escanea con Trivy (`CRITICAL` y `HIGH` con corrección
+  disponible), levanta Kafka desde `infrastructure/compose.yaml` para tener la red `smxplore-net`,
+  arranca PostgreSQL, MongoDB y Mailpit con `mongo-init`, y ejecuta el contenedor con la clave
+  pública de pruebas hasta que `/actuator/health` responde `UP` y `/v3/api-docs` responde `200`.
 
 ## Pendiente
 
