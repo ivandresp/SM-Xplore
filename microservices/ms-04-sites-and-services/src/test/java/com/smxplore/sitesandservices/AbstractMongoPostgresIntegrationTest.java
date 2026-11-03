@@ -23,7 +23,7 @@ import java.util.UUID;
 public abstract class AbstractMongoPostgresIntegrationTest {
 
     protected static final MongoDBContainer MONGO =
-            new MongoDBContainer("mongo:7.0").withReplicaSet();
+            new MongoDBContainer("mongo:8.2").withReplicaSet();
 
     protected static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:16-alpine")

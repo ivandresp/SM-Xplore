@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:7.0
+    image: mongo:8.2
     restart: unless-stopped
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
@@ -17,7 +17,7 @@ services:
       - smxplore-net
 
   mongo-init:
-    image: mongo:7.0
+    image: mongo:8.2
     restart: "no"
     depends_on:
       mongo:
