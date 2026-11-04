@@ -8,18 +8,25 @@ import com.smxplore.recommendations.application.recommendation.DiversitySelector
 import com.smxplore.recommendations.application.retention.ProcessedEventRetentionService;
 import com.smxplore.recommendations.application.recommendation.RecommendationScorer;
 import com.smxplore.recommendations.application.recommendation.RecommendationService;
+import com.smxplore.recommendations.application.reindex.ReindexService;
 import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
 import com.smxplore.recommendations.domain.ports.in.HandleProjectionEventUseCase;
 import com.smxplore.recommendations.domain.ports.in.PurgeProcessedEventsUseCase;
 import com.smxplore.recommendations.domain.ports.in.RegisterViewUseCase;
+import com.smxplore.recommendations.domain.ports.in.ReindexCatalogUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.out.CatalogExportPort;
 import com.smxplore.recommendations.domain.ports.out.EventProjectionPort;
 import com.smxplore.recommendations.domain.ports.out.ProcessedEventRetentionPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
+import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
+import com.smxplore.recommendations.infrastructure.adapters.out.web.CatalogExportClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 
@@ -101,5 +108,24 @@ public class BeanConfiguration {
             ProcessedEventRetentionPort retentionPort
     ) {
         return new ProcessedEventRetentionService(retentionPort);
+    }
+
+    @Bean
+    public CatalogExportPort catalogExportPort(
+            ObjectMapper objectMapper,
+            ProjectionEventDecoder decoder,
+            ReindexProperties reindexProperties
+    ) {
+        return new CatalogExportClient(WebClient.builder(), objectMapper, decoder, reindexProperties);
+    }
+
+    @Bean
+    public ReindexCatalogUseCase reindexCatalogUseCase(
+            CatalogExportPort catalogExportPort,
+            HandleProjectionEventUseCase handleProjectionEventUseCase,
+            ReindexProperties reindexProperties
+    ) {
+        return new ReindexService(catalogExportPort, handleProjectionEventUseCase,
+                reindexProperties.getMaxPages());
     }
 }

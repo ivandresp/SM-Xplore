@@ -81,6 +81,11 @@ app:
       max-batches: ${EVENTS_RETENTION_MAX_BATCHES:20}
       interval: ${EVENTS_RETENTION_INTERVAL:1h}
       initial-delay: ${EVENTS_RETENTION_INITIAL_DELAY:1m}
+  reindex:
+    catalog-base-url: ${CATALOG_EXPORT_BASE_URL:http://localhost:8084}
+    page-size: ${REINDEX_PAGE_SIZE:200}
+    max-pages: ${REINDEX_MAX_PAGES:500}
+    timeout: ${REINDEX_TIMEOUT:30s}
 
 springdoc:
   api-docs:
