@@ -144,7 +144,8 @@ UPDATE reservations SET item_starts_at = booked_for WHERE item_starts_at IS NULL
 
 -- One column, one meaning: the symbolic model uses the catalog start.
 UPDATE reservations SET booked_for = item_starts_at
-WHERE booked_for IS DISTINCT FROM item_starts_at;
+WHERE booked_for IS DISTINCT FROM item_starts_at
+  AND item_starts_at > booked_at;
 
 UPDATE reservations SET total = unit_price * number_of_people
 WHERE total <> unit_price * number_of_people;
