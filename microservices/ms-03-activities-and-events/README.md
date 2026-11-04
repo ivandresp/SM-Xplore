@@ -34,7 +34,7 @@ Servicios:
 
 Swagger está desactivado por defecto; Docker Compose y `.env.example` lo activan para desarrollo. El detalle público solo devuelve ítems `PUBLISHED`; el staff autenticado puede ver cualquier estado.
 
-Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas). `V2` archiva las filas originales en `reservations_legacy` y `reservation_items_legacy`, y mueve a `reservations_quarantine` las reservas que no se pueden representar: sin ítem, multi-ítem, ítem inexistente, inicio anterior a la reserva, total no divisible o `PENDING` sin cupo. No reescribe el `total`; solo elimina de la tabla viva los IDs capturados en esa ejecución. Hacer backup y revisar la cuarentena después de migrar.
+Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas, `V3` índices y checks de integridad). `V2` archiva las filas originales en `reservations_legacy` y `reservation_items_legacy`, y mueve a `reservations_quarantine` las reservas que no se pueden representar: sin ítem, multi-ítem, ítem inexistente, inicio anterior a la reserva, total no divisible o `PENDING` sin cupo. No reescribe el `total`; solo elimina de la tabla viva los IDs capturados en esa ejecución. Hacer backup y revisar la cuarentena después de migrar.
 
 Para reiniciar las bases desde cero:
 

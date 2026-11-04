@@ -14,6 +14,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios. El `Authorization` del usuario se reenvía a ms-04.
 - **Reservas por gestora**: `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con el nuevo filtro `managerId` de ms-04 y devuelve solo las reservas de sus eventos/actividades. `ADMIN` conserva el listado global.
 - **Usuarios de base de datos**: PostgreSQL usa `ms03_flyway` para DDL y `ms03_app` para DML; MongoDB usa `reviews_app` con `readWrite` solo en `reviews`. Los usuarios root quedan únicamente para el init y ya no hay credenciales por defecto en Compose.
+- **V3**: índices para catálogo/reservas y checks `NOT VALID` de precio, cupo, duración, horario y estado en `evento`/`actividad`.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.
