@@ -6,8 +6,8 @@ spring:
     name: activities-and-events
   r2dbc:
     url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:postgres}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     pool:
       max-size: ${R2DBC_POOL_MAX_SIZE:20}
       max-acquire-time: 5s
@@ -19,8 +19,8 @@ spring:
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     url: "${FLYWAY_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
-    user: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:postgres}
+    user: ${FLYWAY_USER}
+    password: ${FLYWAY_PASSWORD}
     locations: classpath:db/migration
     schemas: public
     baseline-on-migrate: true

@@ -105,13 +105,13 @@ Canonical contract, with ms-01 as issuer:
 - Symbolic reservations: one item per reservation (`itemType` + `itemId`), born `CONFIRMED`, capacity taken atomically, payment resolved outside the platform.
 - Rules: optional `Idempotency-Key` (1-64) on `POST /api/v1/reservations`; maximum 5 active reservations per tourist; tourist cancellation up to 24 h before start; attendance and no-show after start; daily auto-close at 03:15 `America/Bogota` with `P1D` grace.
 - Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
-- Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports.
+- Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports. PostgreSQL roles: `ms03_flyway` (DDL) and `ms03_app` (DML); MongoDB app user `reviews_app` (`readWrite` on `reviews`). Root users are only for container init.
 - Flyway: `V1` baseline, `V2` symbolic reservations. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows; review `reservations_quarantine` after upgrading.
-- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
   1. `TODO(ms-04)`: manager-scoped listings need a `managerId` filter in ms-04, which does not exist today. Event creation already validates `GET /api/v1/sites/{siteId}` and copies `siteName`/`managerId` from the site; refresh that snapshot when the manager changes.
   2. Events/outbox: resolve the contract mismatch first, then publish.
-  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, required `paymentMethod`, and least-privilege DB/Mongo users.
+  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, and required `paymentMethod`.
 - 202 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules

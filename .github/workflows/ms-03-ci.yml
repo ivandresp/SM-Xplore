@@ -30,6 +30,16 @@ concurrency:
 env:
   SERVICE_DIR: microservices/ms-03-activities-and-events
   IMAGE_NAME: smxplore/ms-03:local
+  POSTGRES_ROOT_USER: postgres
+  POSTGRES_ROOT_PASSWORD: postgres-root
+  POSTGRES_USER: ms03_app
+  POSTGRES_PASSWORD: ms03-app
+  FLYWAY_USER: ms03_flyway
+  FLYWAY_PASSWORD: ms03-flyway
+  MONGO_ROOT_USER: root
+  MONGO_ROOT_PASSWORD: mongo-root
+  MONGO_APP_USER: reviews_app
+  MONGO_APP_PASSWORD: reviews-app
 
 jobs:
   verify:
@@ -170,10 +180,12 @@ jobs:
           echo "Red de compose: ${NETWORK}"
           docker run -d --name ms-03 --network "${NETWORK}" -p 8082:8082 \
             -e R2DBC_URL="r2dbc:postgresql://postgres:5432/activities_events" \
-            -e POSTGRES_USER="postgres" \
-            -e POSTGRES_PASSWORD="postgres" \
-            -e MONGODB_URI="mongodb://root:change-me@mongo:27017/reviews?authSource=admin&uuidRepresentation=standard" \
+            -e POSTGRES_USER="ms03_app" \
+            -e POSTGRES_PASSWORD="ms03-app" \
+            -e MONGODB_URI="mongodb://reviews_app:reviews-app@mongo:27017/reviews?authSource=reviews&uuidRepresentation=standard" \
             -e FLYWAY_URL="jdbc:postgresql://postgres:5432/activities_events" \
+            -e FLYWAY_USER="ms03_flyway" \
+            -e FLYWAY_PASSWORD="ms03-flyway" \
             -e JWK_SET_URI="http://127.0.0.1:9/.well-known/jwks.json" \
             -e JWT_ISSUER="sm-xplore-ms-01" \
             -e JWT_AUDIENCE="sm-xplore-services" \

@@ -12,6 +12,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Seguridad**: principal nulo → 401 en guardas y actividades; `guideId` sale del token para guías. `JWT_AUDIENCE` es obligatoria; el JWKS remoto exige HTTPS y timeouts; `scope`/`scp=mfa` se rechazan.
 - **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas queda temporalmente en `ADMIN`. Los roles se comparan de forma exacta en español (los alias ingleses quedan explícitos). Swagger se desactiva por defecto.
 - **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios.
+- **Usuarios de base de datos**: PostgreSQL usa `ms03_flyway` para DDL y `ms03_app` para DML; MongoDB usa `reviews_app` con `readWrite` solo en `reviews`. Los usuarios root quedan únicamente para el init y ya no hay credenciales por defecto en Compose.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.

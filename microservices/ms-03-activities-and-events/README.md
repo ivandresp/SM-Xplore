@@ -64,8 +64,12 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `SERVER_PORT` | `8082` | Puerto HTTP del servicio. |
 | `APP_PORT` | `8082` | Puerto publicado por Docker Compose. |
 | `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/activities_events` | Conexión reactiva a PostgreSQL. |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `postgres` | Credenciales de PostgreSQL. |
-| `MONGODB_URI` | `mongodb://localhost:27017/reviews` | Conexión a MongoDB. |
+| `POSTGRES_ROOT_USER` / `POSTGRES_ROOT_PASSWORD` | `postgres` / vacío | Superusuario; solo lo usa el init de Docker. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `ms03_app` / vacío | Usuario DML de la aplicación (sin DDL). |
+| `FLYWAY_USER` / `FLYWAY_PASSWORD` | `ms03_flyway` / vacío | Usuario DDL de Flyway. |
+| `MONGODB_URI` | `mongodb://localhost:27017/reviews` | Conexión a MongoDB. En Compose usa `reviews_app`. |
+| `MONGO_ROOT_USER` / `MONGO_ROOT_PASSWORD` | `root` / vacío | Superusuario; solo init de Mongo. |
+| `MONGO_APP_USER` / `MONGO_APP_PASSWORD` | `reviews_app` / vacío | Usuario `readWrite` solo sobre `reviews`. |
 | `JWK_SET_URI` | vacío | URL del JWKS de ms-01. Obligatoria si no hay PEM; fuera de loopback debe ser `https://`. |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Ruta o URL de la llave pública PEM (local/tests). |
 | `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado en el token. |
@@ -78,6 +82,8 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
 | `MS04_BASE_URL` | `http://localhost:8084` | Base de ms-04 para validar el sitio al crear eventos. En Compose: `http://host.docker.internal:8084`. |
 | `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
+
+Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `FLYWAY_PASSWORD`, `MONGO_ROOT_PASSWORD` o `MONGO_APP_PASSWORD`. Copia `.env.example`, completa los valores y usa un volumen limpio (`docker compose down -v`) la primera vez, porque los scripts de init solo corren en una base nueva.
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 
