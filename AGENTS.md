@@ -112,7 +112,7 @@ Canonical contract, with ms-01 as issuer:
   1. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
   2. Events/outbox: resolve the contract mismatch first, then publish.
   3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, `managerId` accepted from the body for ADMIN, required `paymentMethod`, event site validation against ms-04, and least-privilege DB/Mongo users.
-- 190 tests as of 2026-11-03, including Testcontainers PostgreSQL tests.
+- 193 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules
 

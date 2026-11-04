@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import com.sun.net.httpserver.HttpServer;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,6 +74,38 @@ class JwtConfigurationTest {
 
         assertThatThrownBy(() -> decoder.decode(token).block())
                 .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void decodesWithTheRemoteJwksBranch() throws Exception {
+        var keyPair = keyPair();
+        var jwk = new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
+                .keyID("test-key")
+                .build()
+                .toPublicJWK()
+                .toJSONString();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/jwks", exchange -> {
+            var body = ("{\"keys\":[" + jwk + "]}").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        server.start();
+        try {
+            var properties = properties();
+            properties.setJwkSetUri("http://127.0.0.1:" + server.getAddress().getPort() + "/jwks");
+            var decoder = new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder();
+
+            var decoded = decoder.decode(token(keyPair, claims().build())).block();
+
+            assertThat(decoded).isNotNull();
+            assertThat(decoded.getSubject()).isEqualTo(USER_ID);
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

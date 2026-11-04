@@ -175,4 +175,4 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers (PostgreSQL) y requieren Docker.
+Las pruebas de integración usan Testcontainers (PostgreSQL y MongoDB) y requieren Docker. `ApplicationContextTest` levanta el contexto completo, ejecuta Flyway y valida el wiring RS256; los tests sin Docker se omiten.
