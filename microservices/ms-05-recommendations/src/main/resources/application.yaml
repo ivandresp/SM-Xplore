@@ -1,0 +1,126 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: ms-05-recommendations
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    authentication:
+      username: ${NEO4J_USER:neo4j}
+      password: ${NEO4J_PASSWORD:change-me}
+    pool:
+      max-connection-pool-size: ${NEO4J_POOL_SIZE:50}
+      connection-acquisition-timeout: ${NEO4J_ACQUISITION_TIMEOUT:30s}
+    connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:15s}
+    max-transaction-retry-time: ${NEO4J_RETRY_TIME:15s}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:ms-05-recommendations}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.records: ${KAFKA_MAX_POLL_RECORDS:50}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      user-id-claim: ${JWT_USER_ID_CLAIM:userId}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+  recommendations:
+    default-limit: ${RECOMMENDATIONS_DEFAULT_LIMIT:20}
+    max-limit: ${RECOMMENDATIONS_MAX_LIMIT:50}
+    candidate-limit: ${RECOMMENDATIONS_CANDIDATE_LIMIT:200}
+    category-max-depth: ${RECOMMENDATIONS_CATEGORY_MAX_DEPTH:2}
+    proximity-radius-km: ${RECOMMENDATIONS_PROXIMITY_RADIUS_KM:10.0}
+    novelty-half-life-days: ${RECOMMENDATIONS_NOVELTY_HALF_LIFE_DAYS:90.0}
+    preference-half-life-days: ${RECOMMENDATIONS_PREFERENCE_HALF_LIFE_DAYS:90.0}
+    quality-prior-mean: ${RECOMMENDATIONS_QUALITY_PRIOR_MEAN:3.5}
+    quality-prior-count: ${RECOMMENDATIONS_QUALITY_PRIOR_COUNT:10.0}
+    max-items-per-site: ${RECOMMENDATIONS_MAX_ITEMS_PER_SITE:2}
+    max-category-ratio: ${RECOMMENDATIONS_MAX_CATEGORY_RATIO:0.4}
+    weights:
+      affinity: ${RECOMMENDATIONS_WEIGHT_AFFINITY:0.45}
+      quality: ${RECOMMENDATIONS_WEIGHT_QUALITY:0.25}
+      proximity: ${RECOMMENDATIONS_WEIGHT_PROXIMITY:0.20}
+      novelty: ${RECOMMENDATIONS_WEIGHT_NOVELTY:0.10}
+    cache:
+      enabled: ${RECOMMENDATIONS_CACHE_ENABLED:true}
+      local-ttl: ${RECOMMENDATIONS_CACHE_LOCAL_TTL:10s}
+      redis-ttl: ${RECOMMENDATIONS_CACHE_REDIS_TTL:1m}
+      local-max-size: ${RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE:1000}
+      key-prefix: ${RECOMMENDATIONS_CACHE_KEY_PREFIX:ms05:recommendations:}
+      version-key: ${RECOMMENDATIONS_CACHE_VERSION_KEY:ms05:graph:version}
+  neo4j:
+    initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
+  seed:
+    enabled: ${SEED_ENABLED:false}
+  events:
+    consumer:
+      enabled: ${EVENTS_CONSUMER_ENABLED:false}
+      max-retries: ${EVENTS_CONSUMER_MAX_RETRIES:3}
+      initial-backoff: ${EVENTS_CONSUMER_INITIAL_BACKOFF:500ms}
+      max-backoff: ${EVENTS_CONSUMER_MAX_BACKOFF:5s}
+      processing-timeout: ${EVENTS_CONSUMER_PROCESSING_TIMEOUT:15s}
+      backoff-multiplier: ${EVENTS_CONSUMER_BACKOFF_MULTIPLIER:2.0}
+      concurrency: ${EVENTS_CONSUMER_CONCURRENCY:1}
+      dlq-suffix: ${EVENTS_CONSUMER_DLQ_SUFFIX:.dlq}
+    retention:
+      enabled: ${EVENTS_RETENTION_ENABLED:true}
+      days: ${EVENTS_RETENTION_DAYS:30}
+      batch-size: ${EVENTS_RETENTION_BATCH_SIZE:1000}
+      max-batches: ${EVENTS_RETENTION_MAX_BATCHES:20}
+      interval: ${EVENTS_RETENTION_INTERVAL:1h}
+      initial-delay: ${EVENTS_RETENTION_INITIAL_DELAY:1m}
+  reindex:
+    catalog-base-url: ${CATALOG_EXPORT_BASE_URL:http://localhost:8084}
+    page-size: ${REINDEX_PAGE_SIZE:200}
+    max-pages: ${REINDEX_MAX_PAGES:500}
+    timeout: ${REINDEX_TIMEOUT:30s}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: ${HEALTH_SHOW_DETAILS:never}
+  health:
+    redis:
+      # Redis es una cache best-effort: si cae, la API sigue respondiendo sin cache.
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
