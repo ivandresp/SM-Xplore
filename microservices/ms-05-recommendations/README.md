@@ -204,6 +204,11 @@ un arranque silencioso sin validación de tokens.
 | `NEO4J_URI` | `bolt://localhost:7687` | URI de Neo4j |
 | `NEO4J_USER` | `neo4j` | Usuario |
 | `NEO4J_PASSWORD` | `change-me` | Contraseña |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis compartido: cache de recomendaciones y versión del grafo |
+| `RECOMMENDATIONS_CACHE_ENABLED` | `true` | Activa la cache en memoria + Redis |
+| `RECOMMENDATIONS_CACHE_LOCAL_TTL` | `10s` | Vida de la capa en memoria (Caffeine) |
+| `RECOMMENDATIONS_CACHE_REDIS_TTL` | `1m` | Vida de la capa compartida (Redis) |
+| `RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE` | `1000` | Entradas máximas de la capa en memoria |
 | `NEO4J_INITIALIZE_SCHEMA` | `true` | Crea constraints/índices al arrancar |
 | `SEED_ENABLED` | `false` | Carga datos de demo; usar solo en local/test |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
@@ -304,7 +309,7 @@ El seed es idempotente (`MERGE`).
 ```
 
 Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafka
-(`apache/kafka:4.1.0`) y Docker. La suite cubre:
+(`apache/kafka:4.1.0`) y Docker. Son **24 clases y 112 pruebas**, todas en verde. La suite cubre:
 
 - scoring bayesiano, proximidad, novedad y normalización;
 - topes de diversidad por sitio/categoría;
@@ -314,6 +319,7 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - consultas Neo4j y ausencia total de aristas `RESERVO`;
 - contexto completo con seed;
 - validación de todos los ejemplos contra los JSON Schema de `contracts/`;
+- cache en memoria + Redis, invalidación por versión del grafo y degradación sin Redis;
 - consumidores Kafka, idempotencia, eventos viejos, DLQ y agregados de reseñas;
 - purga de marcadores `ProcessedEvent` por lotes y con corte por antigüedad;
 - reindexado del catálogo: paginación, `updatedSince`, corte por `max-pages`, traducción de

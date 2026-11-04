@@ -145,6 +145,21 @@ Para forzar una corrida se puede reiniciar el servicio; el job también se ejecu
 tras `EVENTS_RETENTION_INITIAL_DELAY`. Borrar marcadores no borra la proyección: solo permite
 que un evento repetido se vuelva a aplicar.
 
+## Cache de recomendaciones
+
+La respuesta de `GET /api/v1/recommendations` se guarda en dos capas: Caffeine en memoria
+(`RECOMMENDATIONS_CACHE_LOCAL_TTL`, 10 s) y Redis compartido (`RECOMMENDATIONS_CACHE_REDIS_TTL`,
+1 min). La llave incluye la versión del grafo (`ms05:graph:version`), que se incrementa cada vez
+que se aplica una proyección, así que una ingesta nueva invalida las respuestas cacheadas sin
+recorrer la cache.
+
+- Redis es best-effort: si no responde, la API calcula la recomendación contra Neo4j y no cachea.
+  Por eso `management.health.redis.enabled` está en `false` y una caída de Redis no marca el
+  servicio como `DOWN`.
+- `RECOMMENDATIONS_CACHE_ENABLED=false` desactiva ambas capas.
+- Para invalidar todo a mano: `redis-cli SET ms05:graph:version 0` (o `INCR`) y esperar el TTL
+  local.
+- La cache no sustituye al ranking: solo evita recalcular la misma consulta del mismo turista.
 ## Reset del seed local
 
 ```bash
