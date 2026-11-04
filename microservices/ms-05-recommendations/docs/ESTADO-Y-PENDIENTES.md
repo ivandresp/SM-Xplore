@@ -148,10 +148,17 @@ se podrá añadir, pero no es parte de este contrato.
   - `catalog.category.changed`
 - Endpoints de lectura para re-sync.
 
+> **Actualizado (rama `ms-sites-services`, ya integrada):** ms-04 publica los tres topics por su
+> outbox y expone `GET /api/v1/admin/catalog/export` (paginado, `updatedSince`, payload idéntico
+> al evento). Ese feed es el que consume el reindexado de ms-05.
+
 ## 6. Pendiente en ms-05
 
 - Retención/prune de nodos `ProcessedEvent` (por ejemplo, 30 días). Hoy crecen sin límite.
+  → **Implementado**: `app.events.retention.*` y `ProcessedEventRetentionJob`.
 - Reindex desde ms-03/ms-04 (`POST /internal/admin/reindex`, fase 3).
+  → **Implementado para el catálogo** (ms-04); falta ms-03, que todavía no expone un feed con
+  `updatedSince`.
 - Caché Redis + Caffeine, circuit breaker y degradación (fase 3).
 - Métricas de recomendación y diversidad (fase 3).
 - Pruebas de carga, runbook final y alertas (fase 4).

@@ -89,6 +89,7 @@ src/main/java/com/smxplore/recommendations
 | POST | `/api/v1/preferences` | `TOURIST` | Gusto explícito por categoría |
 | DELETE | `/api/v1/preferences/{categoryId}` | `TOURIST` | Quitar gusto |
 | POST | `/api/v1/interactions/view/{itemType}/{itemId}` | `TOURIST` | Registrar vista |
+| POST | `/internal/admin/reindex?entity=&updatedSince=` | `ADMIN` | Reindexado del catálogo desde ms-04 |
 | GET | `/actuator/health` | público | Liveness/readiness |
 | GET | `/swagger-ui.html` | público | Documentación OpenAPI |
 
@@ -124,6 +125,25 @@ Cada mensaje se procesa en una transacción de Neo4j que, en la misma operación
 Los fallos de contrato van directo a `<topic>.dlq`. Los fallos transitorios se reintentan con
 backoff exponencial y después van a la DLQ. El offset se confirma solo después de aplicar el
 cambio o de publicar en la DLQ.
+
+### Reindexado del catálogo
+
+El grafo es una proyección: si se borra o se desincroniza, se reconstruye sin esperar a que
+ms-04 vuelva a emitir cada evento. `POST /internal/admin/reindex?entity=SITES|SERVICES|CATEGORIES`
+recorre el feed `GET /api/v1/admin/catalog/export` de ms-04 y aplica **el mismo camino de
+proyección** que los consumidores de Kafka:
+
+- reenvía el token del administrador que invoca el endpoint (ms-05 no tiene credenciales propias);
+- cada ítem del feed se convierte en el evento equivalente (`catalog.site.changed`, etc.) y pasa
+  por `ProjectionEventDecoder`, así que las validaciones de contrato son las mismas;
+- el `eventId` se deriva de `eventType + aggregateId + updatedAt`, de modo que repetir una página
+  es idempotente y una entidad que cambió después genera un marcador nuevo;
+- `updatedSince` permite reanudar un recorrido interrumpido y `REINDEX_MAX_PAGES` evita bucles
+  infinitos si el feed no termina;
+- la respuesta resume `pages`, `events`, `applied`, `duplicate` y `stale`.
+
+Docker-local: ms-04 se publica en `http://localhost:8084`, que es el `CATALOG_EXPORT_BASE_URL`
+por defecto.
 
 ### Ejemplo de respuesta
 
@@ -209,6 +229,10 @@ un arranque silencioso sin validación de tokens.
 | `EVENTS_RETENTION_BATCH_SIZE` | `1000` | Marcadores por lote |
 | `EVENTS_RETENTION_MAX_BATCHES` | `20` | Lotes máximos por corrida |
 | `EVENTS_RETENTION_INTERVAL` | `1h` | Espera entre corridas |
+| `CATALOG_EXPORT_BASE_URL` | `http://localhost:8084` | Base URL de ms-04 para el reindexado |
+| `REINDEX_PAGE_SIZE` | `200` | Ítems pedidos por página (máximo 200) |
+| `REINDEX_MAX_PAGES` | `500` | Tope de páginas por reindexado |
+| `REINDEX_TIMEOUT` | `30s` | Timeout de cada llamada a ms-04 |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes |
 | `RECOMMENDATIONS_*` | ver `application.yaml` | Pesos, límites y diversidad |
 
@@ -292,6 +316,8 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - validación de todos los ejemplos contra los JSON Schema de `contracts/`;
 - consumidores Kafka, idempotencia, eventos viejos, DLQ y agregados de reseñas;
 - purga de marcadores `ProcessedEvent` por lotes y con corte por antigüedad;
+- reindexado del catálogo: paginación, `updatedSince`, corte por `max-pages`, traducción de
+  errores de ms-04 y endpoint administrativo (incluido el 403 para roles que no son `ADMIN`);
 - idioma desde `Accept-Language` y JWT sin claim `locale`.
 
 ## Documentación
@@ -309,7 +335,8 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 
 - Outbox y publicación real de eventos en ms-03/ms-04. ms-05 ya consume; los productores se
   implementan en sus ramas.
-- Reindex desde ms-03/ms-04 (fase 3).
+- Reindexado desde ms-03 (actividades, eventos y reseñas): ms-03 todavía no expone un feed
+  equivalente al de ms-04, así que solo el catálogo se puede reconstruir hoy.
 - Caché Redis/Caffeine (fase 3).
 - Circuit breaker y pruebas de carga (fases 3-4).
 - Recomendaciones para guías (US10/US17).
