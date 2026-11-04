@@ -1,0 +1,45 @@
+app:
+  bootstrap-admin:
+    enabled: false
+  security:
+    jwt:
+      issuer: sm-xplore-ms-01
+      audience: sm-xplore-services
+      ttl: PT60M
+      key-store-path: build/test-jwt/keys.pem
+      allow-generated-keys: true
+    password-reset:
+      ttl: PT30M
+    account-invitation:
+      ttl: PT48H
+    rate-limit:
+      enabled: true
+      requests-per-minute: 120
+    lockout:
+      enabled: true
+      max-attempts: 5
+      window: PT15M
+      duration: PT15M
+    mfa:
+      required-for-admins: false
+      challenge-ttl: PT5M
+      issuer: SM-Xplore
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  frontend:
+    base-url: http://localhost:5173
+    reset-password-path: /reset-password
+  reviews:
+    index-initialization:
+      enabled: false
+    ai-filter:
+      enabled: false
+  anomalies:
+    detection:
+      enabled: false
+
+spring:
+  mail:
+    host: localhost
+    port: 1025

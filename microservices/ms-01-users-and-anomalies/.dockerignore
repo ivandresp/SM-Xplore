@@ -1,0 +1,17 @@
+# Artefactos de build y cachés locales: se reconstruyen dentro de la imagen.
+build
+.gradle
+.gradle-user-home
+.kotlin
+
+# Configuración y secretos locales.
+.env
+.local
+application-local.yml
+*.log
+
+# Metadatos del repositorio y del IDE.
+.git
+.gitignore
+.idea
+docs

@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: smxplore-postgres
+    environment:
+      POSTGRES_DB: smxplore_users
+      POSTGRES_USER: smxplore
+      POSTGRES_PASSWORD: smxplore
+    ports:
+      - "5432:5432"
+    volumes:
+      - smxplore-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smxplore -d smxplore_users"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongodb:
+    image: mongo:8.2
+    container_name: smxplore-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: smxplore
+      MONGO_INITDB_ROOT_PASSWORD: smxplore
+      MONGO_INITDB_DATABASE: smxplore_reviews
+    ports:
+      - "27017:27017"
+    volumes:
+      - smxplore-mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: smxplore-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Servicio completo (perfil "full"): docker compose --profile full up -d --build
+  ms-01:
+    profiles: ["full"]
+    image: smxplore/ms-01:local
+    container_name: smxplore-ms-01
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
+      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
+      DB_USERNAME: smxplore
+      DB_PASSWORD: smxplore
+      MONGODB_URI: mongodb://smxplore:smxplore@mongodb:27017/smxplore_reviews?authSource=admin
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      SERVER_PORT: "8081"
+      FRONTEND_BASE_URL: http://localhost:5173
+    ports:
+      - "8081:8081"
+    # Endurecimiento: sistema de archivos de sólo lectura, sin capacidades y con /tmp en memoria.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - smxplore-ms-01-keys:/app/.local
+    restart: unless-stopped
+
+volumes:
+  smxplore-postgres-data:
+  smxplore-mongodb-data:
+  smxplore-ms-01-keys:
