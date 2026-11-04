@@ -204,6 +204,11 @@ un arranque silencioso sin validación de tokens.
 | `EVENTS_CONSUMER_BACKOFF_MULTIPLIER` | `2.0` | Multiplicador del backoff |
 | `EVENTS_CONSUMER_CONCURRENCY` | `1` | Hilos por listener |
 | `EVENTS_CONSUMER_DLQ_SUFFIX` | `.dlq` | Sufijo del topic de descarte |
+| `EVENTS_RETENTION_ENABLED` | `true` | Purga periódica de marcadores `ProcessedEvent` |
+| `EVENTS_RETENTION_DAYS` | `30` | Antigüedad mínima para borrar un marcador |
+| `EVENTS_RETENTION_BATCH_SIZE` | `1000` | Marcadores por lote |
+| `EVENTS_RETENTION_MAX_BATCHES` | `20` | Lotes máximos por corrida |
+| `EVENTS_RETENTION_INTERVAL` | `1h` | Espera entre corridas |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes |
 | `RECOMMENDATIONS_*` | ver `application.yaml` | Pesos, límites y diversidad |
 
@@ -286,6 +291,7 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - contexto completo con seed;
 - validación de todos los ejemplos contra los JSON Schema de `contracts/`;
 - consumidores Kafka, idempotencia, eventos viejos, DLQ y agregados de reseñas;
+- purga de marcadores `ProcessedEvent` por lotes y con corte por antigüedad;
 - idioma desde `Accept-Language` y JWT sin claim `locale`.
 
 ## Documentación

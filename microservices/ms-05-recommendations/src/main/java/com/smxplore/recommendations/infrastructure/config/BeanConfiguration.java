@@ -5,15 +5,18 @@ import com.smxplore.recommendations.application.preference.AddPreferenceService;
 import com.smxplore.recommendations.application.preference.RemovePreferenceService;
 import com.smxplore.recommendations.application.projection.ProjectionService;
 import com.smxplore.recommendations.application.recommendation.DiversitySelector;
+import com.smxplore.recommendations.application.retention.ProcessedEventRetentionService;
 import com.smxplore.recommendations.application.recommendation.RecommendationScorer;
 import com.smxplore.recommendations.application.recommendation.RecommendationService;
 import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
 import com.smxplore.recommendations.domain.ports.in.HandleProjectionEventUseCase;
+import com.smxplore.recommendations.domain.ports.in.PurgeProcessedEventsUseCase;
 import com.smxplore.recommendations.domain.ports.in.RegisterViewUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.out.EventProjectionPort;
+import com.smxplore.recommendations.domain.ports.out.ProcessedEventRetentionPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -91,5 +94,12 @@ public class BeanConfiguration {
     @Bean
     public HandleProjectionEventUseCase handleProjectionEventUseCase(EventProjectionPort projectionPort) {
         return new ProjectionService(projectionPort);
+    }
+
+    @Bean
+    public PurgeProcessedEventsUseCase purgeProcessedEventsUseCase(
+            ProcessedEventRetentionPort retentionPort
+    ) {
+        return new ProcessedEventRetentionService(retentionPort);
     }
 }

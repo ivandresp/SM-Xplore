@@ -74,6 +74,13 @@ app:
       backoff-multiplier: ${EVENTS_CONSUMER_BACKOFF_MULTIPLIER:2.0}
       concurrency: ${EVENTS_CONSUMER_CONCURRENCY:1}
       dlq-suffix: ${EVENTS_CONSUMER_DLQ_SUFFIX:.dlq}
+    retention:
+      enabled: ${EVENTS_RETENTION_ENABLED:true}
+      days: ${EVENTS_RETENTION_DAYS:30}
+      batch-size: ${EVENTS_RETENTION_BATCH_SIZE:1000}
+      max-batches: ${EVENTS_RETENTION_MAX_BATCHES:20}
+      interval: ${EVENTS_RETENTION_INTERVAL:1h}
+      initial-delay: ${EVENTS_RETENTION_INITIAL_DELAY:1m}
 
 springdoc:
   api-docs:

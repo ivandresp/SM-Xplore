@@ -16,6 +16,15 @@ public record Neo4jProjectionQueries() {
                           p.outcome = $outcome
             """;
 
+    static final String PRUNE_PROCESSED = """
+            MATCH (p:ProcessedEvent)
+            WHERE p.processedAt < datetime($cutoff)
+            WITH p LIMIT $batchSize
+            WITH collect(p) AS stale
+            FOREACH (node IN stale | DETACH DELETE node)
+            RETURN size(stale) AS deleted
+            """;
+
     static final String STALE_CATEGORY = """
             MATCH (c:Categoria {categoriaId: $id})
             RETURN c.updatedAt IS NOT NULL AND c.updatedAt >= datetime($updatedAt) AS stale
