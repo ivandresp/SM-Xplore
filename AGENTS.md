@@ -1,124 +1,138 @@
 # AGENTS.md
 
-## Project state
+## Project
 
-SM-Xplore is a tourism management platform for Santa Marta, Colombia. The repo started as a design/documentation project and now contains the first backend microservice: `microservices/ms-01-users-and-anomalies` (identity/auth with MFA, admin user management, guide/provider reviews, anomalies, admin monitoring and access hardening implemented).
+SM-Xplore is a tourism management platform for Santa Marta, Colombia. This repository is a monorepo of backend services under `microservices/`, plus shared event contracts and local infrastructure. Java 25 + Spring Boot 4.1.2 + Spring WebFlux, Gradle 9.8.2 (Kotlin DSL). Each service is self-contained: its own Gradle wrapper, build, `Dockerfile`, `docker-compose.yml` and `.env.example`. There is no root Gradle build.
 
-The ms-01 build is self-contained: its Gradle wrapper, settings, version catalog, `docker-compose.yml` and `.env.example` live inside the service directory. There is no root Gradle build anymore.
+Integration branch: `microservicios` (the branch `microservices` does not exist). This file is tracked and shared: keep it accurate when the repository state changes.
 
-All deliverables, user stories, diagrams, and commit messages are in **Spanish**. Code identifiers are English; domain class names follow the Spanish model (`Usuario`, `Guia`, `PrestadoraServicios`).
+## Repository state (2026-11-03)
+
+| Service | Folder | Status | Host port | Auth |
+|---|---|---|---|---|
+| ms-01 users and anomalies | `microservices/ms-01-users-and-anomalies/` | Merged in `microservicios`; identity, MFA, admin, reviews, anomalies | 8081 | RS256/JWKS (issuer) |
+| ms-02 security reports | `microservices/ms-02-security-reports/` | Merged (PR #33) | 8080 | HS256, migration pending |
+| ms-03 activities and events | `microservices/ms-03-activities-and-events/` | Current work, branch `ms-03-symbolic-reservations` | 8082 | HS256, migration pending |
+| ms-04 sites and services | `microservices/ms-04-sites-and-services/` | Merged (PR #34); catalog, reservations, notifications, outbox | 8084 | RS256 (JWKS or PEM) |
+| ms-05 recommendations | `microservices/ms-05-recommendations/` | Branch `ms-recommendations`, not merged | 8085 | RS256 |
+
+Shared at the repository root:
+
+- `contracts/`: event envelope, seven versioned schemas and fixtures.
+- `infrastructure/`: Kafka, Kafka UI and Redis compose for local integration.
+- `.github/workflows/`: `ms-01-ci.yml` and `ms-04-ci.yml`; ms-03 CI is pending.
+- `docs/`: read-only reference (models, user stories, SRS).
+
+`ms-03-activities-and-events` is the older ms-03 branch, contained in `ms-03-symbolic-reservations`. Never merge it separately.
 
 ## Canonical paths
 
 | Path | What it is |
-| --- | --- |
+|---|---|
+| `microservices/ms-01-users-and-anomalies/` | Users, identity/auth, anomalies (other owner) |
+| `microservices/ms-02-security-reports/` | Security reports and comments |
+| `microservices/ms-03-activities-and-events/` | Activities, events, reservations and reviews (this work) |
+| `microservices/ms-04-sites-and-services/` | Sites, services, reservations, notifications and outbox |
+| `docs/models/` | PlantUML sources and static design images |
+| `docs/models/deployment/module_3.puml` | Deployment reference for ms-03 |
 | `docs/user-stories/<role>/us.md` | User stories, one file per role |
-| `docs/models/` | Tracked PlantUML + static design images (domain, classes, UC, packages, deployment, DB, E-R) |
-| `docs/requirements/SM-Xplore_SRS.docx` | SRS v2.0 (binary Word; no Markdown source) |
-| `docs/plan/` | RUP plan (`.xlsx`) and team roles |
-| `microservices/ms-01-users-and-anomalies/` | Java 25 + Spring Boot 4.1.2 identity/auth service (Spring WebFlux + R2DBC) |
-| `microservices/ms-01-users-and-anomalies/{gradlew,gradle,settings.gradle.kts,build.gradle.kts}` | Self-contained Gradle build root |
-| `microservices/ms-01-users-and-anomalies/docker-compose.yml` | PostgreSQL, MongoDB and Mailpit for ms-01 |
-| `microservices/ms-02...ms-04/` | Placeholder READMEs for the remaining services |
+| `docs/requirements/SM-Xplore_SRS.docx` | SRS v2.0 |
+| `contracts/events/` | Versioned event schemas and examples |
 
-Path/naming traps:
+Path traps: diagram sources live in `docs/models/` (not `docs/modelos/`); `docs/requirements/` is lowercase; `docs/models/uc-lvl-1/gestionar-reseñas/` uses a real UTF-8 ñ. Files are UTF-8; verify with the Read tool before fixing apparent mojibake.
 
-- Diagram sources live in `docs/models/` (English), **not** `docs/modelos/`. The old `docs/modelos/` tree and its PNG renders were removed from the repo; `_render/` and `/docs/modelos/` are gitignored so renders stay local.
-- The folder on disk is `docs/requirements/` (lowercase). Links using `docs/Requirements/` work on Windows but break on case-sensitive systems.
-- Files are UTF-8. Windows PowerShell 5 output often shows mojibake (`GuÃ­a`, `ReseÃ±as`); use the Read tool or set `[Console]::OutputEncoding` before "fixing" accents that are actually fine.
+## Stack and conventions
+
+- Java 25, Spring Boot 4.1.2, Gradle 9.8.2 wrapper inside each service.
+- WebFlux, R2DBC PostgreSQL, reactive MongoDB, OAuth2 resource server, Actuator, springdoc 3.1.0.
+- `bootJar` must produce `app.jar`.
+- Lombok + MapStruct are allowed in ms-02, ms-03, ms-04 and ms-05; ms-01 forbids them. The split is a pending convention decision.
+- Package roots: ms-01 `com.smxplore.users`, ms-02 `com.smxplore.securityreports`, ms-03 `com.smxplore.activitiesevents`, ms-04 `com.smxplore.sitesandservices`, ms-05 `com.smxplore.recommendations`.
+- Constructor injection; records for DTOs; explicit mappers where Lombok/MapStruct are not used.
 
 ## Build, run, test
 
-Java 25 and Gradle 9.5.1 are required. The wrapper and build live in the service directory:
+Run inside the service folder; there is no root build:
 
-```bash
-cd microservices/ms-01-users-and-anomalies
-docker compose up -d
-./gradlew bootRun
+```powershell
+$env:JAVA_HOME = "C:\Users\USUARIO\.jdks\temurin-25\jdk-25.0.4.1+1"
+cd microservices/ms-03-activities-and-events
+cp .env.example .env
+docker compose up --build
 ./gradlew test
-./gradlew test --tests "com.smxplore.users.infrastructure.adapter.in.rest.AuthFlowTest"
-./gradlew check
-docker compose --profile full up -d --build   # imagen + stack completo
-docker compose --profile full down
+./gradlew build
 ```
 
-- API: `http://localhost:8081`; Swagger: `/swagger-ui.html`; Mailpit: `http://localhost:8025`.
-- Integration tests use Testcontainers and **require Docker**.
-- `check` runs tests, ArchUnit, and Spotless.
-- Default local bootstrap admin: `admin@smxplore.local` / `ChangeMe123!`; override with `BOOTSTRAP_ADMIN_*` outside development.
-- PostgreSQL is the only transactional store, accessed through R2DBC. Flyway keeps its own JDBC URL (`spring.flyway.url`) only to migrate the schema, because Boot 4 backs off JDBC `DataSource` auto-config when an R2DBC `ConnectionFactory` exists. Review documents live in MongoDB (`spring.mongodb.uri`, database `smxplore_reviews`). Anomalies and their thresholds live in PostgreSQL (`anomalies`, `anomaly_thresholds`); detection runs every 30 s (`app.anomalies.detection.enabled`, `app.anomalies.detection.interval-ms`). Login lockout uses `login_attempts`; MFA uses `mfa_enrollments` and `mfa_recovery_codes`.
-- Review AI filter: `app.reviews.ai-filter.*` (`enabled`, `base-url`/`LITTLELLM_URL`, `api-key`/`LITTLELLM_API_KEY`, `model`, `timeout`, `threshold`, `temperature`/`REVIEW_AI_TEMPERATURE` (default `0.0`, greedy decoding for a stable verdict), `action`, `fail-open`). The adapter calls an OpenAI-compatible `POST /v1/chat/completions`; flagged reviews become `PENDIENTE_REVISION` (or `HIDDEN` with `action=HIDE`) and the assessment is stored on the review document. Tests point it at a local `HttpServer` stub.
-- Data retention: `app.retention.*` (`enabled`, `auth-artifacts-days` 30, `audit-log-days` 1825, `cron`). `RetentionScheduler` purges expired reset tokens, login attempts, used recovery codes and old audit entries daily; the legal procedure (ARCO) is delivered with the project documentation outside this repo.
-- Security knobs: `app.security.rate-limit.*` (per-IP fixed window on auth endpoints), `app.security.lockout.*` (per-account failures, PostgreSQL-backed), `app.security.mfa.*` (`required-for-admins`, challenge TTL, issuer, `secret-key`/`MFA_SECRET_KEY` for TOTP encryption at rest), `app.security.headers.*` (HSTS off by default, on in `prod`). `SPRING_PROFILES_ACTIVE=prod` loads `application-prod.yml`; `ProductionSecurityValidator` refuses to start with generated JWT keys or the default bootstrap password, and `MfaSecretCipherConfig` refuses to start without `MFA_SECRET_KEY` outside `dev`/`test`.
+- Integration tests use Testcontainers and require Docker running.
+- ms-03: API `http://localhost:8082`, Swagger `/swagger-ui.html`, health `/actuator/health`.
+- ms-02: `8080`; ms-04: `8084`; ms-05: `8085`; ms-01: `8081`.
 
 ## Architecture rules
 
 - Clean/hexagonal: `infrastructure -> application -> domain`.
-- Packages are flat under `com.smxplore.users`: only `domain`, `application`, and `infrastructure` (no `identity` or `shared` split).
-- `domain` must not import Spring, Jakarta, R2DBC, Reactor, Mongo, or Jackson. ArchUnit enforces this; application must not depend on infrastructure.
-- Application use cases live in `application/service`, implement input ports, and use output ports. Ports are reactive (`Mono`/`Flux`) and write use cases run inside `TransactionPort` (implemented with `TransactionalOperator`); there is no `@Transactional` in controllers or domain.
-- Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity. The user identifier is a plain `UUID`; there is no `UserId` wrapper.
-- Adapters own R2DBC SQL/row mapping and Mongo document mapping; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
-- Controllers are Spring WebFlux annotated controllers returning `Mono`/`Flux`. Security is reactive: `SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`, `@EnableReactiveMethodSecurity`. Errors are RFC 9457 `ProblemDetail`.
-- `Role` constants are English (`TOURIST`, `GUIDE`, ...) but `Role.code()` keeps the Spanish wire values used by the database and JWT. API DTOs expose the code as `String`.
-- No Lombok/MapStruct; use records and explicit mappers. Constructor injection only.
+- `domain` must not import Spring, Jakarta/JPA, R2DBC, Reactor, Mongo or Jackson.
+- Adapters own SQL/Mongo documents and mappers; controllers only translate HTTP; constructor injection.
+- Errors must be RFC 9457 `ProblemDetail`. ms-03 still uses a custom `ApiErrorResponse`; the fix is pending.
+- Persistence: ms-01 PostgreSQL + MongoDB; ms-02 MongoDB; ms-03 PostgreSQL (events, activities, reservations) + MongoDB (reviews); ms-04 PostgreSQL/MongoDB + outbox; ms-05 Neo4j + Kafka.
+- Neo4j remains deferred in ms-03.
 
-## Domain and planned architecture
+## JWT contract
 
-- 5 roles: Turista, Guía Turístico, Prestadora de Servicios, Gestora de Destinos, Admin. `Usuario` is the base concept in `docs/models/domain/diagram.puml`.
-- 11 level-0 use cases (UC1–UC11) in `docs/models/uc-lvl-0/diagram.puml`. The SRS defines RF01–RF108 with UC/HU/PA traceability.
-- 4 microservices: ms-01 users + anomalies (+ guide/provider reviews), ms-02 security reports, ms-03 activities + events (+ reservations/reviews), ms-04 sites + services (+ reservations/reviews).
-- Polyglot persistence: PostgreSQL (transactional), MongoDB (semi-structured), Neo4j (relations/recommendations). ms-01 uses PostgreSQL for users and MongoDB (`smxplore_reviews`) for guide/provider reviews.
-- Chosen stack: Java 25 + Spring Boot 4.1.2; React + JavaScript/TypeScript for the frontend. External integrations: OpenStreetMap, OpenMeteo, PSE, email/Web Push, and a locally hosted littleLLM-compatible model for review moderation. UI is Spanish/English.
-- Ley 1581 de 2012 (Colombian data protection) is a hard compliance constraint (admin US5, RNF09).
+Canonical contract, with ms-01 as issuer:
 
-## MS-01 remaining work
+- RS256 only for new integrations; no shared HS256 secret.
+- `iss=sm-xplore-ms-01`, `aud=sm-xplore-services`.
+- Public keys at `GET /.well-known/jwks.json`.
+- Claims: `sub` and `id` (the same user UUID), `name`, `role`, `ver`, `mfa`, optional `providerStatus`, plus `iss`, `aud`, `iat`, `exp`, `jti`.
+- Role wire values (Spanish): `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`.
+- Tokens carrying `scope=mfa` are not access tokens; reject them.
+- ms-01 enforces `ver` revocation; the other services validate signature, `iss`, `aud` and `exp` only.
+- ms-01, ms-04 and ms-05 validate with `JWK_SET_URI` (production) or a PEM public key (local/tests). ms-02 and ms-03 still use HS256 and must migrate.
+- Never copy ms-01 signing code or private keys into another service.
 
-Current branch scope is **only** `microservices/ms-01-users-and-anomalies`; do not scaffold ms-02–ms-04 here.
+## Events and contracts
 
-Implemented: tourist/provider registration (optional provider website), login, RS256 JWT/JWKS with persisted RSA keys, `/users/me`, self profile update, self-service password change, forgot/reset password, bootstrap admin, admin user management (create internal accounts with invitation, change role with profile subtype migration, approve/reject providers, block/suspend/reactivate, delete with PII anonymization, list/search/filter/paginate, admin password reset, audit log), public profiles without identity documents, guide/provider reviews in MongoDB (create/read, responses, reports, moderation, reputation summary, one review per tourist and target, AI review-bombing filter with a `PENDIENTE_REVISION` queue), anomalies (RF99–RF102, Admin US11–US14: automatic detection of failed logins, PostgreSQL/MongoDB downtime and request spikes; severity classification, resolution with note, configurable thresholds, audit trail), admin monitoring (Admin US9 overview with users/reviews/anomalies indicators and system availability, Admin US16 live availability of PostgreSQL/MongoDB, Admin US10 audit CSV and PDF export), data retention (daily purge of expired auth artifacts and old audit entries, `app.retention.*`, policy delivered outside this repo), security hardening (TOTP MFA with hashed recovery codes, AES-GCM encrypted TOTP secrets, per-IP auth rate limiting, PostgreSQL-backed account lockout, security headers, production profile with startup validation, logout via `auth_version` revocation, recovery-code rotation), a multi-stage Docker image with a Compose `full` profile (read-only root, no capabilities), GitHub Actions CI (verification, Trivy image scan and image smoke test) plus Dependabot, persistence, tests (including a Mailpit password-reset E2E), ArchUnit, and Spotless.
+- Every event uses `contracts/events/envelope.v1.json`: `eventId`, `eventType`, `eventVersion`, `occurredAt`, `aggregateId`, `correlationId`, `producer` and `payload`.
+- Schemas are versioned; renaming, removing or retyping a field requires `v2`.
+- Producers: `catalog.*` from ms-04; `activities.*` from ms-03 (pending); `reviews.review.changed` from ms-03/ms-04; `bookings.reservation.changed` from ms-03/ms-04.
+- ms-04 has a transactional outbox with relay, retries, metrics and admin reprocess endpoints; use it as the reference.
+- ms-03 does not publish events yet, and its model lacks fields the current schemas require (`categoryId`, `latitude`, `longitude`, `updatedAt`; `items[]` for bookings; `status` and `updatedAt` for reviews). Resolve by contract v2 or model enrichment before building the outbox.
+- Data copied from another service is eventually consistent; document how it is refreshed.
 
-Still to design/implement:
+## ms-03 activities and events
 
-1. **Tests and delivery**
-   - CI builds and smoke-tests the image but does not publish it; add a registry push when the deployment target is chosen.
+- Branch: `ms-03-symbolic-reservations`. Scope: activities, availability, events, reservations, reviews and review reports. Do not modify ms-01, ms-02 or ms-04.
+- Symbolic reservations: one item per reservation (`itemType` + `itemId`), born `CONFIRMED`, capacity taken atomically, payment resolved outside the platform.
+- Rules: optional `Idempotency-Key` (1-64) on `POST /api/v1/reservations`; maximum 5 active reservations per tourist; tourist cancellation up to 24 h before start; attendance and no-show after start; daily auto-close at 03:15 `America/Bogota` with `P1D` grace.
+- Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
+- Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWT_SECRET` (current HS256), `JWT_ISSUER`, `JWT_AUDIENCE`, `CORS_ALLOWED_ORIGINS`, `SQL_INIT_MODE`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Current gaps, in order:
+  1. JWT: migrate from HS256 to RS256/JWKS and Spanish roles.
+  2. Flyway: replace `schema.sql` and `SQL_INIT_MODE=always`; the migration is destructive and must run once, not on every boot.
+  3. CI: add `.github/workflows/ms-03-ci.yml` using the ms-04 workflow as reference.
+  4. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
+  5. Events/outbox: resolve the contract mismatch first, then publish.
+  6. Hardening: `ProblemDetail`, pagination, status filtering in SQL, hide non-published items in public detail, `managerId` accepted from the body for ADMIN, required `paymentMethod`.
+- 168 tests as of 2026-11-03, including one Testcontainers PostgreSQL test.
 
-2. **Monitoring follow-ups**
-   - Cross-service indicators (reservations, sites, activities, events) once ms-03/ms-04 expose their contracts.
+## Cross-service rules
 
-3. **Security follow-ups**
-   - The per-IP rate limiter is in-memory and per instance; lockout is shared through PostgreSQL. A distributed limiter is only needed if ms-01 scales horizontally.
-   - JWT keys are static (no `kid` rotation/keyring). Reset tokens and MFA secrets are single-key; rotating `MFA_SECRET_KEY` requires re-encrypting `mfa_enrollments`.
-   - Logout revokes `auth_version`, which ms-01 enforces immediately; ms-02–ms-04 only validate signature/exp until they consult `ver`.
+- Mark every dependency on another service with a `TODO(ms-XX):` comment that states the missing contract and the warning. Never silently assume another service's data.
+- Snapshots are eventually consistent; document the refresh strategy.
+- Every implementation block is reviewed by at least two independent subagents: `cavecrew-reviewer` plus a security-focused `general` agent. Fix findings before closing the block.
+- Before closing a milestone, run the Cloudflare `security-audit` skill against ms-03.
 
-4. **Review AI follow-ups**
-   - The adapter assumes littleLLM exposes the OpenAI chat-completions schema; confirm the real contract before deploying.
-   - The filter runs synchronously and fail-open by default. If latency matters, move the assessment to a queue and keep the review `PENDIENTE_REVISION` until it finishes.
-   - Prompt/model quality is not benchmarked; add a labelled sample of positive and negative review bombing to tune `threshold` and categories.
+## Documentation
 
-## JWT contract (ms-01 → ms-02)
+- `docs/` is read-only. Never modify it; ask for explicit approval if an edit is strictly necessary.
+- Deliverables, user stories and documentation are in Spanish; commit messages are in English.
+- Keep each service `README.md` and `CHANGELOG.md` current: purpose, endpoints, run instructions and environment variables.
 
-- RS256 access-only tokens; no refresh endpoint.
-- Claims: `sub` and `id` (same user UUID), `name`, `role`, `ver`, `mfa` (true only after the second factor), optional `providerStatus`, `iss=sm-xplore-ms-01`, `aud=sm-xplore-services`, `iat`, `exp`, `jti`.
-- MFA challenge tokens (`scope=mfa`, 5 min) are not access tokens; ms-01's access decoder rejects them. Other services must reject any token carrying `scope=mfa`.
-- Public keys: `GET /.well-known/jwks.json`.
-- ms-01 validates `ver` against `users.auth_version` (60 s cache). Other services validate signature, `iss`, `aud`, `exp`.
-- If ms-02 reads the UUID from `id`/`userId` instead of `sub`, align the contract before integration.
-- Role strings: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`.
+## Git rules
 
-## Diagrams
-
-- All diagrams are PlantUML (`.puml`), except the DB (`postgre.jpg`, `mongoDB.png`, `neo4j.png`) and E-R (`model.png`) images, which are static.
-- No `plantuml.jar` is vendored and there is no render script/CI. Render manually with Java:
-  `java -jar plantuml.jar -charset UTF-8 -o docs/models/_render/domain docs/models/domain/diagram.puml`
-- Renders are local artifacts: `_render/` is gitignored, so never commit PNGs.
-- UC level-1 folders hold a combined `diagram.puml` plus per-actor `<actor>-diagrama.puml`. Naming is inconsistent: `administrar-anomalias/` and `gestionar-destino/` use `diagrama.puml`, and actor slugs vary (`gestoras-*` for Gestora de Destinos). Follow the existing files.
-- `gestionar-reseñas/` uses a real UTF-8 `ñ`; do not confuse it with `gestionar-reservas/`.
-- When adding/removing diagrams, update `docs/models/README.md` and `docs/models/uc-lvl-1/README.md`.
-
-## Conventions
-
-- User stories use `##/### US# - <title> (Priority: P#)`; most files use `###`, but `docs/user-stories/guia-turistico/us.md` uses `##`. Priorities: P1 must-have, P2 should-have, P3 nice-to-have.
-- US numbers restart at US1 in every role file; always cite `<role> US#`, not a bare `US5`.
-- The SRS follows ISO/IEC/IEEE 29148:2018; preserve RF ↔ UC ↔ US ↔ PA traceability.
-- Git history uses Spanish commit descriptions, often with English prefixes (`Add:`, `Fix:`, `Update:`); changes land through feature branches and pull requests.
+- Local commits only. Never push and never open a pull request without an explicit instruction.
+- Work stays on the service branch (`ms-03-symbolic-reservations` for ms-03).
+- Commit messages are in English with the prefixes `Add:`, `Fix:` or `Update:`.
+- Do not commit secrets, `.env` files, build artifacts or IDE files.
+- This file is tracked in `microservicios`; update it when the repository state changes instead of keeping a private copy.
