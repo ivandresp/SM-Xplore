@@ -20,6 +20,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper.Catal
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.security.CorrelationIdResolver;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -135,11 +136,15 @@ public class SiteController {
             @RequestParam(required = false) UUID zoneId,
             @RequestParam(required = false) ContentStatus status,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Only an administrator can use any value; a destination manager can only use its own id")
+            @RequestParam(required = false) UUID managerId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        SiteFilter filter = new SiteFilter(categoryId, zoneId, status, search, page, size);
-        return listUseCase.handle(filter)
+        SiteFilter filter = new SiteFilter(categoryId, zoneId, status, search, managerId, page, size);
+        Actor actor = jwtUserResolver.resolve(jwt);
+        return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));
     }
 }

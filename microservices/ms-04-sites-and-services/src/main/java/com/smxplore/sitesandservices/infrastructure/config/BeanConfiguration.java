@@ -344,8 +344,8 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public ListSitesUseCase listSitesUseCase(SiteRepositoryPort siteRepository) {
-        return new SiteListService(siteRepository);
+    public ListSitesUseCase listSitesUseCase(SiteRepositoryPort siteRepository, CatalogAccess access) {
+        return new SiteListService(siteRepository, access);
     }
 
     @Bean
