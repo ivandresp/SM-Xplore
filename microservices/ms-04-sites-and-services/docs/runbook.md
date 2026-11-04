@@ -184,7 +184,7 @@ que despublicarlo bloquea reservas nuevas de inmediato.
 | Síntoma | Causa probable | Acción |
 |---|---|---|
 | `401` con token válido | `JWT_ISSUER`/`JWT_AUDIENCE` no coinciden o la clave pública/JWKS no carga | comparar con ms-01 (`/.well-known/jwks.json`) |
-| `403` en rutas de catálogo | rol sin permiso (se esperan `GESTORA_DESTINOS`/`ADMIN`) | revisar el claim de rol |
+| `403` en rutas de catálogo | rol sin permiso (se esperan `DESTINATION_MANAGER`/`ADMIN`) | revisar el claim de rol |
 | `500` al arrancar | Flyway o Mongo sin replica set | ver `flyway_schema_history` y `rs.status()` |
 | `Migration checksum mismatch` | se editó una migración aplicada | restaurar el archivo desde git y crear `V3__…sql` |
 | Outbox crece sin DRENAR | broker caído o `OUTBOX_ENABLED=false` | revisar Kafka y la propiedad |

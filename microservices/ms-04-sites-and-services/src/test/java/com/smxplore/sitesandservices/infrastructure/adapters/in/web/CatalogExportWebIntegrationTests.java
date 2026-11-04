@@ -86,12 +86,12 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
         UUID managerId = UUID.randomUUID();
         UUID providerId = UUID.randomUUID();
 
-        clientFor(managerId, "GESTORA_DESTINOS")
+        clientFor(managerId, "DESTINATION_MANAGER")
                 .get().uri("/api/v1/admin/catalog/export?entity=SITES")
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(providerId, "PRESTADORA_SERVICIOS")
+        clientFor(providerId, "SERVICE_PROVIDER")
                 .get().uri("/api/v1/admin/catalog/export?entity=SITES")
                 .exchange()
                 .expectStatus().isForbidden();
@@ -145,7 +145,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
     }
 
     private CategoryResponse createCategory(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -159,7 +159,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
     }
 
     private ZoneResponse createZone(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/zones")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -173,7 +173,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
     }
 
     private SiteResponse createSite(UUID managerId, UUID categoryId, UUID zoneId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/sites")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -203,7 +203,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
             UUID zoneId,
             UUID siteId
     ) {
-        return clientFor(providerId, "PRESTADORA_SERVICIOS")
+        return clientFor(providerId, "SERVICE_PROVIDER")
                 .post().uri("/api/v1/services")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""

@@ -66,7 +66,7 @@ class ReservationOutboxClaimIntegrationTests extends AbstractMongoPostgresIntegr
                         .people(2)
                         .build()))
                 .build();
-        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TURISTA, "Turista claim");
+        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TOURIST, "Turista claim");
         Reservation reservation = createReservationUseCase.handle(
                         draft,
                         "reservation-claim-" + UUID.randomUUID(),

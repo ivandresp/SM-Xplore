@@ -125,15 +125,15 @@ public class UserRepositoryAdapter implements UserRepository {
                    COUNT(*) FILTER (WHERE status = 'BLOQUEADO') AS blocked,
                    COUNT(*) FILTER (WHERE status = 'SUSPENDIDO') AS suspended,
                    COUNT(*) FILTER (WHERE status = 'ELIMINADO') AS deleted,
-                   COUNT(*) FILTER (WHERE role = 'TURISTA') AS tourists,
-                   COUNT(*) FILTER (WHERE role = 'GUIA') AS guides,
-                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS') AS providers,
-                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS' AND id IN (
+                   COUNT(*) FILTER (WHERE role = 'TOURIST') AS tourists,
+                   COUNT(*) FILTER (WHERE role = 'GUIDE') AS guides,
+                   COUNT(*) FILTER (WHERE role = 'SERVICE_PROVIDER') AS providers,
+                   COUNT(*) FILTER (WHERE role = 'SERVICE_PROVIDER' AND id IN (
                        SELECT user_id FROM provider_profiles WHERE registration_status = 'APROBADO'
                    )) AS approved_providers,
-                   COUNT(*) FILTER (WHERE role = 'GESTORA_DESTINOS') AS destination_managers,
+                   COUNT(*) FILTER (WHERE role = 'DESTINATION_MANAGER') AS destination_managers,
                    COUNT(*) FILTER (WHERE role = 'ADMIN') AS admins,
-                   COUNT(*) FILTER (WHERE role = 'PRESTADORA_SERVICIOS' AND id IN (
+                   COUNT(*) FILTER (WHERE role = 'SERVICE_PROVIDER' AND id IN (
                        SELECT user_id FROM provider_profiles WHERE registration_status = 'PENDIENTE'
                    )) AS pending_providers,
                    COUNT(*) FILTER (WHERE signed_up_at >= :since) AS new_users
@@ -355,28 +355,28 @@ public class UserRepositoryAdapter implements UserRepository {
 
     private Mono<Usuario> loadProfile(UserRecord user) {
         return switch (user.role()) {
-            case "TURISTA" ->
+            case "TOURIST" ->
                 databaseClient
                         .sql("SELECT * FROM tourist_profiles WHERE user_id = :id")
                         .bind("id", user.id())
                         .map((row, metadata) -> (Usuario) mapper.toTourist(user, row))
                         .one()
                         .switchIfEmpty(missingProfile("turista", user.id()));
-            case "GUIA" ->
+            case "GUIDE" ->
                 databaseClient
                         .sql("SELECT * FROM guide_profiles WHERE user_id = :id")
                         .bind("id", user.id())
                         .map((row, metadata) -> (Usuario) mapper.toGuide(user, row))
                         .one()
                         .switchIfEmpty(missingProfile("guía", user.id()));
-            case "PRESTADORA_SERVICIOS" ->
+            case "SERVICE_PROVIDER" ->
                 databaseClient
                         .sql("SELECT * FROM provider_profiles WHERE user_id = :id")
                         .bind("id", user.id())
                         .map((row, metadata) -> (Usuario) mapper.toProvider(user, row))
                         .one()
                         .switchIfEmpty(missingProfile("prestadora", user.id()));
-            case "GESTORA_DESTINOS" ->
+            case "DESTINATION_MANAGER" ->
                 databaseClient
                         .sql("SELECT * FROM destination_manager_profiles WHERE user_id = :id")
                         .bind("id", user.id())

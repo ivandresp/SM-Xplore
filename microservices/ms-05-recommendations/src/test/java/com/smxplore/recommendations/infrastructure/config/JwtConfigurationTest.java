@@ -32,6 +32,7 @@ class JwtConfigurationTest {
         JwtProperties properties = new JwtProperties();
         properties.setPublicKeyLocation("classpath:keys/test-public.pem");
         properties.setIssuer("https://ms-05.local");
+        properties.setAudience("sm-xplore-services");
 
         ReactiveJwtDecoder decoder = new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder();
 
@@ -47,6 +48,7 @@ class JwtConfigurationTest {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("https://ms-05.local")
+                .audience(java.util.List.of("sm-xplore-services"))
                 .subject("66666666-6666-6666-6666-666666666601")
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))

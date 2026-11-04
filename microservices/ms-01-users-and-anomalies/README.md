@@ -210,7 +210,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | PUT | `/api/v1/users/me/password` | Autenticado |
 | POST | `/api/v1/users/me/logout` | Autenticado, revoca todos los tokens de la cuenta |
 | GET | `/api/v1/public/users/{id}` | Público, solo guías activos y prestadoras aprobadas |
-| POST | `/api/v1/reviews` | TURISTA, crea una reseña de guía o prestadora |
+| POST | `/api/v1/reviews` | TOURIST, crea una reseña de guía o prestadora |
 | POST | `/api/v1/reviews/{id}/response` | GUÍA o PRESTADORA, responde su propia reseña |
 | POST | `/api/v1/reviews/{id}/report` | Autenticado, reporta una reseña |
 | GET | `/api/v1/public/reviews` | Público, reseñas visibles de un destino |
@@ -257,7 +257,7 @@ campo se devuelve en el perfil administrativo y en el perfil público de la pres
 Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colección `reviews`):
 
 - Solo un turista puede crearlas, con calificación de 1 a 5 y comentario opcional.
-- `targetType` acepta `GUIA` o `PRESTADORA_SERVICIOS`, y `targetId` es el UUID del perfil reseñado.
+- `targetType` acepta `GUIA` o `PRESTADORA_SERVICIOS`, y `targetId` es el UUID del perfil reseñado. Es un tipo de destino de reseña, no un código de rol.
 - Solo se reseñan guías activos y prestadoras aprobadas; hay una reseña por turista y destino (índice único).
 - El destino puede responder una vez y cualquier usuario autenticado puede reportar la reseña.
 - El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
@@ -351,7 +351,7 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 - `providerStatus` solo aparece para prestadoras.
 - `mfa` indica si el token se emitió después de superar el segundo factor; ms-02 puede exigirlo para acciones sensibles.
 - Los tokens de desafío (`scope=mfa`) no son tokens de acceso y el servicio los rechaza fuera de `/api/v1/auth/mfa/verify`.
-- `role` usa los códigos en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`), aunque el enum Java esté en inglés y exponga `Role.code()`.
+- `role` usa los códigos en inglés (`TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN`). Los códigos históricos en español se aceptan solo al leer datos antiguos durante la migración.
 - `ver` se valida en ms-01 contra `users.auth_version`; otros servicios deben validar firma, `iss`, `aud` y `exp`.
 - El servicio de reportes de seguridad debe confiar en la llave pública publicada en `/.well-known/jwks.json`.
 

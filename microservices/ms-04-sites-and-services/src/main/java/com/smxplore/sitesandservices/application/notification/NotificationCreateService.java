@@ -53,7 +53,7 @@ public class NotificationCreateService {
         notifications.add(notification(
                 message,
                 message.touristId(),
-                UserRole.TURISTA,
+                UserRole.TOURIST,
                 type,
                 touristTitle(type),
                 touristMessage(type, services, date, people)
@@ -67,7 +67,7 @@ public class NotificationCreateService {
             notifications.add(notification(
                     message,
                     providerId,
-                    UserRole.PRESTADORA_SERVICIOS,
+                    UserRole.SERVICE_PROVIDER,
                     type,
                     providerTitle(type),
                     providerMessage(type, services, date, people)

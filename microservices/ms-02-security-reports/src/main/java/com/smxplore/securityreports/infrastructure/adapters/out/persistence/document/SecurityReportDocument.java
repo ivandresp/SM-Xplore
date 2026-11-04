@@ -8,8 +8,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
+import org.springframework.data.mongodb.core.index.GeoSpatialIndexType;
+import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
@@ -36,11 +39,15 @@ public class SecurityReportDocument {
     private String description;
     private LocationDocument location;
 
+    @GeoSpatialIndexed(name = "idx_security_reports_position", type = GeoSpatialIndexType.GEO_2DSPHERE)
+    private GeoJsonPoint position;
+
     @Builder.Default
     private List<String> photosUrls = new ArrayList<>();
 
     private SecurityReportStatus status;
     private Instant createdAt;
+    private Instant updatedAt;
 
     @Version
     private Long version;

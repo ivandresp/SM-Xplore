@@ -1,0 +1,22 @@
+app:
+  outbox:
+    enabled: false
+  security:
+    jwt:
+      public-key-location: classpath:keys/test-public.pem
+      issuer: sm-xplore-ms-01
+      audience: sm-xplore-services
+      user-id-claim: userId
+      role-claim: role
+      name-claim: name
+
+spring:
+  data:
+    mongodb:
+      auto-index-creation: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

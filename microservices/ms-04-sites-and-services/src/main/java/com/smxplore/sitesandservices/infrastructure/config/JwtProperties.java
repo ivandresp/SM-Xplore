@@ -11,8 +11,8 @@ public class JwtProperties {
 
     private String jwkSetUri;
     private String publicKeyLocation;
-    private String issuer;
-    private String audience;
+    private String issuer = "sm-xplore-ms-01";
+    private String audience = "sm-xplore-services";
     private String userIdClaim = "userId";
     private String roleClaim = "role";
     private String nameClaim = "name";

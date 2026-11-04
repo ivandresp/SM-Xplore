@@ -1,0 +1,27 @@
+-- Migra los códigos de rol expuestos en la API, el JWT y PostgreSQL al inglés.
+-- Los códigos antiguos se conservan como alias de lectura en Role.fromCode.
+
+UPDATE users
+SET role = CASE role
+    WHEN 'TURISTA' THEN 'TOURIST'
+    WHEN 'GUIA' THEN 'GUIDE'
+    WHEN 'PRESTADORA_SERVICIOS' THEN 'SERVICE_PROVIDER'
+    WHEN 'GESTORA_DESTINOS' THEN 'DESTINATION_MANAGER'
+    ELSE role
+END
+WHERE role IN ('TURISTA', 'GUIA', 'PRESTADORA_SERVICIOS', 'GESTORA_DESTINOS');
+
+ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role;
+ALTER TABLE users ADD CONSTRAINT chk_users_role CHECK (
+    role IN ('TOURIST', 'GUIDE', 'SERVICE_PROVIDER', 'DESTINATION_MANAGER', 'ADMIN')
+);
+
+UPDATE audit_logs
+SET actor_role = CASE actor_role
+    WHEN 'TURISTA' THEN 'TOURIST'
+    WHEN 'GUIA' THEN 'GUIDE'
+    WHEN 'PRESTADORA_SERVICIOS' THEN 'SERVICE_PROVIDER'
+    WHEN 'GESTORA_DESTINOS' THEN 'DESTINATION_MANAGER'
+    ELSE actor_role
+END
+WHERE actor_role IN ('TURISTA', 'GUIA', 'PRESTADORA_SERVICIOS', 'GESTORA_DESTINOS');

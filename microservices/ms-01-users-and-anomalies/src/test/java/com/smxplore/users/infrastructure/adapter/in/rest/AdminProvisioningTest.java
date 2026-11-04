@@ -86,7 +86,7 @@ class AdminProvisioningTest {
         ResponseEntity<Map> created =
                 createInternalUser(adminToken, guiaPayload("guia.nuevo@example.com", "8880001111", "LIC-001"));
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(created.getBody().get("role")).isEqualTo("GUIA");
+        assertThat(created.getBody().get("role")).isEqualTo("GUIDE");
         String userId = String.valueOf(created.getBody().get("id"));
 
         assertThat(loginStatus("guia.nuevo@example.com", "cualquier-clave-larga"))
@@ -106,11 +106,11 @@ class AdminProvisioningTest {
     void createsGestoraAndAdminAccounts() {
         String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
 
-        Map<String, Object> gestora = basePayload("GESTORA_DESTINOS", "gestora@example.com");
+        Map<String, Object> gestora = basePayload("DESTINATION_MANAGER", "gestora@example.com");
         gestora.put("nit", "901333444-5");
         ResponseEntity<Map> createdGestora = createInternalUser(adminToken, gestora);
         assertThat(createdGestora.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(createdGestora.getBody().get("role")).isEqualTo("GESTORA_DESTINOS");
+        assertThat(createdGestora.getBody().get("role")).isEqualTo("DESTINATION_MANAGER");
 
         Map<String, Object> admin = basePayload("ADMIN", "nuevo.admin@example.com");
         admin.put("dniType", "CC");
@@ -140,7 +140,7 @@ class AdminProvisioningTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
 
-        Map<String, Object> provider = basePayload("PRESTADORA_SERVICIOS", "prestadora.admin@example.com");
+        Map<String, Object> provider = basePayload("SERVICE_PROVIDER", "prestadora.admin@example.com");
         assertThat(createInternalUser(adminToken, provider).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -157,7 +157,7 @@ class AdminProvisioningTest {
         assertThat(entries(page)).singleElement().satisfies(entry -> {
             assertThat(entry.get("action")).isEqualTo("CUENTA_INTERNA_CREADA");
             Map<String, Object> details = (Map<String, Object>) entry.get("details");
-            assertThat(details).containsEntry("rol", "GUIA");
+            assertThat(details).containsEntry("rol", "GUIDE");
         });
     }
 
@@ -187,7 +187,7 @@ class AdminProvisioningTest {
     }
 
     private static Map<String, Object> guiaPayload(String email, String dniNumber, String license) {
-        Map<String, Object> payload = basePayload("GUIA", email);
+        Map<String, Object> payload = basePayload("GUIDE", email);
         payload.put("dniType", "CC");
         payload.put("dniNumber", dniNumber);
         if (license != null) {

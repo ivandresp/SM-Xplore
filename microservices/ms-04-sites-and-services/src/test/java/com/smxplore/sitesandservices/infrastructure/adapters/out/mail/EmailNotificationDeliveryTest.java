@@ -97,7 +97,7 @@ class EmailNotificationDeliveryTest {
         return Notification.builder()
                 .notificationId(UUID.randomUUID())
                 .recipientId(recipientId)
-                .recipientRole(UserRole.TURISTA)
+                .recipientRole(UserRole.TOURIST)
                 .reservationId(UUID.randomUUID())
                 .eventId(UUID.randomUUID())
                 .type(NotificationType.RESERVATION_CONFIRMED)

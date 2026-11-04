@@ -6,7 +6,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
@@ -58,8 +60,18 @@ public class JwtConfiguration {
                     audience -> audience.contains(properties.getAudience())
             ));
         }
+        validators.add(notMfaChallenge());
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
+    }
+
+    private static OAuth2TokenValidator<Jwt> notMfaChallenge() {
+        return token -> "mfa".equals(token.getClaimAsString("scope"))
+                ? OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        "invalid_token",
+                        "MFA challenge tokens cannot be used as access tokens",
+                        null))
+                : OAuth2TokenValidatorResult.success();
     }
 
     private RSAPublicKey readPublicKey(String location) {

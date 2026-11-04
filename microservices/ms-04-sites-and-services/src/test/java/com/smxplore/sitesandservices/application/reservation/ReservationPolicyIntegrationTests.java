@@ -50,7 +50,7 @@ class ReservationPolicyIntegrationTests extends AbstractMongoPostgresIntegration
     void enforcesTheCreationRateLimitPerTourist() {
         Service service = serviceRepository.save(publishedService()).block();
         assertThat(service).isNotNull();
-        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TURISTA, "Rate limit tourist");
+        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TOURIST, "Rate limit tourist");
         Instant bookedFor = nextMondayWithin(7);
 
         createReservationUseCase.handle(
@@ -68,7 +68,7 @@ class ReservationPolicyIntegrationTests extends AbstractMongoPostgresIntegration
     void rejectsReservationsBeyondTheConfiguredAdvanceWindow() {
         Service service = serviceRepository.save(publishedService()).block();
         assertThat(service).isNotNull();
-        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TURISTA, "Advance tourist");
+        Actor tourist = new Actor(UUID.randomUUID(), UserRole.TOURIST, "Advance tourist");
 
         assertThatThrownBy(() -> createReservationUseCase.handle(
                 draft(service.serviceId(), nextMondayWithin(60)),

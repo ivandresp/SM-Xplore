@@ -1,7 +1,7 @@
 package com.smxplore.securityreports.infrastructure.config;
 
 import com.smxplore.securityreports.domain.model.types.UserRole;
-import com.smxplore.securityreports.infrastructure.adapters.in.web.error.ApiErrorResponse;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.error.ProblemDetails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -111,7 +111,7 @@ public class SecurityConfiguration {
                 .filter(origin -> !origin.isBlank())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
@@ -121,10 +121,10 @@ public class SecurityConfiguration {
                                          ObjectMapper objectMapper) {
         var response = exchange.getResponse();
         response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        response.getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
 
         try {
-            var json = objectMapper.writeValueAsBytes(ApiErrorResponse.of(status, message, exchange));
+            var json = objectMapper.writeValueAsBytes(ProblemDetails.of(status, message, exchange));
             var buffer = response.bufferFactory().wrap(json);
             return response.writeWith(Mono.just(buffer));
         } catch (JacksonException exception) {

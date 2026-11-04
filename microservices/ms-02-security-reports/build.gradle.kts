@@ -21,6 +21,7 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive")
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -43,6 +44,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-mongodb")
+    testImplementation("org.testcontainers:testcontainers-kafka")
+    testImplementation("com.networknt:json-schema-validator:1.5.9")
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testAnnotationProcessor("org.projectlombok:lombok")
@@ -50,8 +53,8 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    environment("JWT_SECRET", "test-secret-for-integration-tests-32-bytes-minimum!")
-    environment("JWT_ISSUER", "https://securityreports.local")
+    environment("JWT_ISSUER", "sm-xplore-ms-01")
+    environment("JWT_AUDIENCE", "sm-xplore-services")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {

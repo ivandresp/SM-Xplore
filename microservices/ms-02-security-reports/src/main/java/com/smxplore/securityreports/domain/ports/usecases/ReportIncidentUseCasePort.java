@@ -5,5 +5,5 @@ import com.smxplore.securityreports.domain.model.types.UserRef;
 import reactor.core.publisher.Mono;
 
 public interface ReportIncidentUseCasePort {
-    Mono<SecurityReport> handle(UserRef user, SecurityReport report);
+    Mono<SecurityReport> handle(UserRef user, SecurityReport report, String correlationId);
 }

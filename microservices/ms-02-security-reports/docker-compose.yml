@@ -2,9 +2,8 @@ services:
   mongo:
     image: mongo:7.0
     restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-me}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-security_reports}
     ports:
       - "127.0.0.1:${MONGO_PORT:-27017}:27017"
@@ -16,6 +15,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - smxplore-net
+
+  mongo-init:
+    image: mongo:7.0
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - "try { rs.status() } catch (e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) }"
+    networks:
+      - smxplore-net
 
   app:
     build:
@@ -23,27 +40,47 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      mongo:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
     ports:
       - "${APP_PORT:-8080}:8080"
     environment:
-      MONGODB_URI: "mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:-change-me}@mongo:27017/${MONGO_DATABASE:-security_reports}?authSource=admin&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000"
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env or in the environment}
-      JWT_ISSUER: ${JWT_ISSUER:-https://securityreports.local}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      MONGODB_URI: "mongodb://mongo:27017/${MONGO_DATABASE:-security_reports}?replicaSet=rs0&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000"
+      JWK_SET_URI: ${JWK_SET_URI:-}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      JWT_ISSUER: ${JWT_ISSUER:-sm-xplore-ms-01}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sm-xplore-services}
+      JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
       JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
       JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      OUTBOX_PRODUCER: ${OUTBOX_PRODUCER:-ms-02}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
+      OUTBOX_INITIAL_BACKOFF: ${OUTBOX_INITIAL_BACKOFF:-1s}
+      OUTBOX_MAX_BACKOFF: ${OUTBOX_MAX_BACKOFF:-1m}
+      OUTBOX_LEASE_DURATION: ${OUTBOX_LEASE_DURATION:-3m}
+      OUTBOX_RETENTION_DAYS: ${OUTBOX_RETENTION_DAYS:-30}
+      OUTBOX_RETENTION_INTERVAL_MS: ${OUTBOX_RETENTION_INTERVAL_MS:-3600000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
       MONGO_AUTO_INDEX_CREATION: ${MONGO_AUTO_INDEX_CREATION:-true}
       SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-true}
       SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-true}
+    networks:
+      - smxplore-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 40s
+
+networks:
+  smxplore-net:
+    external: true
+    name: smxplore-net
 
 volumes:
   mongo_data:

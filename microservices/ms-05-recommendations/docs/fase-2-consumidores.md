@@ -51,8 +51,8 @@ Configuración de ms-05:
 
 ```text
 JWK_SET_URI=https://ms-01/.well-known/jwks.json
-JWT_ISSUER=https://ms-01
-JWT_AUDIENCE=smxplore            # opcional
+JWT_ISSUER=sm-xplore-ms-01
+JWT_AUDIENCE=sm-xplore-services
 ```
 
 En local/tests se puede usar una llave pública PEM con `JWT_PUBLIC_KEY_LOCATION`; es un atajo

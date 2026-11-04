@@ -18,6 +18,7 @@ contracts/
     ├── catalog.service.changed.v1.json
     ├── catalog.site.changed.v1.json
     ├── reviews.review.changed.v1.json
+    ├── security.report.changed.v1.json
     └── examples/
 ```
 
@@ -57,11 +58,14 @@ Todos los eventos comparten el sobre de `envelope.v1.json`:
 | `activities.event.changed` | ms-03 | sí |
 | `activities.activity.changed` | ms-03 | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
+| `security.report.changed` | ms-02 | **no** |
 | `bookings.reservation.changed` | ms-03 / ms-04 | **no** |
 
 `reviews.review.changed` lo publica ms-03 para actividades/eventos y ms-04 para sitios y
 servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin distinguir el
 productor. El sobre conserva `producer` para trazabilidad.
+
+`security.report.changed` lo publica ms-02 para alertas, notificaciones y analítica; ms-05 no lo consume.
 
 `bookings.reservation.changed` se mantiene porque notificaciones y analítica lo usan, pero
 **ms-05 no lo consume**. La recomendación no usa reservas: ver

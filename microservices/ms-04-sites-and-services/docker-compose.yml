@@ -88,8 +88,8 @@ services:
       SMTP_PORT: ${SMTP_PORT:-1025}
       JWK_SET_URI: ${JWK_SET_URI:-}
       JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
-      JWT_ISSUER: ${JWT_ISSUER:-}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      JWT_ISSUER: ${JWT_ISSUER:-sm-xplore-ms-01}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sm-xplore-services}
       JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
       JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
       JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}

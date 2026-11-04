@@ -41,6 +41,9 @@ public class SecurityReport {
     @Builder.Default
     private final Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
+    @Builder.Default
+    private Instant updatedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
     private Long version;
 
     //Methods
@@ -48,6 +51,10 @@ public class SecurityReport {
         validateTitle(title);
         validateDescription(description);
         if (createdAt == null) throw new InvalidReportRequestException("Creation date is mandatory.");
+        if (updatedAt == null) updatedAt = createdAt;
+        if (updatedAt.isBefore(createdAt)) {
+            throw new InvalidReportRequestException("Update date cannot be before creation date.");
+        }
         if (location != null) location.validate();
         if (user == null) throw new InvalidUserReporterException("User is empty");
 
@@ -59,6 +66,11 @@ public class SecurityReport {
         validateDescription(description);
         this.title = title;
         this.description = description;
+        touch();
+    }
+
+    public void touch() {
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
     }
 
     public void addPhotos(Collection<String> photos) {
@@ -76,6 +88,7 @@ public class SecurityReport {
         }
 
         photosUrls.add(url);
+        touch();
     }
 
     private String validateUrl(String url){
@@ -111,6 +124,7 @@ public class SecurityReport {
             throw new InvalidStatusTransitionException("SecurityReport must be reported before being solved");
         }
         status = SecurityReportStatus.SOLVED;
+        touch();
     }
 
     public List<String> getPhotosUrls() {
@@ -120,6 +134,7 @@ public class SecurityReport {
     public void markAsReported() {
         if (!isOngoing()) throw new InvalidStatusTransitionException("SecurityReport is not ongoing");
         status = SecurityReportStatus.REPORTED;
+        touch();
     }
 
     private void validateTitle(String title) {

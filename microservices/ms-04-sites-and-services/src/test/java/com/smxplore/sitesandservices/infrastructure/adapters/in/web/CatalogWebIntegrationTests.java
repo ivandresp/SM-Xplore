@@ -52,7 +52,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         ReviewResponse review = createReview(touristId, site.siteId());
         respondToReview(managerId, review.reviewId());
 
-        ReviewSummaryResponse summary = clientFor(touristId, "TURISTA")
+        ReviewSummaryResponse summary = clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/reviews/summary?itemType=SITE&itemId=" + site.siteId())
                 .exchange()
                 .expectStatus().isOk()
@@ -119,7 +119,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
         createReview(touristId, site.siteId());
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reviews")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(reviewBody(site.siteId()))
@@ -131,7 +131,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     void touristCannotCreateCatalogResourcesAndAnonymousCannotRead() {
         UUID touristId = UUID.randomUUID();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/sites")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{}")
@@ -170,10 +170,10 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         UUID managerB = UUID.randomUUID();
         SiteResponse siteA = createSiteFor(managerA);
 
-        PageResponse<SiteResponse> own = listSitesByManager(managerA, "GESTORA_DESTINOS", managerA);
+        PageResponse<SiteResponse> own = listSitesByManager(managerA, "DESTINATION_MANAGER", managerA);
         assertThat(own.content()).extracting(SiteResponse::siteId).contains(siteA.siteId());
 
-        clientFor(managerA, "GESTORA_DESTINOS")
+        clientFor(managerA, "DESTINATION_MANAGER")
                 .get().uri("/api/v1/sites?managerId=" + managerB)
                 .exchange()
                 .expectStatus().isForbidden();
@@ -183,12 +183,12 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     void rejectsTheManagerFilterForTouristsAndProviders() {
         UUID managerId = UUID.randomUUID();
 
-        clientFor(UUID.randomUUID(), "TURISTA")
+        clientFor(UUID.randomUUID(), "TOURIST")
                 .get().uri("/api/v1/sites?managerId=" + managerId)
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(UUID.randomUUID(), "PRESTADORA_SERVICIOS")
+        clientFor(UUID.randomUUID(), "SERVICE_PROVIDER")
                 .get().uri("/api/v1/sites?managerId=" + managerId)
                 .exchange()
                 .expectStatus().isForbidden();
@@ -199,7 +199,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         UUID managerId = UUID.randomUUID();
         SiteResponse site = createSiteFor(managerId);
 
-        PageResponse<SiteResponse> page = clientFor(UUID.randomUUID(), "TURISTA")
+        PageResponse<SiteResponse> page = clientFor(UUID.randomUUID(), "TOURIST")
                 .get().uri("/api/v1/sites?categoryId=" + site.categoryId())
                 .exchange()
                 .expectStatus().isOk()
@@ -228,7 +228,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {        return clientFor(managerId, "GESTORA_DESTINOS")
+    private CategoryResponse createCategory(UUID managerId) {        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -242,7 +242,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private ZoneResponse createZone(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/zones")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -256,7 +256,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private SiteResponse createSite(UUID managerId, UUID categoryId, UUID zoneId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/sites")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -295,7 +295,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         SiteResponse renamed = renameSite(managerId, site, "Playa renombrada");
         assertThat(renamed.name()).isEqualTo("Playa renombrada");
 
-        ServiceResponse reloaded = clientFor(managerId, "GESTORA_DESTINOS")
+        ServiceResponse reloaded = clientFor(managerId, "DESTINATION_MANAGER")
                 .get().uri("/api/v1/services/" + service.serviceId())
                 .exchange()
                 .expectStatus().isOk()
@@ -307,7 +307,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private SiteResponse renameSite(UUID managerId, SiteResponse site, String newName) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .put().uri("/api/v1/sites/" + site.siteId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -336,7 +336,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
             UUID zoneId,
             UUID siteId
     ) {
-        return clientFor(providerId, "PRESTADORA_SERVICIOS")
+        return clientFor(providerId, "SERVICE_PROVIDER")
                 .post().uri("/api/v1/services")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -365,7 +365,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private ReviewResponse createReview(UUID touristId, UUID siteId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reviews")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(reviewBody(siteId))
@@ -389,7 +389,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private void respondToReview(UUID managerId, UUID reviewId) {
-        clientFor(managerId, "GESTORA_DESTINOS")
+        clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/reviews/" + reviewId + "/response")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -400,7 +400,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private PageResponse<CategoryResponse> listCategories(UUID touristId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/categories")
                 .exchange()
                 .expectStatus().isOk()
@@ -411,7 +411,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private PageResponse<ZoneResponse> listZones(UUID touristId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/zones")
                 .exchange()
                 .expectStatus().isOk()
@@ -422,7 +422,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private PageResponse<SiteResponse> listSites(UUID touristId, UUID zoneId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/sites?zoneId=" + zoneId)
                 .exchange()
                 .expectStatus().isOk()
@@ -433,7 +433,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private PageResponse<ServiceResponse> listServices(UUID touristId, UUID siteId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/services?siteId=" + siteId)
                 .exchange()
                 .expectStatus().isOk()
@@ -444,7 +444,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     private PageResponse<ReviewResponse> listReviews(UUID touristId, UUID siteId) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .get().uri("/api/v1/reviews?itemType=SITE&itemId=" + siteId)
                 .exchange()
                 .expectStatus().isOk()

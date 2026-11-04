@@ -7,5 +7,5 @@ import java.util.Collection;
 import java.util.UUID;
 
 public interface AddReportPhotosUseCasePort {
-    Mono<SecurityReport> handle(UUID reportId, Collection<String> photos);
+    Mono<SecurityReport> handle(UUID reportId, Collection<String> photos, String correlationId);
 }

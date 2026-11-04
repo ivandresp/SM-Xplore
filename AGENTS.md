@@ -60,7 +60,7 @@ docker compose --profile full down
 - Domain uses the documented inheritance: `Usuario` is the sealed base class and `Turista`, `Guia`, `PrestadoraServicios`, `GestoraDestinos`, and `Admin` extend it. Do not introduce a separate `Profile`/`User` domain entity. The user identifier is a plain `UUID`; there is no `UserId` wrapper.
 - Adapters own R2DBC SQL/row mapping and Mongo document mapping; domain has no persistence annotations. `RoleDetailsView` is an API read DTO, not a domain entity.
 - Controllers are Spring WebFlux annotated controllers returning `Mono`/`Flux`. Security is reactive: `SecurityWebFilterChain`, `WebFilter`, `ReactiveJwtDecoder`, `@EnableReactiveMethodSecurity`. Errors are RFC 9457 `ProblemDetail`.
-- `Role` constants are English (`TOURIST`, `GUIDE`, ...) but `Role.code()` keeps the Spanish wire values used by the database and JWT. API DTOs expose the code as `String`.
+- `Role` constants and `Role.code()` use English (`TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN`) in the API, database and JWT. Legacy Spanish codes are accepted only for reading old data during the migration.
 - No Lombok/MapStruct; use records and explicit mappers. Constructor injection only.
 
 ## Domain and planned architecture
@@ -104,7 +104,7 @@ Still to design/implement:
 - Public keys: `GET /.well-known/jwks.json`.
 - ms-01 validates `ver` against `users.auth_version` (60 s cache). Other services validate signature, `iss`, `aud`, `exp`.
 - If ms-02 reads the UUID from `id`/`userId` instead of `sub`, align the contract before integration.
-- Role strings: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`.
+- Role strings: `TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN`.
 
 ## Diagrams
 

@@ -179,8 +179,10 @@ por defecto.
 - Solo RS256. No se acepta HS256.
 - Producción / ms-01: `JWK_SET_URI=https://ms-01/.../.well-known/jwks.json`.
 - Local / tests: `JWT_PUBLIC_KEY_LOCATION=file:/ruta/public.pem` o `classpath:...`.
-- `JWT_ISSUER` es obligatorio si se quiere validar `iss`.
+- `JWT_ISSUER=sm-xplore-ms-01` y `JWT_AUDIENCE=sm-xplore-services`.
 - El rol se lee del claim configurado (`role` por defecto) y se prefija con `ROLE_`.
+- Los roles esperados son `TOURIST` y `ADMIN` (códigos en inglés de ms-01).
+- Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - El UUID del turista se lee de `sub`; si no existe, se usa el claim configurado
   `JWT_USER_ID_CLAIM` (`userId` por defecto). Los claims esperados son `userId`/`sub`, `role`
   y `name`.
@@ -213,8 +215,8 @@ un arranque silencioso sin validación de tokens.
 | `SEED_ENABLED` | `false` | Carga datos de demo; usar solo en local/test |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Llave pública PEM para local/test |
-| `JWT_ISSUER` | vacío | Issuer esperado |
-| `JWT_AUDIENCE` | vacío | Audiencia esperada, opcional |
+| `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado |
+| `JWT_AUDIENCE` | `sm-xplore-services` | Audiencia esperada |
 | `JWT_USER_ID_CLAIM` | `userId` | Claim de identidad si no viene `sub` |
 | `JWT_ROLE_CLAIM` | `role` | Claim de rol |
 | `JWT_NAME_CLAIM` | `name` | Claim de nombre |
@@ -282,7 +284,8 @@ export NEO4J_URI=bolt://localhost:7687
 export NEO4J_USER=neo4j
 export NEO4J_PASSWORD=change-me
 export JWT_PUBLIC_KEY_LOCATION=file:/ruta/ms-01-public.pem
-export JWT_ISSUER=https://ms-01.local
+export JWT_ISSUER=sm-xplore-ms-01
+export JWT_AUDIENCE=sm-xplore-services
 export SEED_ENABLED=true
 export SPRING_PROFILES_ACTIVE=local
 ./gradlew bootRun

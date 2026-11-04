@@ -14,6 +14,7 @@ public record SecurityReportResponse(
         LocationDto location,
         List<String> photosUrls,
         SecurityReportStatus status,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

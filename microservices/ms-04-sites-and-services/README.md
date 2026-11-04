@@ -190,24 +190,24 @@ una red o puerto privado.
 
 | Método | Ruta | Roles | Descripción |
 |---|---|---|---|
-| POST | `/api/v1/categories` | `GESTORA_DESTINOS`, `ADMIN` | Crear categoría |
-| PUT | `/api/v1/categories/{id}` | `GESTORA_DESTINOS`, `ADMIN` | Actualizar categoría |
+| POST | `/api/v1/categories` | `DESTINATION_MANAGER`, `ADMIN` | Crear categoría |
+| PUT | `/api/v1/categories/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar categoría |
 | GET | `/api/v1/categories` | autenticado | Listar/filtrar categorías |
-| POST | `/api/v1/zones` | `GESTORA_DESTINOS`, `ADMIN` | Crear zona |
-| PUT | `/api/v1/zones/{id}` | `GESTORA_DESTINOS`, `ADMIN` | Actualizar zona |
-| PATCH | `/api/v1/zones/{id}/status` | `GESTORA_DESTINOS`, `ADMIN` | Cambiar estado/congestión |
+| POST | `/api/v1/zones` | `DESTINATION_MANAGER`, `ADMIN` | Crear zona |
+| PUT | `/api/v1/zones/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar zona |
+| PATCH | `/api/v1/zones/{id}/status` | `DESTINATION_MANAGER`, `ADMIN` | Cambiar estado/congestión |
 | GET | `/api/v1/zones` | autenticado | Listar/filtrar zonas |
-| POST | `/api/v1/sites` | `GESTORA_DESTINOS`, `ADMIN` | Crear sitio |
-| PUT | `/api/v1/sites/{id}` | `GESTORA_DESTINOS`, `ADMIN` | Actualizar sitio |
-| PATCH | `/api/v1/sites/{id}/status` | `GESTORA_DESTINOS`, `ADMIN` | Cambiar estado |
-| PATCH | `/api/v1/sites/{id}/zone` | `GESTORA_DESTINOS`, `ADMIN` | Asignar zona |
+| POST | `/api/v1/sites` | `DESTINATION_MANAGER`, `ADMIN` | Crear sitio |
+| PUT | `/api/v1/sites/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar sitio |
+| PATCH | `/api/v1/sites/{id}/status` | `DESTINATION_MANAGER`, `ADMIN` | Cambiar estado |
+| PATCH | `/api/v1/sites/{id}/zone` | `DESTINATION_MANAGER`, `ADMIN` | Asignar zona |
 | GET | `/api/v1/sites` | autenticado | Listar/filtrar sitios |
-| POST | `/api/v1/services` | `PRESTADORA_SERVICIOS`, `ADMIN` | Crear servicio |
-| PUT | `/api/v1/services/{id}` | `PRESTADORA_SERVICIOS`, `ADMIN` | Actualizar servicio |
-| PATCH | `/api/v1/services/{id}/status` | `PRESTADORA_SERVICIOS`, `ADMIN` | Cambiar estado |
+| POST | `/api/v1/services` | `SERVICE_PROVIDER`, `ADMIN` | Crear servicio |
+| PUT | `/api/v1/services/{id}` | `SERVICE_PROVIDER`, `ADMIN` | Actualizar servicio |
+| PATCH | `/api/v1/services/{id}/status` | `SERVICE_PROVIDER`, `ADMIN` | Cambiar estado |
 | GET | `/api/v1/services` | autenticado | Listar/filtrar servicios |
-| POST | `/api/v1/reviews` | `TURISTA` | Crear reseña de sitio o servicio |
-| POST | `/api/v1/reviews/{id}/response` | `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN` | Responder reseña |
+| POST | `/api/v1/reviews` | `TOURIST` | Crear reseña de sitio o servicio |
+| POST | `/api/v1/reviews/{id}/response` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Responder reseña |
 | PATCH | `/api/v1/reviews/{id}/status` | `ADMIN` | Moderar reseña |
 | GET | `/api/v1/reviews/summary?itemType=&itemId=` | autenticado | Promedio y número de reseñas |
 | GET | `/api/v1/reviews/reputation?itemType=&itemId=` | autenticado | Métricas de reputación (distribución, respuestas, ocultas) |
@@ -215,10 +215,10 @@ una red o puerto privado.
 | GET | `/api/v1/reviews/reports?status=&reviewId=&page=&size=` | `ADMIN` | Listar reportes de reseñas |
 | PATCH | `/api/v1/reviews/reports/{id}` | `ADMIN` | Aceptar o descartar un reporte |
 | GET | `/api/v1/reviews` | autenticado | Listar reseñas |
-| POST | `/api/v1/reservations` | `TURISTA` | Crear reserva confirmada de hasta 10 servicios de una prestadora |
+| POST | `/api/v1/reservations` | `TOURIST` | Crear reserva confirmada de hasta 10 servicios de una prestadora |
 | GET | `/api/v1/reservations/availability?serviceId=&bookedFor=&people=` | autenticado | Consultar cupos disponibles |
 | GET | `/api/v1/reservations/{id}` | turista dueño, prestadora o `ADMIN` | Ver reserva |
-| GET | `/api/v1/reservations` | `TURISTA`, `PRESTADORA_SERVICIOS`, `ADMIN` | Listar reservas según el actor |
+| GET | `/api/v1/reservations` | `TOURIST`, `SERVICE_PROVIDER`, `ADMIN` | Listar reservas según el actor |
 | PATCH | `/api/v1/reservations/{id}/status` | turista dueño (cancelar), prestadora o `ADMIN` | Cancelar o completar |
 | GET | `/api/v1/notifications?unreadOnly=&page=&size=` | autenticado | Bandeja del usuario actual |
 | PATCH | `/api/v1/notifications/{id}/read` | destinatario o `ADMIN` | Marcar notificación como leída |
@@ -230,7 +230,7 @@ una red o puerto privado.
 Filtros disponibles:
 
 - Sitios: `categoryId`, `zoneId`, `status`, `search`, `managerId`, `page`, `size`.
-  `managerId` exige `ADMIN` o la propia `GESTORA_DESTINOS`; cualquier otro valor devuelve `403`.
+  `managerId` exige `ADMIN` o la propia `DESTINATION_MANAGER`; cualquier otro valor devuelve `403`.
 - Servicios: `categoryId`, `zoneId`, `siteId`, `providerId`, `status`, `type`, `search`, `page`, `size`.
 - Zonas: `status`, `type`, `search`, `page`, `size`.
 - Reseñas: `itemType`, `itemId`, `touristId`, `status`, `page`, `size`.
@@ -274,8 +274,10 @@ Las escrituras aceptan `X-Correlation-Id`; si no se envía, se genera uno.
 - Solo RS256. No se acepta HS256.
 - Producción / ms-01: `JWK_SET_URI=https://ms-01/.../.well-known/jwks.json`.
 - Local/tests: `JWT_PUBLIC_KEY_LOCATION=file:/ruta/public.pem`.
+- `JWT_ISSUER=sm-xplore-ms-01` y `JWT_AUDIENCE=sm-xplore-services`.
 - Identidad desde `sub` o, si no viene, del claim `userId` (`JWT_USER_ID_CLAIM`).
-- Roles: `GESTORA_DESTINOS`, `PRESTADORA_SERVICIOS`, `TURISTA`, `ADMIN`.
+- Roles: `DESTINATION_MANAGER`, `SERVICE_PROVIDER`, `GUIDE`, `TOURIST`, `ADMIN`.
+- Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - Las reglas de propiedad se validan en la capa de aplicación: una prestadora solo modifica sus
   servicios; una gestora solo modifica sus zonas/sitios; el `ADMIN` puede moderar.
 - En reservas, un turista solo crea, consulta y cancela las suyas. Como todos los ítems de una
@@ -371,8 +373,8 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `MAILPIT_UI_PORT` | `8025` | Bandeja web de Mailpit en Compose |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | PEM local/test |
-| `JWT_ISSUER` | vacío | Issuer esperado |
-| `JWT_AUDIENCE` | vacío | Audiencia esperada |
+| `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado |
+| `JWT_AUDIENCE` | `sm-xplore-services` | Audiencia esperada |
 | `JWT_USER_ID_CLAIM` | `userId` | Claim de identidad si no viene `sub` |
 | `OUTBOX_ENABLED` | `true` | Activa el relay |
 | `OUTBOX_PRODUCER` | `ms-04` | Campo `producer` del sobre |
