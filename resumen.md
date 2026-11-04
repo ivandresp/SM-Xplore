@@ -103,7 +103,7 @@ Comparación:
 - Seguridad JWT RS256/JWKS alineada con ms-01, roles en inglés, rechazo de `scope=mfa`.
 - Outbox transaccional en MongoDB y publicación de `security.report.changed` por Kafka.
 - Consulta geolocalizada `GET /api/v1/security-reports/nearby` con índice `2dsphere`.
-- Errores RFC 9457 (`application/problem+json`) y cabeceras de seguridad.
+- Errores RFC 9457 (`application/problem+json`), cabeceras de seguridad y rate limit por IP para crear reportes.
 - Compose con MongoDB en replica set, Kafka y red `smxplore-net`.
 - CI con verificación, Trivy y smoke test de imagen.
 - Swagger, health y pruebas de integración con Testcontainers.
@@ -111,7 +111,6 @@ Comparación:
 **Pendientes:**
 
 - Consumidor real de `security.report.changed` para notificaciones/alertas (analítica o bandeja).
-- Rate limiting de creación de reportes si se expone fuera del aula.
 - Entrega push/correo de alertas geolocalizadas.
 
 ### 3.3 ms-03 — Actividades, eventos, reservas y reseñas
@@ -440,7 +439,7 @@ Mínimo para aceptar ms-03:
 
 | Servicio | Cambio | Prioridad |
 |---|---|---|
-| ms-02 | Implementar el consumidor de `security.report.changed` para alertas/notificaciones y rate limiting si se expone fuera del aula. | Media |
+| ms-02 | Implementar el consumidor de `security.report.changed` para alertas/notificaciones y analítica. | Media |
 | ms-04 | Extender notificaciones a `ACTIVITY`/`EVENT` y usar `GUIDE` como destinatario cuando corresponda. | Alta |
 | ms-04 | Actualizar README (ms-05 ya consume el feed) y documentar notificaciones. | Media |
 | ms-05 | Extender `CatalogEntity`/`CatalogExportClient` para reindexar ms-03. El rol ya está alineado. | Alta |
@@ -463,7 +462,7 @@ Mínimo para aceptar ms-03:
 6. **Extender ms-04** para notificar reservas de actividades/eventos.
 7. **CI, Docker, runbook y documentación**.
 8. **E2E completo** ms-01 → ms-04 → ms-03 → ms-05, más notificaciones en ms-04.
-9. **Cerrar deuda de ms-02** (consumidor de eventos/rate limit) y actualizar documentación global.
+9. **Cerrar deuda de ms-02** (consumidor de eventos) y actualizar documentación global.
 
 ### Primeras órdenes concretas sugeridas
 
@@ -473,7 +472,7 @@ Mínimo para aceptar ms-03:
 - `ms-03`: endpoint `admin/catalog/export` para `ACTIVITIES`/`EVENTS` + pruebas de paginación.
 - `ms-05`: reindexado de ms-03 (el rol ya está alineado).
 - `ms-04`: notificaciones para `ACTIVITY`/`EVENT` + rol `GUIDE` como destinatario.
-- `ms-02`: consumidor de `security.report.changed` y rate limiting si se expone fuera del aula.
+- `ms-02`: consumidor de `security.report.changed` para alertas/notificaciones.
 - `docs/infra`: actualizar `AGENTS.md`, READMEs, contracts e compose integral.
 - `ms-01`: ejecutar `V10`, forzar re-login y actualizar cualquier cliente que filtre por `?role=` o lea el claim `role`.
 
