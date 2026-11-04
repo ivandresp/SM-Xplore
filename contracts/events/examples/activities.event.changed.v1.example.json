@@ -1,0 +1,22 @@
+{
+  "eventId": "f4a5b6c7-d8e9-4f0a-b1c2-3d4e5f607182",
+  "eventType": "activities.event.changed",
+  "eventVersion": 1,
+  "occurredAt": "2026-10-26T02:00:00Z",
+  "aggregateId": "44444444-4444-4444-4444-444444444401",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-03",
+  "payload": {
+    "eventId": "44444444-4444-4444-4444-444444444401",
+    "name": "Festival del Mar",
+    "categoryId": "11111111-1111-1111-1111-111111111106",
+    "siteId": "22222222-2222-2222-2222-222222222201",
+    "latitude": 10.391,
+    "longitude": -75.479,
+    "price": 100000,
+    "startsAt": "2026-11-02T18:00:00Z",
+    "endsAt": "2026-11-03T00:00:00Z",
+    "status": "PUBLISHED",
+    "updatedAt": "2026-10-26T02:00:00Z"
+  }
+}

@@ -1,0 +1,135 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: ms-04-sites-and-services
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/smxplore?replicaSet=rs0}
+    auto-index-creation: false
+  r2dbc:
+    url: ${POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/smxplore}
+    username: ${POSTGRES_USER:smxplore}
+    password: ${POSTGRES_PASSWORD:change-me}
+    pool:
+      max-size: ${POSTGRES_POOL_SIZE:20}
+      initial-size: ${POSTGRES_POOL_INITIAL_SIZE:2}
+      max-idle-time: ${POSTGRES_MAX_IDLE_TIME:30m}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    url: ${POSTGRES_JDBC_URL:jdbc:postgresql://localhost:5432/smxplore}
+    user: ${POSTGRES_USER:smxplore}
+    password: ${POSTGRES_PASSWORD:change-me}
+    locations: classpath:db/migration
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: 0
+    validate-on-migrate: ${FLYWAY_VALIDATE_ON_MIGRATE:true}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:ms-04-notifications}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:latest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      missing-topics-fatal: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+app:
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      user-id-claim: ${JWT_USER_ID_CLAIM:userId}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+  outbox:
+    enabled: ${OUTBOX_ENABLED:true}
+    producer: ${OUTBOX_PRODUCER:ms-04}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
+    initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
+    max-backoff: ${OUTBOX_MAX_BACKOFF:1m}
+    lease-duration: ${OUTBOX_LEASE_DURATION:3m}
+    retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
+
+  catalog:
+    seed-enabled: ${CATALOG_SEED_ENABLED:false}
+
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    email:
+      enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}
+      from: ${NOTIFICATIONS_EMAIL_FROM:no-reply@smxplore.local}
+      subject-prefix: ${NOTIFICATIONS_EMAIL_SUBJECT_PREFIX:[SM-Xplore] }
+
+  bookings:
+    zone-id: ${BOOKINGS_ZONE_ID:America/Bogota}
+    max-active-per-tourist: ${BOOKINGS_MAX_ACTIVE_PER_TOURIST:5}
+    max-creations-per-minute: ${BOOKINGS_MAX_CREATIONS_PER_MINUTE:10}
+    max-advance-days: ${BOOKINGS_MAX_ADVANCE_DAYS:365}
+    auto-complete-enabled: ${BOOKINGS_AUTO_COMPLETE_ENABLED:true}
+    completion-interval-ms: ${BOOKINGS_COMPLETION_INTERVAL_MS:60000}
+    completion-batch-size: ${BOOKINGS_COMPLETION_BATCH_SIZE:100}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+management:
+  defaults:
+    metrics:
+      export:
+        enabled: true
+  health:
+    # El correo es un canal secundario best-effort: que SMTP esté caído no debe
+    # marcar el servicio como DOWN.
+    mail:
+      enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    metrics:
+      access: read-only
+    prometheus:
+      access: read-only
+    health:
+      probes:
+        enabled: true
+      show-details: ${HEALTH_SHOW_DETAILS:never}
+  metrics:
+    tags:
+      application: ${spring.application.name}
