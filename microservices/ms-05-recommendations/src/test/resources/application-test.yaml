@@ -1,4 +1,7 @@
 app:
+  recommendations:
+    cache:
+      enabled: false
   neo4j:
     initialize-schema: true
   seed:

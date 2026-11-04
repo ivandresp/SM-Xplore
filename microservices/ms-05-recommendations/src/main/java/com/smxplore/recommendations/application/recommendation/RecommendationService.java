@@ -9,12 +9,15 @@ import com.smxplore.recommendations.domain.model.ranking.ScoredCandidate;
 import com.smxplore.recommendations.domain.model.ranking.ScoringContext;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.recommendation.Recommendation;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationCacheKey;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationItem;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationQuery;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationRequest;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationSource;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
+import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
@@ -26,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -35,14 +39,45 @@ public class RecommendationService implements GetRecommendationsUseCase {
     private final RecommendationScorer scorer;
     private final DiversitySelector diversitySelector;
     private final RecommendationPolicy policy;
+    private final RecommendationCachePort cache;
+    private final GraphVersionPort graphVersion;
     private final Clock clock;
 
     @Override
     public Mono<Recommendation> handle(RecommendationRequest request) {
         RecommendationQuery query = buildQuery(request);
         Instant now = clock.instant();
+        RecommendationCacheKey cacheKey = cacheKey(query);
+        return graphVersion.current()
+                .flatMap(version -> cache.get(cacheKey.value(version))
+                        .onErrorResume(error -> Mono.just(Optional.empty()))
+                        .flatMap(cached -> cached
+                                .map(Mono::just)
+                                .orElseGet(() -> compute(query, now, cacheKey, version))));
+    }
+
+    private Mono<Recommendation> compute(
+            RecommendationQuery query,
+            Instant now,
+            RecommendationCacheKey cacheKey,
+            long version
+    ) {
         return loadCandidates(query, now)
-                .map(candidates -> buildRecommendation(query, candidates, now));
+                .map(candidates -> buildRecommendation(query, candidates, now))
+                .flatMap(recommendation -> cache.put(cacheKey.value(version), recommendation)
+                        .onErrorResume(error -> Mono.empty())
+                        .thenReturn(recommendation));
+    }
+
+    private RecommendationCacheKey cacheKey(RecommendationQuery query) {
+        GeoLocation location = query.location();
+        return new RecommendationCacheKey(
+                query.touristId(),
+                query.siteId(),
+                location == null ? null : location.latitude(),
+                location == null ? null : location.longitude(),
+                query.limit()
+        );
     }
 
     private RecommendationQuery buildQuery(RecommendationRequest request) {

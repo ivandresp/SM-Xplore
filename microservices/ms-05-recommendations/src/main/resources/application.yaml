@@ -15,6 +15,13 @@ spring:
       connection-acquisition-timeout: ${NEO4J_ACQUISITION_TIMEOUT:30s}
     connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:15s}
     max-transaction-retry-time: ${NEO4J_RETRY_TIME:15s}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
     consumer:
@@ -60,6 +67,13 @@ app:
       quality: ${RECOMMENDATIONS_WEIGHT_QUALITY:0.25}
       proximity: ${RECOMMENDATIONS_WEIGHT_PROXIMITY:0.20}
       novelty: ${RECOMMENDATIONS_WEIGHT_NOVELTY:0.10}
+    cache:
+      enabled: ${RECOMMENDATIONS_CACHE_ENABLED:true}
+      local-ttl: ${RECOMMENDATIONS_CACHE_LOCAL_TTL:10s}
+      redis-ttl: ${RECOMMENDATIONS_CACHE_REDIS_TTL:1m}
+      local-max-size: ${RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE:1000}
+      key-prefix: ${RECOMMENDATIONS_CACHE_KEY_PREFIX:ms05:recommendations:}
+      version-key: ${RECOMMENDATIONS_CACHE_VERSION_KEY:ms05:graph:version}
   neo4j:
     initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
   seed:
@@ -103,6 +117,10 @@ management:
       probes:
         enabled: true
       show-details: ${HEALTH_SHOW_DETAILS:never}
+  health:
+    redis:
+      # Redis es una cache best-effort: si cae, la API sigue respondiendo sin cache.
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}

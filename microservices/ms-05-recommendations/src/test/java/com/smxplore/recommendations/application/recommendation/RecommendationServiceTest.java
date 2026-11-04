@@ -10,6 +10,8 @@ import com.smxplore.recommendations.domain.model.recommendation.Recommendation;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationRequest;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationSource;
+import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,11 +19,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +63,8 @@ class RecommendationServiceTest {
                 new RecommendationScorer(policy),
                 new DiversitySelector(policy),
                 policy,
+                new RecordingCache(),
+                new FixedGraphVersion(1L),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -268,5 +276,40 @@ class RecommendationServiceTest {
                 .build();
         policy.validate();
         return policy;
+    }
+
+    static final class RecordingCache implements RecommendationCachePort {
+
+        final Map<String, Recommendation> entries = new HashMap<>();
+
+        @Override
+        public Mono<Optional<Recommendation>> get(String key) {
+            return Mono.just(Optional.ofNullable(entries.get(key)));
+        }
+
+        @Override
+        public Mono<Void> put(String key, Recommendation recommendation) {
+            entries.put(key, recommendation);
+            return Mono.empty();
+        }
+    }
+
+    static final class FixedGraphVersion implements GraphVersionPort {
+
+        private final long version;
+
+        FixedGraphVersion(long version) {
+            this.version = version;
+        }
+
+        @Override
+        public Mono<Long> current() {
+            return Mono.just(version);
+        }
+
+        @Override
+        public Mono<Void> bump() {
+            return Mono.empty();
+        }
     }
 }
