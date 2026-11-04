@@ -360,6 +360,5 @@ salud de la cache: si cae a cero con Redis arriba, revisar `ms05:graph:version` 
   implementan en sus ramas.
 - Reindexado desde ms-03 (actividades, eventos y reseñas): ms-03 todavía no expone un feed
   equivalente al de ms-04, así que solo el catálogo se puede reconstruir hoy.
-- Caché Redis/Caffeine (fase 3).
-- Circuit breaker y pruebas de carga (fases 3-4).
+- Circuit breaker explícito y alertas de DLQ/lag (fases 3-4); la cache ya degrada sin Redis.
 - Recomendaciones para guías (US10/US17).
