@@ -1,0 +1,28 @@
+## Actualizaciones automáticas de dependencias para ms-01.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/microservices/ms-01-users-and-anomalies"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+      testcontainers:
+        patterns:
+          - "org.testcontainers*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-01-users-and-anomalies"
+    schedule:
+      interval: "weekly"
+      day: "monday"

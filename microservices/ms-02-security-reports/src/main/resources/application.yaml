@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: security-reports
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/security_reports}
+  data:
+    mongodb:
+      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:false}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      issuer: ${JWT_ISSUER:https://securityreports.local}
+      audience: ${JWT_AUDIENCE:}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}

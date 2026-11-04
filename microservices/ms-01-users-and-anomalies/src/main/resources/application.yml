@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: ms-01-users-and-anomalies
+  profiles:
+    default: dev
+  r2dbc:
+    url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/smxplore_users}
+    username: ${DB_USERNAME:smxplore}
+    password: ${DB_PASSWORD:smxplore}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/smxplore_users}
+    user: ${DB_USERNAME:smxplore}
+    password: ${DB_PASSWORD:smxplore}
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://smxplore:smxplore@localhost:27017/smxplore_reviews?authSource=admin}
+    representation:
+      uuid: standard
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:sm-xplore-ms-01}
+      audience: ${JWT_AUDIENCE:sm-xplore-services}
+      ttl: ${JWT_TTL:PT60M}
+      private-key: ${JWT_PRIVATE_KEY:}
+      public-key: ${JWT_PUBLIC_KEY:}
+      key-store-path: ${JWT_KEY_STORE:.local/jwt/keys.pem}
+      allow-generated-keys: ${JWT_ALLOW_GENERATED_KEYS:false}
+    password-reset:
+      ttl: ${PASSWORD_RESET_TTL:PT30M}
+    account-invitation:
+      ttl: ${ACCOUNT_INVITATION_TTL:PT48H}
+    rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:30}
+    lockout:
+      enabled: ${LOGIN_LOCKOUT_ENABLED:true}
+      max-attempts: ${LOGIN_LOCKOUT_MAX_ATTEMPTS:5}
+      window: ${LOGIN_LOCKOUT_WINDOW:PT15M}
+      duration: ${LOGIN_LOCKOUT_DURATION:PT15M}
+    mfa:
+      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
+      challenge-ttl: ${MFA_CHALLENGE_TTL:PT5M}
+      issuer: ${MFA_ISSUER:SM-Xplore}
+      secret-key: ${MFA_SECRET_KEY:}
+    headers:
+      hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
+      hsts-max-age-days: ${SECURITY_HSTS_MAX_AGE_DAYS:365}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    reset-password-path: ${FRONTEND_RESET_PASSWORD_PATH:/reset-password}
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@smxplore.local}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:ChangeMe123!}
+    full-name: ${BOOTSTRAP_ADMIN_NAME:Administrador SM-Xplore}
+  reviews:
+    index-initialization:
+      enabled: ${REVIEW_INDEX_INIT:true}
+    ai-filter:
+      enabled: ${REVIEW_AI_ENABLED:false}
+      base-url: ${LITTLELLM_URL:}
+      api-key: ${LITTLELLM_API_KEY:}
+      api-key-header: ${LITTLELLM_API_KEY_HEADER:Authorization}
+      api-key-prefix: ${LITTLELLM_API_KEY_PREFIX:Bearer}
+      model: ${LITTLELLM_MODEL:littlellm}
+      chat-path: ${LITTLELLM_CHAT_PATH:/v1/chat/completions}
+      timeout: ${REVIEW_AI_TIMEOUT:PT5S}
+      threshold: ${REVIEW_AI_THRESHOLD:0.7}
+      temperature: ${REVIEW_AI_TEMPERATURE:0.0}
+      action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
+  anomalies:
+    detection:
+      enabled: ${ANOMALY_DETECTION_ENABLED:true}
+      interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
+  retention:
+    enabled: ${RETENTION_ENABLED:true}
+    auth-artifacts-days: ${RETENTION_AUTH_ARTIFACTS_DAYS:30}
+    audit-log-days: ${RETENTION_AUDIT_LOG_DAYS:1825}
+    cron: "${RETENTION_CRON:0 30 3 * * *}"

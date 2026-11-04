@@ -1,0 +1,20 @@
+# Normaliza los finales de línea en el repositorio. Sin esto, un checkout en Windows con
+# core.autocrlf=true deja gradlew con CRLF y el build dentro de Docker falla con "./gradlew: not found".
+
+* text=auto
+
+# Scripts de shell y wrappers: siempre LF, porque el kernel no entiende un shebang con CRLF.
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Wrappers de Windows: siempre CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Recursos binarios: nunca normalizar.
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.docx binary
+*.xlsx binary
