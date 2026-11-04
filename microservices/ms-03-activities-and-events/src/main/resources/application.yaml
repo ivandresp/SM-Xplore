@@ -5,7 +5,7 @@ spring:
   application:
     name: activities-and-events
   r2dbc:
-    url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/activities_events}
+    url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
     pool:
@@ -18,12 +18,14 @@ spring:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
-    url: ${FLYWAY_URL:jdbc:postgresql://localhost:5432/activities_events}
+    url: "${FLYWAY_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
     user: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
     locations: classpath:db/migration
+    schemas: public
     baseline-on-migrate: true
-    baseline-version: 1
+    baseline-version: 0
+    connect-retries: ${FLYWAY_CONNECT_RETRIES:10}
     clean-disabled: true
 
 springdoc:

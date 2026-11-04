@@ -20,7 +20,7 @@ Shared at the repository root:
 
 - `contracts/`: event envelope, seven versioned schemas and fixtures.
 - `infrastructure/`: Kafka, Kafka UI and Redis compose for local integration.
-- `.github/workflows/`: `ms-01-ci.yml` and `ms-04-ci.yml`; ms-03 CI is pending.
+- `.github/workflows/`: `ms-01-ci.yml`, `ms-03-ci.yml` and `ms-04-ci.yml`.
 - `docs/`: read-only reference (models, user stories, SRS).
 
 `ms-03-activities-and-events` is the older ms-03 branch, contained in `ms-03-symbolic-reservations`. Never merge it separately.
@@ -106,12 +106,12 @@ Canonical contract, with ms-01 as issuer:
 - Rules: optional `Idempotency-Key` (1-64) on `POST /api/v1/reservations`; maximum 5 active reservations per tourist; tourist cancellation up to 24 h before start; attendance and no-show after start; daily auto-close at 03:15 `America/Bogota` with `P1D` grace.
 - Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
 - Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports.
-- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Flyway: `V1` baseline, `V2` symbolic reservations. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows; review `reservations_quarantine` after upgrading.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
-  1. CI: add `.github/workflows/ms-03-ci.yml` using the ms-04 workflow as reference.
-  2. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
-  3. Events/outbox: resolve the contract mismatch first, then publish.
-  4. Hardening: `ProblemDetail`, pagination, status filtering in SQL, hide non-published items in public detail, `managerId` accepted from the body for ADMIN, required `paymentMethod`.
+  1. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
+  2. Events/outbox: resolve the contract mismatch first, then publish.
+  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, hide non-published items in public detail, `managerId` accepted from the body for ADMIN, required `paymentMethod`, fail-closed null principals, required `aud`, and least-privilege DB/Mongo users.
 - 185 tests as of 2026-11-03, including Testcontainers PostgreSQL tests.
 
 ## Cross-service rules

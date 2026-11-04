@@ -8,12 +8,12 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **JWT RS256**: el decoder valida con el JWKS de ms-01 (`JWK_SET_URI`) o con una llave pública PEM (`JWT_PUBLIC_KEY_LOCATION`). Se elimina `JWT_SECRET` y el soporte HS256.
 - **Roles en español**: el claim `role` usa `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`. La autorización interna conserva los identificadores ingleses; los nombres ingleses anteriores se aceptan durante la migración.
 - Los tokens con `scope=mfa` se rechazan como tokens de acceso.
-- **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque.
+- **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque. `V2` archiva las filas originales y mueve a cuarentena las reservas no representables.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.
 - Ajustar `JWT_ISSUER=sm-xplore-ms-01` y `JWT_AUDIENCE=sm-xplore-services` para aceptar tokens de ms-01.
-- Las bases existentes se basan en `V1` y reciben `V2`; hacer backup antes porque `V2` elimina reservas sin ítem.
+- Las bases existentes arrancan con baseline `0`, ejecutan `V1` (idempotente) y `V2`. Hacer backup: `V2` archiva en `reservations_legacy`/`reservation_items_legacy` y mueve a `reservations_quarantine` las reservas sin ítem, multi-ítem o con ítem inexistente.
 
 ## [No publicado] — 2026-10-26
 
@@ -42,7 +42,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - Tabla `reservation_items`, sus casos de uso, adaptadores, DTOs y tests.
 
 ### Migración
-- `schema.sql` agrega las columnas nuevas, normaliza los estados viejos (`PENDING` → `CONFIRMED`, `REJECTED`/`CANCELLATION_REQUESTED` → `CANCELLED`) y elimina reservas sin ítem. El `DELETE` queda como no-op tras la primera ejecución.
+- Histórico, sustituido por `V1`/`V2`: el antiguo `schema.sql` agregaba las columnas nuevas, normalizaba los estados viejos y eliminaba reservas sin ítem.
 
 ## [No publicado] — 2026-10-25
 

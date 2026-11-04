@@ -32,7 +32,7 @@ Servicios:
 - Swagger UI: `http://localhost:8082/swagger-ui.html`
 - Health: `http://localhost:8082/actuator/health`
 
-Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas).
+Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas). `V2` archiva las filas originales en `reservations_legacy` y `reservation_items_legacy`, y mueve a `reservations_quarantine` las reservas que no se pueden representar (sin ítem, multi-ítem o ítem inexistente). Hacer backup y revisar la cuarentena después de migrar.
 
 Para reiniciar las bases desde cero:
 
@@ -53,6 +53,8 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 
 `JWK_SET_URI` o `JWT_PUBLIC_KEY_LOCATION` es obligatorio: el servicio no arranca sin una fuente de llaves RS256. No se admite HS256.
 
+Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTGRES_HOST`, `POSTGRES_PORT` y `POSTGRES_DB`; si las defines, deben apuntar a la misma base.
+
 ## Variables de entorno
 
 | Variable | Default | Descripción |
@@ -71,6 +73,7 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker se activa. |
 | `FLYWAY_URL` | `jdbc:postgresql://localhost:5432/activities_events` | URL JDBC que usa Flyway para migrar el esquema. |
+| `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 
@@ -93,20 +96,20 @@ Los roles del JWT son los de ms-01: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `
 | GET | `/api/v1/events/{eventId}/exists` | Público (200/404) |
 | GET | `/api/v1/events/{eventId}/availability` | Público |
 | GET | `/api/v1/events/search?name=` | Público |
-| POST | `/api/v1/events` | `ADMIN`, `DESTINATION_MANAGER` |
-| PATCH | `/api/v1/events/{eventId}/status` | `ADMIN`, `DESTINATION_MANAGER` |
-| PATCH | `/api/v1/events/{eventId}/attendance` | `ADMIN`, `DESTINATION_MANAGER` |
+| POST | `/api/v1/events` | `ADMIN`, `GESTORA_DESTINOS` |
+| PATCH | `/api/v1/events/{eventId}/status` | `ADMIN`, `GESTORA_DESTINOS` |
+| PATCH | `/api/v1/events/{eventId}/attendance` | `ADMIN`, `GESTORA_DESTINOS` |
 | GET | `/api/v1/activities` | Público |
 | GET | `/api/v1/activities/{activityId}` | Público |
 | GET | `/api/v1/activities/{activityId}/availability` | Público |
 | GET | `/api/v1/activities/search?category=` | Público |
 | GET | `/api/v1/activities/site/{siteId}` | Público |
-| POST | `/api/v1/activities` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
-| PATCH | `/api/v1/activities/{activityId}` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
-| PATCH | `/api/v1/activities/{activityId}/availability` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
-| PATCH | `/api/v1/activities/{activityId}/slots` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
-| PATCH | `/api/v1/activities/{activityId}/status` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
-| POST | `/api/v1/activities/{activityId}/cancel` | `ADMIN`, `DESTINATION_MANAGER`, `GUIDE` |
+| POST | `/api/v1/activities` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
+| PATCH | `/api/v1/activities/{activityId}` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
+| PATCH | `/api/v1/activities/{activityId}/availability` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
+| PATCH | `/api/v1/activities/{activityId}/slots` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
+| PATCH | `/api/v1/activities/{activityId}/status` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
+| POST | `/api/v1/activities/{activityId}/cancel` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
 
 Los errores usan el formato uniforme `{timestamp, status, error, message, path}`.
 
@@ -125,7 +128,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 |---|---|---|
 | POST | `/api/v1/reservations` | Autenticado (turista crea la suya; admin puede crear para otro) |
 | GET | `/api/v1/reservations/{id}` | Dueño, guía de la reserva o staff |
-| GET | `/api/v1/reservations?status=` | `ADMIN`, `DESTINATION_MANAGER` |
+| GET | `/api/v1/reservations?status=` | `ADMIN`, `GESTORA_DESTINOS` |
 | GET | `/api/v1/reservations/tourists/{touristId}` | El propio turista o staff |
 | GET | `/api/v1/reservations/guides/{guideId}` | El propio guía o staff |
 | GET | `/api/v1/reservations/by-item?itemType=&itemId=` | Guía dueño del ítem o staff (eventos: staff) |
@@ -152,8 +155,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 | GET | `/api/v1/reviews/activities/{activityId}/metrics` | Público |
 | POST | `/api/v1/reviews/{reviewId}/report` | Autenticado; un reporte por usuario y reseña |
 | POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o ADMIN |
-| GET | `/api/v1/review-reports?status=PENDING` | `ADMIN`, `DESTINATION_MANAGER` |
-| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`, `DESTINATION_MANAGER` |
+| GET | `/api/v1/review-reports?status=PENDING` | `ADMIN`, `GESTORA_DESTINOS` |
+| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`, `GESTORA_DESTINOS` |
 
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
