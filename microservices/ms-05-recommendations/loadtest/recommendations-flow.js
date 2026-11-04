@@ -7,7 +7,6 @@
 //
 // Requiere un JWT de turista emitido por ms-01 (RS256). El script mide el camino completo:
 // version del grafo en Redis -> cache Caffeine/Redis -> ranking en Neo4j.
-import crypto from 'k6/crypto';
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
@@ -47,7 +46,7 @@ function headers() {
   return {
     Authorization: `Bearer ${TOKEN}`,
     Accept: 'application/json',
-    'X-Correlation-Id': crypto.randomBytes(8).toString('hex'),
+    'X-Correlation-Id': 'load-' + __VU + '-' + __ITER,
   };
 }
 
