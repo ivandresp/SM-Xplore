@@ -127,16 +127,33 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Analizar la imagen con Trivy
-        # Fijado al commit de v0.36.0: los tags de trivy-action se han reescrito en ataques de cadena de suministro.
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        # Se ejecuta la imagen oficial de Trivy en lugar de la accion: el resultado sale completo en
+        # el log, la version es inmutable y no se depende de un tag que se pueda reescribir.
+        env:
+          TRIVY_IMAGE: aquasec/trivy:0.68.2
+        run: |
+          set +e
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "${TRIVY_IMAGE}" image \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --timeout 15m \
+            --exit-code 1 \
+            "${IMAGE_NAME}" 2>&1 | tee trivy-report.txt
+          code=${PIPESTATUS[0]}
+          if [ "${code}" -ne 0 ]; then
+            echo "::error title=Trivy (exit ${code})::$(grep -E 'CVE-[0-9]{4}-[0-9]+|^ERROR|^FATAL' trivy-report.txt | head -n 5 | tr '\n' ' ')"
+          fi
+          exit "${code}"
+
+      - name: Publicar el reporte de Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          image-ref: ${{ env.IMAGE_NAME }}
-          format: table
-          scanners: vuln
-          timeout: "15m"
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
+          name: ms-04-trivy-report
+          path: trivy-report.txt
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Levantar Kafka y la red compartida
         run: |
