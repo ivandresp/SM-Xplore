@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
@@ -55,6 +56,7 @@ public class ReservationController {
     private final CreateReservationUseCasePort createReservationUseCase;
     private final ConsultOneReservationUseCasePort consultOneReservationUseCase;
     private final ConsultReservationsByStatusUseCasePort consultReservationsByStatusUseCase;
+    private final ConsultManagerReservationsUseCase consultManagerReservationsUseCase;
     private final ConsultReservationsByTouristUseCasePort consultReservationsByTouristUseCase;
     private final ConsultReservationsByGuideUseCasePort consultReservationsByGuideUseCase;
     private final ConsultReservationsByItemUseCasePort consultReservationsByItemUseCase;
@@ -101,11 +103,19 @@ public class ReservationController {
     @GetMapping
     @Operation(summary = "List reservations by status (admin/managers)")
     public Flux<ReservationSummaryResponse> findByStatus(@RequestParam ReservationStatus status,
-                                                         @RequestParam(defaultValue = "50") int limit) {
-        // TODO(ms-04): scope this listing to the sites of the caller's managerId.
-        // Until that contract exists, SecurityConfiguration restricts this listing to ADMIN.
-        return consultReservationsByStatusUseCase.handle(status, PaginationLimits.clamp(limit))
-                .map(mapper::toSummary);
+                                                         @RequestParam(defaultValue = "50") int limit,
+                                                         @AuthenticationPrincipal Jwt jwt) {
+        if (isAdmin(jwt)) {
+            return consultReservationsByStatusUseCase.handle(status, PaginationLimits.clamp(limit))
+                    .map(mapper::toSummary);
+        }
+        if (role(jwt) == UserRole.DESTINATION_MANAGER) {
+            return consultManagerReservationsUseCase
+                    .handle(subjectAsUuid(jwt), jwt.getTokenValue(), status, PaginationLimits.clamp(limit))
+                    .map(mapper::toSummary);
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Only admins and destination managers can list reservations by status.");
     }
 
     @GetMapping("/tourists/{touristId}")

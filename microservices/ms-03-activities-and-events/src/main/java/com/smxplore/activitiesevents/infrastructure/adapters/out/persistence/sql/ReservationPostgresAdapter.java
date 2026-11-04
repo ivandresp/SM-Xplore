@@ -16,6 +16,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class ReservationPostgresAdapter implements ReservationRepositoryPort {
 
     private static final Sort STABLE_ORDER = Sort.by("id");
+    private static final UUID NO_ITEM = new UUID(0L, 0L);
 
     private final ReservationR2dbcRepository repository;
     private final R2dbcEntityTemplate template;
@@ -83,6 +86,14 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     @Override
     public Flux<Reservation> findAllByItem(UUID itemId, ReservationItemType type, int limit) {
         return repository.findAllByItem(itemId, type.name(), limit).map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Reservation> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                               ReservationStatus status, int limit) {
+        var events = eventIds.isEmpty() ? Set.of(NO_ITEM) : eventIds;
+        var activities = activityIds.isEmpty() ? Set.of(NO_ITEM) : activityIds;
+        return repository.findAllByItemRefs(events, activities, status.name(), limit).map(mapper::toDomain);
     }
 
     @Override

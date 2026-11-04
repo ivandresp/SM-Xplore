@@ -5,9 +5,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -16,6 +18,8 @@ import java.util.UUID;
  */
 @Component
 public class Ms04SiteCatalogAdapter implements SiteCatalogPort {
+
+    private static final int PAGE_SIZE = 100;
 
     private final WebClient webClient;
     private final Duration timeout;
@@ -27,14 +31,43 @@ public class Ms04SiteCatalogAdapter implements SiteCatalogPort {
     }
 
     @Override
-    public Mono<SiteSnapshot> findById(UUID siteId) {
+    public Mono<SiteSnapshot> findById(UUID siteId, String bearerToken) {
         return webClient.get()
                 .uri("/api/v1/sites/{siteId}", siteId)
+                .headers(headers -> headers.setBearerAuth(bearerToken))
                 .retrieve()
                 .bodyToMono(SiteResponse.class)
                 .timeout(timeout)
                 .onErrorResume(WebClientResponseException.NotFound.class, exception -> Mono.empty())
                 .map(site -> new SiteSnapshot(site.siteId(), site.managerId(), site.name()));
+    }
+
+    @Override
+    public Flux<SiteSnapshot> findByManagerId(UUID managerId, String bearerToken) {
+        return page(managerId, 0, bearerToken);
+    }
+
+    private Flux<SiteSnapshot> page(UUID managerId, int page, String bearerToken) {
+        return webClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/sites")
+                        .queryParam("managerId", managerId)
+                        .queryParam("page", page)
+                        .queryParam("size", PAGE_SIZE)
+                        .build())
+                .headers(headers -> headers.setBearerAuth(bearerToken))
+                .retrieve()
+                .bodyToMono(SitePage.class)
+                .timeout(timeout)
+                .flatMapMany(result -> {
+                    var current = Flux.fromIterable(result.content())
+                            .map(site -> new SiteSnapshot(site.siteId(), site.managerId(), site.name()));
+                    return page + 1 < result.totalPages()
+                            ? current.concatWith(page(managerId, page + 1, bearerToken))
+                            : current;
+                });
+    }
+
+    private record SitePage(List<SiteResponse> content, int page, int size, long total, int totalPages) {
     }
 
     private record SiteResponse(UUID siteId, UUID managerId, String name) {

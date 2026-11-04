@@ -109,10 +109,10 @@ Canonical contract, with ms-01 as issuer:
 - Flyway: `V1` baseline, `V2` symbolic reservations. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows; review `reservations_quarantine` after upgrading.
 - Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
-  1. `TODO(ms-04)`: manager-scoped listings need a `managerId` filter in ms-04, which does not exist today. Event creation already validates `GET /api/v1/sites/{siteId}` and copies `siteName`/`managerId` from the site; refresh that snapshot when the manager changes.
+  1. `TODO(ms-04)`: ms-04 still has to deploy the `managerId` filter on `GET /api/v1/sites`; ms-03 already consumes it, forwards the user token, and scopes the reservation listing by the manager's sites. Refresh the `siteName`/`managerId` snapshot when the manager changes.
   2. Events/outbox: resolve the contract mismatch first, then publish.
   3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, and required `paymentMethod`.
-- 202 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
+- 205 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules
 

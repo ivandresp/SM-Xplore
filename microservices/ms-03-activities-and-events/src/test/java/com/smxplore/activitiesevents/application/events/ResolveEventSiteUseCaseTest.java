@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -19,16 +20,26 @@ class ResolveEventSiteUseCaseTest {
     private static final UUID SITE_ID = UUID.randomUUID();
     private static final UUID MANAGER_ID = UUID.randomUUID();
 
-    private final SiteCatalogPort sites = siteId -> siteId.equals(SITE_ID)
-            ? Mono.just(new SiteCatalogPort.SiteSnapshot(SITE_ID, MANAGER_ID, "Parque Tayrona"))
-            : Mono.empty();
+    private final SiteCatalogPort sites = new SiteCatalogPort() {
+        @Override
+        public Mono<SiteSnapshot> findById(UUID siteId, String token) {
+            return siteId.equals(SITE_ID)
+                    ? Mono.just(new SiteSnapshot(SITE_ID, MANAGER_ID, "Parque Tayrona"))
+                    : Mono.empty();
+        }
+
+        @Override
+        public Flux<SiteSnapshot> findByManagerId(UUID managerId, String token) {
+            return Flux.empty();
+        }
+    };
     private final ResolveEventSiteUseCase useCase = new ResolveEventSiteUseCase(sites);
 
     @Test
     void managerCanOnlyUseTheirOwnSiteAndTheSiteOwnsTheSnapshot() {
         var event = event();
 
-        StepVerifier.create(useCase.handle(event, MANAGER_ID, UserRole.DESTINATION_MANAGER))
+        StepVerifier.create(useCase.handle(event, MANAGER_ID, UserRole.DESTINATION_MANAGER, "token"))
                 .assertNext(resolved -> {
                     assertThat(resolved.getManagerId()).isEqualTo(MANAGER_ID);
                     assertThat(resolved.getSiteName()).isEqualTo("Parque Tayrona");
@@ -38,14 +49,14 @@ class ResolveEventSiteUseCaseTest {
 
     @Test
     void managerCannotUseAnotherManagersSite() {
-        StepVerifier.create(useCase.handle(event(), UUID.randomUUID(), UserRole.DESTINATION_MANAGER))
+        StepVerifier.create(useCase.handle(event(), UUID.randomUUID(), UserRole.DESTINATION_MANAGER, "token"))
                 .expectError(EventSiteAccessDeniedException.class)
                 .verify();
     }
 
     @Test
     void adminUsesTheSiteManagerInsteadOfTheBody() {
-        StepVerifier.create(useCase.handle(event(), UUID.randomUUID(), UserRole.ADMIN))
+        StepVerifier.create(useCase.handle(event(), UUID.randomUUID(), UserRole.ADMIN, "token"))
                 .assertNext(resolved -> assertThat(resolved.getManagerId()).isEqualTo(MANAGER_ID))
                 .verifyComplete();
     }
@@ -59,7 +70,7 @@ class ResolveEventSiteUseCaseTest {
                 .category("Nautical")
                 .build();
 
-        StepVerifier.create(useCase.handle(event, MANAGER_ID, UserRole.ADMIN))
+        StepVerifier.create(useCase.handle(event, MANAGER_ID, UserRole.ADMIN, "token"))
                 .expectError(InvalidEventRequestException.class)
                 .verify();
     }

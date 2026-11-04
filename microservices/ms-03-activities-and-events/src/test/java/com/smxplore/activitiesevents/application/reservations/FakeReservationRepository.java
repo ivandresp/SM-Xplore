@@ -8,6 +8,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -69,6 +70,16 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     public Flux<Reservation> findAllByItem(UUID itemId, ReservationItemType type, int limit) {
         return Flux.fromIterable(reservations.values())
                 .filter(reservation -> itemId.equals(reservation.getItemId()) && type == reservation.getItemType());
+    }
+
+    @Override
+    public Flux<Reservation> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                               ReservationStatus status, int limit) {
+        return Flux.fromIterable(reservations.values())
+                .filter(reservation -> reservation.getStatus() == status)
+                .filter(reservation -> reservation.getItemType() == ReservationItemType.EVENT
+                        ? eventIds.contains(reservation.getItemId())
+                        : activityIds.contains(reservation.getItemId()));
     }
 
     @Override

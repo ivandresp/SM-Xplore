@@ -65,7 +65,7 @@ public class EventController {
     public Mono<EventResponse> register(@Valid @RequestBody EventRequest request,
                                         @AuthenticationPrincipal Jwt jwt) {
         var event = mapper.toDomain(request);
-        return resolveEventSiteUseCase.handle(event, managerIdFrom(jwt), role(jwt))
+        return resolveEventSiteUseCase.handle(event, managerIdFrom(jwt), role(jwt), jwt.getTokenValue())
                 .flatMap(registerEventUseCase::handle)
                 .map(mapper::toResponse);
     }

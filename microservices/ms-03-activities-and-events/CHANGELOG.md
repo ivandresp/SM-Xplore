@@ -11,7 +11,8 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque. `V2` archiva las filas originales y mueve a cuarentena las reservas no representables.
 - **Seguridad**: principal nulo → 401 en guardas y actividades; `guideId` sale del token para guías. `JWT_AUDIENCE` es obligatoria; el JWKS remoto exige HTTPS y timeouts; `scope`/`scp=mfa` se rechazan.
 - **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas queda temporalmente en `ADMIN`. Los roles se comparan de forma exacta en español (los alias ingleses quedan explícitos). Swagger se desactiva por defecto.
-- **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios.
+- **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios. El `Authorization` del usuario se reenvía a ms-04.
+- **Reservas por gestora**: `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con el nuevo filtro `managerId` de ms-04 y devuelve solo las reservas de sus eventos/actividades. `ADMIN` conserva el listado global.
 - **Usuarios de base de datos**: PostgreSQL usa `ms03_flyway` para DDL y `ms03_app` para DML; MongoDB usa `reviews_app` con `readWrite` solo en `reviews`. Los usuarios root quedan únicamente para el init y ya no hay credenciales por defecto en Compose.
 
 ### Migración

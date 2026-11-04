@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.domain.ports.repository;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -10,7 +11,10 @@ import java.util.UUID;
  */
 public interface SiteCatalogPort {
 
-    Mono<SiteSnapshot> findById(UUID siteId);
+    Mono<SiteSnapshot> findById(UUID siteId, String bearerToken);
+
+    /** All sites managed by {@code managerId}, following the ms-04 pages. */
+    Flux<SiteSnapshot> findByManagerId(UUID managerId, String bearerToken);
 
     record SiteSnapshot(UUID siteId, UUID managerId, String name) {
     }

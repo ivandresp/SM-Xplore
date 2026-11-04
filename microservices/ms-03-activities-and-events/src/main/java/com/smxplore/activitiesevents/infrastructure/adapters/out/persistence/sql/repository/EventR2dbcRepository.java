@@ -6,6 +6,7 @@ import org.springframework.data.r2dbc.repository.Query;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface EventR2dbcRepository extends ReactiveCrudRepository<EventEntity, UUID> {
@@ -14,4 +15,7 @@ public interface EventR2dbcRepository extends ReactiveCrudRepository<EventEntity
 
     @Query("SELECT * FROM evento WHERE id = :id FOR UPDATE")
     Mono<EventEntity> findByIdForUpdate(UUID id);
+
+    @Query("SELECT id FROM evento WHERE sitio_id IN (:siteIds)")
+    Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
 }

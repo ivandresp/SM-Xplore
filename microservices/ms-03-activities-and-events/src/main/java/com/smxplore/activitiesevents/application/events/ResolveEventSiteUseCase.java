@@ -19,8 +19,8 @@ public class ResolveEventSiteUseCase {
 
     private final SiteCatalogPort siteCatalog;
 
-    public Mono<Event> handle(Event event, UUID requesterId, UserRole requesterRole) {
-        return siteCatalog.findById(event.getSiteId())
+    public Mono<Event> handle(Event event, UUID requesterId, UserRole requesterRole, String bearerToken) {
+        return siteCatalog.findById(event.getSiteId(), bearerToken)
                 .switchIfEmpty(Mono.error(new InvalidEventRequestException(
                         "Site %s does not exist.".formatted(event.getSiteId()))))
                 .flatMap(site -> {

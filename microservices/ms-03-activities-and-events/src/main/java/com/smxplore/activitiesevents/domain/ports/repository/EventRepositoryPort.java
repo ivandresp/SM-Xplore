@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.model.event.Event;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface EventRepositoryPort {
@@ -19,4 +20,6 @@ public interface EventRepositoryPort {
     Flux<Event> findAll();
 
     Flux<Event> searchByName(String name);
+
+    Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
 }

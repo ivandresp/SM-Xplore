@@ -72,7 +72,7 @@ class EventControllerTest {
 
     @BeforeEach
     void stubSiteResolution() {
-        given(resolveEventSiteUseCase.handle(any(), any(), any()))
+        given(resolveEventSiteUseCase.handle(any(), any(), any(), any()))
                 .willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
     }
 
@@ -253,7 +253,7 @@ class EventControllerTest {
     @Test
     void siteOwnershipErrorMapsToForbidden() {
         doReturn(Mono.error(new EventSiteAccessDeniedException("not your site")))
-                .when(resolveEventSiteUseCase).handle(any(), any(), any());
+                .when(resolveEventSiteUseCase).handle(any(), any(), any(), any());
 
         webTestClient.post().uri("/api/v1/events")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -7,6 +7,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface ReservationRepositoryPort {
@@ -36,6 +37,10 @@ public interface ReservationRepositoryPort {
 
     /** Lists the reservations of a given event or activity. */
     Flux<Reservation> findAllByItem(UUID itemId, ReservationItemType type, int limit);
+
+    /** Lists reservations for any of the manager's events or activities. */
+    Flux<Reservation> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                        ReservationStatus status, int limit);
 
     /** People already booked (CONFIRMED) for an event or activity. */
     Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);

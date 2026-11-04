@@ -7,6 +7,7 @@ import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
@@ -78,6 +79,9 @@ class ReservationControllerTest {
 
     @MockitoBean
     private EventRepositoryPort eventRepository;
+
+    @MockitoBean
+    private ConsultManagerReservationsUseCase consultManagerReservationsUseCase;
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 @Repository
@@ -56,5 +57,10 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     public Flux<Event> searchByName(String name) {
         // shortcut: substring search is a sequential scan; add a pg_trgm GIN index when the catalog grows.
         return repository.findByNameContainingIgnoreCase(name).map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds) {
+        return repository.findIdsBySiteIds(siteIds);
     }
 }

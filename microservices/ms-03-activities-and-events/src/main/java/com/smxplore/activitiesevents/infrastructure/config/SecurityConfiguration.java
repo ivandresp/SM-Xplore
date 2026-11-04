@@ -68,7 +68,7 @@ public class SecurityConfiguration {
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         // Reservations: staff-only global listings; ownership is enforced in the controller
                         .pathMatchers(HttpMethod.GET, "/api/v1/reservations")
-                        .hasRole(ADMIN)
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers("/api/v1/review-reports/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers("/api/v1/reservations/**").authenticated()

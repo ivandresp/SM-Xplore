@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
 import com.smxplore.activitiesevents.application.reservations.CancelReservationUseCase;
+import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultOneReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByGuideUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByItemUseCase;
@@ -12,6 +13,7 @@ import com.smxplore.activitiesevents.application.reservations.RegisterReservatio
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
@@ -52,6 +54,16 @@ public class ReservationUseCaseConfiguration {
     public ConsultReservationsByStatusUseCasePort consultReservationsByStatusUseCase(
             ReservationRepositoryPort reservationRepository) {
         return new ConsultReservationsByStatusUseCase(reservationRepository);
+    }
+
+    @Bean
+    public ConsultManagerReservationsUseCase consultManagerReservationsUseCase(
+            SiteCatalogPort siteCatalog,
+            EventRepositoryPort eventRepository,
+            ActivityRepositoryPort activityRepository,
+            ReservationRepositoryPort reservationRepository) {
+        return new ConsultManagerReservationsUseCase(
+                siteCatalog, eventRepository, activityRepository, reservationRepository);
     }
 
     @Bean

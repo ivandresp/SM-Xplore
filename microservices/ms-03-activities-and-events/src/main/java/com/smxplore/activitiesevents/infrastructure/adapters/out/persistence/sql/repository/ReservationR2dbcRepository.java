@@ -8,6 +8,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface ReservationR2dbcRepository extends ReactiveCrudRepository<ReservationEntity, UUID> {
@@ -29,6 +30,17 @@ public interface ReservationR2dbcRepository extends ReactiveCrudRepository<Reser
 
     @Query("SELECT * FROM reservations WHERE id = :id FOR UPDATE")
     Mono<ReservationEntity> findByIdForUpdate(UUID id);
+
+    @Query("""
+            SELECT * FROM reservations
+            WHERE ((item_type = 'EVENT' AND item_id IN (:eventIds))
+                OR (item_type = 'ACTIVITY' AND item_id IN (:activityIds)))
+              AND status = :status
+            ORDER BY booked_at DESC, id
+            LIMIT :limit
+            """)
+    Flux<ReservationEntity> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                              String status, int limit);
 
     Mono<ReservationEntity> findByTouristIdAndIdempotencyKey(UUID touristId, String idempotencyKey);
 

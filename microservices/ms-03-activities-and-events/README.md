@@ -139,7 +139,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 |---|---|---|
 | POST | `/api/v1/reservations` | Autenticado (turista crea la suya; admin puede crear para otro) |
 | GET | `/api/v1/reservations/{id}` | Dueño, guía de la reserva o staff |
-| GET | `/api/v1/reservations?status=` | `ADMIN` (temporal, hasta el contrato de sitios de ms-04) |
+| GET | `/api/v1/reservations?status=` | `ADMIN` (todas) o `GESTORA_DESTINOS` (solo sus sitios) |
 | GET | `/api/v1/reservations/tourists/{touristId}` | El propio turista o staff |
 | GET | `/api/v1/reservations/guides/{guideId}` | El propio guía o staff |
 | GET | `/api/v1/reservations/by-item?itemType=&itemId=` | Guía dueño del ítem o staff (eventos: staff) |
@@ -152,6 +152,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 **Idempotencia:** `POST /api/v1/reservations` acepta el header opcional `Idempotency-Key` (1–64 caracteres). Si la misma clave se repite para el mismo turista, la respuesta es la reserva creada en el primer intento y no se consume cupo otra vez. La clave se guarda en `reservations` y el índice único parcial `(tourist_id, idempotency_key)` cubre la carrera concurrente. Reutilizar una clave con otro ítem o con otro número de personas devuelve la reserva original: la clave identifica la operación completa, no el ítem.
 
 **Privacidad:** los listados (`?status=`, `/tourists/{id}`, `/guides/{id}`, `/by-item`) usan un DTO sin `notes`; el texto libre solo se devuelve en `GET /api/v1/reservations/{id}`.
+
+**Alcance por gestora:** `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=...` de ms-04 (reenviando el `Authorization` del usuario), luego sus eventos/actividades y finalmente sus reservas. Si no tiene sitios, devuelve una lista vacía. `ADMIN` sigue viendo todas.
 
 **Cierre automático:** un job diario (03:15, `America/Bogota`) marca `NO_SHOW` las reservas `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `RESERVATION_AUTO_CLOSE_GRACE` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`. Los ítems pausados o postergados no se tocan. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
 
