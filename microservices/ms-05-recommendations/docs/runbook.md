@@ -82,7 +82,7 @@ EVENTS_CONSUMER_ENABLED=false
 - La API sigue respondiendo con el grafo existente.
 - El listener de Spring Kafka reintenta conectarse; no bloquea el event loop de WebFlux.
 - Revisar lag en `kafka-ui` (`http://localhost:8090`).
-- Si el lag supera el umbral, alertar y evaluar un reindex cuando esté disponible.
+- Si el lag supera el umbral, alertar y evaluar un reindex del catálogo.
 
 ## Si la DLQ crece
 
@@ -105,17 +105,45 @@ En `/actuator/prometheus`:
 - `recommendations_events_dlq_total{topic}`.
 - `kafka_consumer_*`, incluida la lag por partición.
 
-## Reindex (fase 3)
+## Reindex del catálogo
 
-El endpoint `POST /internal/admin/reindex` se añadirá en fase 3. Reconstruirá la proyección
-desde ms-03/ms-04 con paginación por cursor y `updatedSince`. Mientras no exista, la
-recuperación se hace con replay de Kafka o borrando y reconstruyendo el grafo con las fuentes.
+`POST /internal/admin/reindex?entity=SITES|SERVICES|CATEGORIES` recorre el feed
+`GET /api/v1/admin/catalog/export` de ms-04 y aplica el mismo camino de proyección que Kafka.
+
+```bash
+TOKEN=<jwt de un ADMIN>
+curl -fsS -X POST "http://localhost:8085/internal/admin/reindex?entity=SITES" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Respuesta: `{"entity":"SITES","pages":1,"events":12,"applied":12,"duplicate":0,"stale":0}`.
+
+- `CATALOG_EXPORT_BASE_URL` debe apuntar a ms-04 (`http://ms-04:8080` dentro de Compose,
+  `http://localhost:8084` en local).
+- El token se reenvía tal cual: ms-05 no tiene credenciales propias y ms-04 exige `ADMIN`.
+- Repetir el reindexado es seguro: el `eventId` se deriva de `eventType + aggregateId +
+  updatedAt`, así que lo ya proyectado sale como `duplicate`.
+- Si el recorrido se corta, reanudar con `?updatedSince=<última fecha vista>`.
+- `REINDEX_MAX_PAGES` (500 por defecto) evita bucles si el feed no termina; si se alcanza, el
+  endpoint devuelve `500` con “catalog export did not finish after N pages”.
+- ms-03 todavía no expone un feed equivalente: actividades, eventos y reseñas solo se recuperan
+  con replay de Kafka.
 
 ## Retención de `ProcessedEvent`
 
-Hoy los nodos `ProcessedEvent` se conservan para deduplicar. En producción conviene una tarea
-periódica que borre los nodos con `processedAt` mayor a 30 días. La ventana debe ser mayor que
-la retención de Kafka para cubrir replays.
+`ProcessedEventRetentionJob` borra los marcadores más viejos que `EVENTS_RETENTION_DAYS` (30 por
+defecto) en lotes de `EVENTS_RETENTION_BATCH_SIZE`, hasta `EVENTS_RETENTION_MAX_BATCHES` por
+corrida y cada `EVENTS_RETENTION_INTERVAL`. La ventana debe ser mayor que la retención de Kafka
+para cubrir replays.
+
+```cypher
+MATCH (p:ProcessedEvent)
+RETURN count(p) AS markers, min(p.processedAt) AS oldest;
+```
+
+Para forzar una corrida se puede reiniciar el servicio; el job también se ejecuta al arrancar
+tras `EVENTS_RETENTION_INITIAL_DELAY`. Borrar marcadores no borra la proyección: solo permite
+que un evento repetido se vuelva a aplicar.
 
 ## Reset del seed local
 
