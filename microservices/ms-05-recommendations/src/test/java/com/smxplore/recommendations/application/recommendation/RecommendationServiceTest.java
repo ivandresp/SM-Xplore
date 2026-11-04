@@ -53,6 +53,9 @@ class RecommendationServiceTest {
     @Mock
     private RecommendationGraphPort graphPort;
 
+    private final RecordingMetrics metrics = new RecordingMetrics();
+
+
     private RecommendationService service;
 
     @BeforeEach
@@ -65,6 +68,7 @@ class RecommendationServiceTest {
                 policy,
                 new RecordingCache(),
                 new FixedGraphVersion(1L),
+                metrics,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }

@@ -23,12 +23,15 @@ import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
 import com.smxplore.recommendations.domain.ports.out.ProcessedEventRetentionPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationMetricsPort;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
+import com.smxplore.recommendations.infrastructure.adapters.out.metrics.MicrometerRecommendationMetrics;
 import com.smxplore.recommendations.infrastructure.adapters.out.redis.RedisGraphVersionAdapter;
 import com.smxplore.recommendations.infrastructure.adapters.out.redis.RedisRecommendationCacheAdapter;
 import com.smxplore.recommendations.infrastructure.adapters.out.web.CatalogExportClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.ObjectMapper;
@@ -95,6 +98,11 @@ public class BeanConfiguration {
     }
 
     @Bean
+    public RecommendationMetricsPort recommendationMetricsPort(MeterRegistry registry) {
+        return new MicrometerRecommendationMetrics(registry);
+    }
+
+    @Bean
     public GetRecommendationsUseCase getRecommendationsUseCase(
             RecommendationGraphPort graphPort,
             RecommendationScorer scorer,
@@ -102,9 +110,11 @@ public class BeanConfiguration {
             RecommendationPolicy policy,
             RecommendationCachePort cache,
             GraphVersionPort graphVersion,
+            RecommendationMetricsPort metrics,
             Clock clock
     ) {
-        return new RecommendationService(graphPort, scorer, diversitySelector, policy, cache, graphVersion, clock);
+        return new RecommendationService(graphPort, scorer, diversitySelector, policy, cache, graphVersion,
+                metrics, clock);
     }
 
     @Bean

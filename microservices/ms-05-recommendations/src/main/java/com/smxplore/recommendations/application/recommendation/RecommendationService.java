@@ -17,6 +17,7 @@ import com.smxplore.recommendations.domain.model.recommendation.RecommendationRe
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationSource;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
 import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationMetricsPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +43,7 @@ public class RecommendationService implements GetRecommendationsUseCase {
     private final RecommendationPolicy policy;
     private final RecommendationCachePort cache;
     private final GraphVersionPort graphVersion;
+    private final RecommendationMetricsPort metrics;
     private final Clock clock;
 
     @Override
@@ -51,8 +54,8 @@ public class RecommendationService implements GetRecommendationsUseCase {
         return graphVersion.current()
                 .flatMap(version -> cache.get(cacheKey.value(version))
                         .onErrorResume(error -> Mono.just(Optional.empty()))
-                        .flatMap(cached -> cached
-                                .map(Mono::just)
+                        .flatMap(hit -> hit
+                                .<Mono<Recommendation>>map(cached -> Mono.fromCallable(() -> fromCache(cached)))
                                 .orElseGet(() -> compute(query, now, cacheKey, version))));
     }
 
@@ -62,11 +65,34 @@ public class RecommendationService implements GetRecommendationsUseCase {
             RecommendationCacheKey cacheKey,
             long version
     ) {
+        metrics.cacheMiss();
         return loadCandidates(query, now)
                 .map(candidates -> buildRecommendation(query, candidates, now))
                 .flatMap(recommendation -> cache.put(cacheKey.value(version), recommendation)
                         .onErrorResume(error -> Mono.empty())
-                        .thenReturn(recommendation));
+                        .thenReturn(recommendation))
+                .doOnNext(this::record);
+    }
+
+    private Recommendation fromCache(Recommendation recommendation) {
+        metrics.cacheHit();
+        record(recommendation);
+        return recommendation;
+    }
+
+    private void record(Recommendation recommendation) {
+        metrics.served(recommendation.source(), recommendation.items().size());
+        metrics.diversity(
+                (int) recommendation.items().stream()
+                        .map(RecommendationItem::categoryId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .count(),
+                (int) recommendation.items().stream()
+                        .map(RecommendationItem::siteId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .count());
     }
 
     private RecommendationCacheKey cacheKey(RecommendationQuery query) {

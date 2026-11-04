@@ -37,13 +37,15 @@ class RecommendationCacheTest {
     private final CountingGraph graph = new CountingGraph();
     private final MapCache cache = new MapCache();
     private final MutableGraphVersion version = new MutableGraphVersion();
+    private final RecordingMetrics metrics = new RecordingMetrics();
+
     private RecommendationService service;
 
     @BeforeEach
     void setUp() {
         RecommendationPolicy policy = policy();
         service = new RecommendationService(graph, new RecommendationScorer(policy),
-                new DiversitySelector(policy), policy, cache, version, Clock.fixed(NOW, ZoneOffset.UTC));
+                new DiversitySelector(policy), policy, cache, version, metrics, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -58,6 +60,11 @@ class RecommendationCacheTest {
 
         assertThat(graph.calls.get()).isEqualTo(1);
         assertThat(cache.entries).hasSize(1);
+        assertThat(metrics.cacheMisses()).isEqualTo(1);
+        assertThat(metrics.cacheHits()).isEqualTo(1);
+        assertThat(metrics.items()).containsExactly(1, 1);
+        assertThat(metrics.categories()).containsExactly(1, 1);
+        assertThat(metrics.sites()).containsExactly(1, 1);
     }
 
     @Test
