@@ -22,7 +22,7 @@ El repositorio ya no es solo documentación. El estado real es:
 
 Los bloqueos de integración más importantes son:
 
-1. **JWT (resuelto en código).** ms-01 emite RS256 con roles en inglés (`TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`). ms-02, ms-03, ms-04 y ms-05 ya usan RS256/JWKS, issuer `sm-xplore-ms-01`, audiencia `sm-xplore-services`, roles en inglés y rechazo de `scope=mfa`. Queda revisar/commitear los cambios y mergear la rama `fix/ms-03-jwt` de ms-03.
+1. **JWT (resuelto en código).** ms-01 emite RS256 con roles en inglés (`TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`). ms-02, ms-03, ms-04 y ms-05 ya usan RS256/JWKS, issuer `sm-xplore-ms-01`, audiencia `sm-xplore-services`, roles en inglés y rechazo de `scope=mfa`. Los cambios de ms-01/02/04/05 quedaron en el commit `693ca40`; queda mergear la rama `fix/ms-03-jwt` de ms-03.
 2. **ms-03 no publica eventos.** No tiene outbox ni publica `activities.*`, `reviews.review.changed` ni `bookings.reservation.changed`. ms-05 no puede proyectar actividades/eventos y ms-04 no puede notificar sus reservas.
 3. **El modelo de ms-03 no coincide con los contratos.** Usa `category` como texto, no tiene `categoryId` UUID, coordenadas ni `updatedAt`, y sus estados (`PAUSED`, `POSTPONED`, `NO_SHOW`) no están en los esquemas de eventos.
 
@@ -46,7 +46,7 @@ Notas de la verificación:
 - Las pruebas de ms-03 se ejecutaron en un worktree separado con `JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64`. El `gradlew` de esa rama está en modo `100755` en la rama local.
 - ms-03 solo tiene una prueba con Testcontainers (adaptador PostgreSQL). No hay prueba de contexto completo con Kafka/Mongo ni flujo E2E con ms-01/ms-04/ms-05.
 - ms-02 y ms-03 usan RS256; sus pruebas validan el contrato de ms-01 con llaves de prueba.
-- **Bloqueo 1 resuelto:** ms-01 migró sus códigos de rol a inglés; ms-02 pasó de HS256 a RS256/JWKS, roles en inglés y `scope=mfa`; ms-05 exige el issuer/audiencia de ms-01; ms-04 agregó `GUIDE` y rechazo de `scope=mfa`; ms-03 tiene los mismos cambios en la rama local `fix/ms-03-jwt` (commits `e3eb783` y `c992ecc`, 172 pruebas). Los cambios de ms-02/04/05 están sin commitear en `microservicios`.
+- **Bloqueo 1 resuelto:** ms-01 migró sus códigos de rol a inglés; ms-02 pasó de HS256 a RS256/JWKS, roles en inglés y `scope=mfa`; ms-05 exige el issuer/audiencia de ms-01; ms-04 agregó `GUIDE` y rechazo de `scope=mfa`; ms-03 tiene los mismos cambios en la rama local `fix/ms-03-jwt` (commits `e3eb783` y `c992ecc`, 172 pruebas). Los cambios de ms-01/02/04/05 quedaron en el commit `693ca40` de `microservicios`.
 
 ### Ramas de ms-03
 
