@@ -1,0 +1,5 @@
+logging:
+  level:
+    com.smxplore.sitesandservices: DEBUG
+    org.springframework.data.mongodb: INFO
+    org.springframework.r2dbc: INFO
