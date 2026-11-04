@@ -83,7 +83,7 @@ class ReservationControllerTest {
     void configureClient(WebTestClient webTestClient) {
         this.webTestClient = webTestClient
                 .mutateWith(SecurityMockServerConfigurers.mockJwt()
-                        .jwt(jwt -> jwt.subject(TOURIST_ID.toString())))
+                        .jwt(jwt -> jwt.subject(TOURIST_ID.toString()).claim("role", "ADMIN")))
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 

@@ -63,8 +63,8 @@ docker compose up --build
 ./gradlew build
 ```
 
-- Integration tests use Testcontainers and require Docker running.
-- ms-03: API `http://localhost:8082`, Swagger `/swagger-ui.html`, health `/actuator/health`.
+- Integration tests use Testcontainers; without Docker they are skipped, so CI is the only place the migrations are guaranteed to run.
+- ms-03: API `http://localhost:8082`, health `/actuator/health`. Swagger is off by default; enable it with `SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true`.
 - ms-02: `8080`; ms-04: `8084`; ms-05: `8085`; ms-01: `8081`.
 
 ## Architecture rules
@@ -107,12 +107,12 @@ Canonical contract, with ms-01 as issuer:
 - Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
 - Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports.
 - Flyway: `V1` baseline, `V2` symbolic reservations. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows; review `reservations_quarantine` after upgrading.
-- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
-  1. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
+  1. `TODO(ms-04)`: manager-scoped listings need a `managerId` filter in ms-04, which does not exist today. Event creation already validates `GET /api/v1/sites/{siteId}` and copies `siteName`/`managerId` from the site; refresh that snapshot when the manager changes.
   2. Events/outbox: resolve the contract mismatch first, then publish.
-  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, `managerId` accepted from the body for ADMIN, required `paymentMethod`, event site validation against ms-04, and least-privilege DB/Mongo users.
-- 193 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
+  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, required `paymentMethod`, and least-privilege DB/Mongo users.
+- 202 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules
 

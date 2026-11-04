@@ -111,6 +111,7 @@ class FlywayMigrationTest {
 
             insertReservation(connection, multiId, 2, "300.00", "CONFIRMED", STARTS_AT);
             insertItem(connection, multiId, activityA, "ACTIVITY", "100.00");
+            insertItem(connection, multiId, activityA, "ACTIVITY", "100.00");
             insertItem(connection, multiId, activityB, "ACTIVITY", "200.00");
 
             insertReservation(connection, orphanId, 1, "50.00", "PENDING", STARTS_AT);
@@ -124,7 +125,7 @@ class FlywayMigrationTest {
         try (var connection = connection()) {
             assertThat(count(connection, "reservations")).isZero();
             assertThat(count(connection, "reservations_legacy")).isEqualTo(3);
-            assertThat(count(connection, "reservation_items_legacy")).isEqualTo(3);
+            assertThat(count(connection, "reservation_items_legacy")).isEqualTo(4);
             assertThat(count(connection, "reservations_quarantine")).isEqualTo(3);
             assertThat(countWhere(connection, "reservations_quarantine", "reason = 'multiple items'")).isEqualTo(1);
             assertThat(countWhere(connection, "reservations_quarantine", "reason = 'no item'")).isEqualTo(1);

@@ -47,6 +47,8 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${APP_PORT:-8082}:8082"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SERVER_PORT: 8082
       R2DBC_URL: "r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-activities_events}"
@@ -61,6 +63,8 @@ services:
       JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
       MONGO_AUTO_INDEX_CREATION: ${MONGO_AUTO_INDEX_CREATION:-true}
+      MS04_BASE_URL: ${MS04_BASE_URL:-http://host.docker.internal:8084}
+      MS04_TIMEOUT: ${MS04_TIMEOUT:-3s}
       FLYWAY_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:-activities_events}"
       FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
       RESERVATION_AUTO_CLOSE_CRON: "${RESERVATION_AUTO_CLOSE_CRON:-0 15 3 * * *}"

@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web;
 
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventNameException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusTransitionException;
 import com.smxplore.activitiesevents.domain.model.event.Event;
@@ -11,10 +12,12 @@ import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAt
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ValidateEventExistsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.RegisterEventUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.SearchEventsUseCasePort;
+import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ViewEventDetailsUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller.EventController;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.error.GlobalExceptionHandler;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.EventWebMapperImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -34,6 +37,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doReturn;
 
 @WebFluxTest(controllers = EventController.class)
 @Import({EventWebMapperImpl.class, GlobalExceptionHandler.class})
@@ -44,6 +48,9 @@ class EventControllerTest {
 
     @MockitoBean
     private RegisterEventUseCasePort registerEventUseCase;
+
+    @MockitoBean
+    private ResolveEventSiteUseCase resolveEventSiteUseCase;
 
     @MockitoBean
     private ViewEventDetailsUseCasePort viewEventDetailsUseCase;
@@ -62,6 +69,12 @@ class EventControllerTest {
 
     @MockitoBean
     private ValidateEventExistsUseCasePort validateEventExistsUseCase;
+
+    @BeforeEach
+    void stubSiteResolution() {
+        given(resolveEventSiteUseCase.handle(any(), any(), any()))
+                .willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+    }
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {
@@ -235,6 +248,28 @@ class EventControllerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.length()").isEqualTo(1);
+    }
+
+    @Test
+    void siteOwnershipErrorMapsToForbidden() {
+        doReturn(Mono.error(new EventSiteAccessDeniedException("not your site")))
+                .when(resolveEventSiteUseCase).handle(any(), any(), any());
+
+        webTestClient.post().uri("/api/v1/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "name": "Sunset Kayak Tour",
+                          "category": "Nautical",
+                          "price": 150000.00,
+                          "maxCapacity": 12,
+                          "startsAt": "2026-11-01T10:00:00Z",
+                          "endsAt": "2026-11-01T12:00:00Z"
+                        }
+                        """.formatted(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

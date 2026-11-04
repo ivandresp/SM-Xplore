@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS reservation_items (
     CONSTRAINT reservation_items_type_valid CHECK (type IN ('EVENT', 'ACTIVITY'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS reservation_items_reservation_item_uidx ON reservation_items (reservation_id, item_id);
+-- The legacy schema allowed duplicate (reservation_id, item_id) rows; the baseline must not
+-- abort before V2 can quarantine multi-item reservations.
+CREATE INDEX IF NOT EXISTS reservation_items_reservation_item_idx ON reservation_items (reservation_id, item_id);
 CREATE INDEX IF NOT EXISTS reservation_items_item_idx ON reservation_items (item_id);
 CREATE INDEX IF NOT EXISTS reservation_items_type_idx ON reservation_items (type);

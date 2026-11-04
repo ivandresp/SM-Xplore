@@ -177,6 +177,8 @@ jobs:
             -e JWK_SET_URI="http://127.0.0.1:9/.well-known/jwks.json" \
             -e JWT_ISSUER="sm-xplore-ms-01" \
             -e JWT_AUDIENCE="sm-xplore-services" \
+            -e SPRINGDOC_API_DOCS_ENABLED="true" \
+            -e SPRINGDOC_SWAGGER_UI_ENABLED="true" \
             "${IMAGE_NAME}"
 
       - name: Verificar estado y migraciones
@@ -195,9 +197,13 @@ jobs:
             docker logs ms-03
             exit 1
           }
-          migrations=$(docker compose exec -T postgres psql -U postgres -d activities_events -tAc "SELECT count(*) FROM flyway_schema_history WHERE success")
-          echo "Migraciones Flyway aplicadas: ${migrations}"
-          test "${migrations}" = "2"
+          version2=$(docker compose exec -T postgres psql -U postgres -d activities_events -tAc "SELECT count(*) FROM flyway_schema_history WHERE version = '2' AND success")
+          test "${version2}" = "1"
+          quarantine=$(docker compose exec -T postgres psql -U postgres -d activities_events -tAc "SELECT count(*) FROM reservations_quarantine")
+          test "${quarantine}" = "0"
+          status=$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8082/api/v1/reservations?status=CONFIRMED')
+          echo "Reservas sin token: ${status}"
+          test "${status}" = "401"
 
       - name: Mostrar logs si algo falló
         if: failure()

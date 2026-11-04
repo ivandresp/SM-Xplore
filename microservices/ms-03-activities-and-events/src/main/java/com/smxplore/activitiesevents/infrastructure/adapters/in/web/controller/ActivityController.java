@@ -76,7 +76,8 @@ public class ActivityController {
     public Mono<ActivityResponse> findOne(@PathVariable UUID activityId,
                                           @AuthenticationPrincipal Jwt jwt) {
         return viewActivityDetailsUseCase.handle(activityId)
-                .filter(activity -> jwt != null || activity.getStatus() == ActivityStatus.PUBLISHED)
+                .filter(activity -> activity.getStatus() == ActivityStatus.PUBLISHED
+                        || accessGuard.canViewUnpublished(activity, jwt))
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity not found.")))
                 .map(mapper::toResponse);
     }

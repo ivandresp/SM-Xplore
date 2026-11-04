@@ -66,16 +66,18 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/activities_events` | Conexión reactiva a PostgreSQL. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `postgres` | Credenciales de PostgreSQL. |
 | `MONGODB_URI` | `mongodb://localhost:27017/reviews` | Conexión a MongoDB. |
-| `JWK_SET_URI` | vacío | URL del JWKS de ms-01. Obligatoria si no hay PEM. |
+| `JWK_SET_URI` | vacío | URL del JWKS de ms-01. Obligatoria si no hay PEM; fuera de loopback debe ser `https://`. |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Ruta o URL de la llave pública PEM (local/tests). |
 | `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado en el token. |
 | `JWT_AUDIENCE` | `sm-xplore-services` | Audiencia esperada en el token. |
 | `JWT_ROLE_CLAIM` | `role` | Claim que contiene el rol. |
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
-| `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker se activa. |
+| `MONGO_AUTO_INDEX_CREATION` | `true` | Crea índices al arrancar. |
 | `FLYWAY_URL` | `jdbc:postgresql://localhost:5432/activities_events` | URL JDBC que usa Flyway para migrar el esquema. |
 | `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
+| `MS04_BASE_URL` | `http://localhost:8084` | Base de ms-04 para validar el sitio al crear eventos. En Compose: `http://host.docker.internal:8084`. |
+| `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 
@@ -99,6 +101,8 @@ Los roles del JWT son los de ms-01: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `
 | GET | `/api/v1/events/{eventId}/availability` | Público |
 | GET | `/api/v1/events/search?name=` | Público |
 | POST | `/api/v1/events` | `ADMIN`, `GESTORA_DESTINOS` |
+
+Al crear un evento, ms-03 valida el sitio con `GET /api/v1/sites/{siteId}` de ms-04. `siteName` y `managerId` se copian del sitio; el `managerId` del body se ignora y una `GESTORA_DESTINOS` solo puede crear eventos en sus propios sitios. Si ms-04 no responde, la creación falla.
 | PATCH | `/api/v1/events/{eventId}/status` | `ADMIN`, `GESTORA_DESTINOS` |
 | PATCH | `/api/v1/events/{eventId}/attendance` | `ADMIN`, `GESTORA_DESTINOS` |
 | GET | `/api/v1/activities` | Público |
@@ -137,7 +141,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 | PATCH | `/api/v1/reservations/{id}/attendance` | Guía de la reserva o staff |
 | PATCH | `/api/v1/reservations/{id}/no-show` | Guía de la reserva o staff |
 
-Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. El servidor fija `bookedFor` con el inicio del ítem e ignora el valor del cliente. Máximo **5 reservas activas** por turista. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
+Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago se resuelve fuera de la plataforma. Una reserva tiene **un solo ítem** (`itemType` + `itemId`), el precio sale del catálogo y se guarda como `unitPrice`; el total es `unitPrice × numberOfPeople`. Solo se reservan ítems publicados, vigentes y con cupo. El servidor fija `bookedFor` con el inicio del ítem e ignora el valor del cliente. En filas migradas por V2, si el inicio del ítem es anterior a `booked_at`, se conserva el `bookedFor` legacy para no violar el CHECK; solo las reservas nuevas quedan alineadas con el catálogo. Máximo **5 reservas activas** por turista. Estados: `CONFIRMED`, `CANCELLED`, `NO_SHOW`, `COMPLETED`. No existe confirmación manual ni tabla de ítems.
 
 **Idempotencia:** `POST /api/v1/reservations` acepta el header opcional `Idempotency-Key` (1–64 caracteres). Si la misma clave se repite para el mismo turista, la respuesta es la reserva creada en el primer intento y no se consume cupo otra vez. La clave se guarda en `reservations` y el índice único parcial `(tourist_id, idempotency_key)` cubre la carrera concurrente. Reutilizar una clave con otro ítem o con otro número de personas devuelve la reserva original: la clave identifica la operación completa, no el ítem.
 

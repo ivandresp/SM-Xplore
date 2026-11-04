@@ -4,10 +4,12 @@ import com.smxplore.activitiesevents.application.events.ChangeEventStatusUseCase
 import com.smxplore.activitiesevents.application.events.ConsultEventsUseCase;
 import com.smxplore.activitiesevents.application.events.EstimateEventAttendanceUseCase;
 import com.smxplore.activitiesevents.application.events.RegisterEventUseCase;
+import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
 import com.smxplore.activitiesevents.application.events.SearchEventsUseCase;
 import com.smxplore.activitiesevents.application.events.ValidateEventExistsUseCase;
 import com.smxplore.activitiesevents.application.events.ViewEventDetailsUseCase;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
@@ -24,6 +26,11 @@ public class EventUseCaseConfiguration {
     @Bean
     public RegisterEventUseCasePort registerEventUseCase(EventRepositoryPort eventRepository) {
         return new RegisterEventUseCase(eventRepository);
+    }
+
+    @Bean
+    public ResolveEventSiteUseCase resolveEventSiteUseCase(SiteCatalogPort siteCatalog) {
+        return new ResolveEventSiteUseCase(siteCatalog);
     }
 
     @Bean

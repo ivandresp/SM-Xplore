@@ -35,6 +35,9 @@ springdoc:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
 app:
+  ms04:
+    base-url: ${MS04_BASE_URL:http://localhost:8084}
+    timeout: ${MS04_TIMEOUT:3s}
   reservations:
     auto-close:
       cron: "${RESERVATION_AUTO_CLOSE_CRON:0 15 3 * * *}"

@@ -11,11 +11,14 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque. `V2` archiva las filas originales y mueve a cuarentena las reservas no representables.
 - **Seguridad**: principal nulo → 401 en guardas y actividades; `guideId` sale del token para guías. `JWT_AUDIENCE` es obligatoria; el JWKS remoto exige HTTPS y timeouts; `scope`/`scp=mfa` se rechazan.
 - **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas queda temporalmente en `ADMIN`. Los roles se comparan de forma exacta en español (los alias ingleses quedan explícitos). Swagger se desactiva por defecto.
+- **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.
 - Ajustar `JWT_ISSUER=sm-xplore-ms-01` y `JWT_AUDIENCE=sm-xplore-services` para aceptar tokens de ms-01.
 - Las bases existentes arrancan con baseline `0`, ejecutan `V1` (idempotente) y `V2`. Hacer backup: `V2` archiva en `reservations_legacy`/`reservation_items_legacy` y mueve a `reservations_quarantine` las reservas sin ítem, multi-ítem o con ítem inexistente.
+- `V1` crea el índice de `reservation_items` como **no único** para no abortar con pares duplicados del esquema legacy; `V2` los cuenta como multi-ítem y los pone en cuarentena.
+- `V2` alinea `booked_for` con el inicio del ítem solo cuando ese inicio es posterior a `booked_at`. Si es anterior, conserva el `booked_for` legacy para no violar `booked_for > booked_at`; esas filas quedan archivadas para revisión.
 
 ## [No publicado] — 2026-10-26
 

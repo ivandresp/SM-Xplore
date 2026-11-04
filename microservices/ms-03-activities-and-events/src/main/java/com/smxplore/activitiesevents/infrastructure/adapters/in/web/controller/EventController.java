@@ -1,5 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
+import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
@@ -45,6 +47,7 @@ import java.util.UUID;
 public class EventController {
 
     private final RegisterEventUseCasePort registerEventUseCase;
+    private final ResolveEventSiteUseCase resolveEventSiteUseCase;
     private final ViewEventDetailsUseCasePort viewEventDetailsUseCase;
     private final ConsultEventsUseCasePort consultEventsUseCase;
     private final SearchEventsUseCasePort searchEventsUseCase;
@@ -61,18 +64,14 @@ public class EventController {
     @Operation(summary = "Register an event for a site")
     public Mono<EventResponse> register(@Valid @RequestBody EventRequest request,
                                         @AuthenticationPrincipal Jwt jwt) {
-        // TODO(ms-04): resolve and validate the site from ms-04 (GET /sites/{id}) before persisting.
-        // Until that contract exists, siteName is client-supplied and any manager can target any siteId.
         var event = mapper.toDomain(request);
-        if (role(jwt) == UserRole.DESTINATION_MANAGER) {
-            event = event.toBuilder().managerId(managerIdFrom(jwt)).build();
-        }
-        return registerEventUseCase.handle(event)
+        return resolveEventSiteUseCase.handle(event, managerIdFrom(jwt), role(jwt))
+                .flatMap(registerEventUseCase::handle)
                 .map(mapper::toResponse);
     }
 
     private static UUID managerIdFrom(Jwt jwt) {
-        if (jwt.getSubject() == null) {
+        if (jwt == null || jwt.getSubject() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject is required.");
         }
         try {
@@ -87,9 +86,21 @@ public class EventController {
     public Mono<EventResponse> findOne(@PathVariable UUID eventId,
                                         @AuthenticationPrincipal Jwt jwt) {
         return viewEventDetailsUseCase.handle(eventId)
-                .filter(event -> jwt != null || event.getStatus() == EventStatus.PUBLISHED)
+                .filter(event -> event.getStatus() == EventStatus.PUBLISHED
+                        || canSeeUnpublished(event, jwt))
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found.")))
                 .map(mapper::toResponse);
+    }
+
+    private boolean canSeeUnpublished(Event event, Jwt jwt) {
+        var role = role(jwt);
+        if (role == UserRole.ADMIN) {
+            return true;
+        }
+        return role == UserRole.DESTINATION_MANAGER
+                && jwt.getSubject() != null
+                && event.getManagerId() != null
+                && event.getManagerId().toString().equals(jwt.getSubject());
     }
 
     @GetMapping("/{eventId}/exists")
@@ -136,8 +147,11 @@ public class EventController {
     }
 
     private Mono<Void> requireCanManage(UUID eventId, Jwt jwt) {
+        if (jwt == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required."));
+        }
         var role = role(jwt);
-        if (jwt == null || role == UserRole.ADMIN) {
+        if (role == UserRole.ADMIN) {
             return Mono.empty();
         }
         if (role != UserRole.DESTINATION_MANAGER) {

@@ -8,6 +8,7 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityR
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventCapacityException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventNameException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventPriceException;
@@ -102,6 +103,12 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(EventSiteAccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleSiteAccessDenied(EventSiteAccessDeniedException exception,
+                                                                   ServerWebExchange exchange) {
+        return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

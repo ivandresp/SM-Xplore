@@ -1,12 +1,24 @@
 package com.smxplore.activitiesevents;
 
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mongodb.MongoDBContainer;
@@ -15,14 +27,19 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApplicationContextTest {
 
     @Container
@@ -31,10 +48,17 @@ class ApplicationContextTest {
     @Container
     private static final MongoDBContainer MONGO = new MongoDBContainer("mongo:7.0");
 
-    private static final Path PUBLIC_KEY = writePublicKey();
+    private static final KeyPair KEYS = generateKeys();
+    private static final Path PUBLIC_KEY = writePublicKey(KEYS);
+
+    @LocalServerPort
+    private int port;
 
     @Autowired
     private Flyway flyway;
+
+    @Autowired
+    private ReactiveJwtDecoder jwtDecoder;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -61,13 +85,67 @@ class ApplicationContextTest {
                 .isGreaterThanOrEqualTo(MigrationVersion.fromVersion("2"));
     }
 
-    private static Path writePublicKey() {
+    @Test
+    void decoderAcceptsAnAdminToken() {
+        var decoded = jwtDecoder.decode(token("ADMIN")).block();
+
+        assertThat(decoded).isNotNull();
+        assertThat(decoded.getClaimAsString("role")).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void securityChainProtectsTheGlobalReservationListing() {
+        var client = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .build();
+
+        client.get().uri("/api/v1/reservations?status=CONFIRMED")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        client.get().uri("/api/v1/reservations?status=CONFIRMED")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("TURISTA"))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        client.get().uri("/api/v1/reservations?status=CONFIRMED")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("ADMIN"))
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    private static String token(String role) {
+        var now = Instant.now();
+        var claims = JwtClaimsSet.builder()
+                .issuer("sm-xplore-ms-01")
+                .audience(List.of("sm-xplore-services"))
+                .subject(UUID.randomUUID().toString())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(300))
+                .claim("role", role)
+                .build();
+        var rsaKey = new RSAKey.Builder((RSAPublicKey) KEYS.getPublic())
+                .privateKey((RSAPrivateKey) KEYS.getPrivate())
+                .build();
+        var encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(rsaKey)));
+        return encoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(SignatureAlgorithm.RS256).build(), claims)).getTokenValue();
+    }
+
+    private static KeyPair generateKeys() {
         try {
             var generator = KeyPairGenerator.getInstance("RSA");
             generator.initialize(2048);
-            var publicKey = (RSAPublicKey) generator.generateKeyPair().getPublic();
+            return generator.generateKeyPair();
+        } catch (Exception exception) {
+            throw new ExceptionInInitializerError(exception);
+        }
+    }
+
+    private static Path writePublicKey(KeyPair keyPair) {
+        try {
             var encoded = Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
-                    .encodeToString(publicKey.getEncoded());
+                    .encodeToString(keyPair.getPublic().getEncoded());
             var path = Files.createTempFile("ms-03-jwt-public-", ".pem");
             Files.writeString(path, "-----BEGIN PUBLIC KEY-----\n" + encoded
                     + "\n-----END PUBLIC KEY-----\n");

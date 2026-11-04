@@ -33,6 +33,19 @@ public class ActivityAccessGuard {
         return role(jwt) == UserRole.GUIDE;
     }
 
+    /** Staff and the guide of record may read an activity in any state. */
+    public boolean canViewUnpublished(Activity activity, Jwt jwt) {
+        var role = role(jwt);
+        if (role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER) {
+            return true;
+        }
+        return role == UserRole.GUIDE
+                && jwt != null
+                && jwt.getSubject() != null
+                && activity.getGuideId() != null
+                && activity.getGuideId().toString().equals(jwt.getSubject());
+    }
+
     public Mono<Void> requireCanManage(UUID activityId, Jwt jwt) {
         if (jwt == null) {
             return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required."));
