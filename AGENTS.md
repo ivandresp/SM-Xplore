@@ -122,3 +122,4 @@ Still to design/implement:
 - US numbers restart at US1 in every role file; always cite `<role> US#`, not a bare `US5`.
 - The SRS follows ISO/IEC/IEEE 29148:2018; preserve RF ↔ UC ↔ US ↔ PA traceability.
 - Git history uses Spanish commit descriptions, often with English prefixes (`Add:`, `Fix:`, `Update:`); changes land through feature branches and pull requests.
+- Keep the shared task list (`todo_write`) current: add one todo per step before starting a multi-step task, mark each step completed as soon as it is done, and add new steps as they appear. Do not batch updates at the end of a turn; the list must always reflect what is still pending.
