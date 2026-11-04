@@ -34,9 +34,10 @@ app:
       grace: "${RESERVATION_AUTO_CLOSE_GRACE:P1D}"
   security:
     jwt:
-      secret: ${JWT_SECRET:}
-      issuer: ${JWT_ISSUER:https://activitiesevents.local}
-      audience: ${JWT_AUDIENCE:}
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER:sm-xplore-ms-01}
+      audience: ${JWT_AUDIENCE:sm-xplore-services}
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
     cors:

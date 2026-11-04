@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
@@ -62,7 +63,7 @@ public class EventController {
         // TODO(ms-04): resolve and validate the site from ms-04 (GET /sites/{id}) before persisting.
         // Until that contract exists, siteName is client-supplied and any manager can target any siteId.
         var event = mapper.toDomain(request);
-        if (jwt != null && "DESTINATION_MANAGER".equals(jwt.getClaimAsString(roleClaim))) {
+        if (role(jwt) == UserRole.DESTINATION_MANAGER) {
             event = event.toBuilder().managerId(managerIdFrom(jwt)).build();
         }
         return registerEventUseCase.handle(event)
@@ -125,11 +126,16 @@ public class EventController {
                 .map(mapper::toResponse);
     }
 
+    private UserRole role(Jwt jwt) {
+        return jwt == null ? null : UserRole.fromClaim(jwt.getClaimAsString(roleClaim));
+    }
+
     private Mono<Void> requireCanManage(UUID eventId, Jwt jwt) {
-        if (jwt == null || "ADMIN".equals(jwt.getClaimAsString(roleClaim))) {
+        var role = role(jwt);
+        if (jwt == null || role == UserRole.ADMIN) {
             return Mono.empty();
         }
-        if (!"DESTINATION_MANAGER".equals(jwt.getClaimAsString(roleClaim))) {
+        if (role != UserRole.DESTINATION_MANAGER) {
             return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only the manager of the event or an admin can modify it."));
         }

@@ -2,6 +2,17 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [No publicado] — 2026-11-03
+
+### Cambiado
+- **JWT RS256**: el decoder valida con el JWKS de ms-01 (`JWK_SET_URI`) o con una llave pública PEM (`JWT_PUBLIC_KEY_LOCATION`). Se elimina `JWT_SECRET` y el soporte HS256.
+- **Roles en español**: el claim `role` usa `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`. La autorización interna conserva los identificadores ingleses; los nombres ingleses anteriores se aceptan durante la migración.
+- Los tokens con `scope=mfa` se rechazan como tokens de acceso.
+
+### Migración
+- Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.
+- Ajustar `JWT_ISSUER=sm-xplore-ms-01` y `JWT_AUDIENCE=sm-xplore-services` para aceptar tokens de ms-01.
+
 ## [No publicado] — 2026-10-26
 
 ### Añadido
@@ -117,7 +128,7 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 ### Cómo ejecutar
 ```bash
 cd microservices/ms-03-activities-and-events
-cp .env.example .env    # definir JWT_SECRET
+cp .env.example .env    # definir JWK_SET_URI o JWT_PUBLIC_KEY_LOCATION
 docker compose up -d --build
 curl http://localhost:8082/actuator/health
 ```

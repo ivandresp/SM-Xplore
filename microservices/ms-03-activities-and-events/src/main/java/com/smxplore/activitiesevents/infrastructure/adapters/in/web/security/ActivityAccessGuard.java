@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.security;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ViewActivityDetailsUseCasePort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -19,10 +20,6 @@ import java.util.UUID;
 @Component
 public class ActivityAccessGuard {
 
-    private static final String ADMIN = "ADMIN";
-    private static final String DESTINATION_MANAGER = "DESTINATION_MANAGER";
-    private static final String GUIDE = "GUIDE";
-
     private final ViewActivityDetailsUseCasePort viewActivityDetailsUseCase;
     private final String roleClaim;
 
@@ -33,7 +30,7 @@ public class ActivityAccessGuard {
     }
 
     public boolean isGuide(Jwt jwt) {
-        return jwt != null && GUIDE.equals(role(jwt));
+        return role(jwt) == UserRole.GUIDE;
     }
 
     public Mono<Void> requireCanManage(UUID activityId, Jwt jwt) {
@@ -64,10 +61,10 @@ public class ActivityAccessGuard {
 
     private boolean isStaff(Jwt jwt) {
         var role = role(jwt);
-        return ADMIN.equals(role) || DESTINATION_MANAGER.equals(role);
+        return role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER;
     }
 
-    private String role(Jwt jwt) {
-        return jwt.getClaimAsString(roleClaim);
+    private UserRole role(Jwt jwt) {
+        return jwt == null ? null : UserRole.fromClaim(jwt.getClaimAsString(roleClaim));
     }
 }

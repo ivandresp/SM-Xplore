@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -84,10 +85,10 @@ public class SecurityConfiguration {
     public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter(JwtProperties jwtProperties) {
         var converter = new ReactiveJwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            var role = jwt.getClaimAsString(jwtProperties.getRoleClaim());
+            var role = UserRole.fromClaim(jwt.getClaimAsString(jwtProperties.getRoleClaim()));
             return role == null
                     ? Flux.empty()
-                    : Flux.just(new SimpleGrantedAuthority("ROLE_" + role));
+                    : Flux.just(new SimpleGrantedAuthority("ROLE_" + role.name()));
         });
         return converter;
     }

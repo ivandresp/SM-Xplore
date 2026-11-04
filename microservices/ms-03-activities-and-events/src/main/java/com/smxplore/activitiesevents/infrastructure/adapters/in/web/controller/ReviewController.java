@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewsByItemUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewMetricsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
@@ -128,6 +129,7 @@ public class ReviewController {
     }
 
     private String role(Jwt jwt) {
-        return jwt.getClaimAsString(jwtProperties.getRoleClaim());
+        var role = UserRole.fromClaim(jwt.getClaimAsString(jwtProperties.getRoleClaim()));
+        return role == null ? null : role.name();
     }
 }

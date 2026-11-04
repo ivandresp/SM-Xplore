@@ -9,7 +9,7 @@ Incluye las **Reservas** y las **Reseñas** de ambos.
 - Spring WebFlux (reactivo)
 - PostgreSQL (R2DBC) para eventos, actividades y reservas
 - MongoDB (reactivo) para reseñas
-- JWT HS256 (mismo contrato que ms-02)
+- JWT RS256 (JWKS de ms-01 o llave pública PEM)
 
 ## Requisitos
 
@@ -20,8 +20,7 @@ Incluye las **Reservas** y las **Reseñas** de ambos.
 
 ```bash
 cp .env.example .env
-# Edita .env y define un JWT_SECRET real:
-# openssl rand -base64 48
+# Configura JWK_SET_URI (JWKS de ms-01) o JWT_PUBLIC_KEY_LOCATION (PEM)
 docker compose up --build
 ```
 
@@ -42,13 +41,15 @@ docker compose down -v
 ## Ejecución local
 
 ```bash
-export JWT_SECRET="$(openssl rand -base64 48)"
+export JWK_SET_URI="http://localhost:8081/.well-known/jwks.json"
+export JWT_ISSUER="sm-xplore-ms-01"
+export JWT_AUDIENCE="sm-xplore-services"
 export R2DBC_URL="r2dbc:postgresql://localhost:5432/activities_events"
 export MONGODB_URI="mongodb://localhost:27017/reviews"
 ./gradlew bootRun
 ```
 
-`JWT_SECRET` es obligatorio y debe tener al menos 32 bytes. El servicio no arranca sin él.
+`JWK_SET_URI` o `JWT_PUBLIC_KEY_LOCATION` es obligatorio: el servicio no arranca sin una fuente de llaves RS256. No se admite HS256.
 
 ## Variables de entorno
 
@@ -59,9 +60,10 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 | `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/activities_events` | Conexión reactiva a PostgreSQL. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `postgres` | Credenciales de PostgreSQL. |
 | `MONGODB_URI` | `mongodb://localhost:27017/reviews` | Conexión a MongoDB. |
-| `JWT_SECRET` | sin valor | Obligatorio. Secreto HS256 de mínimo 32 bytes. |
-| `JWT_ISSUER` | `https://activitiesevents.local` | Issuer esperado en el token. |
-| `JWT_AUDIENCE` | vacío | Audiencia esperada; si se define, se valida. |
+| `JWK_SET_URI` | vacío | URL del JWKS de ms-01. Obligatoria si no hay PEM. |
+| `JWT_PUBLIC_KEY_LOCATION` | vacío | Ruta o URL de la llave pública PEM (local/tests). |
+| `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado en el token. |
+| `JWT_AUDIENCE` | `sm-xplore-services` | Audiencia esperada en el token. |
 | `JWT_ROLE_CLAIM` | `role` | Claim que contiene el rol. |
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
@@ -77,6 +79,8 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 - Reseñas de actividades y eventos.
 
 Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias queda diferido.
+
+Los roles del JWT son los de ms-01: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`.
 
 ## Endpoints
 
@@ -156,7 +160,7 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 ## Snapshot de sitio en eventos
 
-`Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `DESTINATION_MANAGER`, `managerId` se toma del `sub` del JWT (no del body). Esto permite autorizar la respuesta a reseñas sin consultar ms-04 en caliente. Si cambia la gestora, el snapshot debe refrescarse (pendiente de contrato con ms-04).
+`Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `GESTORA_DESTINOS`, `managerId` se toma del `sub` del JWT (no del body). Esto permite autorizar la respuesta a reseñas sin consultar ms-04 en caliente. Si cambia la gestora, el snapshot debe refrescarse (pendiente de contrato con ms-04).
 
 ## Pruebas
 

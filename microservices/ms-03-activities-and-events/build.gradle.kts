@@ -53,8 +53,8 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
-    environment("JWT_SECRET", "test-secret-for-integration-tests-32-bytes-minimum!")
-    environment("JWT_ISSUER", "https://activitiesevents.local")
+    environment("JWT_ISSUER", "sm-xplore-ms-01")
+    environment("JWT_AUDIENCE", "sm-xplore-services")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {

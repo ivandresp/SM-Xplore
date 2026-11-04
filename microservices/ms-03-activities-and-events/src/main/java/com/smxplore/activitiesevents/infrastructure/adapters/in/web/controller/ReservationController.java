@@ -203,12 +203,16 @@ public class ReservationController {
     }
 
     private boolean isAdmin(Jwt jwt) {
-        return jwt != null && UserRole.ADMIN.name().equals(jwt.getClaimAsString(roleClaim));
+        return role(jwt) == UserRole.ADMIN;
     }
 
     private boolean isAdminOrManager(Jwt jwt) {
-        var role = jwt == null ? null : jwt.getClaimAsString(roleClaim);
-        return UserRole.ADMIN.name().equals(role) || UserRole.DESTINATION_MANAGER.name().equals(role);
+        var role = role(jwt);
+        return role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER;
+    }
+
+    private UserRole role(Jwt jwt) {
+        return jwt == null ? null : UserRole.fromClaim(jwt.getClaimAsString(roleClaim));
     }
 
     private void requireSelfOrStaff(Jwt jwt, UUID userId, String message) {
