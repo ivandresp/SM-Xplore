@@ -11,11 +11,14 @@ on:
       - "microservices/ms-04-sites-and-services/**"
       - "infrastructure/compose.yaml"
       - ".github/workflows/ms-04-ci.yml"
+      # Si cambian los finales de línea, el build de la imagen puede romperse (./gradlew: not found).
+      - ".gitattributes"
   pull_request:
     paths:
       - "microservices/ms-04-sites-and-services/**"
       - "infrastructure/compose.yaml"
       - ".github/workflows/ms-04-ci.yml"
+      - ".gitattributes"
   workflow_dispatch:
 
 permissions:
