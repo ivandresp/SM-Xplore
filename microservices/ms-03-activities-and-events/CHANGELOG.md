@@ -9,6 +9,8 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Roles en español**: el claim `role` usa `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`. La autorización interna conserva los identificadores ingleses; los nombres ingleses anteriores se aceptan durante la migración.
 - Los tokens con `scope=mfa` se rechazan como tokens de acceso.
 - **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque. `V2` archiva las filas originales y mueve a cuarentena las reservas no representables.
+- **Seguridad**: principal nulo → 401 en guardas y actividades; `guideId` sale del token para guías. `JWT_AUDIENCE` es obligatoria; el JWKS remoto exige HTTPS y timeouts; `scope`/`scp=mfa` se rechazan.
+- **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas queda temporalmente en `ADMIN`. Los roles se comparan de forma exacta en español (los alias ingleses quedan explícitos). Swagger se desactiva por defecto.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.

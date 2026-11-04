@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
@@ -83,8 +84,12 @@ public class EventController {
 
     @GetMapping("/{eventId}")
     @Operation(summary = "Get one event by id")
-    public Mono<EventResponse> findOne(@PathVariable UUID eventId) {
-        return viewEventDetailsUseCase.handle(eventId).map(mapper::toResponse);
+    public Mono<EventResponse> findOne(@PathVariable UUID eventId,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        return viewEventDetailsUseCase.handle(eventId)
+                .filter(event -> jwt != null || event.getStatus() == EventStatus.PUBLISHED)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found.")))
+                .map(mapper::toResponse);
     }
 
     @GetMapping("/{eventId}/exists")

@@ -32,6 +32,8 @@ Servicios:
 - Swagger UI: `http://localhost:8082/swagger-ui.html`
 - Health: `http://localhost:8082/actuator/health`
 
+Swagger está desactivado por defecto; Docker Compose y `.env.example` lo activan para desarrollo. El detalle público solo devuelve ítems `PUBLISHED`; el staff autenticado puede ver cualquier estado.
+
 Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas). `V2` archiva las filas originales en `reservations_legacy` y `reservation_items_legacy`, y mueve a `reservations_quarantine` las reservas que no se pueden representar (sin ítem, multi-ítem o ítem inexistente). Hacer backup y revisar la cuarentena después de migrar.
 
 Para reiniciar las bases desde cero:
@@ -118,7 +120,6 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 - Los listados públicos no paginan todavía (catalog pequeño).
 - No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
 - La búsqueda por nombre usa `ILIKE` sin índice `pg_trgm`.
-- El detalle por UUID no filtra por estado; los listados públicos sí (solo `PUBLISHED`).
 - La cobertura de integración es parcial: cierre automático de reservas y migraciones Flyway.
 - Neo4j (preferencias) queda diferido.
 
@@ -128,7 +129,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 |---|---|---|
 | POST | `/api/v1/reservations` | Autenticado (turista crea la suya; admin puede crear para otro) |
 | GET | `/api/v1/reservations/{id}` | Dueño, guía de la reserva o staff |
-| GET | `/api/v1/reservations?status=` | `ADMIN`, `GESTORA_DESTINOS` |
+| GET | `/api/v1/reservations?status=` | `ADMIN` (temporal, hasta el contrato de sitios de ms-04) |
 | GET | `/api/v1/reservations/tourists/{touristId}` | El propio turista o staff |
 | GET | `/api/v1/reservations/guides/{guideId}` | El propio guía o staff |
 | GET | `/api/v1/reservations/by-item?itemType=&itemId=` | Guía dueño del ítem o staff (eventos: staff) |

@@ -16,15 +16,17 @@ class UserRoleTest {
     }
 
     @Test
-    void acceptsTheRolePrefixAndIsCaseInsensitive() {
-        assertThat(UserRole.fromClaim("ROLE_GUIA")).isEqualTo(UserRole.GUIDE);
-        assertThat(UserRole.fromClaim(" gestora_destinos ")).isEqualTo(UserRole.DESTINATION_MANAGER);
+    void rejectsNonCanonicalSpellings() {
+        assertThat(UserRole.fromClaim("ROLE_GUIA")).isNull();
+        assertThat(UserRole.fromClaim("guia")).isNull();
+        assertThat(UserRole.fromClaim(" gestora_destinos ")).isNull();
     }
 
     @Test
-    void acceptsLegacyEnglishNamesWhileThePlatformMigrates() {
+    void acceptsOnlyTheExplicitLegacyEnglishAliases() {
         assertThat(UserRole.fromClaim("TOURIST")).isEqualTo(UserRole.TOURIST);
         assertThat(UserRole.fromClaim("DESTINATION_MANAGER")).isEqualTo(UserRole.DESTINATION_MANAGER);
+        assertThat(UserRole.fromClaim("tourist")).isNull();
     }
 
     @Test

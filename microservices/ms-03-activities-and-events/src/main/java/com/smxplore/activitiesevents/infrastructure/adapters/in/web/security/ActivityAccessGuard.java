@@ -34,9 +34,10 @@ public class ActivityAccessGuard {
     }
 
     public Mono<Void> requireCanManage(UUID activityId, Jwt jwt) {
-        // The security chain always provides a JWT for writes; a null principal can
-        // only happen in sliced controller tests that bypass the security filters.
-        if (jwt == null || isStaff(jwt)) {
+        if (jwt == null) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required."));
+        }
+        if (isStaff(jwt)) {
             return Mono.empty();
         }
         return viewActivityDetailsUseCase.handle(activityId)

@@ -103,7 +103,7 @@ public class ReservationController {
     public Flux<ReservationSummaryResponse> findByStatus(@RequestParam ReservationStatus status,
                                                          @RequestParam(defaultValue = "50") int limit) {
         // TODO(ms-04): scope this listing to the sites of the caller's managerId.
-        // Today any DESTINATION_MANAGER sees every reservation in the system.
+        // Until that contract exists, SecurityConfiguration restricts this listing to ADMIN.
         return consultReservationsByStatusUseCase.handle(status, PaginationLimits.clamp(limit))
                 .map(mapper::toSummary);
     }

@@ -64,6 +64,17 @@ class JwtConfigurationTest {
     }
 
     @Test
+    void rejectsMfaChallengeInTheScpClaim(@TempDir Path directory) throws Exception {
+        var keyPair = keyPair();
+        var decoder = decoder(directory, keyPair);
+
+        var token = token(keyPair, claims().claim("scp", "mfa").build());
+
+        assertThatThrownBy(() -> decoder.decode(token).block())
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
     void onlyAcceptsTheRs256Algorithm() {
         var validator = JwtConfiguration.requireRs256();
         var rs512 = Jwt.withTokenValue("token").header("alg", "RS512").subject("user").build();
@@ -100,7 +111,7 @@ class JwtConfigurationTest {
 
     @Test
     void requiresAnIssuer() {
-        var properties = new JwtProperties();
+        var properties = properties();
         properties.setIssuer("  ");
 
         assertThatThrownBy(() -> new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder())
@@ -109,21 +120,54 @@ class JwtConfigurationTest {
     }
 
     @Test
+    void requiresAnAudience() {
+        var properties = properties();
+        properties.setAudience("  ");
+
+        assertThatThrownBy(() -> new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("audience");
+    }
+
+    @Test
     void requiresAJwkSetUriOrAPublicKey() {
-        var properties = new JwtProperties();
+        var properties = properties();
 
         assertThatThrownBy(() -> new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("RS256");
     }
 
+    @Test
+    void rejectsPlainHttpJwksForRemoteHosts() {
+        var properties = properties();
+        properties.setJwkSetUri("http://issuer.example/.well-known/jwks.json");
+
+        assertThatThrownBy(() -> new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("https");
+    }
+
+    @Test
+    void acceptsHttpsJwksWithoutFetchingItAtStartup() {
+        var properties = properties();
+        properties.setJwkSetUri("https://issuer.example/.well-known/jwks.json");
+
+        assertThat(new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder()).isNotNull();
+    }
+
+    private static JwtProperties properties() {
+        var properties = new JwtProperties();
+        properties.setIssuer(ISSUER);
+        properties.setAudience(AUDIENCE);
+        return properties;
+    }
+
     private static ReactiveJwtDecoder decoder(Path directory, KeyPair keyPair) throws Exception {
         var pem = directory.resolve("public.pem");
         Files.writeString(pem, publicKeyPem((RSAPublicKey) keyPair.getPublic()));
-        var properties = new JwtProperties();
+        var properties = properties();
         properties.setPublicKeyLocation(pem.toUri().toString());
-        properties.setIssuer(ISSUER);
-        properties.setAudience(AUDIENCE);
         return new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder();
     }
 

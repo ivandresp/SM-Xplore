@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ChangeActivityStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ConsultActivitiesUseCasePort;
@@ -72,8 +73,12 @@ public class ActivityController {
 
     @GetMapping("/{activityId}")
     @Operation(summary = "Get one activity by id")
-    public Mono<ActivityResponse> findOne(@PathVariable UUID activityId) {
-        return viewActivityDetailsUseCase.handle(activityId).map(mapper::toResponse);
+    public Mono<ActivityResponse> findOne(@PathVariable UUID activityId,
+                                          @AuthenticationPrincipal Jwt jwt) {
+        return viewActivityDetailsUseCase.handle(activityId)
+                .filter(activity -> jwt != null || activity.getStatus() == ActivityStatus.PUBLISHED)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity not found.")))
+                .map(mapper::toResponse);
     }
 
     @GetMapping
