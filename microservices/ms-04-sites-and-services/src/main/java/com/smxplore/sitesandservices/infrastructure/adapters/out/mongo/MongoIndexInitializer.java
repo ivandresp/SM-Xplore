@@ -38,6 +38,8 @@ public class MongoIndexInitializer {
                 mongoTemplate.indexOps(SiteDocument.class)
                         .createIndex(new Index().on("zone.id", Sort.Direction.ASC)),
                 mongoTemplate.indexOps(SiteDocument.class)
+                        .createIndex(new Index().on("managerId", Sort.Direction.ASC)),
+                mongoTemplate.indexOps(SiteDocument.class)
                         .createIndex(new Index().on("updatedAt", Sort.Direction.DESC)),
                 mongoTemplate.indexOps(ServiceDocument.class)
                         .createIndex(new Index().on("status", Sort.Direction.ASC)),

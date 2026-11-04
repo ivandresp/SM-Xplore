@@ -229,7 +229,8 @@ una red o puerto privado.
 
 Filtros disponibles:
 
-- Sitios: `categoryId`, `zoneId`, `status`, `search`, `page`, `size`.
+- Sitios: `categoryId`, `zoneId`, `status`, `search`, `managerId`, `page`, `size`.
+  `managerId` exige `ADMIN` o la propia `GESTORA_DESTINOS`; cualquier otro valor devuelve `403`.
 - Servicios: `categoryId`, `zoneId`, `siteId`, `providerId`, `status`, `type`, `search`, `page`, `size`.
 - Zonas: `status`, `type`, `search`, `page`, `size`.
 - Reseñas: `itemType`, `itemId`, `touristId`, `status`, `page`, `size`.
@@ -428,7 +429,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **67 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **71 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 

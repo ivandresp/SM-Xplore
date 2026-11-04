@@ -150,8 +150,85 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .expectStatus().isOk();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+    @Test
+    void filtersSitesByManagerForAdministrators() {
+        UUID managerA = UUID.randomUUID();
+        UUID managerB = UUID.randomUUID();
+        SiteResponse siteA = createSiteFor(managerA);
+        SiteResponse siteB = createSiteFor(managerB);
+
+        PageResponse<SiteResponse> page = listSitesByManager(UUID.randomUUID(), "ADMIN", managerA);
+
+        assertThat(page.content()).extracting(SiteResponse::siteId)
+                .contains(siteA.siteId())
+                .doesNotContain(siteB.siteId());
+    }
+
+    @Test
+    void letsADestinationManagerListItsOwnSitesButNotAnotherManagers() {
+        UUID managerA = UUID.randomUUID();
+        UUID managerB = UUID.randomUUID();
+        SiteResponse siteA = createSiteFor(managerA);
+
+        PageResponse<SiteResponse> own = listSitesByManager(managerA, "GESTORA_DESTINOS", managerA);
+        assertThat(own.content()).extracting(SiteResponse::siteId).contains(siteA.siteId());
+
+        clientFor(managerA, "GESTORA_DESTINOS")
+                .get().uri("/api/v1/sites?managerId=" + managerB)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void rejectsTheManagerFilterForTouristsAndProviders() {
+        UUID managerId = UUID.randomUUID();
+
+        clientFor(UUID.randomUUID(), "TURISTA")
+                .get().uri("/api/v1/sites?managerId=" + managerId)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        clientFor(UUID.randomUUID(), "PRESTADORA_SERVICIOS")
+                .get().uri("/api/v1/sites?managerId=" + managerId)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void keepsTheListingUnfilteredWhenManagerIdIsMissing() {
+        UUID managerId = UUID.randomUUID();
+        SiteResponse site = createSiteFor(managerId);
+
+        PageResponse<SiteResponse> page = clientFor(UUID.randomUUID(), "TURISTA")
+                .get().uri("/api/v1/sites?categoryId=" + site.categoryId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<SiteResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(page.content()).extracting(SiteResponse::siteId).contains(site.siteId());
+    }
+
+    private SiteResponse createSiteFor(UUID managerId) {
+        CategoryResponse category = createCategory(managerId);
+        ZoneResponse zone = createZone(managerId);
+        return createSite(managerId, category.categoryId(), zone.zoneId());
+    }
+
+    private PageResponse<SiteResponse> listSitesByManager(UUID callerId, String role, UUID managerId) {
+        return clientFor(callerId, role)
+                .get().uri("/api/v1/sites?managerId=" + managerId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<SiteResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private CategoryResponse createCategory(UUID managerId) {        return clientFor(managerId, "GESTORA_DESTINOS")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""

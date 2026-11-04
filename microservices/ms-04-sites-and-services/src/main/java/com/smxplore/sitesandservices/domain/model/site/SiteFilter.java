@@ -10,6 +10,7 @@ public record SiteFilter(
         UUID zoneId,
         ContentStatus status,
         String search,
+        UUID managerId,
         int page,
         int size
 ) {

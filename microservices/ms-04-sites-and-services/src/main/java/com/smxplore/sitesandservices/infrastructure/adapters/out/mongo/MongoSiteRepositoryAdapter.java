@@ -108,6 +108,9 @@ public class MongoSiteRepositoryAdapter implements SiteRepositoryPort {
         if (filter.status() != null) {
             criteria.and("status").is(filter.status().name());
         }
+        if (filter.managerId() != null) {
+            criteria.and("managerId").is(filter.managerId().toString());
+        }
         if (filter.search() != null && !filter.search().isBlank()) {
             String pattern = Pattern.quote(filter.search().trim());
             criteria.orOperator(
