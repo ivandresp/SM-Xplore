@@ -59,6 +59,8 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `JWT_ROLE_CLAIM` | `role` | Claim que contiene el rol. |
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre del usuario. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos, separados por coma. |
+| `REPORT_RATE_LIMIT_ENABLED` | `true` | Activa el límite por IP para crear reportes. |
+| `REPORT_RATE_LIMIT_PER_MINUTE` | `30` | Máximo de reportes por IP por minuto. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker Compose se activa; en producción se recomienda gestionarlos con migraciones. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka compartido. |
 | `OUTBOX_ENABLED` | `true` | Activa el relay del outbox de reportes. |
@@ -127,6 +129,7 @@ Reportes: orden `createdAt DESC`, `_id DESC`. Comentarios: orden `createdAt ASC`
 - La llave pública se obtiene del JWKS de ms-01 o de un PEM local; nunca se comparte una llave privada.
 - Los errores usan RFC 9457 (`application/problem+json`) con `type`, `title`, `status`, `detail` e `instance`.
 - Se agregan cabeceras `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`.
+- La creación de reportes tiene un límite fijo por IP (`REPORT_RATE_LIMIT_PER_MINUTE`, 30 por defecto); al superarlo responde `429` con `Retry-After`.
 
 ## Migraciones y datos legados
 

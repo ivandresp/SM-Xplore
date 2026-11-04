@@ -32,6 +32,9 @@ app:
       name-claim: ${JWT_NAME_CLAIM:name}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+    rate-limit:
+      enabled: ${REPORT_RATE_LIMIT_ENABLED:true}
+      requests-per-minute: ${REPORT_RATE_LIMIT_PER_MINUTE:30}
   outbox:
     enabled: ${OUTBOX_ENABLED:true}
     producer: ${OUTBOX_PRODUCER:ms-02}
