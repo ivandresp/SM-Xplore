@@ -104,7 +104,19 @@ En `/actuator/prometheus`:
 - `recommendations_events_failures_total{topic}`.
 - `recommendations_events_dlq_total{topic}`.
 - `kafka_consumer_*`, incluida la lag por partición.
+- `recommendations_served_total{source}`: respuestas por origen (`MIXED`, `AFFINITY`, `NEARBY`,
+  `FALLBACK`). Un `FALLBACK` alto indica poca afinidad registrada o proyección incompleta.
+- `recommendations_items`: elementos devueltos por respuesta.
+- `recommendations_cache_total{result}`: `hit` o `miss`; la proporción de `hit` es la salud de la
+  cache. Si cae a cero con Redis arriba, revisar `ms05:graph:version` y el TTL local de 10 s.
+- `recommendations_diversity_categories` y `recommendations_diversity_sites`: categorías y sitios
+  distintos por respuesta.
 
+```promql
+sum(rate(recommendations_cache_total{result="hit"}[5m]))
+  / sum(rate(recommendations_cache_total[5m]))
+sum by (source) (rate(recommendations_served_total[5m]))
+```
 ## Reindex del catálogo
 
 `POST /internal/admin/reindex?entity=SITES|SERVICES|CATEGORIES` recorre el feed
@@ -145,6 +157,22 @@ Para forzar una corrida se puede reiniciar el servicio; el job también se ejecu
 tras `EVENTS_RETENTION_INITIAL_DELAY`. Borrar marcadores no borra la proyección: solo permite
 que un evento repetido se vuelva a aplicar.
 
+## Pruebas de carga
+
+`loadtest/recommendations-flow.js` (k6) mide el camino completo: versión del grafo en Redis, cache
+Caffeine + Redis y ranking en Neo4j.
+
+```bash
+k6 run loadtest/recommendations-flow.js \
+  -e BASE_URL=http://localhost:8085 -e TOKEN="$TOKEN" -e LAT=10.39 -e LNG=-75.47
+```
+
+Umbrales: p95 < 600 ms, errores < 1 % y `checks` > 98 %. Durante la corrida vigilar:
+
+- `recommendations_cache_total{result=hit}` debe subir durante la meseta; si se queda en `miss`,
+  revisar el TTL local (10 s) y que `ms05:graph:version` no esté cambiando por una ingesta activa.
+- `neo4j_driver_*` y la latencia de Neo4j; una p95 alta con cache caliente apunta a la base.
+- `recommendations_diversity_sites` no debe caer a 1 con el catálogo lleno.
 ## Cache de recomendaciones
 
 La respuesta de `GET /api/v1/recommendations` se guarda en dos capas: Caffeine en memoria

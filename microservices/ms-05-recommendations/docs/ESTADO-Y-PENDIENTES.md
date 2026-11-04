@@ -159,10 +159,18 @@ se podrá añadir, pero no es parte de este contrato.
 - Reindex desde ms-03/ms-04 (`POST /internal/admin/reindex`, fase 3).
   → **Implementado para el catálogo** (ms-04); falta ms-03, que todavía no expone un feed con
   `updatedSince`.
-- Caché Redis + Caffeine, circuit breaker y degradación (fase 3).
+- Caché Redis + Caffeine y degradación (fase 3).
+  → **Implementado**: dos capas (Caffeine 10 s + Redis 1 min) con invalidación por versión del
+  grafo y degradación si Redis falla. El circuit breaker explícito sigue pendiente: hoy la cache
+  se salta con `onErrorResume` en cada operación.
 - Métricas de recomendación y diversidad (fase 3).
+  → **Implementado**: `recommendations.served{source}`, `recommendations.items`,
+  `recommendations.cache{result}` y las dos series de diversidad.
 - Pruebas de carga, runbook final y alertas (fase 4).
-- Decidir si se usa `RecommendationSource.QUALITY` para un fallback solo de calidad.
+  → **Runbook actualizado** con cache, métricas y su diagnóstico; faltan las pruebas de carga.
+- `RecommendationSource.QUALITY`: **no se usa**. El resolvedor solo devuelve `AFFINITY`,
+  `NEARBY`, `FALLBACK` o `MIXED`; la calidad entra en el puntaje, no en el origen. Se conserva el
+  valor en el enum porque ya está publicado en el contrato y su serie de métricas queda en cero.
 
 ### Nota sobre el seed
 

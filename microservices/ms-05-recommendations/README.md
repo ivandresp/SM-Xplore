@@ -309,7 +309,7 @@ El seed es idempotente (`MERGE`).
 ```
 
 Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafka
-(`apache/kafka:4.1.0`) y Docker. Son **24 clases y 112 pruebas**, todas en verde. La suite cubre:
+(`apache/kafka:4.1.0`) y Docker. Son **25 clases y 116 pruebas**, todas en verde. La suite cubre:
 
 - scoring bayesiano, proximidad, novedad y normalización;
 - topes de diversidad por sitio/categoría;
@@ -324,7 +324,23 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - purga de marcadores `ProcessedEvent` por lotes y con corte por antigüedad;
 - reindexado del catálogo: paginación, `updatedSince`, corte por `max-pages`, traducción de
   errores de ms-04 y endpoint administrativo (incluido el 403 para roles que no son `ADMIN`);
-- idioma desde `Accept-Language` y JWT sin claim `locale`.
+- idioma desde `Accept-Language` y JWT sin claim `locale`;
+- métricas de recomendaciones servidas, cache y diversidad;
+
+## Métricas
+
+`GET /actuator/prometheus` publica, además de las métricas de JVM y HTTP:
+
+| Métrica | Tipo | Etiquetas | Qué mide |
+| --- | --- | --- | --- |
+| `recommendations.served` | counter | `source` (`MIXED`, `AFFINITY`, `NEARBY`, `FALLBACK`, ...) | respuestas servidas por origen |
+| `recommendations.items` | summary | - | elementos devueltos por respuesta |
+| `recommendations.cache` | counter | `result` (`hit`, `miss`) | consultas resueltas por la cache y consultas calculadas |
+| `recommendations.diversity.categories` | summary | - | categorías distintas por respuesta |
+| `recommendations.diversity.sites` | summary | - | sitios distintos por respuesta |
+
+La proporción `recommendations.cache` con `result=hit` frente a `result=miss` es el indicador de
+salud de la cache: si cae a cero con Redis arriba, revisar `ms05:graph:version` y el TTL local.
 
 ## Documentación
 
@@ -334,6 +350,7 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - `docs/adr/0001-event-driven-broker.md`: Kafka + outbox para fase 2.
 - `docs/adr/0002-no-reservation-signal.md`: decisión de excluir `RESERVO`.
 - `docs/runbook.md`: operación y diagnóstico.
+- `loadtest/recommendations-flow.js`: prueba de carga con k6 (`BASE_URL`, `TOKEN`, `LAT`/`LNG`, `LIMIT`).
 - `../../contracts/README.md`: contratos de eventos.
 - `../../infrastructure/README.md`: Kafka/Redis compartidos.
 
