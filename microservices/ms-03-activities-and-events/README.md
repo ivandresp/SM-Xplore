@@ -32,6 +32,8 @@ Servicios:
 - Swagger UI: `http://localhost:8082/swagger-ui.html`
 - Health: `http://localhost:8082/actuator/health`
 
+Las migraciones viven en `src/main/resources/db/migration` y las aplica Flyway al arrancar (`V1` baseline, `V2` reservas simbólicas).
+
 Para reiniciar las bases desde cero:
 
 ```bash
@@ -68,7 +70,7 @@ export MONGODB_URI="mongodb://localhost:27017/reviews"
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker se activa. |
-| `SQL_INIT_MODE` | `never` | Ejecuta `schema.sql` al arrancar. En Docker Compose se activa (`always`). |
+| `FLYWAY_URL` | `jdbc:postgresql://localhost:5432/activities_events` | URL JDBC que usa Flyway para migrar el esquema. |
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 
@@ -114,7 +116,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 - No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
 - La búsqueda por nombre usa `ILIKE` sin índice `pg_trgm`.
 - El detalle por UUID no filtra por estado; los listados públicos sí (solo `PUBLISHED`).
-- Faltan pruebas de integración con Testcontainers (declaradas en el build).
+- La cobertura de integración es parcial: cierre automático de reservas y migraciones Flyway.
 - Neo4j (preferencias) queda diferido.
 
 ## Reservas
@@ -169,4 +171,4 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 ./gradlew build
 ```
 
-Las pruebas de integración usarán Testcontainers (PostgreSQL + MongoDB) y requieren Docker.
+Las pruebas de integración usan Testcontainers (PostgreSQL) y requieren Docker.

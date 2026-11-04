@@ -12,7 +12,7 @@ Integration branch: `microservicios` (the branch `microservices` does not exist)
 |---|---|---|---|---|
 | ms-01 users and anomalies | `microservices/ms-01-users-and-anomalies/` | Merged in `microservicios`; identity, MFA, admin, reviews, anomalies | 8081 | RS256/JWKS (issuer) |
 | ms-02 security reports | `microservices/ms-02-security-reports/` | Merged (PR #33) | 8080 | HS256, migration pending |
-| ms-03 activities and events | `microservices/ms-03-activities-and-events/` | Current work, branch `ms-03-symbolic-reservations` | 8082 | HS256, migration pending |
+| ms-03 activities and events | `microservices/ms-03-activities-and-events/` | Current work, branch `ms-03-symbolic-reservations` | 8082 | RS256 (JWKS or PEM) |
 | ms-04 sites and services | `microservices/ms-04-sites-and-services/` | Merged (PR #34); catalog, reservations, notifications, outbox | 8084 | RS256 (JWKS or PEM) |
 | ms-05 recommendations | `microservices/ms-05-recommendations/` | Branch `ms-recommendations`, not merged | 8085 | RS256 |
 
@@ -87,7 +87,7 @@ Canonical contract, with ms-01 as issuer:
 - Role wire values (Spanish): `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`.
 - Tokens carrying `scope=mfa` are not access tokens; reject them.
 - ms-01 enforces `ver` revocation; the other services validate signature, `iss`, `aud` and `exp` only.
-- ms-01, ms-04 and ms-05 validate with `JWK_SET_URI` (production) or a PEM public key (local/tests). ms-02 and ms-03 still use HS256 and must migrate.
+- ms-01, ms-03, ms-04 and ms-05 validate with `JWK_SET_URI` (production) or a PEM public key (local/tests). ms-02 still uses HS256 and must migrate.
 - Never copy ms-01 signing code or private keys into another service.
 
 ## Events and contracts
@@ -106,15 +106,13 @@ Canonical contract, with ms-01 as issuer:
 - Rules: optional `Idempotency-Key` (1-64) on `POST /api/v1/reservations`; maximum 5 active reservations per tourist; tourist cancellation up to 24 h before start; attendance and no-show after start; daily auto-close at 03:15 `America/Bogota` with `P1D` grace.
 - Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
 - Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports.
-- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWT_SECRET` (current HS256), `JWT_ISSUER`, `JWT_AUDIENCE`, `CORS_ALLOWED_ORIGINS`, `SQL_INIT_MODE`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
-  1. JWT: migrate from HS256 to RS256/JWKS and Spanish roles.
-  2. Flyway: replace `schema.sql` and `SQL_INIT_MODE=always`; the migration is destructive and must run once, not on every boot.
-  3. CI: add `.github/workflows/ms-03-ci.yml` using the ms-04 workflow as reference.
-  4. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
-  5. Events/outbox: resolve the contract mismatch first, then publish.
-  6. Hardening: `ProblemDetail`, pagination, status filtering in SQL, hide non-published items in public detail, `managerId` accepted from the body for ADMIN, required `paymentMethod`.
-- 168 tests as of 2026-11-03, including one Testcontainers PostgreSQL test.
+  1. CI: add `.github/workflows/ms-03-ci.yml` using the ms-04 workflow as reference.
+  2. `TODO(ms-04)`: validate the site on event creation and refresh `siteName`/`managerId`; manager-scoped listings need a `managerId` filter in ms-04, which does not exist today.
+  3. Events/outbox: resolve the contract mismatch first, then publish.
+  4. Hardening: `ProblemDetail`, pagination, status filtering in SQL, hide non-published items in public detail, `managerId` accepted from the body for ADMIN, required `paymentMethod`.
+- 185 tests as of 2026-11-03, including Testcontainers PostgreSQL tests.
 
 ## Cross-service rules
 
