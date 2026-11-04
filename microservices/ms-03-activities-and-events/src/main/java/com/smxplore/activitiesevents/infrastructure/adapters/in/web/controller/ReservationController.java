@@ -216,26 +216,18 @@ public class ReservationController {
         return role(jwt) == UserRole.ADMIN;
     }
 
-    private boolean isAdminOrManager(Jwt jwt) {
-        var role = role(jwt);
-        return role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER;
-    }
-
     private UserRole role(Jwt jwt) {
         return jwt == null ? null : UserRole.fromClaim(jwt.getClaimAsString(roleClaim));
     }
 
     private void requireSelfOrStaff(Jwt jwt, UUID userId, String message) {
-        if (!isAdminOrManager(jwt) && !userId.toString().equals(subject(jwt))) {
+        if (!isAdmin(jwt) && !userId.toString().equals(subject(jwt))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
         }
     }
 
     private void requireReservationAccess(Jwt jwt, Reservation reservation) {
-        if (isAdminOrManager(jwt)) {
-            return;
-        }
-        if (!isOwner(jwt, reservation) && !isStaff(jwt, reservation)) {
+        if (!isAdmin(jwt) && !isOwner(jwt, reservation) && !isStaff(jwt, reservation)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot access this reservation.");
         }
     }
@@ -245,9 +237,9 @@ public class ReservationController {
                 && reservation.getTouristId().toString().equals(subject(jwt));
     }
 
-    /** The guide of the activity or the manager of the event, plus admins and destination managers. */
+    /** The guide of the activity or the provider of the reservation, plus admins. */
     private boolean isStaff(Jwt jwt, Reservation reservation) {
-        if (isAdminOrManager(jwt)) {
+        if (isAdmin(jwt)) {
             return true;
         }
         var subject = subject(jwt);
@@ -268,7 +260,7 @@ public class ReservationController {
     }
 
     private Mono<Void> requireItemAccess(Jwt jwt, ReservationItemType itemType, UUID itemId) {
-        var staff = isAdminOrManager(jwt);
+        var staff = isAdmin(jwt);
         return switch (itemType) {
             case ACTIVITY -> activityRepository.findById(itemId)
                     .switchIfEmpty(Mono.error(new ActivityNotFoundException(itemId)))

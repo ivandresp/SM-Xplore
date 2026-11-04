@@ -1,6 +1,10 @@
 package com.smxplore.activitiesevents;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
+import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import org.flywaydb.core.Flyway;
@@ -34,7 +38,10 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+
+import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,6 +66,15 @@ class ApplicationContextTest {
 
     @Autowired
     private ReactiveJwtDecoder jwtDecoder;
+
+    @Autowired
+    private ReservationRepositoryPort reservationRepository;
+
+    @Autowired
+    private EventRepositoryPort eventRepository;
+
+    @Autowired
+    private ActivityRepositoryPort activityRepository;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -112,6 +128,19 @@ class ApplicationContextTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("ADMIN"))
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    void managerQueriesSupportCollectionParameters() {
+        var itemId = UUID.randomUUID();
+
+        StepVerifier.create(eventRepository.findIdsBySiteIds(Set.of(itemId)))
+                .verifyComplete();
+        StepVerifier.create(activityRepository.findIdsBySiteIds(Set.of(itemId)))
+                .verifyComplete();
+        StepVerifier.create(reservationRepository.findAllByItemRefs(
+                        Set.of(itemId), Set.of(itemId), ReservationStatus.CONFIRMED, 10))
+                .verifyComplete();
     }
 
     private static String token(String role) {

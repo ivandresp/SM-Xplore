@@ -104,10 +104,14 @@ public class EventController {
     }
 
     @GetMapping("/{eventId}/exists")
-    @Operation(summary = "Validate that an event exists")
-    public Mono<ResponseEntity<Void>> exists(@PathVariable UUID eventId) {
-        return validateEventExistsUseCase.handle(eventId)
-                .map(exists -> exists ? ResponseEntity.ok().build() : ResponseEntity.notFound().build());
+    @Operation(summary = "Validate that an event exists and is visible to the caller")
+    public Mono<ResponseEntity<Void>> exists(@PathVariable UUID eventId,
+                                             @AuthenticationPrincipal Jwt jwt) {
+        return viewEventDetailsUseCase.handle(eventId)
+                .filter(event -> event.getStatus() == EventStatus.PUBLISHED
+                        || canSeeUnpublished(event, jwt))
+                .map(event -> ResponseEntity.ok().<Void>build())
+                .defaultIfEmpty(ResponseEntity.<Void>notFound().build());
     }
 
     @GetMapping

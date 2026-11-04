@@ -46,8 +46,8 @@ app:
     jwt:
       jwk-set-uri: ${JWK_SET_URI:}
       public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
-      issuer: ${JWT_ISSUER:sm-xplore-ms-01}
-      audience: ${JWT_AUDIENCE:sm-xplore-services}
+      issuer: ${JWT_ISSUER}
+      audience: ${JWT_AUDIENCE}
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
     cors:

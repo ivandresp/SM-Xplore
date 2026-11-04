@@ -97,6 +97,72 @@ class FlywayMigrationTest {
     }
 
     @Test
+    void pendingReservationsOverCapacityAreQuarantined() throws Exception {
+        flywayAtV1().migrate();
+
+        var activityId = UUID.randomUUID();
+        var first = UUID.randomUUID();
+        var second = UUID.randomUUID();
+        try (var connection = connection()) {
+            insertActivity(connection, activityId, 1, STARTS_AT);
+            insertReservation(connection, first, 1, "100.00", "PENDING", STARTS_AT);
+            insertItem(connection, first, activityId, "ACTIVITY", "100.00");
+            insertReservation(connection, second, 1, "100.00", "PENDING", STARTS_AT);
+            insertItem(connection, second, activityId, "ACTIVITY", "100.00");
+        }
+
+        flyway().migrate();
+
+        try (var connection = connection()) {
+            assertThat(countWhere(connection, "reservations", "status = 'CONFIRMED'")).isEqualTo(1);
+            assertThat(countWhere(connection, "reservations_quarantine",
+                    "reason = 'pending over capacity'")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void nonDivisibleTotalIsQuarantined() throws Exception {
+        flywayAtV1().migrate();
+
+        var activityId = UUID.randomUUID();
+        var reservationId = UUID.randomUUID();
+        try (var connection = connection()) {
+            insertActivity(connection, activityId, 10, STARTS_AT);
+            insertReservation(connection, reservationId, 3, "100.00", "CONFIRMED", STARTS_AT);
+            insertItem(connection, reservationId, activityId, "ACTIVITY", "100.00");
+        }
+
+        flyway().migrate();
+
+        try (var connection = connection()) {
+            assertThat(count(connection, "reservations")).isZero();
+            assertThat(countWhere(connection, "reservations_quarantine",
+                    "reason = 'non-divisible total'")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void reservationCreatedAfterTheItemStartedIsQuarantined() throws Exception {
+        flywayAtV1().migrate();
+
+        var activityId = UUID.randomUUID();
+        var reservationId = UUID.randomUUID();
+        try (var connection = connection()) {
+            insertActivity(connection, activityId, 10, Instant.parse("2026-01-01T07:00:00Z"));
+            insertReservation(connection, reservationId, 1, "100.00", "CONFIRMED", STARTS_AT);
+            insertItem(connection, reservationId, activityId, "ACTIVITY", "100.00");
+        }
+
+        flyway().migrate();
+
+        try (var connection = connection()) {
+            assertThat(count(connection, "reservations")).isZero();
+            assertThat(countWhere(connection, "reservations_quarantine",
+                    "reason = 'start before booking'")).isEqualTo(1);
+        }
+    }
+
+    @Test
     void multiItemOrphanAndMissingCatalogReservationsAreQuarantined() throws Exception {
         flywayAtV1().migrate();
 
@@ -218,14 +284,19 @@ class FlywayMigrationTest {
     }
 
     private static void insertActivity(Connection connection, UUID activityId) throws SQLException {
+        insertActivity(connection, activityId, 10, STARTS_AT);
+    }
+
+    private static void insertActivity(Connection connection, UUID activityId, int capacity,
+                                       Instant startsAt) throws SQLException {
         try (var statement = connection.createStatement()) {
             statement.execute("""
                     INSERT INTO actividad (id, sitio_id, name, category, status, price, max_capacity,
                                            duration_mins, starts_at, ends_at)
-                    VALUES ('%s', '%s', 'Kayak', 'Tour', 'PUBLISHED', 100.00, 10, 60,
+                    VALUES ('%s', '%s', 'Kayak', 'Tour', 'PUBLISHED', 100.00, %d, 60,
                             '%s', '%s')
-                    """.formatted(activityId, UUID.randomUUID(),
-                    Timestamp.from(STARTS_AT), Timestamp.from(STARTS_AT.plusSeconds(3600))));
+                    """.formatted(activityId, UUID.randomUUID(), capacity,
+                    Timestamp.from(startsAt), Timestamp.from(startsAt.plusSeconds(3600))));
         }
     }
 
