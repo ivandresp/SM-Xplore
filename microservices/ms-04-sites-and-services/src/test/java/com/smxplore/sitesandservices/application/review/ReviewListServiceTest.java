@@ -63,6 +63,29 @@ class ReviewListServiceTest {
     }
 
     @Test
+    void touristCanListOwnHiddenReviews() {
+        service.handle(filter(TOURIST_ID, ReviewStatus.HIDDEN), tourist()).block();
+
+        assertThat(repository.lastFilter.touristId()).isEqualTo(TOURIST_ID);
+        assertThat(repository.lastFilter.status()).isEqualTo(ReviewStatus.HIDDEN);
+    }
+
+    @Test
+    void managerCanFilterPublishedReviewsByTourist() {
+        service.handle(filter(OTHER_TOURIST_ID, null), manager()).block();
+
+        assertThat(repository.lastFilter.touristId()).isEqualTo(OTHER_TOURIST_ID);
+        assertThat(repository.lastFilter.status()).isEqualTo(ReviewStatus.PUBLISHED);
+    }
+
+    @Test
+    void managerCannotListHiddenReviews() {
+        assertThatThrownBy(() -> service.handle(filter(OTHER_TOURIST_ID, ReviewStatus.HIDDEN), manager()).block())
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessageContaining("status");
+    }
+
+    @Test
     void adminCanListAnotherTouristsReviews() {
         service.handle(filter(OTHER_TOURIST_ID, null), admin()).block();
 
@@ -87,6 +110,10 @@ class ReviewListServiceTest {
 
     private static Actor admin() {
         return new Actor(UUID.randomUUID(), UserRole.ADMIN, "Admin");
+    }
+
+    private static Actor manager() {
+        return new Actor(UUID.randomUUID(), UserRole.DESTINATION_MANAGER, "Gestora");
     }
 
     private static final class CapturingRepository implements ReviewRepositoryPort {

@@ -12,9 +12,11 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
 /**
- * Listado publico de resenas. Solo un administrador puede pedir estados distintos de
- * PUBLISHED o el historial de otro turista; el resto de usuarios ve exclusivamente el
- * contenido publicado (y, si filtra por turista, el suyo).
+ * Listado de resenas. Un administrador ve cualquier estado y cualquier turista. El resto:
+ * - solo ve PUBLISHED, salvo el propio turista consultando su historial (touristId propio),
+ *   que puede ver el estado real de sus resenas (incluidas HIDDEN/DELETED);
+ * - solo puede filtrar por su propio touristId, salvo la gestora/prestadora, que puede
+ *   filtrar resenas publicadas por turista dentro de su catalogo.
  */
 @RequiredArgsConstructor
 public class ReviewListService implements ListReviewsUseCase {
@@ -23,12 +25,14 @@ public class ReviewListService implements ListReviewsUseCase {
 
     @Override
     public Mono<PageResult<Review>> handle(ReviewFilter filter, Actor actor) {
+        boolean ownsHistory = filter.touristId() != null && actor.owns(filter.touristId());
         if (!actor.isAdmin()) {
-            if (filter.status() != null && filter.status() != ReviewStatus.PUBLISHED) {
+            boolean staff = actor.isGestora() || actor.isPrestadora();
+            if (filter.status() != null && filter.status() != ReviewStatus.PUBLISHED && !ownsHistory) {
                 return Mono.error(new ForbiddenOperationException(
                         "Only administrators can list reviews with status " + filter.status()));
             }
-            if (filter.touristId() != null && !actor.owns(filter.touristId())) {
+            if (filter.touristId() != null && !ownsHistory && !staff) {
                 return Mono.error(new ForbiddenOperationException(
                         "Only administrators can list another tourist's reviews"));
             }
