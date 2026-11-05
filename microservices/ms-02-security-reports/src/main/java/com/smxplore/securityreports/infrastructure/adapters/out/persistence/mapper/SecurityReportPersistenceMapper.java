@@ -4,6 +4,7 @@ import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.infrastructure.adapters.out.persistence.document.SecurityReportDocument;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.List;
         unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface SecurityReportPersistenceMapper {
 
+    @Mapping(target = "position", ignore = true)
     SecurityReportDocument toDocument(SecurityReport report);
 
     SecurityReport toDomain(SecurityReportDocument document);

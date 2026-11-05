@@ -76,7 +76,7 @@ class NotificationInboxIntegrationTests extends AbstractKafkaMongoPostgresIntegr
                 .untilAsserted(() -> assertThat(notifications(touristId, providerId)).hasSize(2));
 
         PageResponse<NotificationResponse> touristInbox = inbox(
-                touristId, "TURISTA", false);
+                touristId, "TOURIST", false);
         assertThat(touristInbox.total()).isEqualTo(1);
         NotificationResponse touristNotification = touristInbox.content().getFirst();
         assertThat(touristNotification.recipientId()).isEqualTo(touristId);
@@ -84,17 +84,17 @@ class NotificationInboxIntegrationTests extends AbstractKafkaMongoPostgresIntegr
         assertThat(touristNotification.readAt()).isNull();
 
         PageResponse<NotificationResponse> providerInbox = inbox(
-                providerId, "PRESTADORA_SERVICIOS", false);
+                providerId, "SERVICE_PROVIDER", false);
         assertThat(providerInbox.total()).isEqualTo(1);
         NotificationResponse providerNotification = providerInbox.content().getFirst();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .patch().uri("/api/v1/notifications/"
                         + providerNotification.notificationId() + "/read")
                 .exchange()
                 .expectStatus().isForbidden();
 
-        NotificationResponse read = clientFor(touristId, "TURISTA")
+        NotificationResponse read = clientFor(touristId, "TOURIST")
                 .patch().uri("/api/v1/notifications/"
                         + touristNotification.notificationId() + "/read")
                 .exchange()
@@ -105,8 +105,8 @@ class NotificationInboxIntegrationTests extends AbstractKafkaMongoPostgresIntegr
         assertThat(read).isNotNull();
         assertThat(read.readAt()).isNotNull();
 
-        assertThat(inbox(touristId, "TURISTA", true).total()).isZero();
-        assertThat(inbox(providerId, "PRESTADORA_SERVICIOS", true).total()).isEqualTo(1);
+        assertThat(inbox(touristId, "TOURIST", true).total()).isZero();
+        assertThat(inbox(providerId, "SERVICE_PROVIDER", true).total()).isEqualTo(1);
     }
 
     private List<NotificationDocument> notifications(UUID touristId, UUID providerId) {

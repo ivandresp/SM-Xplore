@@ -53,7 +53,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
         assertThat(resolved.status()).isEqualTo(ReviewReportStatus.ACCEPTED);
         assertThat(resolved.resolvedBy()).isEqualTo(adminId);
 
-        ReviewResponse hidden = clientFor(authorId, "TURISTA")
+        ReviewResponse hidden = clientFor(authorId, "TOURIST")
                 .get().uri("/api/v1/reviews/" + review.reviewId())
                 .exchange()
                 .expectStatus().isOk()
@@ -83,7 +83,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
 
         assertThat(dismissed.status()).isEqualTo(ReviewReportStatus.DISMISSED);
 
-        ReviewResponse stillPublished = clientFor(authorId, "TURISTA")
+        ReviewResponse stillPublished = clientFor(authorId, "TOURIST")
                 .get().uri("/api/v1/reviews/" + review.reviewId())
                 .exchange()
                 .expectStatus().isOk()
@@ -114,7 +114,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
 
         reportReview(reporterId, review.reviewId());
 
-        clientFor(reporterId, "TURISTA")
+        clientFor(reporterId, "TOURIST")
                 .post().uri("/api/v1/reviews/" + review.reviewId() + "/reports")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -123,7 +123,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
                 .exchange()
                 .expectStatus().isEqualTo(409);
 
-        clientFor(authorId, "TURISTA")
+        clientFor(authorId, "TOURIST")
                 .post().uri("/api/v1/reviews/" + review.reviewId() + "/reports")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -132,7 +132,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(reporterId, "TURISTA")
+        clientFor(reporterId, "TOURIST")
                 .get().uri("/api/v1/reviews/reports")
                 .exchange()
                 .expectStatus().isForbidden();
@@ -176,7 +176,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
     }
 
     private ReviewResponse createReview(UUID touristId, UUID siteId, int rating) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reviews")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -196,7 +196,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
     }
 
     private ReviewReportResponse reportReview(UUID reporterId, UUID reviewId) {
-        return clientFor(reporterId, "TURISTA")
+        return clientFor(reporterId, "TOURIST")
                 .post().uri("/api/v1/reviews/" + reviewId + "/reports")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -238,7 +238,7 @@ class ReviewReportWebIntegrationTests extends AbstractMongoPostgresIntegrationTe
     }
 
     private ReputationResponse reputation(UUID siteId) {
-        return clientFor(UUID.randomUUID(), "TURISTA")
+        return clientFor(UUID.randomUUID(), "TOURIST")
                 .get().uri("/api/v1/reviews/reputation?itemType=SITE&itemId=" + siteId)
                 .exchange()
                 .expectStatus().isOk()

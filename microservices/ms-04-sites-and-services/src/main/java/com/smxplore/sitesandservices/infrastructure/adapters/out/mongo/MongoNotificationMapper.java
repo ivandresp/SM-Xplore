@@ -30,7 +30,7 @@ public class MongoNotificationMapper {
         return Notification.builder()
                 .notificationId(UUID.fromString(document.getNotificationId()))
                 .recipientId(UUID.fromString(document.getRecipientId()))
-                .recipientRole(UserRole.valueOf(document.getRecipientRole()))
+                .recipientRole(UserRole.fromStored(document.getRecipientRole()))
                 .reservationId(UUID.fromString(document.getReservationId()))
                 .eventId(UUID.fromString(document.getEventId()))
                 .type(NotificationType.valueOf(document.getType()))

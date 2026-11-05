@@ -10,6 +10,7 @@ import io.r2dbc.spi.RowMetadata;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
@@ -83,6 +84,15 @@ public class PostgresZoneRepositoryAdapter implements ZoneRepositoryPort {
 
         return Mono.zip(total, content)
                 .map(tuple -> new PageResult<>(tuple.getT2(), filter.page(), filter.size(), tuple.getT1()));
+    }
+
+    @Override
+    public Flux<Zone> findByManagerId(UUID managerId) {
+        String sql = "SELECT " + SELECT_COLUMNS + " FROM zones WHERE manager_id = :managerId ORDER BY name ASC";
+        return databaseClient.sql(sql)
+                .bind("managerId", managerId)
+                .map(rowMapper())
+                .all();
     }
 
     private QueryParts queryParts(ZoneFilter filter) {

@@ -21,6 +21,7 @@ public record ReviewResponse(
         Instant respondedAt,
         int helpfulReactions,
         ReviewStatus status,
+        ReviewAiAssessmentResponse ai,
         Instant createdAt,
         Instant updatedAt
 ) {

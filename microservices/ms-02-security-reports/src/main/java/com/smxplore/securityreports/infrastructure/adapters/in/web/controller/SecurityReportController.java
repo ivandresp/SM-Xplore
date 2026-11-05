@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -35,6 +36,7 @@ public class SecurityReportController {
     private final ConsultOneReportUseCasePort consultOneReportUseCase;
     private final ConsultReportsUseCasePort consultReportsUseCase;
     private final ConsultReportsByUserUseCasePort consultReportsByUserUseCase;
+    private final ConsultNearbyReportsUseCasePort consultNearbyReportsUseCase;
     private final ChangeReportContentUseCasePort changeReportTextUseCase;
     private final AddReportPhotosUseCasePort addReportPhotosUseCase;
     private final CloseReportUseCasePort closeReportUseCase;
@@ -48,11 +50,25 @@ public class SecurityReportController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Report a security incident (the reporter is taken from the token)")
     public Mono<SecurityReportResponse> reportIncident(@Valid @RequestBody SecurityReportRequest request,
+                                                       @RequestHeader(value = "X-Correlation-Id", required = false)
+                                                       String correlationId,
                                                        @AuthenticationPrincipal Jwt jwt) {
         var user = jwtUserResolver.resolve(jwt);
         var securityReport = mapper.toDomain(request).toBuilder().user(user).build();
-        return reportIncidentUseCase.handle(user, securityReport)
+        return reportIncidentUseCase.handle(user, securityReport, correlationId(correlationId))
                 .map(mapper::toResponse);
+    }
+
+    @GetMapping("/nearby")
+    @Operation(summary = "List security reports near a coordinate, ordered by distance")
+    public Flux<SecurityReportResponse> findNearby(
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+            @RequestParam(defaultValue = "5") double radiusKm,
+            @RequestParam(required = false) SecurityReportStatus status,
+            @RequestParam(defaultValue = "20") int size) {
+        var query = new NearbyReportsQuery(latitude, longitude, radiusKm, status, size);
+        return consultNearbyReportsUseCase.handle(query).map(mapper::toResponse);
     }
 
     @GetMapping("/{reportId}")
@@ -89,9 +105,12 @@ public class SecurityReportController {
     @Operation(summary = "Change the content of a security report (its author or staff)")
     public Mono<SecurityReportResponse> changeText(@PathVariable UUID reportId,
                                                    @Valid @RequestBody ChangeReportContentRequest request,
+                                                   @RequestHeader(value = "X-Correlation-Id", required = false)
+                                                   String correlationId,
                                                    @AuthenticationPrincipal Jwt jwt) {
         return requireReportAuthorOrStaff(jwt, reportId)
-                .then(Mono.defer(() -> changeReportTextUseCase.handle(reportId, request.title(), request.description())))
+                .then(Mono.defer(() -> changeReportTextUseCase.handle(
+                        reportId, request.title(), request.description(), correlationId(correlationId))))
                 .map(mapper::toResponse);
     }
 
@@ -99,23 +118,34 @@ public class SecurityReportController {
     @Operation(summary = "Add photos to a security report (its author or staff)")
     public Mono<SecurityReportResponse> addPhotos(@PathVariable UUID reportId,
                                                   @Valid @RequestBody PhotosRequest request,
+                                                  @RequestHeader(value = "X-Correlation-Id", required = false)
+                                                  String correlationId,
                                                   @AuthenticationPrincipal Jwt jwt) {
         return requireReportAuthorOrStaff(jwt, reportId)
-                .then(Mono.defer(() -> addReportPhotosUseCase.handle(reportId, request.photosUrls())))
+                .then(Mono.defer(() -> addReportPhotosUseCase.handle(
+                        reportId, request.photosUrls(), correlationId(correlationId))))
                 .map(mapper::toResponse);
     }
 
     @PostMapping("/{reportId}/close")
     @Operation(summary = "Close a security report (marks it as reported)")
-    public Mono<SecurityReportResponse> close(@PathVariable UUID reportId) {
-        return closeReportUseCase.handle(reportId).map(mapper::toResponse);
+    public Mono<SecurityReportResponse> close(@PathVariable UUID reportId,
+                                              @RequestHeader(value = "X-Correlation-Id", required = false)
+                                              String correlationId) {
+        return closeReportUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
     }
 
     @PostMapping("/{reportId}/solve")
     @Operation(summary = "Mark a security report as solved")
-    public Mono<SecurityReportResponse> solve(@PathVariable UUID reportId) {
-        return markReportAsSolvedUseCase.handle(reportId).map(mapper::toResponse);
+    public Mono<SecurityReportResponse> solve(@PathVariable UUID reportId,
+                                              @RequestHeader(value = "X-Correlation-Id", required = false)
+                                              String correlationId) {
+        return markReportAsSolvedUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
 
+    }
+
+    private static String correlationId(String header) {
+        return header == null || header.isBlank() ? UUID.randomUUID().toString() : header.trim();
     }
 
     private boolean isAdminOrManager(Jwt jwt) {

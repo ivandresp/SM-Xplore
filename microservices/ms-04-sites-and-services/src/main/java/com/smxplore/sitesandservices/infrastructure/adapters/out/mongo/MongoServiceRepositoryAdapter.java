@@ -14,9 +14,12 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -72,6 +75,44 @@ public class MongoServiceRepositoryAdapter implements ServiceRepositoryPort {
 
         return Mono.zip(total, content)
                 .map(tuple -> new PageResult<>(tuple.getT2(), page, size, tuple.getT1()));
+    }
+
+    @Override
+    public Flux<Service> findByIds(Collection<UUID> serviceIds) {
+        if (serviceIds == null || serviceIds.isEmpty()) {
+            return Flux.empty();
+        }
+        List<String> ids = serviceIds.stream().distinct().map(UUID::toString).toList();
+        return mongoTemplate.find(
+                        Query.query(Criteria.where("_id").in(ids)),
+                        ServiceDocument.class)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Service> findByScope(
+            UUID providerId,
+            Collection<UUID> zoneIds,
+            Collection<UUID> siteIds
+    ) {
+        List<Criteria> alternatives = new ArrayList<>();
+        if (zoneIds != null && !zoneIds.isEmpty()) {
+            alternatives.add(Criteria.where("zone.id")
+                    .in(zoneIds.stream().map(UUID::toString).toList()));
+        }
+        if (siteIds != null && !siteIds.isEmpty()) {
+            alternatives.add(Criteria.where("site.id")
+                    .in(siteIds.stream().map(UUID::toString).toList()));
+        }
+        Criteria criteria = new Criteria();
+        if (providerId != null) {
+            criteria.and("provider.id").is(providerId.toString());
+        }
+        if (!alternatives.isEmpty()) {
+            criteria.orOperator(alternatives.toArray(Criteria[]::new));
+        }
+        return mongoTemplate.find(Query.query(criteria), ServiceDocument.class)
+                .map(mapper::toDomain);
     }
 
     @Override

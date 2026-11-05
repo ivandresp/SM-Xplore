@@ -6,5 +6,5 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 public interface CloseReportUseCasePort {
-    Mono<SecurityReport> handle(UUID securityReportId);
+    Mono<SecurityReport> handle(UUID securityReportId, String correlationId);
 }

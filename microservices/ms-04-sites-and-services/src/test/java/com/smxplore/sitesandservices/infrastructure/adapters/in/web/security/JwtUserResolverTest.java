@@ -22,14 +22,14 @@ class JwtUserResolverTest {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
                 .subject(userId.toString())
-                .claim("role", "GESTORA_DESTINOS")
+                .claim("role", "DESTINATION_MANAGER")
                 .claim("name", "Gestora")
                 .build();
 
         Actor actor = resolver.resolve(jwt);
 
         assertThat(actor.userId()).isEqualTo(userId);
-        assertThat(actor.role()).isEqualTo(UserRole.GESTORA_DESTINOS);
+        assertThat(actor.role()).isEqualTo(UserRole.DESTINATION_MANAGER);
         assertThat(actor.name()).isEqualTo("Gestora");
     }
 
@@ -39,13 +39,13 @@ class JwtUserResolverTest {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
                 .claim("userId", userId.toString())
-                .claim("role", "ROLE_TURISTA")
+                .claim("role", "ROLE_TOURIST")
                 .build();
 
         Actor actor = resolver.resolve(jwt);
 
         assertThat(actor.userId()).isEqualTo(userId);
-        assertThat(actor.role()).isEqualTo(UserRole.TURISTA);
+        assertThat(actor.role()).isEqualTo(UserRole.TOURIST);
     }
 
     @Test

@@ -77,7 +77,7 @@ class NotificationContactWebIntegrationTests extends AbstractMongoPostgresIntegr
     void onlyAdministratorsCanManageContacts() {
         UUID recipientId = UUID.randomUUID();
 
-        clientFor(UUID.randomUUID(), "TURISTA")
+        clientFor(UUID.randomUUID(), "TOURIST")
                 .put().uri("/api/v1/admin/notification-contacts/" + recipientId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -86,7 +86,7 @@ class NotificationContactWebIntegrationTests extends AbstractMongoPostgresIntegr
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(UUID.randomUUID(), "GESTORA_DESTINOS")
+        clientFor(UUID.randomUUID(), "DESTINATION_MANAGER")
                 .delete().uri("/api/v1/admin/notification-contacts/" + recipientId)
                 .exchange()
                 .expectStatus().isForbidden();

@@ -38,6 +38,8 @@ public class MongoIndexInitializer {
                 mongoTemplate.indexOps(SiteDocument.class)
                         .createIndex(new Index().on("zone.id", Sort.Direction.ASC)),
                 mongoTemplate.indexOps(SiteDocument.class)
+                        .createIndex(new Index().on("managerId", Sort.Direction.ASC)),
+                mongoTemplate.indexOps(SiteDocument.class)
                         .createIndex(new Index().on("updatedAt", Sort.Direction.DESC)),
                 mongoTemplate.indexOps(ServiceDocument.class)
                         .createIndex(new Index().on("status", Sort.Direction.ASC)),
@@ -63,6 +65,11 @@ public class MongoIndexInitializer {
                                 .on("itemId", Sort.Direction.ASC)
                                 .on("status", Sort.Direction.ASC)
                                 .on("createdAt", Sort.Direction.DESC)),
+                mongoTemplate.indexOps(ReviewDocument.class)
+                        .createIndex(new Index()
+                                .on("aiRetained", Sort.Direction.ASC)
+                                .on("status", Sort.Direction.ASC)
+                                .on("updatedAt", Sort.Direction.DESC)),
                 mongoTemplate.indexOps(ReviewReportDocument.class)
                         .createIndex(new Index()
                                 .on("reviewId", Sort.Direction.ASC)

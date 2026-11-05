@@ -20,15 +20,19 @@ public record Actor(
     }
 
     public boolean isGestora() {
-        return role == UserRole.GESTORA_DESTINOS;
+        return role == UserRole.DESTINATION_MANAGER;
     }
 
     public boolean isPrestadora() {
-        return role == UserRole.PRESTADORA_SERVICIOS;
+        return role == UserRole.SERVICE_PROVIDER;
+    }
+
+    public boolean isGuide() {
+        return role == UserRole.GUIDE;
     }
 
     public boolean isTourist() {
-        return role == UserRole.TURISTA;
+        return role == UserRole.TOURIST;
     }
 
     public boolean owns(UUID ownerId) {

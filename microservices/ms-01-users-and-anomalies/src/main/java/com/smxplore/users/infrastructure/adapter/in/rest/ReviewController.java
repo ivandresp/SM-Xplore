@@ -44,7 +44,7 @@ public class ReviewController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('TURISTA')")
+    @PreAuthorize("hasRole('TOURIST')")
     public Mono<ResponseEntity<ReviewView>> create(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateReviewRequest request) {
         return createReview
@@ -60,7 +60,7 @@ public class ReviewController {
     }
 
     @PostMapping("/{id}/response")
-    @PreAuthorize("hasAnyRole('GUIA','PRESTADORA_SERVICIOS')")
+    @PreAuthorize("hasAnyRole('GUIDE','SERVICE_PROVIDER')")
     public Mono<ReviewView> respond(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String id,

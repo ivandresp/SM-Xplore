@@ -3,6 +3,7 @@ package com.smxplore.securityreports.infrastructure.adapters.out.persistence.ada
 import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.domain.model.types.Cursor;
+import com.smxplore.securityreports.domain.model.types.NearbyReportsQuery;
 import com.smxplore.securityreports.domain.model.types.Page;
 import com.smxplore.securityreports.domain.model.types.PageRequest;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
@@ -11,10 +12,15 @@ import com.smxplore.securityreports.infrastructure.adapters.out.persistence.mapp
 import com.smxplore.securityreports.infrastructure.adapters.out.persistence.repository.SecurityReportMongoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.geo.Point;
 import org.springframework.data.mongodb.core.ReactiveMongoOperations;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.NearQuery;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -31,8 +37,13 @@ public class SecurityReportPersistenceAdapter implements SecurityReportRepositor
 
     @Override
     public Mono<SecurityReport> save(SecurityReport securityReport) {
-        return repository.save(mapper.toDocument(securityReport))
-                .map(mapper::toDomain);
+        var document = mapper.toDocument(securityReport);
+        if (securityReport.getLocation() != null) {
+            document.setPosition(new GeoJsonPoint(
+                    securityReport.getLocation().longitude(),
+                    securityReport.getLocation().latitude()));
+        }
+        return repository.save(document).map(mapper::toDomain);
     }
 
     @Override
@@ -51,6 +62,23 @@ public class SecurityReportPersistenceAdapter implements SecurityReportRepositor
     public Mono<Page<SecurityReport>> findAllByUserId(UUID userId, PageRequest pageRequest) {
         var query = Query.query(Criteria.where("user.userId").is(userId.toString()));
         return findPage(query, pageRequest);
+    }
+
+    @Override
+    public Flux<SecurityReport> findNearby(NearbyReportsQuery criteria) {
+        Query filter = criteria.status() == null
+                ? new Query()
+                : Query.query(Criteria.where("status").is(criteria.status()));
+        NearQuery nearQuery = NearQuery.near(new Point(criteria.longitude(), criteria.latitude()))
+                .maxDistance(criteria.radiusKm() * 1000)
+                .spherical(true)
+                .query(filter);
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.geoNear(nearQuery, "distanceMeters"),
+                Aggregation.limit(criteria.limit())
+        );
+        return mongoOperations.aggregate(aggregation, "security_reports", SecurityReportDocument.class)
+                .map(mapper::toDomain);
     }
 
     private Mono<Page<SecurityReport>> findPage(Query query, PageRequest pageRequest) {

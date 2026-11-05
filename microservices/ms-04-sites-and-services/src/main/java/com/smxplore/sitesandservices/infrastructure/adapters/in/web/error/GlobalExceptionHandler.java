@@ -9,6 +9,7 @@ import com.smxplore.sitesandservices.domain.exception.InvalidJwtException;
 import com.smxplore.sitesandservices.domain.exception.ReservationConflictException;
 import com.smxplore.sitesandservices.domain.exception.ReservationLimitException;
 import com.smxplore.sitesandservices.domain.exception.ResourceNotFoundException;
+import com.smxplore.sitesandservices.domain.exception.ReviewFilterUnavailableException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -101,6 +102,15 @@ public class GlobalExceptionHandler {
             ServerWebExchange exchange
     ) {
         return error(HttpStatus.TOO_MANY_REQUESTS, "Reservation limit reached",
+                exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewFilterUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(
+            ReviewFilterUnavailableException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "Review filter unavailable",
                 exception.getMessage(), exchange);
     }
 

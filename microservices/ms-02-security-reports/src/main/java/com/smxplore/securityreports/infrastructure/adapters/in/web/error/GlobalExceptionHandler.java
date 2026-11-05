@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
@@ -33,7 +35,7 @@ import java.util.stream.Stream;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ReportNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleReportNotFound(ReportNotFoundException exception,
+    public ResponseEntity<ProblemDetail> handleReportNotFound(ReportNotFoundException exception,
                                                                  ServerWebExchange exchange) {
         return error(HttpStatus.NOT_FOUND, exception.getMessage(), exchange);
     }
@@ -47,38 +49,38 @@ public class GlobalExceptionHandler {
             InvalidCursorException.class,
             ReportWithoutContentException.class
     })
-    public ResponseEntity<ApiErrorResponse> handleInvalidRequest(RuntimeException exception,
+    public ResponseEntity<ProblemDetail> handleInvalidRequest(RuntimeException exception,
                                                                  ServerWebExchange exchange) {
         return error(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(InvalidJwtException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidJwt(InvalidJwtException exception,
+    public ResponseEntity<ProblemDetail> handleInvalidJwt(InvalidJwtException exception,
                                                              ServerWebExchange exchange) {
         return error(HttpStatus.UNAUTHORIZED, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(InvalidStatusTransitionException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidStatusTransition(InvalidStatusTransitionException exception,
+    public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidStatusTransitionException exception,
                                                                           ServerWebExchange exchange) {
         return error(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(OptimisticLockingFailureException exception,
+    public ResponseEntity<ProblemDetail> handleOptimisticLock(OptimisticLockingFailureException exception,
                                                                  ServerWebExchange exchange) {
         return error(HttpStatus.CONFLICT,
                 "The report was modified by another request. Please retry with the latest version.", exchange);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
-    public ResponseEntity<ApiErrorResponse> handleValidation(WebExchangeBindException exception,
+    public ResponseEntity<ProblemDetail> handleValidation(WebExchangeBindException exception,
                                                              ServerWebExchange exchange) {
         return error(HttpStatus.BAD_REQUEST, validationMessage(exception.getBindingResult()), exchange);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(ConstraintViolationException exception,
+    public ResponseEntity<ProblemDetail> handleConstraintViolation(ConstraintViolationException exception,
                                                                       ServerWebExchange exchange) {
         var message = exception.getConstraintViolations().stream()
                 .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
@@ -87,14 +89,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ServerWebInputException.class)
-    public ResponseEntity<ApiErrorResponse> handleServerWebInput(ServerWebInputException exception,
+    public ResponseEntity<ProblemDetail> handleServerWebInput(ServerWebInputException exception,
                                                                  ServerWebExchange exchange) {
         var message = exception.getReason() == null ? "Malformed request." : exception.getReason();
         return error(HttpStatus.BAD_REQUEST, message, exchange);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ApiErrorResponse> handleResponseStatus(ResponseStatusException exception,
+    public ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException exception,
                                                                  ServerWebExchange exchange) {
         var status = HttpStatus.resolve(exception.getStatusCode().value());
         if (status == null) status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -103,14 +105,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException exception,
+    public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException exception,
                                                                   ServerWebExchange exchange) {
         var message = exception.getMessage() == null ? "Invalid request parameter." : exception.getMessage();
         return error(HttpStatus.BAD_REQUEST, message, exchange);
     }
 
     @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<ApiErrorResponse> handleDataAccess(DataAccessException exception,
+    public ResponseEntity<ProblemDetail> handleDataAccess(DataAccessException exception,
                                                              ServerWebExchange exchange) {
         log.error("Persistence error while processing {}", exchange.getRequest().getPath().value(), exception);
         return error(HttpStatus.SERVICE_UNAVAILABLE,
@@ -118,15 +120,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception, ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleUnexpected(Exception exception, ServerWebExchange exchange) {
         log.error("Unhandled error while processing {}", exchange.getRequest().getPath().value(), exception);
         return error(HttpStatus.INTERNAL_SERVER_ERROR,
                 "An unexpected error occurred. Please try again later.", exchange);
     }
 
-    private static ResponseEntity<ApiErrorResponse> error(HttpStatus status, String message,
+    private static ResponseEntity<ProblemDetail> error(HttpStatus status, String message,
                                                           ServerWebExchange exchange) {
-        return ResponseEntity.status(status).body(ApiErrorResponse.of(status, message, exchange));
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ProblemDetails.of(status, message, exchange));
     }
 
     private static String validationMessage(BindingResult bindingResult) {

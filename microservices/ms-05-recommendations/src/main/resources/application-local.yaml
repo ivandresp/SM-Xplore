@@ -1,0 +1,10 @@
+app:
+  seed:
+    enabled: true
+  neo4j:
+    initialize-schema: true
+
+logging:
+  level:
+    com.smxplore.recommendations: DEBUG
+    org.neo4j.driver: INFO

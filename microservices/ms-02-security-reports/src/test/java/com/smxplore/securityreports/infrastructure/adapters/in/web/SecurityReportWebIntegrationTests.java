@@ -1,38 +1,37 @@
 package com.smxplore.securityreports.infrastructure.adapters.in.web;
 
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.smxplore.securityreports.TestJwtConfiguration;
 import com.smxplore.securityreports.TestcontainersConfiguration;
 import com.smxplore.securityreports.infrastructure.adapters.out.persistence.repository.SecurityReportMongoRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
+@ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
-@Import({TestcontainersConfiguration.class, SecurityReportWebIntegrationTests.JwtTestConfiguration.class})
+@Import({TestcontainersConfiguration.class, TestJwtConfiguration.class})
 class SecurityReportWebIntegrationTests {
 
-    private static final String ISSUER = "https://securityreports.local";
+    private static final String ISSUER = "sm-xplore-ms-01";
+    private static final String AUDIENCE = "sm-xplore-services";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -118,6 +117,34 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
+    void findsReportsNearACoordinate() {
+        var userId = UUID.randomUUID();
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(userId, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "Incidente cerca del parque",
+                          "description": "Reporte geolocalizado",
+                          "location": {"latitude": 10.391, "longitude": -75.479}
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isCreated();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.392&longitude=-75.478&radiusKm=2")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(1)
+                .jsonPath("$[0].title").isEqualTo("Incidente cerca del parque");
+    }
+
+    @Test
     void returnsJsonErrorWhenTokenIsMissing() {
         webTestClient.get()
                 .uri("/api/v1/security-reports/by-user/{userId}", UUID.randomUUID())
@@ -125,7 +152,7 @@ class SecurityReportWebIntegrationTests {
                 .expectStatus().isUnauthorized()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(401)
-                .jsonPath("$.error").isEqualTo("Unauthorized");
+                .jsonPath("$.title").isEqualTo("Unauthorized");
     }
 
     @Test
@@ -141,6 +168,7 @@ class SecurityReportWebIntegrationTests {
         var now = Instant.now();
         var claims = JwtClaimsSet.builder()
                 .issuer(ISSUER)
+                .audience(List.of(AUDIENCE))
                 .issuedAt(now)
                 .expiresAt(now.plus(1, ChronoUnit.HOURS))
                 .claim("role", role)
@@ -149,18 +177,10 @@ class SecurityReportWebIntegrationTests {
             claims.subject(userId.toString());
         }
         var parameters = JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwsHeader.with(SignatureAlgorithm.RS256).build(),
                 claims.build()
         );
         var token = jwtEncoder.encode(parameters).getTokenValue();
         return "Bearer " + token;
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class JwtTestConfiguration {
-        @Bean
-        JwtEncoder jwtEncoder(@Value("${app.security.jwt.secret}") String secret) {
-            return new NimbusJwtEncoder(new ImmutableSecret<>(secret.getBytes(StandardCharsets.UTF_8)));
-        }
     }
 }

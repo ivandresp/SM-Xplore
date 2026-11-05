@@ -77,7 +77,7 @@ class AdminUserFlowTest {
         Map<?, ?> byName = get(adminToken, "/api/v1/admin/users?q=lovelace");
         assertThat(users(byName)).singleElement().satisfies(user -> {
             assertThat(user.get("id")).isEqualTo(touristId);
-            assertThat(user.get("role")).isEqualTo("TURISTA");
+            assertThat(user.get("role")).isEqualTo("TOURIST");
         });
 
         Map<?, ?> byDni = get(adminToken, "/api/v1/admin/users?q=5550001111");
@@ -91,9 +91,9 @@ class AdminUserFlowTest {
             assertThat(user.get("providerStatus")).isEqualTo("PENDIENTE");
         });
 
-        Map<?, ?> byRole = get(adminToken, "/api/v1/admin/users?role=PRESTADORA_SERVICIOS");
+        Map<?, ?> byRole = get(adminToken, "/api/v1/admin/users?role=SERVICE_PROVIDER");
         assertThat(users(byRole))
-                .allSatisfy(user -> assertThat(user.get("role")).isEqualTo("PRESTADORA_SERVICIOS"));
+                .allSatisfy(user -> assertThat(user.get("role")).isEqualTo("SERVICE_PROVIDER"));
 
         Map<?, ?> detail = get(adminToken, "/api/v1/admin/users/" + providerId);
         assertThat(detail.get("status")).isEqualTo("ACTIVO");
@@ -229,13 +229,13 @@ class AdminUserFlowTest {
                 adminToken,
                 userId,
                 Map.of(
-                        "role", "GUIA",
+                        "role", "GUIDE",
                         "dniType", "CC",
                         "dniNumber", "6660004444",
                         "license", "LIC-ROLE-1"));
 
         assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(changed.getBody().get("role")).isEqualTo("GUIA");
+        assertThat(changed.getBody().get("role")).isEqualTo("GUIDE");
         Map<String, Object> profile = (Map<String, Object>) changed.getBody().get("profile");
         assertThat(profile.get("license")).isEqualTo("LIC-ROLE-1");
         assertThat(profile).doesNotContainKeys("preferredLanguage", "birthDate", "nationality");
@@ -244,21 +244,21 @@ class AdminUserFlowTest {
         assertThat(loginStatus("rita.role@example.com", PASSWORD)).isEqualTo(HttpStatus.OK);
 
         Map<?, ?> detail = get(adminToken, "/api/v1/admin/users/" + userId);
-        assertThat(detail.get("role")).isEqualTo("GUIA");
+        assertThat(detail.get("role")).isEqualTo("GUIDE");
         assertThat(((Map<?, ?>) detail.get("profile")).get("license")).isEqualTo("LIC-ROLE-1");
 
         Map<?, ?> audit = get(adminToken, "/api/v1/admin/audit-logs?targetUserId=" + userId);
         assertThat(entries(audit)).anySatisfy(entry -> {
             assertThat(entry.get("action")).isEqualTo("ROL_CAMBIADO");
             Map<String, Object> details = (Map<String, Object>) entry.get("details");
-            assertThat(details).containsEntry("rolAnterior", "TURISTA").containsEntry("rolNuevo", "GUIA");
+            assertThat(details).containsEntry("rolAnterior", "TOURIST").containsEntry("rolNuevo", "GUIDE");
         });
 
         assertThat(changeRoleStatus(
                         adminToken,
                         userId,
                         Map.of(
-                                "role", "GUIA",
+                                "role", "GUIDE",
                                 "dniType", "CC",
                                 "dniNumber", "6660004444",
                                 "license", "LIC-ROLE-1")))
@@ -271,9 +271,9 @@ class AdminUserFlowTest {
         String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
 
         assertThat(changeRoleStatus(
-                        adminToken, userId, Map.of("role", "GUIA", "dniType", "CC", "dniNumber", "6660005555")))
+                        adminToken, userId, Map.of("role", "GUIDE", "dniType", "CC", "dniNumber", "6660005555")))
                 .isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(changeRoleStatus(adminToken, userId, Map.of("role", "PRESTADORA_SERVICIOS")))
+        assertThat(changeRoleStatus(adminToken, userId, Map.of("role", "SERVICE_PROVIDER")))
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -284,7 +284,7 @@ class AdminUserFlowTest {
         String adminId = String.valueOf(me.get("id"));
 
         assertThat(changeRoleStatus(
-                        adminToken, adminId, Map.of("role", "TURISTA", "dniType", "CC", "dniNumber", "1000000000")))
+                        adminToken, adminId, Map.of("role", "TOURIST", "dniType", "CC", "dniNumber", "1000000000")))
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(deleteUser(adminToken, adminId)).isEqualTo(HttpStatus.FORBIDDEN);
     }

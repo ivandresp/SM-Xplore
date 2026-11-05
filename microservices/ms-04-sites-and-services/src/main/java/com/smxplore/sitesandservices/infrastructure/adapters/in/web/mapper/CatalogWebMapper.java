@@ -16,6 +16,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.catalog.
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category.CategoryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewAiAssessmentResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewReportResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewSummaryResponse;
@@ -117,6 +118,7 @@ public class CatalogWebMapper {
                 review.respondedAt(),
                 review.helpfulReactions(),
                 review.status(),
+                ReviewAiAssessmentResponse.from(review.aiAssessment()),
                 review.createdAt(),
                 review.updatedAt()
         );

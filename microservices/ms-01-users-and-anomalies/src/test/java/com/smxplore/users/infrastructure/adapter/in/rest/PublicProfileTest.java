@@ -125,7 +125,7 @@ class PublicProfileTest {
 
     private String createGuide(String token, String email, String dniNumber, String license) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("role", "GUIA");
+        payload.put("role", "GUIDE");
         payload.put("fullName", "Guía Público");
         payload.put("email", email);
         payload.put("dniType", "CC");

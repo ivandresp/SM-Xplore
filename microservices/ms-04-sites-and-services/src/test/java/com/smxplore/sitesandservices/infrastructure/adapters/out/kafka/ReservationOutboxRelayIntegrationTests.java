@@ -65,7 +65,7 @@ class ReservationOutboxRelayIntegrationTests extends AbstractKafkaMongoPostgresI
                         .build()))
                 .build();
         Actor tourist = new Actor(
-                UUID.randomUUID(), UserRole.TURISTA, "Turista Kafka");
+                UUID.randomUUID(), UserRole.TOURIST, "Turista Kafka");
 
         Reservation reservation = createReservationUseCase.handle(
                         draft,

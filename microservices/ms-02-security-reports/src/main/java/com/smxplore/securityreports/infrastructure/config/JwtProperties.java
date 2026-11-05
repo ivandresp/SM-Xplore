@@ -8,9 +8,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "app.security.jwt")
 public class JwtProperties {
-    private String secret;
-    private String issuer = "https://securityreports.local";
-    private String audience;
+
+    private String jwkSetUri;
+    private String publicKeyLocation;
+    private String issuer = "sm-xplore-ms-01";
+    private String audience = "sm-xplore-services";
+    private String userIdClaim = "userId";
     private String roleClaim = "role";
     private String nameClaim = "name";
 }

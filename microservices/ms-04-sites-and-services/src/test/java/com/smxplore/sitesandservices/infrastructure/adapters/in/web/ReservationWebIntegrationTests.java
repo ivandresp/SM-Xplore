@@ -68,16 +68,16 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(reservation.items().getFirst().serviceId()).isEqualTo(service.serviceId());
         assertThat(reservation.items().getFirst().unitPrice()).isEqualByComparingTo("50000.00");
 
-        getReservation(touristId, "TURISTA", reservation.reservationId(), 200);
-        getReservation(providerId, "PRESTADORA_SERVICIOS", reservation.reservationId(), 200);
-        getReservation(UUID.randomUUID(), "TURISTA", reservation.reservationId(), 403);
+        getReservation(touristId, "TOURIST", reservation.reservationId(), 200);
+        getReservation(providerId, "SERVICE_PROVIDER", reservation.reservationId(), 200);
+        getReservation(UUID.randomUUID(), "TOURIST", reservation.reservationId(), 403);
 
         PageResponse<ReservationResponse> touristReservations = listReservations(
-                touristId, "TURISTA", "");
+                touristId, "TOURIST", "");
         assertThat(touristReservations.total()).isEqualTo(1);
 
         PageResponse<ReservationResponse> providerReservations = listReservations(
-                providerId, "PRESTADORA_SERVICIOS", "");
+                providerId, "SERVICE_PROVIDER", "");
         assertThat(providerReservations.total()).isEqualTo(1);
 
         ReservationAvailabilityResponse availability = availability(
@@ -86,7 +86,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(availability.remainingCapacity()).isEqualTo(18);
         assertThat(availability.available()).isTrue();
 
-        clientFor(providerId, "PRESTADORA_SERVICIOS")
+        clientFor(providerId, "SERVICE_PROVIDER")
                 .patch().uri("/api/v1/reservations/" + reservation.reservationId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -100,7 +100,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
 
         ReservationResponse cancelledByProvider = changeStatus(
                 providerId,
-                "PRESTADORA_SERVICIOS",
+                "SERVICE_PROVIDER",
                 reservation.reservationId(),
                 "CANCELLED",
                 null
@@ -112,7 +112,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 touristId, bookedFor, itemBody(service.serviceId(), 1));
         ReservationResponse cancelledByTourist = changeStatus(
                 touristId,
-                "TURISTA",
+                "TOURIST",
                 second.reservationId(),
                 "CANCELLED",
                 "Cambio de planes"
@@ -147,7 +147,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 touristId, bookedFor, itemBody(service.serviceId(), 1));
 
         PageResponse<ReservationResponse> page = listReservations(
-                touristId, "TURISTA", "?size=10");
+                touristId, "TOURIST", "?size=10");
 
         assertThat(page.total()).isEqualTo(2);
         assertThat(page.content())
@@ -182,7 +182,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .toList();
         assertThat(active).hasSize(5);
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -193,7 +193,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .jsonPath("$.title").isEqualTo("Reservation limit reached");
 
         changeStatus(
-                touristId, "TURISTA", active.getFirst().reservationId(), "CANCELLED", null);
+                touristId, "TOURIST", active.getFirst().reservationId(), "CANCELLED", null);
 
         ReservationResponse replacement = createReservation(
                 touristId, bookedFor, itemBody(service.serviceId(), 1));
@@ -212,7 +212,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ReservationResponse first = createReservation(
                 touristId, bookedFor, itemBody(service.serviceId(), 2));
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -228,7 +228,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(full.remainingCapacity()).isEqualTo(1);
         assertThat(full.available()).isTrue();
 
-        changeStatus(touristId, "TURISTA", first.reservationId(), "CANCELLED", null);
+        changeStatus(touristId, "TOURIST", first.reservationId(), "CANCELLED", null);
 
         ReservationResponse replacement = createReservation(
                 touristId, bookedFor, itemBody(service.serviceId(), 2));
@@ -253,7 +253,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 firstTourist, bookedFor, itemBody(service.serviceId(), 3));
         assertThat(reservation.status().name()).isEqualTo("CONFIRMED");
 
-        clientFor(secondTourist, "TURISTA")
+        clientFor(secondTourist, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -308,7 +308,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ServiceResponse secondService = createService(managerId, secondProviderId, 10, "PUBLISHED");
         Instant bookedFor = nextBookingInstant();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -332,7 +332,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ServiceResponse draft = createService(managerId, providerId, 10, "DRAFT");
         Instant bookedFor = nextBookingInstant();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -344,7 +344,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                         assertThat(detail.toString()).contains("SERVICE_NOT_PUBLISHED"));
 
         ServiceResponse published = createService(managerId, providerId, 10, "PUBLISHED");
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -366,7 +366,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
 
         ServiceResponse service = createService(managerId, providerId, 10, "PUBLISHED");
 
-        clientFor(managerId, "GESTORA_DESTINOS")
+        clientFor(managerId, "DESTINATION_MANAGER")
                 .patch().uri("/api/v1/sites/" + service.siteId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -377,7 +377,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .expectBody(SiteResponse.class)
                 .value(site -> assertThat(site.status()).isEqualTo(ContentStatus.DRAFT));
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -408,7 +408,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(past.available()).isFalse();
         assertThat(past.reason()).isEqualTo("BOOKED_FOR_IN_PAST");
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(reservationBody(
@@ -444,7 +444,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 touristId, service.serviceId(), bookedFor, 1);
         assertThat(availability.reservedPeople()).isEqualTo(2);
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -464,7 +464,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .reduce((left, right) -> left + "," + right)
                 .orElseThrow();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -487,7 +487,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ReservationResponse first = createReservation(
                 touristId, bookedFor, items, idempotencyKey);
 
-        clientFor(providerId, "PRESTADORA_SERVICIOS")
+        clientFor(providerId, "SERVICE_PROVIDER")
                 .patch().uri("/api/v1/services/" + service.serviceId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -512,7 +512,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ServiceResponse service = createService(managerId, providerId, 10, "PUBLISHED");
         Instant bookedFor = nextBookingInstant();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -522,7 +522,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .exchange()
                 .expectStatus().isBadRequest();
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -535,7 +535,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ReservationResponse reservation = createReservation(
                 touristId, bookedFor, itemBody(service.serviceId(), 1));
 
-        clientFor(touristId, "TURISTA")
+        clientFor(touristId, "TOURIST")
                 .patch().uri("/api/v1/reservations/" + reservation.reservationId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -544,7 +544,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(providerId, "PRESTADORA_SERVICIOS")
+        clientFor(providerId, "SERVICE_PROVIDER")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -552,12 +552,12 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(UUID.randomUUID(), "PRESTADORA_SERVICIOS")
+        clientFor(UUID.randomUUID(), "SERVICE_PROVIDER")
                 .get().uri("/api/v1/reservations/" + reservation.reservationId())
                 .exchange()
                 .expectStatus().isForbidden();
 
-        clientFor(managerId, "GESTORA_DESTINOS")
+        clientFor(managerId, "DESTINATION_MANAGER")
                 .get().uri("/api/v1/reservations")
                 .exchange()
                 .expectStatus().isForbidden();
@@ -577,7 +577,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
             String items,
             String idempotencyKey
     ) {
-        return clientFor(touristId, "TURISTA")
+        return clientFor(touristId, "TOURIST")
                 .post().uri("/api/v1/reservations")
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -638,7 +638,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
             Instant bookedFor,
             int people
     ) {
-        return clientFor(userId, "TURISTA")
+        return clientFor(userId, "TOURIST")
                 .get().uri(uriBuilder -> uriBuilder
                         .path("/api/v1/reservations/availability")
                         .queryParam("serviceId", serviceId)
@@ -711,7 +711,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         ZoneResponse zone = createZone(managerId);
         SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
         String capacity = slotCapacity == null ? "" : ", \"capacity\":" + slotCapacity;
-        return clientFor(providerId, "PRESTADORA_SERVICIOS")
+        return clientFor(providerId, "SERVICE_PROVIDER")
                 .post().uri("/api/v1/services")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -748,7 +748,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
     }
 
     private CategoryResponse createCategory(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -762,7 +762,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
     }
 
     private ZoneResponse createZone(UUID managerId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/zones")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -776,7 +776,7 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
     }
 
     private SiteResponse createSite(UUID managerId, UUID categoryId, UUID zoneId) {
-        return clientFor(managerId, "GESTORA_DESTINOS")
+        return clientFor(managerId, "DESTINATION_MANAGER")
                 .post().uri("/api/v1/sites")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""

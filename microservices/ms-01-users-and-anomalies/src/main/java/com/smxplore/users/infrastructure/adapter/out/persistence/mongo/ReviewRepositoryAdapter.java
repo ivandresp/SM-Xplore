@@ -49,13 +49,13 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
 
     @Override
     public Mono<Boolean> existsByTouristAndTarget(UUID touristId, ReviewTargetType targetType, UUID targetId) {
-        return reviews.existsByTouristIdAndTargetTypeAndTargetId(touristId, targetType.code(), targetId);
+        return reviews.existsByTouristIdAndTargetTypeInAndTargetId(touristId, targetType.codes(), targetId);
     }
 
     @Override
     public Mono<PageResult<Review>> findVisible(ReviewTargetType targetType, UUID targetId, int page, int size) {
         Criteria criteria = Criteria.where("targetType")
-                .is(targetType.code())
+                .in(targetType.codes())
                 .and("targetId")
                 .is(targetId)
                 .and("moderationStatus")
@@ -108,7 +108,7 @@ public class ReviewRepositoryAdapter implements ReviewRepository {
     @Override
     public Mono<ReputationSummary> summary(ReviewTargetType targetType, UUID targetId) {
         Criteria criteria = Criteria.where("targetType")
-                .is(targetType.code())
+                .in(targetType.codes())
                 .and("targetId")
                 .is(targetId)
                 .and("moderationStatus")

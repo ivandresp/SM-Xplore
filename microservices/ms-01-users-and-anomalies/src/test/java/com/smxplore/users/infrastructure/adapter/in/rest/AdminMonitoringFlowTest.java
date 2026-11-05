@@ -87,7 +87,7 @@ class AdminMonitoringFlowTest {
 
         String touristToken = login(touristEmail, PASSWORD);
         ResponseEntity<Map> review =
-                createReview(touristToken, providerId, "PRESTADORA_SERVICIOS", 4, "Muy buena experiencia");
+                createReview(touristToken, providerId, "SERVICE_PROVIDER", 4, "Muy buena experiencia");
         assertThat(review.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         assertThat(updateThreshold(adminToken, "ACCESO_SOSPECHOSO", 2, 120, "ALTA", true)

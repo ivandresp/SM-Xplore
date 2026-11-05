@@ -6,7 +6,7 @@
 //
 // Variables de entorno:
 //   BASE_URL        URL de la API (por defecto http://localhost:8084)
-//   TOKEN           JWT con rol TURISTA (obligatorio)
+//   TOKEN           JWT con rol TOURIST (obligatorio)
 //   SERVICE_ID      servicio publicado sobre el que se reserva (obligatorio)
 //   SERVICE_IDS     lista separada por comas para repartir lecturas (opcional)
 //   BOOKING_DATE    ISO-8601 del turno a reservar; por defecto mañana a las 15:00 UTC
@@ -34,7 +34,7 @@ const SKIP_BOOKING = (__ENV.SKIP_BOOKING || 'false').toLowerCase() === 'true';
 const VUS = Number(__ENV.VUS || 10);
 
 if (!TOKEN) {
-  fail('Falta TOKEN: exporte un JWT con rol TURISTA en la variable de entorno TOKEN.');
+  fail('Falta TOKEN: exporte un JWT con rol TOURIST en la variable de entorno TOKEN.');
 }
 if (!SERVICE_ID && SERVICE_IDS.length === 0) {
   fail('Falta SERVICE_ID (o SERVICE_IDS) con un servicio publicado.');

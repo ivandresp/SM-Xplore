@@ -6,12 +6,18 @@ import java.util.Locale;
 
 public enum UserRole {
     ADMIN,
-    GESTORA_DESTINOS,
-    PRESTADORA_SERVICIOS,
-    TURISTA;
+    GUIDE,
+    DESTINATION_MANAGER,
+    SERVICE_PROVIDER,
+    TOURIST;
 
     public static UserRole fromClaim(String role) {
         return parse(normalize(role));
+    }
+
+    /** Reads roles persisted before the English-code migration (for example, old notifications). */
+    public static UserRole fromStored(String role) {
+        return fromClaim(role);
     }
 
     private static String normalize(String role) {
@@ -19,7 +25,14 @@ public enum UserRole {
             throw new InvalidJwtException("JWT role is required");
         }
         String value = role.startsWith("ROLE_") ? role.substring("ROLE_".length()) : role;
-        return value.trim().toUpperCase(Locale.ROOT);
+        value = value.trim().toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "TURISTA" -> "TOURIST";
+            case "GUIA" -> "GUIDE";
+            case "PRESTADORA_SERVICIOS" -> "SERVICE_PROVIDER";
+            case "GESTORA_DESTINOS" -> "DESTINATION_MANAGER";
+            default -> value;
+        };
     }
 
     private static UserRole parse(String role) {

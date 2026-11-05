@@ -65,7 +65,7 @@ class OutboxMaintenanceIntegrationTests extends AbstractMongoPostgresIntegration
                 .jsonPath("$.catalogEvents")
                 .value(count -> assertThat(((Number) count).longValue()).isGreaterThanOrEqualTo(1));
 
-        clientFor(UUID.randomUUID(), "TURISTA")
+        clientFor(UUID.randomUUID(), "TOURIST")
                 .post().uri("/api/v1/admin/outbox/reprocess")
                 .exchange()
                 .expectStatus().isForbidden();

@@ -16,17 +16,7 @@ public class JwtUserResolver {
     private final JwtProperties jwtProperties;
 
     public UserRef resolve(Jwt jwt) {
-        var subject = jwt.getSubject();
-        if (subject == null || subject.isBlank()) {
-            throw new InvalidJwtException("Token subject (sub) is missing.");
-        }
-
-        final UUID id;
-        try {
-            id = UUID.fromString(subject);
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidJwtException("Token subject (sub) is not a valid UUID.", exception);
-        }
+        final UUID id = subjectId(jwt);
 
         var name = jwt.getClaimAsString(jwtProperties.getNameClaim());
         if (name == null || name.isBlank()) {
@@ -37,6 +27,18 @@ public class JwtUserResolver {
     }
 
     public UUID subjectId(Jwt jwt) {
-        return resolve(jwt).id();
+        String identity = jwt.getSubject();
+        if (identity == null || identity.isBlank()) {
+            identity = jwt.getClaimAsString(jwtProperties.getUserIdClaim());
+        }
+        if (identity == null || identity.isBlank()) {
+            throw new InvalidJwtException("Token subject (sub) or user id claim is missing.");
+        }
+
+        try {
+            return UUID.fromString(identity);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidJwtException("Token subject (sub) is not a valid UUID.", exception);
+        }
     }
 }

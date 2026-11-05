@@ -66,7 +66,10 @@ Topics de fase 2 (ms-05 ya implementa los consumidores; ms-04 ya publica catálo
 | `activities.event.changed` | ms-03 | sí |
 | `activities.activity.changed` | ms-03 | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
+| `security.report.changed` | ms-02 | **no** |
 | `bookings.reservation.changed` | ms-03 / ms-04 | **no** (ms-05 no usa reservas) |
+
+ms-02 publica `security.report.changed` para alertas, notificaciones y analítica; ms-05 no lo consume.
 
 ms-05 crea `<topic>.dlq` para los mensajes que no puede procesar. En desarrollo los topics se
 autocreatan; en producción deben crearse de forma controlada. La decisión de excluir `RESERVO`

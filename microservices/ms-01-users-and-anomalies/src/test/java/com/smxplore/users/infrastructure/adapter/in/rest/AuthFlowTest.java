@@ -79,7 +79,7 @@ class AuthFlowTest {
                 .toEntity(Map.class);
 
         assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(registration.getBody().get("role")).isEqualTo("TURISTA");
+        assertThat(registration.getBody().get("role")).isEqualTo("TOURIST");
 
         ResponseEntity<Map> login = client.post()
                 .uri("/api/v1/auth/login")

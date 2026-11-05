@@ -6,6 +6,7 @@ import com.smxplore.sitesandservices.domain.model.review.CatalogTarget;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
+import com.smxplore.sitesandservices.domain.model.site.SiteFilter;
 import com.smxplore.sitesandservices.domain.model.zone.Zone;
 import reactor.core.publisher.Mono;
 
@@ -66,5 +67,16 @@ public class CatalogAccess {
                 ? Mono.just(target)
                 : Mono.error(new ForbiddenOperationException(
                         "Only the target owner can respond to this review"));
+    }
+
+    public Mono<SiteFilter> requireSiteFilterScope(SiteFilter filter, Actor actor) {
+        if (filter.managerId() == null || actor.isAdmin()) {
+            return Mono.just(filter);
+        }
+        if (actor.isGestora() && actor.owns(filter.managerId())) {
+            return Mono.just(filter);
+        }
+        return Mono.error(new ForbiddenOperationException(
+                "Only an administrator or the destination manager owning those sites can filter by manager"));
     }
 }

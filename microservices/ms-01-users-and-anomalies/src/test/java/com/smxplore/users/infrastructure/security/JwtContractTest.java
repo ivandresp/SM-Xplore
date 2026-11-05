@@ -58,7 +58,7 @@ class JwtContractTest {
         assertThat(jwt.getSubject()).isEqualTo(user.id().toString());
         assertThat(jwt.getClaimAsString("id")).isEqualTo(user.id().toString());
         assertThat(jwt.getClaimAsString("name")).isEqualTo("Ada Turista");
-        assertThat(jwt.getClaimAsString("role")).isEqualTo("TURISTA");
+        assertThat(jwt.getClaimAsString("role")).isEqualTo("TOURIST");
         assertThat(jwt.getClaimAsBoolean("mfa")).isFalse();
         assertThat(((Number) jwt.getClaim("ver")).longValue()).isZero();
         assertThat(jwt.getAudience()).containsExactly("sm-xplore-services");

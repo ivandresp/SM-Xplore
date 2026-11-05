@@ -8,10 +8,12 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.data.mongodb.core.ReactiveMongoOperations;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,6 +35,8 @@ public class LegacyDataMigration implements ApplicationRunner {
         backfillCreatedAt(SecurityReportDocument.class, "security_reports");
         backfillCreatedAt(CommentDocument.class, "security_report_comments");
         backfillReportVersion();
+        backfillUpdatedAt();
+        backfillPositions();
     }
 
     private void backfillCreatedAt(Class<?> documentType, String collection) {
@@ -57,6 +61,37 @@ public class LegacyDataMigration implements ApplicationRunner {
 
         if (result != null && result.getModifiedCount() > 0) {
             log.info("Backfilled version for {} security report document(s).", result.getModifiedCount());
+        }
+    }
+
+    private void backfillUpdatedAt() {
+        var query = Query.query(Criteria.where("updatedAt").is(null));
+        var update = new Update().set("updatedAt", Instant.now().truncatedTo(ChronoUnit.MILLIS));
+
+        var result = mongoOperations.updateMulti(query, update, SecurityReportDocument.class)
+                .block(Duration.ofSeconds(30));
+
+        if (result != null && result.getModifiedCount() > 0) {
+            log.info("Backfilled updatedAt for {} security report document(s).", result.getModifiedCount());
+        }
+    }
+
+    private void backfillPositions() {
+        var query = Query.query(Criteria.where("position").is(null).and("location").ne(null));
+        var updated = mongoOperations.find(query, SecurityReportDocument.class)
+                .concatMap(document -> {
+                    var location = document.getLocation();
+                    if (location == null || location.getLatitude() == null || location.getLongitude() == null) {
+                        return Mono.just(document);
+                    }
+                    document.setPosition(new GeoJsonPoint(location.getLongitude(), location.getLatitude()));
+                    return mongoOperations.save(document);
+                })
+                .count()
+                .block(Duration.ofSeconds(30));
+
+        if (updated != null && updated > 0) {
+            log.info("Backfilled geo position for {} security report document(s).", updated);
         }
     }
 }

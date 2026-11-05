@@ -59,8 +59,8 @@ app:
     jwt:
       jwk-set-uri: ${JWK_SET_URI:}
       public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
-      issuer: ${JWT_ISSUER:}
-      audience: ${JWT_AUDIENCE:}
+      issuer: ${JWT_ISSUER:sm-xplore-ms-01}
+      audience: ${JWT_AUDIENCE:sm-xplore-services}
       user-id-claim: ${JWT_USER_ID_CLAIM:userId}
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
@@ -80,6 +80,22 @@ app:
 
   catalog:
     seed-enabled: ${CATALOG_SEED_ENABLED:false}
+
+  reviews:
+    ai-filter:
+      enabled: ${REVIEW_AI_ENABLED:false}
+      base-url: ${LITTLELLM_URL:}
+      api-key: ${LITTLELLM_API_KEY:}
+      api-key-header: ${LITTLELLM_API_KEY_HEADER:Authorization}
+      api-key-prefix: ${LITTLELLM_API_KEY_PREFIX:Bearer}
+      model: ${LITTLELLM_MODEL:littlellm}
+      chat-path: ${LITTLELLM_CHAT_PATH:/v1/chat/completions}
+      timeout: ${REVIEW_AI_TIMEOUT:PT5S}
+      threshold: ${REVIEW_AI_THRESHOLD:0.7}
+      temperature: ${REVIEW_AI_TEMPERATURE:0.0}
+      action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
 
   notifications:
     enabled: ${NOTIFICATIONS_ENABLED:true}

@@ -1,17 +1,41 @@
 package com.smxplore.securityreports.infrastructure.config;
 
 import com.smxplore.securityreports.application.*;
+import com.smxplore.securityreports.application.event.SecurityReportEventFactory;
+import com.smxplore.securityreports.application.support.TransactionalOutboxWriter;
+import com.smxplore.securityreports.domain.ports.out.OutboxPort;
+import com.smxplore.securityreports.domain.ports.out.TransactionPort;
 import com.smxplore.securityreports.domain.ports.repository.CommentRepositoryPort;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
 import com.smxplore.securityreports.domain.ports.usecases.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Clock;
+
 @Configuration(proxyBeanMethods = false)
 public class BeanConfiguration {
+
     @Bean
-    public ReportIncidentUseCasePort reportIncidentUseCase(SecurityReportRepositoryPort securityReportRepository) {
-        return new ReportIncidentUseCase(securityReportRepository);
+    public SecurityReportEventFactory securityReportEventFactory(OutboxProperties outboxProperties, Clock clock) {
+        return new SecurityReportEventFactory(outboxProperties.getProducer(), clock);
+    }
+
+    @Bean
+    public TransactionalOutboxWriter transactionalOutboxWriter(
+            TransactionPort transaction,
+            OutboxPort outbox
+    ) {
+        return new TransactionalOutboxWriter(transaction, outbox);
+    }
+
+    @Bean
+    public ReportIncidentUseCasePort reportIncidentUseCase(
+            SecurityReportRepositoryPort securityReportRepository,
+            TransactionalOutboxWriter outboxWriter,
+            SecurityReportEventFactory eventFactory
+    ) {
+        return new ReportIncidentUseCase(securityReportRepository, outboxWriter, eventFactory);
     }
 
     @Bean
@@ -30,23 +54,44 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public ChangeReportContentUseCasePort changeReportTextUseCase(SecurityReportRepositoryPort securityReportRepository) {
-        return new ChangeReportContentUseCase(securityReportRepository);
+    public ConsultNearbyReportsUseCasePort consultNearbyReportsUseCase(SecurityReportRepositoryPort securityReportRepository) {
+        return new ConsultNearbyReportsUseCase(securityReportRepository);
     }
 
     @Bean
-    public AddReportPhotosUseCasePort addReportPhotosUseCase(SecurityReportRepositoryPort securityReportRepository) {
-        return new AddReportPhotosUseCase(securityReportRepository);
+    public ChangeReportContentUseCasePort changeReportTextUseCase(
+            SecurityReportRepositoryPort securityReportRepository,
+            TransactionalOutboxWriter outboxWriter,
+            SecurityReportEventFactory eventFactory
+    ) {
+        return new ChangeReportContentUseCase(securityReportRepository, outboxWriter, eventFactory);
     }
 
     @Bean
-    public CloseReportUseCasePort closeReportUseCase(SecurityReportRepositoryPort securityReportRepository) {
-        return new CloseReportUseCase(securityReportRepository);
+    public AddReportPhotosUseCasePort addReportPhotosUseCase(
+            SecurityReportRepositoryPort securityReportRepository,
+            TransactionalOutboxWriter outboxWriter,
+            SecurityReportEventFactory eventFactory
+    ) {
+        return new AddReportPhotosUseCase(securityReportRepository, outboxWriter, eventFactory);
     }
 
     @Bean
-    public MarkReportAsSolvedUseCasePort markReportAsSolvedUseCase(SecurityReportRepositoryPort securityReportRepository) {
-        return new MarkReportAsSolvedUseCase(securityReportRepository);
+    public CloseReportUseCasePort closeReportUseCase(
+            SecurityReportRepositoryPort securityReportRepository,
+            TransactionalOutboxWriter outboxWriter,
+            SecurityReportEventFactory eventFactory
+    ) {
+        return new CloseReportUseCase(securityReportRepository, outboxWriter, eventFactory);
+    }
+
+    @Bean
+    public MarkReportAsSolvedUseCasePort markReportAsSolvedUseCase(
+            SecurityReportRepositoryPort securityReportRepository,
+            TransactionalOutboxWriter outboxWriter,
+            SecurityReportEventFactory eventFactory
+    ) {
+        return new MarkReportAsSolvedUseCase(securityReportRepository, outboxWriter, eventFactory);
     }
 
     @Bean

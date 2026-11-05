@@ -20,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.mongodb.core.ReactiveMongoOperations;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@ActiveProfiles("test")
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class PersistenceAdaptersIntegrationTests {
