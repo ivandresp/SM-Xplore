@@ -91,6 +91,103 @@ try {
   } else { Fail "login sin accessToken" }
 } catch { Fail "login/JWT fallo: $_" }
 
+Write-Host "== Metricas (Prometheus) =="
+foreach ($name in $ports.Keys) {
+  $url = "http://" + $HostName + ":" + $ports[$name] + "/actuator/prometheus"
+  try {
+    $response = Invoke-WebRequest -Uri $url -TimeoutSec 5 -UseBasicParsing
+    if ($response.StatusCode -eq 200) { Pass "$name expone /actuator/prometheus" } else { Fail "$name /actuator/prometheus respondio $($response.StatusCode)" }
+  } catch { Fail "$name /actuator/prometheus fallo: $_" }
+}
+
+Write-Host "== Flujo de negocio (catalogo -> actividad -> resena -> reserva) =="
+function Invoke-SmokePost([string]$url, [string]$token, [object]$payload) {
+  $params = @{ Uri = $url; Method = "Post"; ContentType = "application/json"; Body = ($payload | ConvertTo-Json -Depth 6); TimeoutSec = 20; SkipHttpErrorCheck = $true }
+  if ($token) { $params.Headers = @{ Authorization = "Bearer " + $token } }
+  $response = Invoke-WebRequest @params -UseBasicParsing
+  [pscustomobject]@{ Status = [int]$response.StatusCode; Body = $response.Content }
+}
+$flowToken = $null
+if ($login) { $flowToken = $login.accessToken }
+$categoryId = ""
+$zoneId = ""
+$siteId = ""
+$activityId = ""
+$touristToken = $null
+$reservationId = ""
+if (-not $flowToken) {
+  Fail "sin token de administrador no se puede recorrer el flujo de negocio"
+} else {
+  $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  $base04 = "http://" + $HostName + ":" + $ports["ms-04"]
+  $base03 = "http://" + $HostName + ":" + $ports["ms-03"]
+  $invariant = [System.Globalization.CultureInfo]::InvariantCulture
+  $startsAt = (Get-Date).ToUniversalTime().AddDays(3).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $invariant)
+  # El dominio exige endsAt > startsAt.
+  $endsAt = (Get-Date).ToUniversalTime().AddDays(3).AddHours(2).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", $invariant)
+
+  $created = Invoke-SmokePost ($base04 + "/api/v1/categories") $flowToken @{ name = "Smoke categoria $stamp"; scope = "ACTIVITY" }
+  if ($created.Status -eq 201 -or $created.Status -eq 200) { $categoryId = ($created.Body | ConvertFrom-Json).categoryId; Pass "ms-04 creo la categoria ($categoryId)" } else { Fail "ms-04 no creo la categoria (HTTP $($created.Status)): $($created.Body)" }
+
+  $created = Invoke-SmokePost ($base04 + "/api/v1/zones") $flowToken @{ name = "Smoke zona $stamp"; type = "URBANA"; description = "zona del smoke" }
+  if ($created.Status -eq 201 -or $created.Status -eq 200) { $zoneId = ($created.Body | ConvertFrom-Json).zoneId; Pass "ms-04 creo la zona ($zoneId)" } else { Fail "ms-04 no creo la zona (HTTP $($created.Status)): $($created.Body)" }
+
+  if ($categoryId -and $zoneId) {
+    $created = Invoke-SmokePost ($base04 + "/api/v1/sites") $flowToken @{ name = "Smoke sitio $stamp"; description = "sitio del smoke"; categoryId = $categoryId; zoneId = $zoneId; latitude = 11.2408; longitude = -74.1990; maxCapacity = 20 }
+    if ($created.Status -eq 201 -or $created.Status -eq 200) { $siteId = ($created.Body | ConvertFrom-Json).siteId; Pass "ms-04 creo el sitio ($siteId)" } else { Fail "ms-04 no creo el sitio (HTTP $($created.Status)): $($created.Body)" }
+  } else { Fail "sin categoria/zona no se puede crear el sitio" }
+
+  if ($siteId) {
+    $created = Invoke-SmokePost ($base03 + "/api/v1/activities") $flowToken @{ siteId = $siteId; name = "Smoke actividad $stamp"; category = "AVENTURA"; price = 25.00; maxCapacity = 10; durationMinutes = 120; startsAt = $startsAt; endsAt = $endsAt; description = "actividad del smoke" }
+    if ($created.Status -eq 201 -or $created.Status -eq 200) {
+      $activityId = ($created.Body | ConvertFrom-Json).id
+      Pass "ms-03 creo la actividad ($activityId)"
+      # Nace en DRAFT: sin publicarla el catalogo da 404 y la resena/reserva 400.
+      $published = Invoke-SmokePost ($base03 + "/api/v1/activities/" + $activityId + "/status") $flowToken @{ status = "PUBLISHED" }
+      if (($published.Body | ConvertFrom-Json).status -eq "PUBLISHED") { Pass "la actividad quedo PUBLISHED" } else { Fail "no se pudo publicar la actividad (HTTP $($published.Status)): $($published.Body)" }
+    } else { Fail "ms-03 no creo la actividad (HTTP $($created.Status)): $($created.Body)" }
+  }
+
+  if ($activityId) {
+    try {
+      $response = Invoke-WebRequest -Uri ($base03 + "/api/v1/activities/" + $activityId) -TimeoutSec 5 -UseBasicParsing
+      if ($response.StatusCode -eq 200) { Pass "GET publico de la actividad responde 200" } else { Fail "GET publico de la actividad respondio $($response.StatusCode)" }
+    } catch { Fail "GET publico de la actividad fallo: $_" }
+  }
+
+  # Turista real: registro publico y login.
+  $touristEmail = "smoke-$stamp@smxplore.local"
+  $registered = Invoke-SmokePost ("http://" + $HostName + ":" + $ports["ms-01"] + "/api/v1/auth/register/turista") $null @{ fullName = "Smoke Turista $stamp"; email = $touristEmail; phone = "3001234567"; password = "SmokePass12345"; dniType = "CC"; dniNumber = "$stamp"; preferredLanguage = "es"; birthDate = "1990-01-01"; nationality = "CO" }
+  $touristId = ""
+  if ($registered.Status -eq 201 -or $registered.Status -eq 200) { $touristId = ($registered.Body | ConvertFrom-Json).id; Pass "ms-01 registro al turista ($touristId)" } else { Fail "ms-01 no registro al turista (HTTP $($registered.Status)): $($registered.Body)" }
+
+  $touristLogin = Invoke-SmokePost ("http://" + $HostName + ":" + $ports["ms-01"] + "/api/v1/auth/login") $null @{ email = $touristEmail; password = "SmokePass12345" }
+  if ($touristLogin.Status -eq 200) { $touristToken = ($touristLogin.Body | ConvertFrom-Json).accessToken }
+  if ($touristToken) { Pass "login del turista devuelve accessToken" } else { Fail "login del turista fallo (HTTP $($touristLogin.Status)): $($touristLogin.Body)" }
+
+  if ($touristToken -and $activityId) {
+    $review = Invoke-SmokePost ($base03 + "/api/v1/reviews") $touristToken @{ itemType = "ACTIVITY"; itemId = $activityId; rating = 5; comment = "resena del smoke" }
+    if ($review.Status -eq 201 -or $review.Status -eq 200) { Pass "el turista publico una resena" } else { Fail "la resena respondio $($review.Status): $($review.Body)" }
+
+    $reservation = Invoke-SmokePost ($base03 + "/api/v1/reservations") $touristToken @{ touristId = $touristId; itemType = "ACTIVITY"; itemId = $activityId; numberOfPeople = 1; paymentMethod = "CARD"; bookedFor = $startsAt }
+    if ($reservation.Status -eq 201 -or $reservation.Status -eq 200) {
+      $reservationId = ($reservation.Body | ConvertFrom-Json).id
+      Pass "el turista creo la reserva ($reservationId)"
+      try {
+        $own = Invoke-WebRequest -Uri ($base03 + "/api/v1/reservations/" + $reservationId) -Headers @{ Authorization = "Bearer " + $touristToken } -TimeoutSec 5 -UseBasicParsing
+        if ($own.StatusCode -eq 200) { Pass "GET de la reserva propia responde 200" } else { Fail "GET de la reserva propia respondio $($own.StatusCode)" }
+      } catch { Fail "GET de la reserva propia fallo: $_" }
+    } else { Fail "la reserva respondio $($reservation.Status): $($reservation.Body)" }
+  }
+
+  # El outbox es la prueba de que el evento salio: se consulta si hay docker disponible.
+  if ((Test-Path "compose.yaml") -and (Get-Command docker -ErrorAction SilentlyContinue)) {
+    $pgUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "smxplore" }
+    $published = (docker compose exec -T postgres psql -U $pgUser -d activities_events -tAc "SELECT count(*) FROM outbox_events WHERE status = 'PUBLISHED'" 2>$null | Out-String).Trim()
+    if ($published -match "^\d+$" -and [int]$published -gt 0) { Pass "el outbox de ms-03 publico $published evento(s)" } else { Fail "el outbox de ms-03 no registro eventos publicados" }
+  } else { Write-Host "  SKIP outbox: sin docker en PATH o fuera del directorio del compose" }
+}
+
 Write-Host "== Herramientas =="
 $tools = @(
   @("Kafka UI", (Get-Port "KAFKA_UI_PORT" 8090)),

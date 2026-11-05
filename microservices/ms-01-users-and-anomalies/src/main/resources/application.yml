@@ -34,7 +34,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics/prometheus para el scraping; en produccion deben aislarse por red.
+        include: health,info,metrics,prometheus
 
 springdoc:
   swagger-ui:

@@ -17,6 +17,11 @@ x-jwt-env: &jwt-env
   JWK_SET_URI: http://ms-01:8081/.well-known/jwks.json
   JWT_ISSUER: sm-xplore-ms-01
   JWT_AUDIENCE: sm-xplore-services
+  # Solo stack local: dentro de Compose el emisor se alcanza por HTTP en la red privada. El flag
+  # exige un perfil local (el guard de cada servicio falla el arranque si no lo hay) y el perfil
+  # prod lo prohíbe.
+  JWT_ALLOW_INSECURE_JWKS: "true"
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
   # En local/dev la revocacion (ver) y el MFA administrativo quedan apagados para no exigir
   # ms-01 en cada peticion. En produccion el perfil prod los activa.
   AUTH_VERSION_ENABLED: "false"
