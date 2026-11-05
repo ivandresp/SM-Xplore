@@ -68,6 +68,8 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.testcontainers:testcontainers-mongodb")
+    // Valida los eventos generados contra contracts/events/*.v1.json, como ms-02 y ms-05.
+    testImplementation("com.networknt:json-schema-validator:1.5.9")
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testAnnotationProcessor("org.projectlombok:lombok")

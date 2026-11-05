@@ -23,6 +23,12 @@ public class Review {
     private final ReviewReply reply;
 
     @Builder.Default
+    private final ReviewStatus status = ReviewStatus.PUBLISHED;
+
+    /** Set on every change; {@link #updatedAt()} falls back to {@code createdAt} for old documents. */
+    private final Instant updatedAt;
+
+    @Builder.Default
     private final Instant createdAt = Instant.now();
 
     public void validate() {
@@ -41,9 +47,24 @@ public class Review {
         if (comment != null && comment.length() > COMMENT_MAX_LENGTH) {
             throw new InvalidReviewException("Comment must not exceed %d characters.".formatted(COMMENT_MAX_LENGTH));
         }
+        if (status == null) {
+            throw new InvalidReviewException("Review status is mandatory.");
+        }
+    }
+
+    /**
+     * @return when the review last changed. Documents written before the field existed fall back to
+     *     {@code createdAt}, so consumers never see a missing timestamp.
+     */
+    public Instant updatedAt() {
+        return updatedAt != null ? updatedAt : createdAt;
     }
 
     public Review withReply(ReviewReply reply) {
-        return toBuilder().reply(reply).build();
+        return toBuilder().reply(reply).updatedAt(Instant.now()).build();
+    }
+
+    public Review withStatus(ReviewStatus newStatus) {
+        return toBuilder().status(newStatus).updatedAt(Instant.now()).build();
     }
 }
