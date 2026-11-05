@@ -4,6 +4,7 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFound
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ChangeActivityStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ConsultActivitiesUseCasePort;
@@ -32,6 +33,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.argThat;
@@ -180,8 +182,8 @@ class ActivityControllerTest {
 
     @Test
     void findByCategoryReturnsMatchingActivities() {
-        given(findActivitiesByCategoryUseCase.handle("Tour")).willReturn(Flux.just(
-                activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)));
+        given(findActivitiesByCategoryUseCase.handle("Tour", 0, 20)).willReturn(Mono.just(
+                new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/activities/search?category=Tour")
                 .exchange()
@@ -194,8 +196,8 @@ class ActivityControllerTest {
     @Test
     void findBySiteReturnsActivities() {
         var siteId = UUID.randomUUID();
-        given(findActivitiesBySiteUseCase.handle(siteId)).willReturn(Flux.just(
-                activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)));
+        given(findActivitiesBySiteUseCase.handle(siteId, 0, 20)).willReturn(Mono.just(
+                new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/activities/site/{siteId}", siteId)
                 .exchange()
@@ -308,8 +310,8 @@ class ActivityControllerTest {
 
     @Test
     void findAllReturnsActivities() {
-        given(consultActivitiesUseCase.handle()).willReturn(Flux.just(
-                activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)));
+        given(consultActivitiesUseCase.handle(0, 20)).willReturn(Mono.just(
+                new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/activities")
                 .exchange()

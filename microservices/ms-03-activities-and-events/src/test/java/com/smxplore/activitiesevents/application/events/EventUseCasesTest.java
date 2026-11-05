@@ -137,9 +137,10 @@ class EventUseCasesTest {
         eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
         eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
 
-        List<Event> events = Objects.requireNonNull(consultEvents.handle().collectList().block());
+        var page = Objects.requireNonNull(consultEvents.handle(0, 20).block());
 
-        assertEquals(2, events.size());
+        assertEquals(2, page.content().size());
+        assertEquals(2, page.total());
     }
 
     @Test
@@ -147,10 +148,10 @@ class EventUseCasesTest {
         eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
         eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
 
-        List<Event> matches = Objects.requireNonNull(searchEvents.handle("kayak").collectList().block());
+        var page = Objects.requireNonNull(searchEvents.handle("kayak", 0, 20).block());
 
-        assertEquals(1, matches.size());
-        assertEquals("Sunset Kayak Tour", matches.getFirst().getName());
+        assertEquals(1, page.content().size());
+        assertEquals("Sunset Kayak Tour", page.content().getFirst().getName());
     }
 
     @Test

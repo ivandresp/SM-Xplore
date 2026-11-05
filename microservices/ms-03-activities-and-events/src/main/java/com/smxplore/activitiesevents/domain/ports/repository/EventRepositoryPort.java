@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.domain.ports.repository;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 
 import reactor.core.publisher.Flux;
@@ -19,11 +20,12 @@ public interface EventRepositoryPort {
 
     Flux<Event> findAll();
 
-    Flux<Event> findPublished();
+    /** One page of the published catalogue, limited by the database. */
+    Mono<PageResult<Event>> findPublishedPage(int page, int size);
 
     Flux<Event> searchByName(String name);
 
-    Flux<Event> searchPublishedByName(String name);
+    Mono<PageResult<Event>> searchPublishedByNamePage(String name, int page, int size);
 
     Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
 }

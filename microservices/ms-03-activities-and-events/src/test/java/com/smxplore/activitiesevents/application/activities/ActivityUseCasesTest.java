@@ -229,9 +229,10 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
 
-        List<Activity> activities = Objects.requireNonNull(consultActivities.handle().collectList().block());
+        var page = Objects.requireNonNull(consultActivities.handle(0, 20).block());
 
-        assertEquals(2, activities.size());
+        assertEquals(2, page.content().size());
+        assertEquals(2, page.total());
     }
 
     @Test
@@ -239,11 +240,10 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).category("Nautical").build()).block();
 
-        List<Activity> matches = Objects.requireNonNull(
-                findActivitiesByCategory.handle("Water Sports").collectList().block());
+        var page = Objects.requireNonNull(findActivitiesByCategory.handle("Water Sports", 0, 20).block());
 
-        assertEquals(1, matches.size());
-        assertEquals("Water Sports", matches.getFirst().getCategory());
+        assertEquals(1, page.content().size());
+        assertEquals("Water Sports", page.content().getFirst().getCategory());
     }
 
     @Test
@@ -253,9 +253,9 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).siteId(siteId).build()).block();
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
 
-        List<Activity> matches = Objects.requireNonNull(findActivitiesBySite.handle(siteId).collectList().block());
+        var page = Objects.requireNonNull(findActivitiesBySite.handle(siteId, 0, 20).block());
 
-        assertEquals(2, matches.size());
+        assertEquals(2, page.content().size());
     }
 
     @Test

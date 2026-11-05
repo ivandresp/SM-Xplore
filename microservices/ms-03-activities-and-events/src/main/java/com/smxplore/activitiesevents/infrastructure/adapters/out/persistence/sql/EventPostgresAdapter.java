@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.mapper.EventPersistenceMapper;
@@ -54,8 +55,12 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
-    public Flux<Event> findPublished() {
-        return repository.findPublished().map(mapper::toDomain);
+    public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.findPagePublished(size, offset).map(mapper::toDomain).collectList(),
+                        repository.countPublished().defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override
@@ -65,8 +70,14 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
-    public Flux<Event> searchPublishedByName(String name) {
-        return repository.searchPublishedByName(name).map(mapper::toDomain);
+    public Mono<PageResult<Event>> searchPublishedByNamePage(String name, int page, int size) {
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.searchPagePublishedByName(name, size, offset)
+                                .map(mapper::toDomain)
+                                .collectList(),
+                        repository.countSearchPublishedByName(name).defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override

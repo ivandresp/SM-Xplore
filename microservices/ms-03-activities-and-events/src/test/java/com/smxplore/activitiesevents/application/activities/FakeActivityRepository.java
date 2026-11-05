@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.application.activities;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 
 import reactor.core.publisher.Flux;
@@ -8,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -42,8 +44,19 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublished() {
+    public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
+        var matches = publishedList().collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    }
+
+    private Flux<Activity> publishedList() {
         return findAll().filter(activity -> activity.getStatus() == com.smxplore.activitiesevents.domain.model.activity.ActivityStatus.PUBLISHED);
+    }
+
+    private static PageResult<Activity> page(List<Activity> matches, int page, int size) {
+        int from = Math.min(page * size, matches.size());
+        int to = Math.min(from + size, matches.size());
+        return new PageResult<>(List.copyOf(matches.subList(from, to)), page, size, matches.size());
     }
 
     @Override
@@ -52,8 +65,11 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublishedByCategory(String category) {
-        return findPublished().filter(activity -> category.equalsIgnoreCase(activity.getCategory()));
+    public Mono<PageResult<Activity>> findPublishedByCategoryPage(String category, int page, int size) {
+        var matches = publishedList()
+                .filter(activity -> category.equalsIgnoreCase(activity.getCategory()))
+                .collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
     }
 
     @Override
@@ -62,8 +78,11 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublishedBySiteId(UUID siteId) {
-        return findPublished().filter(activity -> siteId.equals(activity.getSiteId()));
+    public Mono<PageResult<Activity>> findPublishedBySiteIdPage(UUID siteId, int page, int size) {
+        var matches = publishedList()
+                .filter(activity -> siteId.equals(activity.getSiteId()))
+                .collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
     }
 
     @Override

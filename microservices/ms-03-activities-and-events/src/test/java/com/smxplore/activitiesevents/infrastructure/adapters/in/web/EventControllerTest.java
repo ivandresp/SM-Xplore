@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeni
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventNameException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusTransitionException;
 import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
@@ -32,6 +33,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -176,8 +178,8 @@ class EventControllerTest {
 
     @Test
     void searchReturnsMatchingEvents() {
-        given(searchEventsUseCase.handle("Kayak")).willReturn(Flux.just(
-                eventWith(UUID.randomUUID(), EventStatus.DRAFT)));
+        given(searchEventsUseCase.handle("Kayak", 0, 20)).willReturn(Mono.just(
+                new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/events/search?name=Kayak")
                 .exchange()
@@ -240,8 +242,8 @@ class EventControllerTest {
 
     @Test
     void findAllReturnsEvents() {
-        given(consultEventsUseCase.handle()).willReturn(Flux.just(
-                eventWith(UUID.randomUUID(), EventStatus.DRAFT)));
+        given(consultEventsUseCase.handle(0, 20)).willReturn(Mono.just(
+                new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/events")
                 .exchange()

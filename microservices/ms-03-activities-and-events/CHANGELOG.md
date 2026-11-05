@@ -2,6 +2,14 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Paginación del catálogo 2026-11-04]
+
+### Cambiado
+- Los listados de catálogo (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}`) paginan en SQL: `LIMIT`/`OFFSET` más un `COUNT` con el mismo filtro. Antes traían la tabla completa y cortaban la página en memoria; sus consultas no tenían `LIMIT`.
+- Sustituidos en el puerto: `findPublished()` → `findPublishedPage(page, size)`, `searchPublishedByName` → `searchPublishedByNamePage`, `findPublishedByCategory` → `findPublishedByCategoryPage`, `findPublishedBySiteId` → `findPublishedBySiteIdPage`.
+- Los puertos de caso de uso devuelven `Mono<PageResult<...>>`; los controladores usan `PageResponse.from(result, mapper)`.
+- Visibilidad sin cambios: solo se publica lo que está `PUBLISHED`.
+
 ## [Paginación en base de datos 2026-11-04]
 
 ### Cambiado

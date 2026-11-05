@@ -1,12 +1,11 @@
 package com.smxplore.activitiesevents.application.activities;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.FindActivitiesBySiteUseCasePort;
-
 import lombok.RequiredArgsConstructor;
-
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -16,7 +15,7 @@ public class FindActivitiesBySiteUseCase implements FindActivitiesBySiteUseCaseP
     private final ActivityRepositoryPort activityRepo;
 
     @Override
-    public Flux<Activity> handle(UUID siteId) {
-        return activityRepo.findPublishedBySiteId(siteId);
+    public Mono<PageResult<Activity>> handle(UUID siteId, int page, int size) {
+        return activityRepo.findPublishedBySiteIdPage(siteId, page, size);
     }
 }

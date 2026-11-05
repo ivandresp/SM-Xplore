@@ -90,10 +90,8 @@ public class ActivityController {
                                                         @RequestParam(defaultValue = "20") int size) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return consultActivitiesUseCase.handle()
-                .map(mapper::toResponse)
-                .collectList()
-                .map(activities -> PageResponse.of(activities, page, size));
+        return consultActivitiesUseCase.handle(page, size)
+                .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 
     @GetMapping("/search")
@@ -103,10 +101,8 @@ public class ActivityController {
                                                                @RequestParam(defaultValue = "20") int size) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return findActivitiesByCategoryUseCase.handle(category)
-                .map(mapper::toResponse)
-                .collectList()
-                .map(activities -> PageResponse.of(activities, page, size));
+        return findActivitiesByCategoryUseCase.handle(category, page, size)
+                .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 
     @GetMapping("/site/{siteId}")
@@ -116,10 +112,8 @@ public class ActivityController {
                                                            @RequestParam(defaultValue = "20") int size) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return findActivitiesBySiteUseCase.handle(siteId)
-                .map(mapper::toResponse)
-                .collectList()
-                .map(activities -> PageResponse.of(activities, page, size));
+        return findActivitiesBySiteUseCase.handle(siteId, page, size)
+                .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 
     @PatchMapping("/{activityId}")
