@@ -62,6 +62,20 @@ class AuthVersionValidatorTest {
     }
 
     @Test
+    void acceptsATokenNewerThanTheCachedVersion() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicLong current = new java.util.concurrent.atomic.AtomicLong(2);
+        startServer(current::get, calls);
+        AuthVersionValidator validator = validator(properties(true, baseUrl()), false);
+
+        assertThat(validator.validate(jwt("TOURIST", true, 2)).block()).isNotNull();
+        current.set(3);
+
+        assertThat(validator.validate(jwt("TOURIST", true, 3)).block()).isNotNull();
+        assertThat(calls).hasValue(2);
+    }
+
+    @Test
     void skipsTheRemoteCheckWhenDisabled() {
         AuthVersionValidator validator = validator(properties(false, null), false);
 
@@ -97,10 +111,14 @@ class AuthVersionValidatorTest {
     }
 
     private void startServer(long currentVersion, AtomicInteger calls) throws IOException {
+        startServer(() -> currentVersion, calls);
+    }
+
+    private void startServer(java.util.function.LongSupplier currentVersion, AtomicInteger calls) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/v1/users/me/auth-version", exchange -> {
             calls.incrementAndGet();
-            byte[] body = ("{\"authVersion\":" + currentVersion + "}").getBytes(StandardCharsets.UTF_8);
+            byte[] body = ("{\"authVersion\":" + currentVersion.getAsLong() + "}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);

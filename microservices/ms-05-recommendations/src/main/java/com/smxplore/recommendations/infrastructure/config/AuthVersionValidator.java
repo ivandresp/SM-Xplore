@@ -86,9 +86,15 @@ public class AuthVersionValidator {
         Instant now = Instant.now();
         CachedVersion cached = cache.get(userId);
         if (cached != null && cached.expiresAt().isAfter(now)) {
-            return cached.version() == tokenVersion
-                    ? Mono.empty()
-                    : invalidSession();
+            if (cached.version() == tokenVersion) {
+                return Mono.empty();
+            }
+            if (tokenVersion < cached.version()) {
+                return invalidSession();
+            }
+            // Un token mas nuevo que la cache significa que la sesion se renovo
+            // (logout/login, cambio de contrasena o de rol): hay que reconsultar
+            // ms-01 antes de rechazarlo.
         }
         return currentVersion(jwt)
                 .doOnNext(current -> cache.put(

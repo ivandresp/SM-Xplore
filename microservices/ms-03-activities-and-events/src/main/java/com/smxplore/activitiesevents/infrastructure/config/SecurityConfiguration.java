@@ -77,7 +77,8 @@ public class SecurityConfiguration {
                         .pathMatchers(HttpMethod.GET, "/api/v1/reservations")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers("/api/v1/review-reports/**")
-                        .hasAnyRole(ADMIN, DESTINATION_MANAGER)
+                        // El caso de uso exige ADMIN, la gestora del sitio o el guia dueno de la actividad.
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         .pathMatchers("/api/v1/admin/**").hasRole(ADMIN)
                         .pathMatchers("/api/v1/reservations/**").authenticated()
                         .anyExchange().authenticated())

@@ -1,5 +1,8 @@
 app:
   security:
+    jwt:
+      # En produccion el JWKS debe ser HTTPS y el flag local queda prohibido.
+      allow-insecure-jwks: false
     auth-version:
       enabled: true
     mfa:
