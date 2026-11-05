@@ -50,6 +50,13 @@ dependencies {
         implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
             because("CVE-2026-108106 y CVE-2026-93451: denegacion de servicio y desbordamiento en snappy-java 1.1.10.7")
         }
+        // El cliente de PostgreSQL autentica con SCRAM y arrastra una version con CVE.
+        implementation("com.ongres.scram:scram-client:3.3") {
+            because("CVE-2026-53712: fallo de autenticacion en scram-client 3.2")
+        }
+        implementation("com.ongres.scram:scram-common:3.3") {
+            because("Debe seguir la version de scram-client, CVE-2026-53712")
+        }
     }
 
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")

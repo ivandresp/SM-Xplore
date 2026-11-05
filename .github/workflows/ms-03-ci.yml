@@ -40,6 +40,10 @@ env:
   MONGO_ROOT_PASSWORD: mongo-root
   MONGO_APP_USER: reviews_app
   MONGO_APP_PASSWORD: reviews-app
+  # docker compose interpola el archivo completo, incluido el servicio app: sin estas dos el
+  # paso que levanta PostgreSQL y MongoDB falla con "required variable JWT_ISSUER is missing".
+  JWT_ISSUER: sm-xplore-ms-01
+  JWT_AUDIENCE: sm-xplore-services
 
 jobs:
   verify:
