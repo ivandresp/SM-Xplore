@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface RespondToReviewUseCasePort {
 
-    Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message);
+    Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message, String bearerToken);
 }

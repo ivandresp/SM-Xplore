@@ -2,6 +2,15 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Refresco del snapshot 2026-11-04]
+
+### Corregido
+- Responder una reseña de evento ya no confía en el `managerId` guardado al crear el evento: se consulta `GET /api/v1/sites/{siteId}` de ms-04 y manda la gestora actual. Una gestora reasignada pierde el derecho de inmediato, en vez de conservarlo hasta que alguien refresque el snapshot.
+- Si ms-04 no responde, o el sitio ya no existe, se degrada al snapshot con un `WARN`: no se bloquean todas las respuestas cuando el catálogo está caído.
+
+### Pendiente
+- El snapshot `siteName`/`managerId` del evento sigue sin refrescarse desde Kafka: `catalog.site.changed` v1 no incluye `managerId` y haría falta un contrato v2.
+
 ## [Reportes de reseña 2026-11-04]
 
 ### Corregido

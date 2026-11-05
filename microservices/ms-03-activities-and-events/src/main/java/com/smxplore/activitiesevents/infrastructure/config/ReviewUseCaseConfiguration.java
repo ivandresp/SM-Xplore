@@ -46,8 +46,9 @@ public class ReviewUseCaseConfiguration {
     @Bean
     public RespondToReviewUseCasePort respondToReviewUseCase(ReviewRepositoryPort reviewRepository,
                                                              ActivityRepositoryPort activityRepository,
-                                                             EventRepositoryPort eventRepository) {
-        return new RespondToReviewUseCase(reviewRepository, activityRepository, eventRepository);
+                                                             EventRepositoryPort eventRepository,
+                                                             SiteCatalogPort siteCatalog) {
+        return new RespondToReviewUseCase(reviewRepository, activityRepository, eventRepository, siteCatalog);
     }
 
     @Bean

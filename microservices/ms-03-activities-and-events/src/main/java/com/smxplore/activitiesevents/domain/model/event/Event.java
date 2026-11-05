@@ -26,8 +26,9 @@ public class Event {
     private final UUID id = UUID.randomUUID();
     private final UUID siteId;
     // TODO(ms-04): siteName and managerId are a creation-time snapshot of the site; ms-04 owns the
-    // source of truth. catalog.site.changed v1 does not carry managerId, so a manager change cannot
-    // be applied from Kafka yet: it needs a contract v2 or a re-read of GET /api/v1/sites/{siteId}.
+    // source of truth. The review reply re-reads GET /api/v1/sites/{siteId} before authorizing, but
+    // the stored snapshot stays stale: catalog.site.changed v1 does not carry managerId, so
+    // applying a manager change from Kafka needs a contract v2.
     private final String siteName;
     private final UUID managerId;
     private String name;

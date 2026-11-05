@@ -22,6 +22,7 @@ import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryP
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,9 @@ class ReviewUseCasesTest {
     private ActivityRepositoryPort activityRepo;
 
     @Mock
+    private SiteCatalogPort siteCatalog;
+
+    @Mock
     private OutboxPort outbox;
 
     private CreateReviewUseCase createReview;
@@ -65,7 +69,7 @@ class ReviewUseCasesTest {
     void setUp() {
         createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, outbox,
                 new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()));
-        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo);
+        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo, siteCatalog);
     }
 
     @Test
@@ -127,7 +131,7 @@ class ReviewUseCasesTest {
         given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(guideId)));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(respondToReview.handle(review.getId(), guideId, "GUIDE", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), guideId, "GUIDE", "Thanks!", "token"))
                 .assertNext(updated -> {
                     assertThat(updated.getReply()).isNotNull();
                     assertThat(updated.getReply().message()).isEqualTo("Thanks!");
@@ -142,7 +146,7 @@ class ReviewUseCasesTest {
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(UUID.randomUUID())));
 
-        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
     }
@@ -153,7 +157,7 @@ class ReviewUseCasesTest {
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(UUID.randomUUID())));
 
-        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
     }
@@ -164,7 +168,7 @@ class ReviewUseCasesTest {
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "ADMIN", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "ADMIN", "Thanks!", "token"))
                 .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
                 .verifyComplete();
     }
@@ -174,8 +178,9 @@ class ReviewUseCasesTest {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
 
-        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
     }
@@ -186,9 +191,10 @@ class ReviewUseCasesTest {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(respondToReview.handle(review.getId(), managerId, "DESTINATION_MANAGER", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), managerId, "DESTINATION_MANAGER", "Thanks!", "token"))
                 .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
                 .verifyComplete();
     }
@@ -198,10 +204,63 @@ class ReviewUseCasesTest {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
 
-        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!"))
+        StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
                 .verify();
+    }
+
+    @Test
+    void revalidatesTheManagerAgainstTheCurrentSite() {
+        var formerManager = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(formerManager);
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(event.getSiteId(), "token"))
+                .willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                        event.getSiteId(), UUID.randomUUID(), "Sitio")));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), formerManager,
+                        "DESTINATION_MANAGER", "Thanks!", "token"))
+                .expectError(ReviewResponseNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
+    void allowsTheManagerThatOwnsTheSiteToday() {
+        var newManager = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(event.getSiteId(), "token"))
+                .willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                        event.getSiteId(), newManager, "Sitio")));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), newManager,
+                        "DESTINATION_MANAGER", "Thanks!", "token"))
+                .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
+                .verifyComplete();
+    }
+
+    @Test
+    void fallsBackToTheSnapshotWhenMs04Fails() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(managerId);
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(event.getSiteId(), "token"))
+                .willReturn(Mono.error(new IllegalStateException("ms-04 down")));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(respondToReview.handle(review.getId(), managerId,
+                        "DESTINATION_MANAGER", "Thanks!", "token"))
+                .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
+                .verifyComplete();
     }
 
     @Test

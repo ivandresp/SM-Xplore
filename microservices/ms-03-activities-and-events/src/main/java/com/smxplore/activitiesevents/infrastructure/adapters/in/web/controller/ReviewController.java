@@ -108,7 +108,8 @@ public class ReviewController {
     public Mono<ReviewResponse> respond(@PathVariable UUID reviewId,
                                         @Valid @RequestBody RespondReviewRequest request,
                                         @AuthenticationPrincipal Jwt jwt) {
-        return respondToReviewUseCase.handle(reviewId, subject(jwt), role(jwt), request.message())
+        return respondToReviewUseCase.handle(reviewId, subject(jwt), role(jwt), request.message(),
+                        jwt.getTokenValue())
                 .map(mapper::toResponse);
     }
 
