@@ -64,6 +64,14 @@ public record Neo4jProjectionQueries() {
             OPTIONAL MATCH (item:CatalogItem {categoryId: $categoryId})
             WITH c, collect(item) AS items
             FOREACH (itemNode IN items | MERGE (itemNode)-[:ES_DE_TIPO]->(c))
+            WITH c
+            OPTIONAL MATCH (namedItem:CatalogItem)
+            WHERE namedItem.categoryName = $name
+            WITH c, collect(namedItem) AS namedItems
+            FOREACH (itemNode IN namedItems |
+                SET itemNode.categoryId = $categoryId
+                MERGE (itemNode)-[:ES_DE_TIPO]->(c)
+            )
             """;
 
     static final String UPSERT_SITE = """
@@ -93,7 +101,15 @@ public record Neo4jProjectionQueries() {
               AND child.itemId <> $siteId
               AND child.itemType IN ['ACTIVITY', 'EVENT']
             WITH s, collect(child) AS children
-            FOREACH (childNode IN children | MERGE (childNode)-[:OCURRE_EN]->(s))
+            FOREACH (childNode IN children |
+                SET childNode.latitude = coalesce(childNode.latitude, s.latitude)
+                SET childNode.longitude = coalesce(childNode.longitude, s.longitude)
+                SET childNode.location = CASE
+                    WHEN childNode.location IS NULL THEN s.location
+                    ELSE childNode.location
+                END
+                MERGE (childNode)-[:OCURRE_EN]->(s)
+            )
             WITH s
             OPTIONAL MATCH (service:CatalogItem:Servicio)
             WHERE service.siteId = $siteId
@@ -141,26 +157,42 @@ public record Neo4jProjectionQueries() {
                 a.itemType = 'ACTIVITY',
                 a.activityId = $activityId,
                 a.name = $name,
-                a.categoryId = $categoryId,
+                a.categoryName = $categoryName,
                 a.siteId = $siteId,
-                a.latitude = $latitude,
-                a.longitude = $longitude,
                 a.price = $price,
                 a.status = $status,
                 a.updatedAt = datetime($updatedAt)
             WITH a
+            OPTIONAL MATCH (site:Sitio {siteId: $siteId})
+            OPTIONAL MATCH (namedCategory:Categoria)
+            WHERE $categoryName IS NOT NULL AND namedCategory.name = $categoryName
+            WITH a, site, namedCategory
+            ORDER BY namedCategory.updatedAt DESC
+            LIMIT 1
+            WITH a, site, coalesce(namedCategory.categoriaId, $categoryId) AS effectiveCategoryId
+            SET a.categoryId = effectiveCategoryId,
+                a.latitude = coalesce($latitude, site.latitude),
+                a.longitude = coalesce($longitude, site.longitude),
+                a.location = CASE
+                    WHEN $latitude IS NOT NULL AND $longitude IS NOT NULL
+                        THEN point({latitude: $latitude, longitude: $longitude})
+                    WHEN site IS NOT NULL THEN site.location
+                    ELSE null
+                END
+            WITH a, site, effectiveCategoryId
             OPTIONAL MATCH (a)-[oldCategory:ES_DE_TIPO]->(:Categoria)
             FOREACH (rel IN CASE WHEN oldCategory IS NULL THEN [] ELSE [oldCategory] END | DELETE rel)
-            WITH a
-            OPTIONAL MATCH (category:Categoria {categoriaId: $categoryId})
-            FOREACH (_ IN CASE WHEN category IS NULL THEN [] ELSE [1] END |
-                MERGE (a)-[:ES_DE_TIPO]->(category)
-            )
-            WITH a
+            WITH a, site, effectiveCategoryId
+            MERGE (category:Categoria {categoriaId: effectiveCategoryId})
+            ON CREATE SET category.name = CASE WHEN $categoryName IS NULL
+                                               THEN toString(effectiveCategoryId)
+                                               ELSE $categoryName END,
+                          category.updatedAt = datetime($updatedAt)
+            MERGE (a)-[:ES_DE_TIPO]->(category)
+            WITH a, site
             OPTIONAL MATCH (a)-[oldSite:OCURRE_EN]->(:Sitio)
             FOREACH (rel IN CASE WHEN oldSite IS NULL THEN [] ELSE [oldSite] END | DELETE rel)
-            WITH a
-            OPTIONAL MATCH (site:Sitio {siteId: $siteId})
+            WITH a, site
             FOREACH (_ IN CASE WHEN site IS NULL THEN [] ELSE [1] END |
                 MERGE (a)-[:OCURRE_EN]->(site)
             )
@@ -173,28 +205,44 @@ public record Neo4jProjectionQueries() {
                 e.itemType = 'EVENT',
                 e.eventId = $eventId,
                 e.name = $name,
-                e.categoryId = $categoryId,
+                e.categoryName = $categoryName,
                 e.siteId = $siteId,
-                e.latitude = $latitude,
-                e.longitude = $longitude,
                 e.price = $price,
                 e.startsAt = datetime($startsAt),
                 e.endsAt = CASE WHEN $endsAt IS NULL THEN null ELSE datetime($endsAt) END,
                 e.status = $status,
                 e.updatedAt = datetime($updatedAt)
             WITH e
+            OPTIONAL MATCH (site:Sitio {siteId: $siteId})
+            OPTIONAL MATCH (namedCategory:Categoria)
+            WHERE $categoryName IS NOT NULL AND namedCategory.name = $categoryName
+            WITH e, site, namedCategory
+            ORDER BY namedCategory.updatedAt DESC
+            LIMIT 1
+            WITH e, site, coalesce(namedCategory.categoriaId, $categoryId) AS effectiveCategoryId
+            SET e.categoryId = effectiveCategoryId,
+                e.latitude = coalesce($latitude, site.latitude),
+                e.longitude = coalesce($longitude, site.longitude),
+                e.location = CASE
+                    WHEN $latitude IS NOT NULL AND $longitude IS NOT NULL
+                        THEN point({latitude: $latitude, longitude: $longitude})
+                    WHEN site IS NOT NULL THEN site.location
+                    ELSE null
+                END
+            WITH e, site, effectiveCategoryId
             OPTIONAL MATCH (e)-[oldCategory:ES_DE_TIPO]->(:Categoria)
             FOREACH (rel IN CASE WHEN oldCategory IS NULL THEN [] ELSE [oldCategory] END | DELETE rel)
-            WITH e
-            OPTIONAL MATCH (category:Categoria {categoriaId: $categoryId})
-            FOREACH (_ IN CASE WHEN category IS NULL THEN [] ELSE [1] END |
-                MERGE (e)-[:ES_DE_TIPO]->(category)
-            )
-            WITH e
+            WITH e, site, effectiveCategoryId
+            MERGE (category:Categoria {categoriaId: effectiveCategoryId})
+            ON CREATE SET category.name = CASE WHEN $categoryName IS NULL
+                                               THEN toString(effectiveCategoryId)
+                                               ELSE $categoryName END,
+                          category.updatedAt = datetime($updatedAt)
+            MERGE (e)-[:ES_DE_TIPO]->(category)
+            WITH e, site
             OPTIONAL MATCH (e)-[oldSite:OCURRE_EN]->(:Sitio)
             FOREACH (rel IN CASE WHEN oldSite IS NULL THEN [] ELSE [oldSite] END | DELETE rel)
-            WITH e
-            OPTIONAL MATCH (site:Sitio {siteId: $siteId})
+            WITH e, site
             FOREACH (_ IN CASE WHEN site IS NULL THEN [] ELSE [1] END |
                 MERGE (e)-[:OCURRE_EN]->(site)
             )

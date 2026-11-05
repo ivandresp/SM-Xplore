@@ -183,6 +183,7 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         );
         params.put("name", event.name());
         params.put("categoryId", event.categoryId().toString());
+        params.put("categoryName", event.categoryName());
         params.put("siteId", event.siteId().toString());
         params.put("latitude", event.latitude());
         params.put("longitude", event.longitude());
@@ -198,6 +199,7 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         );
         params.put("name", event.name());
         params.put("categoryId", event.categoryId().toString());
+        params.put("categoryName", event.categoryName());
         params.put("siteId", event.siteId().toString());
         params.put("latitude", event.latitude());
         params.put("longitude", event.longitude());

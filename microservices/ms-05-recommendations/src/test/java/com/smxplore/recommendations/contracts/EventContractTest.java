@@ -50,8 +50,9 @@ class EventContractTest {
         List<Path> schemas;
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
             schemas = paths
-                    .filter(path -> path.getFileName().toString().endsWith(".v1.json"))
-                    .filter(path -> !path.getFileName().toString().equals("envelope.v1.json"))
+                    .filter(path -> path.getFileName().toString().endsWith(".v1.json")
+                            || path.getFileName().toString().endsWith(".v2.json"))
+                    .filter(path -> !path.getFileName().toString().startsWith("envelope."))
                     .sorted()
                     .toList();
         }
@@ -97,14 +98,16 @@ class EventContractTest {
     @Test
     void decoderAcceptsEveryConsumedExample() throws Exception {
         for (String topic : EventTopics.CONSUMED) {
-            Path examplePath = examplePath(topic);
-            String json = Files.readString(examplePath);
-            String key = eventMapper.readTree(json).get("aggregateId").asString();
+            for (int version : versionsFor(topic)) {
+                Path examplePath = examplePath(topic, version);
+                String json = Files.readString(examplePath);
+                String key = eventMapper.readTree(json).get("aggregateId").asString();
 
-            var event = decoder.decode(topic, key, json);
+                var event = decoder.decode(topic, key, json);
 
-            assertThat(event.eventType()).isEqualTo(topic);
-            assertThat(event.metadata().eventVersion()).isEqualTo(1);
+                assertThat(event.eventType()).isEqualTo(topic);
+                assertThat(event.metadata().eventVersion()).isEqualTo(version);
+            }
         }
     }
 
@@ -142,7 +145,8 @@ class EventContractTest {
         Map<String, String> schemas = new LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
             List<Path> files = paths
-                    .filter(path -> path.getFileName().toString().endsWith(".v1.json"))
+                    .filter(path -> path.getFileName().toString().endsWith(".v1.json")
+                            || path.getFileName().toString().endsWith(".v2.json"))
                     .sorted()
                     .toList();
             for (Path path : files) {
@@ -153,6 +157,19 @@ class EventContractTest {
     }
 
     private Path examplePath(String topic) {
-        return contractsDirectory.resolve("examples").resolve(topic + ".v1.example.json");
+        return examplePath(topic, 1);
+    }
+
+    private Path examplePath(String topic, int version) {
+        return contractsDirectory.resolve("examples").resolve(topic + ".v" + version + ".example.json");
+    }
+
+    private static List<Integer> versionsFor(String topic) {
+        return switch (topic) {
+            case EventTopics.CATALOG_SITE_CHANGED,
+                 EventTopics.ACTIVITIES_ACTIVITY_CHANGED,
+                 EventTopics.ACTIVITIES_EVENT_CHANGED -> List.of(1, 2);
+            default -> List.of(1);
+        };
     }
 }

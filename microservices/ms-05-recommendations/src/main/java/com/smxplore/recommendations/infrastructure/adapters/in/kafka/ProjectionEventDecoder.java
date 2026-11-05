@@ -20,8 +20,10 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
@@ -67,6 +69,7 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeCategory(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1);
         UUID categoryId = requiredUuid(payload, "categoryId");
         requireAggregate(metadata, categoryId, "categoryId");
         return new CategoryChangedEvent(
@@ -80,8 +83,13 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeSite(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1, 2);
         UUID siteId = requiredUuid(payload, "siteId");
         requireAggregate(metadata, siteId, "siteId");
+        if (metadata.eventVersion() == 2) {
+            // v2 requires the manager so ms-03 can refresh the snapshot it keeps on events.
+            requiredUuid(payload, "managerId");
+        }
         return new SiteChangedEvent(
                 metadata,
                 siteId,
@@ -95,6 +103,7 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeService(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1);
         UUID serviceId = requiredUuid(payload, "serviceId");
         requireAggregate(metadata, serviceId, "serviceId");
         return new ServiceChangedEvent(
@@ -112,16 +121,33 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeActivity(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1, 2);
         UUID activityId = requiredUuid(payload, "activityId");
         requireAggregate(metadata, activityId, "activityId");
+        if (metadata.eventVersion() == 1) {
+            return new ActivityChangedEvent(
+                    metadata,
+                    activityId,
+                    requiredText(payload, "name"),
+                    requiredUuid(payload, "categoryId"),
+                    requiredUuid(payload, "siteId"),
+                    requiredDouble(payload, "latitude"),
+                    requiredDouble(payload, "longitude"),
+                    requiredDouble(payload, "price"),
+                    requiredEnum(payload, "status", ContentStatus.class),
+                    requiredInstant(payload, "updatedAt")
+            );
+        }
+        String category = requiredText(payload, "category");
         return new ActivityChangedEvent(
                 metadata,
                 activityId,
                 requiredText(payload, "name"),
-                requiredUuid(payload, "categoryId"),
+                deterministicCategoryId(category),
+                category,
                 requiredUuid(payload, "siteId"),
-                requiredDouble(payload, "latitude"),
-                requiredDouble(payload, "longitude"),
+                null,
+                null,
                 requiredDouble(payload, "price"),
                 requiredEnum(payload, "status", ContentStatus.class),
                 requiredInstant(payload, "updatedAt")
@@ -129,16 +155,35 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeEventItem(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1, 2);
         UUID itemId = requiredUuid(payload, "eventId");
         requireAggregate(metadata, itemId, "eventId");
+        if (metadata.eventVersion() == 1) {
+            return new EventItemChangedEvent(
+                    metadata,
+                    itemId,
+                    requiredText(payload, "name"),
+                    requiredUuid(payload, "categoryId"),
+                    requiredUuid(payload, "siteId"),
+                    requiredDouble(payload, "latitude"),
+                    requiredDouble(payload, "longitude"),
+                    requiredDouble(payload, "price"),
+                    requiredInstant(payload, "startsAt"),
+                    optionalInstant(payload),
+                    requiredEnum(payload, "status", ContentStatus.class),
+                    requiredInstant(payload, "updatedAt")
+            );
+        }
+        String category = requiredText(payload, "category");
         return new EventItemChangedEvent(
                 metadata,
                 itemId,
                 requiredText(payload, "name"),
-                requiredUuid(payload, "categoryId"),
+                deterministicCategoryId(category),
+                category,
                 requiredUuid(payload, "siteId"),
-                requiredDouble(payload, "latitude"),
-                requiredDouble(payload, "longitude"),
+                null,
+                null,
                 requiredDouble(payload, "price"),
                 requiredInstant(payload, "startsAt"),
                 optionalInstant(payload),
@@ -148,6 +193,7 @@ public class ProjectionEventDecoder {
     }
 
     private ProjectedEvent decodeReview(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1);
         UUID reviewId = requiredUuid(payload, "reviewId");
         requireAggregate(metadata, reviewId, "reviewId");
         return new ReviewChangedEvent(
@@ -160,6 +206,22 @@ public class ProjectionEventDecoder {
                 requiredEnum(payload, "status", ReviewStatus.class),
                 requiredInstant(payload, "updatedAt")
         );
+    }
+
+    private static UUID deterministicCategoryId(String category) {
+        String normalized = category.trim().toLowerCase(Locale.ROOT);
+        return UUID.nameUUIDFromBytes(
+                ("ms-03-category:" + normalized).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void requireVersion(EventMetadata metadata, int... supported) {
+        for (int version : supported) {
+            if (metadata.eventVersion() == version) {
+                return;
+            }
+        }
+        throw new InvalidEventException(
+                "Unsupported eventVersion " + metadata.eventVersion() + " for " + metadata.eventType());
     }
 
     private JsonNode parse(String json) {

@@ -41,7 +41,7 @@ public record EventMetadata(
     }
 
     private static void validateEventVersion(int eventVersion) {
-        if (eventVersion != 1) {
+        if (eventVersion != 1 && eventVersion != 2) {
             throw new InvalidEventException("Unsupported eventVersion: " + eventVersion);
         }
     }

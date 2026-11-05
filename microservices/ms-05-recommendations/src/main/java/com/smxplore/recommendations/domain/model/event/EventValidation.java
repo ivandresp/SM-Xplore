@@ -49,6 +49,17 @@ public record EventValidation() {
         }
     }
 
+    static void coordinates(Double latitude, Double longitude) {
+        if (latitude == null && longitude == null) {
+            return;
+        }
+        if (latitude == null || longitude == null) {
+            throw new InvalidEventException("latitude and longitude must be provided together");
+        }
+        latitude(latitude);
+        longitude(longitude);
+    }
+
     static void nonNegative(double value) {
         if (!Double.isFinite(value) || value < 0.0) {
             throw new InvalidEventException("price must be >= 0");

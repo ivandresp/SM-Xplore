@@ -78,6 +78,65 @@ class EventKafkaConsumerIntegrationTests extends AbstractKafkaNeo4jIntegrationTe
     }
 
     @Test
+    void consumesV2SiteAndActivityEventsWithoutDlq() throws Exception {
+        UUID siteId = UUID.randomUUID();
+        UUID activityId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+        UUID guideId = UUID.randomUUID();
+        Instant now = now();
+
+        send(EventTopics.CATALOG_SITE_CHANGED, siteId,
+                siteEventV2(UUID.randomUUID(), siteId, managerId, "Playa V2", 10.4, -75.5, now));
+        await().atMost(30, TimeUnit.SECONDS)
+                .untilAsserted(() -> assertThat(siteName(siteId)).isEqualTo("Playa V2"));
+
+        send(EventTopics.ACTIVITIES_ACTIVITY_CHANGED, activityId,
+                activityEventV2(UUID.randomUUID(), activityId, siteId, guideId,
+                        "Snorkel V2", "Deportes acuáticos", now));
+        await().atMost(30, TimeUnit.SECONDS)
+                .untilAsserted(() -> assertThat(activityName(activityId)).isEqualTo("Snorkel V2"));
+
+        UUID eventItemId = UUID.randomUUID();
+        send(EventTopics.ACTIVITIES_EVENT_CHANGED, eventItemId,
+                eventItemV2(UUID.randomUUID(), eventItemId, siteId, managerId,
+                        "Feria V2", "Cultura", now));
+        await().atMost(30, TimeUnit.SECONDS)
+                .untilAsserted(() -> assertThat(eventItemName(eventItemId)).isEqualTo("Feria V2"));
+
+        try (Session session = driver.session()) {
+            Record record = session.run("""
+                            MATCH (a:Actividad {activityId: $activityId})
+                            OPTIONAL MATCH (a)-[:ES_DE_TIPO]->(c:Categoria)
+                            RETURN a.name AS name,
+                                   a.categoryName AS categoryName,
+                                   a.latitude AS latitude,
+                                   a.longitude AS longitude,
+                                   c.name AS categoryNodeName
+                            """, Map.of("activityId", activityId.toString()))
+                    .single();
+            assertThat(record.get("categoryName").asString()).isEqualTo("Deportes acuáticos");
+            assertThat(record.get("latitude").asDouble()).isEqualTo(10.4);
+            assertThat(record.get("longitude").asDouble()).isEqualTo(-75.5);
+            assertThat(record.get("categoryNodeName").asString()).isEqualTo("Deportes acuáticos");
+
+            Record eventRecord = session.run("""
+                            MATCH (e:Evento {eventId: $eventId})
+                            OPTIONAL MATCH (e)-[:ES_DE_TIPO]->(c:Categoria)
+                            RETURN e.name AS name,
+                                   e.categoryName AS categoryName,
+                                   e.latitude AS latitude,
+                                   e.longitude AS longitude,
+                                   c.name AS categoryNodeName
+                            """, Map.of("eventId", eventItemId.toString()))
+                    .single();
+            assertThat(eventRecord.get("categoryName").asString()).isEqualTo("Cultura");
+            assertThat(eventRecord.get("latitude").asDouble()).isEqualTo(10.4);
+            assertThat(eventRecord.get("longitude").asDouble()).isEqualTo(-75.5);
+            assertThat(eventRecord.get("categoryNodeName").asString()).isEqualTo("Cultura");
+        }
+    }
+
+    @Test
     void sendsMalformedEventsToDlqAndKeepsConsuming() throws Exception {
         String reviewTopic = EventTopics.REVIEWS_REVIEW_CHANGED;
         String malformed = """
@@ -123,6 +182,139 @@ class EventKafkaConsumerIntegrationTests extends AbstractKafkaNeo4jIntegrationTe
         kafkaTemplate.send(topic, key.toString(), value).get(10, TimeUnit.SECONDS);
     }
 
+    private String activityName(UUID activityId) {
+        try (Session session = driver.session()) {
+            return session.run("""
+                            MATCH (a:Actividad {activityId: $activityId})
+                            RETURN a.name AS name
+                            """, Map.of("activityId", activityId.toString()))
+                    .list(record -> record.get("name").asString())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
+    private String eventItemName(UUID eventId) {
+        try (Session session = driver.session()) {
+            return session.run("""
+                            MATCH (e:Evento {eventId: $eventId})
+                            RETURN e.name AS name
+                            """, Map.of("eventId", eventId.toString()))
+                    .list(record -> record.get("name").asString())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
+    private String siteEventV2(
+            UUID eventId,
+            UUID siteId,
+            UUID managerId,
+            String name,
+            double latitude,
+            double longitude,
+            Instant updatedAt
+    ) {
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "catalog.site.changed",
+                  "eventVersion": 2,
+                  "occurredAt": "%s",
+                  "aggregateId": "%s",
+                  "correlationId": "test-correlation",
+                  "producer": "test-ms-04",
+                  "payload": {
+                    "siteId": "%s",
+                    "name": "%s",
+                    "categoryId": "%s",
+                    "managerId": "%s",
+                    "latitude": %s,
+                    "longitude": %s,
+                    "status": "PUBLISHED",
+                    "updatedAt": "%s"
+                  }
+                }
+                """.formatted(eventId, updatedAt, siteId, siteId, name, UUID.randomUUID(),
+                managerId, latitude, longitude, updatedAt);
+    }
+
+    private String eventItemV2(
+            UUID eventId,
+            UUID itemId,
+            UUID siteId,
+            UUID managerId,
+            String name,
+            String category,
+            Instant updatedAt
+    ) {
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "activities.event.changed",
+                  "eventVersion": 2,
+                  "occurredAt": "%s",
+                  "aggregateId": "%s",
+                  "correlationId": "test-correlation",
+                  "producer": "test-ms-03",
+                  "payload": {
+                    "eventId": "%s",
+                    "siteId": "%s",
+                    "managerId": "%s",
+                    "siteName": "Sitio de prueba",
+                    "name": "%s",
+                    "category": "%s",
+                    "price": 25000,
+                    "status": "PUBLISHED",
+                    "maxCapacity": 200,
+                    "startsAt": "%s",
+                    "endsAt": "%s",
+                    "updatedAt": "%s"
+                  }
+                }
+                """.formatted(eventId, updatedAt, itemId, itemId, siteId, managerId, name, category,
+                updatedAt.plusSeconds(3600), updatedAt.plusSeconds(7200), updatedAt);
+    }
+
+    private String activityEventV2(
+            UUID eventId,
+            UUID activityId,
+            UUID siteId,
+            UUID guideId,
+            String name,
+            String category,
+            Instant updatedAt
+    ) {
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "activities.activity.changed",
+                  "eventVersion": 2,
+                  "occurredAt": "%s",
+                  "aggregateId": "%s",
+                  "correlationId": "test-correlation",
+                  "producer": "test-ms-03",
+                  "payload": {
+                    "activityId": "%s",
+                    "siteId": "%s",
+                    "guideId": "%s",
+                    "name": "%s",
+                    "category": "%s",
+                    "price": 80000,
+                    "status": "PUBLISHED",
+                    "maxCapacity": 12,
+                    "durationMinutes": 120,
+                    "startsAt": "%s",
+                    "endsAt": "%s",
+                    "updatedAt": "%s"
+                  }
+                }
+                """.formatted(eventId, updatedAt, activityId, activityId, siteId, guideId, name,
+                category, updatedAt.plusSeconds(3600), updatedAt.plusSeconds(7200), updatedAt);
+    }
+
     private String siteEvent(
             UUID eventId,
             UUID siteId,
@@ -153,8 +345,7 @@ class EventKafkaConsumerIntegrationTests extends AbstractKafkaNeo4jIntegrationTe
                 """.formatted(eventId, occurredAt, siteId, siteId, name, categoryId, updatedAt);
     }
 
-    private String categoryEvent(UUID eventId, UUID categoryId, String name, Instant updatedAt) {
-        return """
+    private String categoryEvent(UUID eventId, UUID categoryId, String name, Instant updatedAt) {        return """
                 {
                   "eventId": "%s",
                   "eventType": "catalog.category.changed",
