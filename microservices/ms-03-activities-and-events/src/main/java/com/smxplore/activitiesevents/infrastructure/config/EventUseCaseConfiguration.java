@@ -1,5 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.application.outbox.BestEffortPublisher;
+import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory;
 import com.smxplore.activitiesevents.application.events.ChangeEventStatusUseCase;
 import com.smxplore.activitiesevents.application.events.ConsultEventsUseCase;
 import com.smxplore.activitiesevents.application.events.EstimateEventAttendanceUseCase;
@@ -24,8 +26,10 @@ import org.springframework.context.annotation.Configuration;
 public class EventUseCaseConfiguration {
 
     @Bean
-    public RegisterEventUseCasePort registerEventUseCase(EventRepositoryPort eventRepository) {
-        return new RegisterEventUseCase(eventRepository);
+    public RegisterEventUseCasePort registerEventUseCase(EventRepositoryPort eventRepository,
+                                                         EventChangedEventFactory eventEvents,
+                                                         BestEffortPublisher publisher) {
+        return new RegisterEventUseCase(eventRepository, eventEvents, publisher);
     }
 
     @Bean
@@ -49,8 +53,10 @@ public class EventUseCaseConfiguration {
     }
 
     @Bean
-    public ChangeEventStatusUseCasePort changeEventStatusUseCase(EventRepositoryPort eventRepository) {
-        return new ChangeEventStatusUseCase(eventRepository);
+    public ChangeEventStatusUseCasePort changeEventStatusUseCase(EventRepositoryPort eventRepository,
+                                                                 EventChangedEventFactory eventEvents,
+                                                                 BestEffortPublisher publisher) {
+        return new ChangeEventStatusUseCase(eventRepository, eventEvents, publisher);
     }
 
     @Bean

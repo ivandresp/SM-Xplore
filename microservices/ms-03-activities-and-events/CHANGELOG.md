@@ -2,6 +2,17 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Eventos de catálogo v2 2026-11-04]
+
+### Agregado
+- `activities.activity.changed` v2 y `activities.event.changed` v2 en `contracts/events/`, con sus fixtures. La v2 alinea el payload con lo que ms-03 modela: `category` como texto en lugar de `categoryId`, sin `latitude`/`longitude` (son del sitio en ms-04) y con los estados reales (`DRAFT`, `PUBLISHED`, `PAUSED`, `CANCELLED` en actividades; `DRAFT`, `PUBLISHED`, `POSTPONED`, `CANCELLED` en eventos).
+- `contracts/events/envelope.v2.json`: el sobre de `envelope.v1.json` fija `eventVersion = 1`, así que un evento v2 necesita su propio sobre.
+- ms-03 publica ambos eventos desde el outbox V4 al crear o modificar una actividad o un evento (`RegisterActivityUseCase`, `UpdateActivityUseCase`, `ChangeActivityStatusUseCase`, `CancelActivityUseCase`, `RegisterEventUseCase`, `ChangeEventStatusUseCase`).
+- Pruebas de contrato contra los esquemas v2, validando también los fixtures.
+
+### Limitaciones
+- El encolado es best effort, igual que en reseñas: la fila se guarda primero y un fallo al encolar solo queda en el log. Actividades, eventos y outbox son PostgreSQL, así que podría hacerse atómico con el envoltorio transaccional que ya usan las reservas; queda como `TODO`.
+
 ## [Paginación del catálogo 2026-11-04]
 
 ### Cambiado

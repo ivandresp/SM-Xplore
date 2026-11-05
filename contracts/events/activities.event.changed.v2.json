@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/activities.event.changed.v2.json",
+  "title": "activities.event.changed.v2",
+  "description": "Evento creado o modificado. Alinea el payload con el modelo de ms-03: categoria por nombre, estado con POSTPONED y sin coordenadas, que son del sitio en ms-04.",
+  "allOf": [
+    {
+      "$ref": "./envelope.v2.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "activities.event.changed"
+        },
+        "eventVersion": {
+          "const": 2
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "eventId",
+            "siteId",
+            "name",
+            "category",
+            "price",
+            "status",
+            "maxCapacity",
+            "startsAt",
+            "endsAt",
+            "updatedAt"
+          ],
+          "properties": {
+            "eventId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "siteId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "managerId": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            },
+            "siteName": {
+              "type": ["string", "null"]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 150
+            },
+            "category": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            },
+            "price": {
+              "type": "number",
+              "minimum": 0
+            },
+            "status": {
+              "enum": ["DRAFT", "PUBLISHED", "POSTPONED", "CANCELLED"]
+            },
+            "maxCapacity": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "startsAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "endsAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

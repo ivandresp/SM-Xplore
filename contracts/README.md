@@ -11,8 +11,11 @@ contracts/
 ├── README.md
 └── events/
     ├── envelope.v1.json
+    ├── envelope.v2.json
     ├── activities.activity.changed.v1.json
+    ├── activities.activity.changed.v2.json
     ├── activities.event.changed.v1.json
+    ├── activities.event.changed.v2.json
     ├── bookings.reservation.changed.v1.json
     ├── catalog.category.changed.v1.json
     ├── catalog.service.changed.v1.json
@@ -27,7 +30,9 @@ fixture en `examples/` con el mismo nombre y sufijo `.v1.example.json`.
 
 ## Sobre del evento
 
-Todos los eventos comparten el sobre de `envelope.v1.json`:
+Todos los eventos comparten el sobre de `envelope.v1.json` y, desde la versión 2, el de
+`envelope.v2.json`: mismo formato, pero `envelope.v1.json` fija `eventVersion = 1` y por eso un
+evento `v2` no puede validarse contra él.
 
 - `eventId`: UUID único. Sirve para deduplicar.
 - `eventType`: nombre del evento, igual al topic.
@@ -42,6 +47,7 @@ Todos los eventos comparten el sobre de `envelope.v1.json`:
 
 - Cambios aditivos y opcionales: misma versión.
 - Renombrar, eliminar o cambiar el tipo de un campo: nueva versión `v2`.
+- Un evento `v2` se valida contra `envelope.v2.json`, no contra `envelope.v1.json`.
 - Nunca reutilizar un nombre de campo con otro significado.
 - Los consumidores ignoran campos desconocidos; los campos requeridos no se renombran.
 - Un productor valida el evento serializado contra el esquema antes de publicar.
@@ -55,8 +61,8 @@ Todos los eventos comparten el sobre de `envelope.v1.json`:
 | `catalog.site.changed` | ms-04 | sí |
 | `catalog.service.changed` | ms-04 | sí |
 | `catalog.category.changed` | ms-04 | sí |
-| `activities.event.changed` | ms-03 | sí |
-| `activities.activity.changed` | ms-03 | sí |
+| `activities.event.changed` | ms-03 (v2) | sí |
+| `activities.activity.changed` | ms-03 (v2) | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
 | `security.report.changed` | ms-02 | **no** |
 | `bookings.reservation.changed` | ms-03 / ms-04 | **no** |
@@ -81,9 +87,10 @@ aditivos para ese consumidor.
 Estado de fase 2:
 
 - ms-05 ya consume los seis topics marcados con “sí”.
-- ms-04 ya publica catálogo, reseñas y reservas de servicios desde su outbox. ms-03 sigue
-  pendiente. Los tests de ms-05 publican los fixtures directamente en Kafka para validar el
-  contrato y la proyección.
+- ms-04 ya publica catálogo, reseñas y reservas de servicios desde su outbox. ms-03 publica
+  reservas y reseñas, y desde este cambio `activities.activity.changed` v2 y
+  `activities.event.changed` v2. Los tests de ms-05 publican los fixtures directamente en Kafka
+  para validar el contrato y la proyección.
 - La key de cada mensaje debe ser el `aggregateId`. ms-05 rechaza una key distinta si viene
   informada.
 - Los errores de contrato van a `<topic>.dlq`.

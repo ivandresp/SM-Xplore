@@ -33,8 +33,12 @@ class EventUseCasesTest {
     @BeforeEach
     void setUp() {
         eventRepo = new FakeEventRepository();
-        registerEvent = new RegisterEventUseCase(eventRepo);
-        changeEventStatus = new ChangeEventStatusUseCase(eventRepo);
+        var publisher = new com.smxplore.activitiesevents.application.outbox.BestEffortPublisher(
+                com.smxplore.activitiesevents.domain.ports.repository.OutboxPort.noop());
+        var eventEvents = new com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory(
+                new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules());
+        registerEvent = new RegisterEventUseCase(eventRepo, eventEvents, publisher);
+        changeEventStatus = new ChangeEventStatusUseCase(eventRepo, eventEvents, publisher);
         estimateEventAttendance = new EstimateEventAttendanceUseCase(eventRepo);
         consultEvents = new ConsultEventsUseCase(eventRepo);
         searchEvents = new SearchEventsUseCase(eventRepo);

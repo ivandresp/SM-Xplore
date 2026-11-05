@@ -38,12 +38,16 @@ class ActivityUseCasesTest {
     @BeforeEach
     void setUp() {
         activityRepo = new FakeActivityRepository();
-        registerActivity = new RegisterActivityUseCase(activityRepo);
-        updateActivity = new UpdateActivityUseCase(activityRepo);
+        var publisher = new com.smxplore.activitiesevents.application.outbox.BestEffortPublisher(
+                com.smxplore.activitiesevents.domain.ports.repository.OutboxPort.noop());
+        var activityEvents = new com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory(
+                new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules());
+        registerActivity = new RegisterActivityUseCase(activityRepo, activityEvents, publisher);
+        updateActivity = new UpdateActivityUseCase(activityRepo, activityEvents, publisher);
         manageAvailability = new ManageAvailabilityUseCase(activityRepo, new com.smxplore.activitiesevents.application.reservations.FakeReservationRepository());
         manageSlots = new ManageSlotsUseCase(activityRepo);
-        cancelActivity = new CancelActivityUseCase(activityRepo);
-        changeActivityStatus = new ChangeActivityStatusUseCase(activityRepo);
+        cancelActivity = new CancelActivityUseCase(activityRepo, activityEvents, publisher);
+        changeActivityStatus = new ChangeActivityStatusUseCase(activityRepo, activityEvents, publisher);
         consultActivities = new ConsultActivitiesUseCase(activityRepo);
         findActivitiesByCategory = new FindActivitiesByCategoryUseCase(activityRepo);
         findActivitiesBySite = new FindActivitiesBySiteUseCase(activityRepo);
