@@ -187,8 +187,8 @@ class ActivityControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1)
-                .jsonPath("$[0].category").isEqualTo("Tour");
+                .jsonPath("$.content.length()").isEqualTo(1)
+                .jsonPath("$.content[0].category").isEqualTo("Tour");
     }
 
     @Test
@@ -201,7 +201,7 @@ class ActivityControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1);
+                .jsonPath("$.content.length()").isEqualTo(1);
     }
 
     @Test
@@ -315,7 +315,7 @@ class ActivityControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1);
+                .jsonPath("$.content.length()").isEqualTo(1);
     }
 
     @Test

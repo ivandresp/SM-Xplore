@@ -13,7 +13,17 @@ public interface ActivityR2dbcRepository extends ReactiveCrudRepository<Activity
 
     Flux<ActivityEntity> findAllByCategoryIgnoreCase(String category);
 
+    @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' ORDER BY name, id")
+    Flux<ActivityEntity> findPublished();
+
+    @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' "
+            + "AND lower(category) = lower(:category) ORDER BY name, id")
+    Flux<ActivityEntity> findPublishedByCategory(String category);
+
     Flux<ActivityEntity> findAllBySiteId(UUID siteId);
+
+    @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' AND sitio_id = :siteId ORDER BY name, id")
+    Flux<ActivityEntity> findPublishedBySiteId(UUID siteId);
 
     @Query("SELECT * FROM actividad WHERE id = :id FOR UPDATE")
     Mono<ActivityEntity> findByIdForUpdate(UUID id);

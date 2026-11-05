@@ -1,7 +1,6 @@
 package com.smxplore.activitiesevents.application.events;
 
 import com.smxplore.activitiesevents.domain.model.event.Event;
-import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 
@@ -16,7 +15,6 @@ public class ConsultEventsUseCase implements ConsultEventsUseCasePort {
 
     @Override
     public Flux<Event> handle() {
-        return eventRepo.findAll()
-                .filter(event -> event.getStatus() == EventStatus.PUBLISHED);
+        return eventRepo.findPublished();
     }
 }

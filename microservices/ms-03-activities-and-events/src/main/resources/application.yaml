@@ -13,6 +13,8 @@ spring:
       max-acquire-time: 5s
   mongodb:
     uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   data:
     mongodb:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
@@ -35,6 +37,9 @@ springdoc:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
 app:
+  outbox:
+    enabled: ${OUTBOX_ENABLED:false}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}

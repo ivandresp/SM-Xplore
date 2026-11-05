@@ -183,8 +183,8 @@ class EventControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1)
-                .jsonPath("$[0].name").isEqualTo("Sunset Kayak Tour");
+                .jsonPath("$.content.length()").isEqualTo(1)
+                .jsonPath("$.content[0].name").isEqualTo("Sunset Kayak Tour");
     }
 
     @Test
@@ -247,7 +247,7 @@ class EventControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1);
+                .jsonPath("$.content.length()").isEqualTo(1);
     }
 
     @Test

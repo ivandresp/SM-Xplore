@@ -93,17 +93,17 @@ class ReservationControllerTest {
 
     @Test
     void listingOmitsTheNotesButKeepsTheTouristId() {
-        given(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 50))
+        given(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 200))
                 .willReturn(Flux.just(reservation()));
 
         webTestClient.get().uri("/api/v1/reservations?status=CONFIRMED")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.length()").isEqualTo(1)
-                .jsonPath("$[0].id").isEqualTo(RESERVATION_ID.toString())
-                .jsonPath("$[0].touristId").isEqualTo(TOURIST_ID.toString())
-                .jsonPath("$[0].notes").doesNotExist();
+                .jsonPath("$.content.length()").isEqualTo(1)
+                .jsonPath("$.content[0].id").isEqualTo(RESERVATION_ID.toString())
+                .jsonPath("$.content[0].touristId").isEqualTo(TOURIST_ID.toString())
+                .jsonPath("$.content[0].notes").doesNotExist();
     }
 
     @Test

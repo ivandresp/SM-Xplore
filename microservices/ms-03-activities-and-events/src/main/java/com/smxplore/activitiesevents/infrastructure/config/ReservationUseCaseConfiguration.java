@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
 import com.smxplore.activitiesevents.application.reservations.CancelReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultOneReservationUseCase;
@@ -12,6 +13,7 @@ import com.smxplore.activitiesevents.application.reservations.RegisterReservatio
 import com.smxplore.activitiesevents.application.reservations.RegisterReservationNoShowUseCase;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
@@ -40,8 +42,11 @@ public class ReservationUseCaseConfiguration {
     public CreateReservationUseCasePort createReservationUseCase(ReservationRepositoryPort reservationRepository,
                                                                  ActivityRepositoryPort activityRepository,
                                                                  EventRepositoryPort eventRepository,
+                                                                 OutboxPort outbox,
+                                                                 ReservationEventFactory eventFactory,
                                                                  TransactionalOperator transactionalOperator) {
-        var useCase = new CreateReservationUseCase(reservationRepository, activityRepository, eventRepository);
+        var useCase = new CreateReservationUseCase(
+                reservationRepository, activityRepository, eventRepository, outbox, eventFactory);
         return new TransactionalCreateReservationUseCase(useCase, transactionalOperator, reservationRepository);
     }
 
@@ -86,22 +91,30 @@ public class ReservationUseCaseConfiguration {
 
     @Bean
     public CancelReservationUseCasePort cancelReservationUseCase(ReservationRepositoryPort reservationRepository,
+                                                                 OutboxPort outbox,
+                                                                 ReservationEventFactory eventFactory,
                                                                  TransactionalOperator transactionalOperator) {
-        var useCase = new CancelReservationUseCase(reservationRepository);
+        var useCase = new CancelReservationUseCase(reservationRepository, outbox, eventFactory);
         return (reservationId, staff) -> transactionalOperator.transactional(useCase.handle(reservationId, staff));
     }
 
     @Bean
     public RegisterReservationAttendanceUseCasePort registerReservationAttendanceUseCase(
-            ReservationRepositoryPort reservationRepository, TransactionalOperator transactionalOperator) {
-        var useCase = new RegisterReservationAttendanceUseCase(reservationRepository);
+            ReservationRepositoryPort reservationRepository,
+            OutboxPort outbox,
+            ReservationEventFactory eventFactory,
+            TransactionalOperator transactionalOperator) {
+        var useCase = new RegisterReservationAttendanceUseCase(reservationRepository, outbox, eventFactory);
         return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
     }
 
     @Bean
     public RegisterReservationNoShowUseCasePort registerReservationNoShowUseCase(
-            ReservationRepositoryPort reservationRepository, TransactionalOperator transactionalOperator) {
-        var useCase = new RegisterReservationNoShowUseCase(reservationRepository);
+            ReservationRepositoryPort reservationRepository,
+            OutboxPort outbox,
+            ReservationEventFactory eventFactory,
+            TransactionalOperator transactionalOperator) {
+        var useCase = new RegisterReservationNoShowUseCase(reservationRepository, outbox, eventFactory);
         return reservationId -> transactionalOperator.transactional(useCase.handle(reservationId));
     }
 }

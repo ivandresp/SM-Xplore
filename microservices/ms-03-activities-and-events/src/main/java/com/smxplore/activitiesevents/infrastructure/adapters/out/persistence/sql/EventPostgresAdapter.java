@@ -54,9 +54,19 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
+    public Flux<Event> findPublished() {
+        return repository.findPublished().map(mapper::toDomain);
+    }
+
+    @Override
     public Flux<Event> searchByName(String name) {
         // shortcut: substring search is a sequential scan; add a pg_trgm GIN index when the catalog grows.
         return repository.findByNameContainingIgnoreCase(name).map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Event> searchPublishedByName(String name) {
+        return repository.searchPublishedByName(name).map(mapper::toDomain);
     }
 
     @Override

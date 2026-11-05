@@ -15,6 +15,8 @@ import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ChangeEv
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.EstimateAttendanceRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.EventRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.EventResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.PageResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.EventWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -116,14 +118,27 @@ public class EventController {
 
     @GetMapping
     @Operation(summary = "List all events")
-    public Flux<EventResponse> findAll() {
-        return consultEventsUseCase.handle().map(mapper::toResponse);
+    public Mono<PageResponse<EventResponse>> findAll(@RequestParam(defaultValue = "0") int page,
+                                                     @RequestParam(defaultValue = "20") int size) {
+        PaginationLimits.validatePage(page);
+        PaginationLimits.validateSize(size);
+        return consultEventsUseCase.handle()
+                .map(mapper::toResponse)
+                .collectList()
+                .map(events -> PageResponse.of(events, page, size));
     }
 
     @GetMapping("/search")
     @Operation(summary = "Search events by name")
-    public Flux<EventResponse> search(@RequestParam String name) {
-        return searchEventsUseCase.handle(name).map(mapper::toResponse);
+    public Mono<PageResponse<EventResponse>> search(@RequestParam String name,
+                                                    @RequestParam(defaultValue = "0") int page,
+                                                    @RequestParam(defaultValue = "20") int size) {
+        PaginationLimits.validatePage(page);
+        PaginationLimits.validateSize(size);
+        return searchEventsUseCase.handle(name)
+                .map(mapper::toResponse)
+                .collectList()
+                .map(events -> PageResponse.of(events, page, size));
     }
 
     @PatchMapping("/{eventId}/status")

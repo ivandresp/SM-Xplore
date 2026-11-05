@@ -36,6 +36,8 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotA
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -44,6 +46,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebInputException;
 
+import java.net.URI;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,7 +55,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({EventNotFoundException.class, ActivityNotFoundException.class,
             ReservationNotFoundException.class, ReviewNotFoundException.class})
-    public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException exception, ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleNotFound(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.NOT_FOUND, exception.getMessage(), exchange);
     }
 
@@ -64,19 +67,19 @@ public class GlobalExceptionHandler {
             ReviewAlreadyExistsException.class,
             ReviewAlreadyReportedException.class,
             ReviewAlreadyRespondedException.class})
-    public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(ReviewResponseNotAllowedException.class)
-    public ResponseEntity<ApiErrorResponse> handleReviewForbidden(RuntimeException exception,
-                                                                  ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
+                                                               ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
-    public ResponseEntity<ApiErrorResponse> handleDuplicateKey(DuplicateKeyException exception,
-                                                               ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleDuplicateKey(DuplicateKeyException exception,
+                                                            ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, "The resource already exists.", exchange);
     }
 
@@ -101,19 +104,19 @@ public class GlobalExceptionHandler {
             InvalidReservationItemPriceException.class,
             InvalidReviewException.class
     })
-    public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(EventSiteAccessDeniedException.class)
-    public ResponseEntity<ApiErrorResponse> handleSiteAccessDenied(EventSiteAccessDeniedException exception,
-                                                                   ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleSiteAccessDenied(EventSiteAccessDeniedException exception,
+                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
-    public ResponseEntity<ApiErrorResponse> handleBodyValidation(WebExchangeBindException exception,
-                                                                 ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleBodyValidation(WebExchangeBindException exception,
+                                                              ServerWebExchange exchange) {
         var message = exception.getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining(", "));
@@ -121,24 +124,30 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ServerWebInputException.class)
-    public ResponseEntity<ApiErrorResponse> handleUnreadableBody(ServerWebInputException exception,
-                                                                 ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleUnreadableBody(ServerWebInputException exception,
+                                                              ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getReason(), exchange);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ApiErrorResponse> handleResponseStatus(ResponseStatusException exception,
-                                                                 ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException exception,
+                                                              ServerWebExchange exchange) {
         return build(HttpStatus.valueOf(exception.getStatusCode().value()), exception.getReason(), exchange);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception, ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleUnexpected(Exception exception, ServerWebExchange exchange) {
         log.error("Unexpected error handling {}", exchange.getRequest().getPath(), exception);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error", exchange);
     }
 
-    private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message, ServerWebExchange exchange) {
-        return ResponseEntity.status(status).body(ApiErrorResponse.of(status, message, exchange));
+    private ResponseEntity<ProblemDetail> build(HttpStatus status, String message, ServerWebExchange exchange) {
+        var detail = message == null || message.isBlank() ? status.getReasonPhrase() : message;
+        var problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setTitle(status.getReasonPhrase());
+        problem.setInstance(URI.create(exchange.getRequest().getPath().value()));
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem);
     }
 }

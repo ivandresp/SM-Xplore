@@ -13,6 +13,8 @@ import com.smxplore.activitiesevents.domain.ports.usecases.activity.UpdateActivi
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ViewActivityDetailsUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ActivityRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ActivityResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.PageResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.AvailabilityRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ChangeActivityStatusRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.SlotsRequest;
@@ -84,20 +86,40 @@ public class ActivityController {
 
     @GetMapping
     @Operation(summary = "List all activities")
-    public Flux<ActivityResponse> findAll() {
-        return consultActivitiesUseCase.handle().map(mapper::toResponse);
+    public Mono<PageResponse<ActivityResponse>> findAll(@RequestParam(defaultValue = "0") int page,
+                                                        @RequestParam(defaultValue = "20") int size) {
+        PaginationLimits.validatePage(page);
+        PaginationLimits.validateSize(size);
+        return consultActivitiesUseCase.handle()
+                .map(mapper::toResponse)
+                .collectList()
+                .map(activities -> PageResponse.of(activities, page, size));
     }
 
     @GetMapping("/search")
     @Operation(summary = "List activities by category")
-    public Flux<ActivityResponse> findByCategory(@RequestParam String category) {
-        return findActivitiesByCategoryUseCase.handle(category).map(mapper::toResponse);
+    public Mono<PageResponse<ActivityResponse>> findByCategory(@RequestParam String category,
+                                                               @RequestParam(defaultValue = "0") int page,
+                                                               @RequestParam(defaultValue = "20") int size) {
+        PaginationLimits.validatePage(page);
+        PaginationLimits.validateSize(size);
+        return findActivitiesByCategoryUseCase.handle(category)
+                .map(mapper::toResponse)
+                .collectList()
+                .map(activities -> PageResponse.of(activities, page, size));
     }
 
     @GetMapping("/site/{siteId}")
     @Operation(summary = "List the activities of a site")
-    public Flux<ActivityResponse> findBySite(@PathVariable UUID siteId) {
-        return findActivitiesBySiteUseCase.handle(siteId).map(mapper::toResponse);
+    public Mono<PageResponse<ActivityResponse>> findBySite(@PathVariable UUID siteId,
+                                                           @RequestParam(defaultValue = "0") int page,
+                                                           @RequestParam(defaultValue = "20") int size) {
+        PaginationLimits.validatePage(page);
+        PaginationLimits.validateSize(size);
+        return findActivitiesBySiteUseCase.handle(siteId)
+                .map(mapper::toResponse)
+                .collectList()
+                .map(activities -> PageResponse.of(activities, page, size));
     }
 
     @PatchMapping("/{activityId}")

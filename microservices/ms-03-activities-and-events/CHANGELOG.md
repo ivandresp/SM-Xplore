@@ -15,6 +15,10 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 - **Reservas por gestora**: `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con el nuevo filtro `managerId` de ms-04 y devuelve solo las reservas de sus eventos/actividades. `ADMIN` conserva el listado global.
 - **Usuarios de base de datos**: PostgreSQL usa `ms03_flyway` para DDL y `ms03_app` para DML; MongoDB usa `reviews_app` con `readWrite` solo en `reviews`. Los usuarios root quedan únicamente para el init y ya no hay credenciales por defecto en Compose.
 - **V3**: índices para catálogo/reservas y checks `NOT VALID` de precio, cupo, duración, horario y estado en `evento`/`actividad`.
+- **Errores RFC 9457**: `ProblemDetail` (`application/problem+json`) en el `GlobalExceptionHandler` y en los handlers de seguridad.
+- **Paginación**: `page`/`size` en catálogo y listado de reservas por estado; `PageResponse` con `content`, `page`, `size`, `total`, `totalPages`.
+- **Filtros en SQL**: los listados públicos de eventos/actividades filtran `PUBLISHED` en la consulta, no en memoria.
+- **Outbox V4**: `outbox_events` recibe `bookings.reservation.changed` v1 en las transacciones de reserva; relay opcional a Kafka (`OUTBOX_ENABLED`). `NO_SHOW` queda pendiente de contrato v2.
 
 ### Migración
 - Reemplazar `JWT_SECRET` por `JWK_SET_URI` (producción) o `JWT_PUBLIC_KEY_LOCATION` (local/tests). El servicio no arranca sin una fuente de llaves RS256.

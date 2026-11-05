@@ -42,12 +42,22 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
+    public Flux<Event> findPublished() {
+        return findAll().filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED);
+    }
+
+    @Override
     public Flux<Event> searchByName(String name) {
         if (name == null) {
             return Flux.empty();
         }
         return findAll().filter(event -> event.getName() != null
                 && event.getName().toLowerCase().contains(name.toLowerCase()));
+    }
+
+    @Override
+    public Flux<Event> searchPublishedByName(String name) {
+        return searchByName(name).filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED);
     }
 
     @Override

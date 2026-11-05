@@ -19,7 +19,11 @@ public interface EventRepositoryPort {
 
     Flux<Event> findAll();
 
+    Flux<Event> findPublished();
+
     Flux<Event> searchByName(String name);
+
+    Flux<Event> searchPublishedByName(String name);
 
     Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
 }

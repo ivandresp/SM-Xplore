@@ -82,6 +82,9 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
 | `MS04_BASE_URL` | `http://localhost:8084` | Base de ms-04 para validar el sitio al crear eventos. En Compose: `http://host.docker.internal:8084`. |
 | `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox. |
+| `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. |
+| `OUTBOX_POLL_INTERVAL_MS` | `5000` | Frecuencia del relay. |
 
 Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `FLYWAY_PASSWORD`, `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `JWT_ISSUER` o `JWT_AUDIENCE`. Copia `.env.example`, completa los valores y usa un volumen limpio (`docker compose down -v`) la primera vez, porque los scripts de init solo corren en una base nueva.
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
@@ -94,6 +97,8 @@ Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASS
 - Reseñas de actividades y eventos.
 
 Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias queda diferido.
+
+Los listados (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}` y `GET /reservations?status=`) aceptan `page` (>= 0) y `size` (1..100) y devuelven `PageResponse`: `content`, `page`, `size`, `total`, `totalPages`. Los errores usan RFC 9457 (`application/problem+json`).
 
 Los roles del JWT son los de ms-01: `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`.
 
@@ -127,7 +132,7 @@ Los errores usan el formato uniforme `{timestamp, status, error, message, path}`
 
 ## Limitaciones conocidas
 
-- Los listados públicos no paginan todavía (catalog pequeño).
+- Los listados paginan en memoria; el catálogo es pequeño. Cuando crezca, mover la paginación al repositorio.
 - No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
 - La búsqueda por nombre usa `ILIKE` sin índice `pg_trgm`.
 - La cobertura de integración es parcial: cierre automático de reservas y migraciones Flyway.
@@ -152,6 +157,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 **Idempotencia:** `POST /api/v1/reservations` acepta el header opcional `Idempotency-Key` (1–64 caracteres). Si la misma clave se repite para el mismo turista, la respuesta es la reserva creada en el primer intento y no se consume cupo otra vez. La clave se guarda en `reservations` y el índice único parcial `(tourist_id, idempotency_key)` cubre la carrera concurrente. Reutilizar una clave con otro ítem o con otro número de personas devuelve la reserva original: la clave identifica la operación completa, no el ítem.
 
 **Privacidad:** los listados (`?status=`, `/tourists/{id}`, `/guides/{id}`, `/by-item`) usan un DTO sin `notes`; el texto libre solo se devuelve en `GET /api/v1/reservations/{id}`. Una `GESTORA_DESTINOS` ya no puede enumerar reservas ajenas por esos endpoints: solo `ADMIN` o el propio turista/guía.
+
+**Outbox:** las transiciones de reserva (`CONFIRMED`, `CANCELLED`, `COMPLETED`) escriben `bookings.reservation.changed` v1 en `outbox_events` dentro de la misma transacción. El relay está desactivado por defecto; con `OUTBOX_ENABLED=true` publica en Kafka usando `KAFKA_BOOTSTRAP_SERVERS`. `NO_SHOW` no se publica porque el contrato v1 no lo incluye.
 
 **Alcance por gestora:** `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=...` de ms-04 (reenviando el `Authorization` del usuario), luego sus eventos/actividades y finalmente sus reservas. Si no tiene sitios, devuelve una lista vacía. `ADMIN` sigue viendo todas.
 

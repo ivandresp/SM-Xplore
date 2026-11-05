@@ -42,13 +42,28 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
+    public Flux<Activity> findPublished() {
+        return findAll().filter(activity -> activity.getStatus() == com.smxplore.activitiesevents.domain.model.activity.ActivityStatus.PUBLISHED);
+    }
+
+    @Override
     public Flux<Activity> findAllByCategory(String category) {
         return findAll().filter(activity -> category.equalsIgnoreCase(activity.getCategory()));
     }
 
     @Override
+    public Flux<Activity> findPublishedByCategory(String category) {
+        return findPublished().filter(activity -> category.equalsIgnoreCase(activity.getCategory()));
+    }
+
+    @Override
     public Flux<Activity> findAllBySiteId(UUID siteId) {
         return findAll().filter(activity -> siteId.equals(activity.getSiteId()));
+    }
+
+    @Override
+    public Flux<Activity> findPublishedBySiteId(UUID siteId) {
+        return findPublished().filter(activity -> siteId.equals(activity.getSiteId()));
     }
 
     @Override

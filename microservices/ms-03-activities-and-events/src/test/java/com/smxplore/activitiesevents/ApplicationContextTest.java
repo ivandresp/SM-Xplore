@@ -4,7 +4,9 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
+import com.smxplore.activitiesevents.domain.model.outbox.OutboxEvent;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import org.flywaydb.core.Flyway;
@@ -76,6 +78,9 @@ class ApplicationContextTest {
     @Autowired
     private ActivityRepositoryPort activityRepository;
 
+    @Autowired
+    private OutboxPort outbox;
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         var jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(
@@ -128,6 +133,23 @@ class ApplicationContextTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("ADMIN"))
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    void outboxStoresAndPublishesAnEvent() {
+        var eventId = UUID.randomUUID();
+        var event = new OutboxEvent(eventId, "bookings.reservation.changed", 1,
+                UUID.randomUUID(), UUID.randomUUID(), "{\"test\":true}", java.time.Instant.now());
+
+        StepVerifier.create(outbox.enqueue(event)).verifyComplete();
+        assertThat(outbox.findPending(10).collectList().block())
+                .extracting(OutboxEvent::id)
+                .contains(eventId);
+
+        StepVerifier.create(outbox.markPublished(eventId)).verifyComplete();
+        assertThat(outbox.findPending(10).collectList().block())
+                .extracting(OutboxEvent::id)
+                .doesNotContain(eventId);
     }
 
     @Test

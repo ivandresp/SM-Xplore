@@ -54,13 +54,28 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
+    public Flux<Activity> findPublished() {
+        return repository.findPublished().map(mapper::toDomain);
+    }
+
+    @Override
     public Flux<Activity> findAllByCategory(String category) {
         return repository.findAllByCategoryIgnoreCase(category).map(mapper::toDomain);
     }
 
     @Override
+    public Flux<Activity> findPublishedByCategory(String category) {
+        return repository.findPublishedByCategory(category).map(mapper::toDomain);
+    }
+
+    @Override
     public Flux<Activity> findAllBySiteId(UUID siteId) {
         return repository.findAllBySiteId(siteId).map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Activity> findPublishedBySiteId(UUID siteId) {
+        return repository.findPublishedBySiteId(siteId).map(mapper::toDomain);
     }
 
     @Override

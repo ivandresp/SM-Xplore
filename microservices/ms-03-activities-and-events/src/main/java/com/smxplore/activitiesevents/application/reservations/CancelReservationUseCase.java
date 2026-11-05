@@ -1,7 +1,9 @@
 package com.smxplore.activitiesevents.application.reservations;
 
+import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CancelReservationUseCase implements CancelReservationUseCasePort {
     private final ReservationRepositoryPort reservationRepo;
+    private final OutboxPort outbox;
+    private final ReservationEventFactory eventFactory;
 
     @Override
     public Mono<Reservation> handle(UUID reservationId, boolean staff) {
@@ -25,6 +29,9 @@ public class CancelReservationUseCase implements CancelReservationUseCasePort {
                         reservation.cancelAsTourist(Instant.now());
                     }
                 })
-                .flatMap(reservationRepo::save);
+                .flatMap(reservationRepo::save)
+                .flatMap(saved -> eventFactory.reservationChanged(saved)
+                        .flatMap(outbox::enqueue)
+                        .thenReturn(saved));
     }
 }

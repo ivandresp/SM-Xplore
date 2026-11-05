@@ -19,9 +19,15 @@ public interface ActivityRepositoryPort {
 
     Flux<Activity> findAll();
 
+    Flux<Activity> findPublished();
+
     Flux<Activity> findAllByCategory(String category);
 
+    Flux<Activity> findPublishedByCategory(String category);
+
     Flux<Activity> findAllBySiteId(UUID siteId);
+
+    Flux<Activity> findPublishedBySiteId(UUID siteId);
 
     Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
 }

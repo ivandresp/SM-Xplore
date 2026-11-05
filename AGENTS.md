@@ -72,7 +72,7 @@ docker compose up --build
 - Clean/hexagonal: `infrastructure -> application -> domain`.
 - `domain` must not import Spring, Jakarta/JPA, R2DBC, Reactor, Mongo or Jackson.
 - Adapters own SQL/Mongo documents and mappers; controllers only translate HTTP; constructor injection.
-- Errors must be RFC 9457 `ProblemDetail`. ms-03 still uses a custom `ApiErrorResponse`; the fix is pending.
+- Errors use RFC 9457 `ProblemDetail` (`application/problem+json`).
 - Persistence: ms-01 PostgreSQL + MongoDB; ms-02 MongoDB; ms-03 PostgreSQL (events, activities, reservations) + MongoDB (reviews); ms-04 PostgreSQL/MongoDB + outbox; ms-05 Neo4j + Kafka.
 - Neo4j remains deferred in ms-03.
 
@@ -96,7 +96,7 @@ Canonical contract, with ms-01 as issuer:
 - Schemas are versioned; renaming, removing or retyping a field requires `v2`.
 - Producers: `catalog.*` from ms-04; `activities.*` from ms-03 (pending); `reviews.review.changed` from ms-03/ms-04; `bookings.reservation.changed` from ms-03/ms-04.
 - ms-04 has a transactional outbox with relay, retries, metrics and admin reprocess endpoints; use it as the reference.
-- ms-03 does not publish events yet, and its model lacks fields the current schemas require (`categoryId`, `latitude`, `longitude`, `updatedAt`; `items[]` for bookings; `status` and `updatedAt` for reviews). Resolve by contract v2 or model enrichment before building the outbox.
+- ms-03 publishes `bookings.reservation.changed` v1 for reservation create/cancel/attendance through the V4 outbox. `NO_SHOW` is skipped because v1 does not include it. Activity/event/review events still need contract v2 or model enrichment (`categoryId`, `latitude`, `longitude`, `updatedAt`, review `status`).
 - Data copied from another service is eventually consistent; document how it is refreshed.
 
 ## ms-03 activities and events
@@ -107,12 +107,12 @@ Canonical contract, with ms-01 as issuer:
 - Listings use `ReservationSummaryResponse` without free-text `notes`; only the detail returns them.
 - Persistence: PostgreSQL/R2DBC for events, activities and reservations; reactive MongoDB for reviews and reports. PostgreSQL roles: `ms03_flyway` (DDL) and `ms03_app` (DML); MongoDB app user `reviews_app` (`readWrite` on `reviews`). Root users are only for container init.
 - Flyway: `V1` baseline, `V2` symbolic reservations, `V3` query indexes and `NOT VALID` integrity checks. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows (no item, multi-item, missing catalog, start before booking, non-divisible total, `PENDING` over capacity); it preserves `total` and deletes only the IDs captured in that run. Review `reservations_quarantine` after upgrading.
-- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
+- Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS`, `OUTBOX_ENABLED`, `OUTBOX_POLL_INTERVAL_MS`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
   1. `TODO(ms-04)`: ms-04 still has to deploy the `managerId` filter on `GET /api/v1/sites`; ms-03 already consumes it, forwards the user token, and scopes the reservation listing by the manager's sites. Refresh the `siteName`/`managerId` snapshot when the manager changes.
-  2. Events/outbox: resolve the contract mismatch first, then publish.
-  3. Hardening: `ProblemDetail`, pagination, status filtering in SQL, and required `paymentMethod`.
-- 209 tests as of 2026-11-03, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
+  2. Events/outbox: reservation lifecycle events use the V4 outbox and `bookings.reservation.changed` v1. `NO_SHOW` is skipped because v1 lacks it; activity/event/review events still need contract v2 or model enrichment.
+  3. Hardening: required `paymentMethod`, and a real DB-level pagination for the largest listings.
+- 212 tests as of 2026-11-04, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules
 

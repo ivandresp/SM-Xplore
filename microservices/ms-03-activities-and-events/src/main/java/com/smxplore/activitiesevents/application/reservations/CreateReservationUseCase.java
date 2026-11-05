@@ -12,8 +12,10 @@ import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,8 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
     private final ReservationRepositoryPort reservationRepo;
     private final ActivityRepositoryPort activityRepo;
     private final EventRepositoryPort eventRepo;
+    private final OutboxPort outbox;
+    private final ReservationEventFactory eventFactory;
 
     @Override
     public Mono<Reservation> handle(Reservation reservation) {
@@ -69,7 +73,10 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
         return Mono.just(reservation)
                 .flatMap(this::resolveItem)
                 .doOnNext(Reservation::validatePricing)
-                .flatMap(reservationRepo::save);
+                .flatMap(reservationRepo::save)
+                .flatMap(saved -> eventFactory.reservationChanged(saved)
+                        .flatMap(outbox::enqueue)
+                        .thenReturn(saved));
     }
 
     private Mono<Reservation> resolveItem(Reservation reservation) {

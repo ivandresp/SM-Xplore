@@ -18,7 +18,9 @@ import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +56,12 @@ class ReservationUseCasesTest {
     @Mock
     private EventRepositoryPort eventRepo;
 
+    @Mock
+    private OutboxPort outbox;
+
+    @Mock
+    private ReservationEventFactory eventFactory;
+
     @InjectMocks
     private CreateReservationUseCase createReservationUseCase;
 
@@ -77,6 +85,7 @@ class ReservationUseCasesTest {
 
     @BeforeEach
     void allowTouristLock() {
+        lenient().when(eventFactory.reservationChanged(any())).thenReturn(reactor.core.publisher.Mono.empty());
         lenient().when(reservationRepo.lockTourist(any())).thenReturn(Mono.empty());
     }
 
