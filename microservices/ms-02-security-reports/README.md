@@ -123,12 +123,13 @@ En `prod`, este servicio valida el claim `ver` contra ms-01 (`MS01_BASE_URL`) y 
 `mfa=true` a los administradores. La validación es fail-closed: si ms-01 no responde, las
 peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABLED=false`.
 
-- Solo se acepta RS256; el token lo emite ms-01.
+- Solo se acepta RS256; el token lo emite ms-01. Los códigos de rol en inglés son los únicos que se emiten; los alias en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`) se siguen leyendo mientras expiran los tokens anteriores a `V10`.
+- `/actuator/metrics` y `/actuator/prometheus` están expuestos sin JWT para el scraping; en producción deben aislarse por red (puerto de management separado o token de scrape).
 - El `issuer` (`iss`) debe ser `sm-xplore-ms-01` y la audiencia `sm-xplore-services`.
 - Los roles usados son los códigos en inglés: `ADMIN`, `DESTINATION_MANAGER`, `GUIDE`, `SERVICE_PROVIDER`, `TOURIST`.
 - `GET /security-reports` (listado global por estado) requiere `ADMIN` o `DESTINATION_MANAGER`.
 - Los usuarios solo pueden modificar sus propios reportes, salvo staff.
-- El detalle de un reporte y sus comentarios están disponibles para cualquier usuario autenticado (alertas públicas).
+- El detalle de un reporte (`GET /security-reports/{reportId}`) y sus comentarios solo los ve su autor o el staff (`ADMIN`/`DESTINATION_MANAGER`): sin ese control cualquier usuario autenticado leía el título, la descripción, las fotos y el denunciante de un incidente.
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - La llave pública se obtiene del JWKS de ms-01 o de un PEM local; nunca se comparte una llave privada.
 - Los errores usan RFC 9457 (`application/problem+json`) con `type`, `title`, `status`, `detail` e `instance`.

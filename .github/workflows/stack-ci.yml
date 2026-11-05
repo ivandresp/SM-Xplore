@@ -1,0 +1,151 @@
+## Integración continua del stack integrado.
+##
+## Los workflows por servicio validan un servicio contra sus propias dependencias. Este valida lo que
+## ninguno miraba: que compose.yaml y los compose por servicio sigan siendo válidos, que los scripts
+## de smoke no tengan errores de sintaxis y que el stack completo arranque y ejecute un flujo de
+## negocio real (identidad -> catálogo -> actividad -> reseña -> reserva) con los eventos saliendo
+## por el outbox.
+
+name: Stack CI
+
+on:
+  push:
+    branches: [main, microservicios]
+    paths: &stack-paths
+      - "compose.yaml"
+      - "deploy/**"
+      - "scripts/**"
+      - "infrastructure/**"
+      - ".env.example"
+      - ".github/workflows/stack-ci.yml"
+      # El stack es el unico job que detecta regresiones de arranque entre servicios
+      # (variables obligatorias, guards de JWT, @ConfigurationProperties sin registrar).
+      - "microservices/*/src/main/resources/**"
+      - "microservices/*/Dockerfile"
+      - "microservices/*/build.gradle.kts"
+      - "microservices/*/docker-compose.yml"
+      - "contracts/**"
+  pull_request:
+    paths: *stack-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Variables de interpolación comunes a los compose.
+env:
+  JWT_ISSUER: sm-xplore-ms-01
+  JWT_AUDIENCE: sm-xplore-services
+
+jobs:
+  definitions:
+    name: Validar compose y scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Solo ms-03 las declara como :?required; acotadas a este job para no reconfigurar el
+      # stack raíz (compose.yaml usa POSTGRES_PASSWORD con default smxplore).
+      POSTGRES_USER: ms03_app
+      POSTGRES_PASSWORD: ms03-app
+      POSTGRES_ROOT_PASSWORD: postgres-root
+      FLYWAY_USER: ms03_flyway
+      FLYWAY_PASSWORD: ms03-flyway
+      MONGO_ROOT_PASSWORD: mongo-root
+      MONGO_APP_USER: reviews_app
+      MONGO_APP_PASSWORD: reviews-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar el compose raíz
+        run: docker compose -f compose.yaml config --quiet
+
+      - name: Validar los compose por servicio
+        run: |
+          shopt -s nullglob
+          files=(microservices/*/docker-compose.yml)
+          if [ "${#files[@]}" -ne 5 ]; then
+            echo "::error title=Compose por servicio::se esperaban 5 compose y hay ${#files[@]}"
+            exit 1
+          fi
+          status=0
+          for file in "${files[@]}"; do
+            service=$(dirname "$file")
+            echo "::group::docker compose config en $service"
+            if ! (cd "$service" && docker compose config --quiet); then
+              echo "::error title=Compose inválido::$service/docker-compose.yml"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Validar el compose de infraestructura
+        run: docker compose -f infrastructure/compose.yaml config --quiet
+
+      - name: Validar scripts/smoke.sh
+        run: bash -n scripts/smoke.sh
+
+      - name: Validar scripts/smoke.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "scripts/smoke.ps1"), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors -and $errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Host "::error title=smoke.ps1::$($_.Message)" }
+            exit 1
+          }
+
+      - name: Validar los scripts de inicialización
+        run: |
+          bash -n deploy/postgres/01-databases.sh
+          bash -n deploy/mongo/init-replica.sh
+
+  stack:
+    name: Stack completo y flujo de negocio
+    needs: definitions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir las imágenes
+        run: docker compose build
+
+      - name: Levantar el stack
+        run: docker compose up -d --wait --wait-timeout 900
+
+      - name: Smoke del stack (incluye métricas y flujo de negocio)
+        env:
+          # El stack ya está UP (docker compose up --wait): no hace falta esperar 5 min por servicio.
+          WAIT_SECONDS: 60
+        run: bash scripts/smoke.sh
+
+      - name: Estado del stack si algo falló
+        if: failure()
+        run: |
+          docker compose ps
+          mkdir -p stack-logs
+          docker compose logs --no-color > stack-logs/compose.log || true
+
+      - name: Publicar los logs del stack si algo falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: stack-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Apagar el stack
+        if: always()
+        run: docker compose down -v --remove-orphans

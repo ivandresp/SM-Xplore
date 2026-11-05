@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.application.reviews.ConsultGuideReviewReportsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultManagerReviewReportsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultReviewMetricsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultReviewReportsUseCase;
@@ -96,6 +97,15 @@ public class ReviewUseCaseConfiguration {
             ReviewRepositoryPort reviewRepository,
             ReviewReportRepositoryPort reportRepository) {
         return new ConsultManagerReviewReportsUseCase(siteCatalog, eventRepository, reviewRepository,
+                reportRepository);
+    }
+
+    @Bean
+    public ConsultGuideReviewReportsUseCase consultGuideReviewReportsUseCase(
+            ActivityRepositoryPort activityRepository,
+            ReviewRepositoryPort reviewRepository,
+            ReviewReportRepositoryPort reportRepository) {
+        return new ConsultGuideReviewReportsUseCase(activityRepository, reviewRepository,
                 reportRepository);
     }
 

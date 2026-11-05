@@ -1,7 +1,5 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
-import com.smxplore.activitiesevents.application.outbox.BestEffortPublisher;
-import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory;
 import com.smxplore.activitiesevents.application.events.ChangeEventStatusUseCase;
 import com.smxplore.activitiesevents.application.events.ConsultEventsUseCase;
 import com.smxplore.activitiesevents.application.events.EstimateEventAttendanceUseCase;
@@ -11,6 +9,8 @@ import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
 import com.smxplore.activitiesevents.application.events.SearchEventsUseCase;
 import com.smxplore.activitiesevents.application.events.ValidateEventExistsUseCase;
 import com.smxplore.activitiesevents.application.events.ViewEventDetailsUseCase;
+import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory;
+import com.smxplore.activitiesevents.application.outbox.OutboxPublisher;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
@@ -22,15 +22,22 @@ import com.smxplore.activitiesevents.domain.ports.usecases.event.ValidateEventEx
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ViewEventDetailsUseCasePort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.reactive.TransactionalOperator;
 
+/**
+ * Igual que {@link ActivityUseCaseConfiguration}: el evento y su fila del outbox se escriben en una
+ * sola transacción, así que un fallo al encolar revierte el cambio del evento.
+ */
 @Configuration(proxyBeanMethods = false)
 public class EventUseCaseConfiguration {
 
     @Bean
     public RegisterEventUseCasePort registerEventUseCase(EventRepositoryPort eventRepository,
                                                          EventChangedEventFactory eventEvents,
-                                                         BestEffortPublisher publisher) {
-        return new RegisterEventUseCase(eventRepository, eventEvents, publisher);
+                                                         OutboxPublisher publisher,
+                                                         TransactionalOperator transactionalOperator) {
+        var useCase = new RegisterEventUseCase(eventRepository, eventEvents, publisher);
+        return event -> transactionalOperator.transactional(useCase.handle(event));
     }
 
     @Bean
@@ -61,8 +68,10 @@ public class EventUseCaseConfiguration {
     @Bean
     public ChangeEventStatusUseCasePort changeEventStatusUseCase(EventRepositoryPort eventRepository,
                                                                  EventChangedEventFactory eventEvents,
-                                                                 BestEffortPublisher publisher) {
-        return new ChangeEventStatusUseCase(eventRepository, eventEvents, publisher);
+                                                                 OutboxPublisher publisher,
+                                                                 TransactionalOperator transactionalOperator) {
+        var useCase = new ChangeEventStatusUseCase(eventRepository, eventEvents, publisher);
+        return (eventId, newStatus) -> transactionalOperator.transactional(useCase.handle(eventId, newStatus));
     }
 
     @Bean

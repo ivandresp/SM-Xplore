@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.scheduling;
 
 import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
+import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationCloseCandidate;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -19,6 +21,10 @@ import java.time.Instant;
  * than the grace period become NO_SHOW, and cancelled items cancel their open
  * reservations. Each change is published like the manual transitions so the
  * tourist, guide and manager receive the corresponding notification.
+ *
+ * <p>Each close runs in its own transaction: the status change and the outbox row are committed
+ * together, so a failed enqueue rolls the reservation back to {@code CONFIRMED} and the next run
+ * retries it instead of leaving a closed reservation without its event.
  */
 @Component
 @Slf4j
@@ -27,11 +33,13 @@ public class ExpiredReservationCleanupJob {
     private final ReservationRepositoryPort reservationRepo;
     private final OutboxPort outbox;
     private final ReservationEventFactory eventFactory;
+    private final TransactionalOperator transactionalOperator;
     private final Duration grace;
 
     public ExpiredReservationCleanupJob(ReservationRepositoryPort reservationRepo,
                                         OutboxPort outbox,
                                         ReservationEventFactory eventFactory,
+                                        TransactionalOperator transactionalOperator,
                                         @Value("${app.reservations.auto-close.grace}") Duration grace) {
         if (grace == null || grace.isNegative() || grace.isZero()) {
             throw new IllegalArgumentException("app.reservations.auto-close.grace must be positive.");
@@ -39,6 +47,7 @@ public class ExpiredReservationCleanupJob {
         this.reservationRepo = reservationRepo;
         this.outbox = outbox;
         this.eventFactory = eventFactory;
+        this.transactionalOperator = transactionalOperator;
         this.grace = grace;
     }
 
@@ -54,6 +63,18 @@ public class ExpiredReservationCleanupJob {
     }
 
     private Mono<Void> close(ReservationCloseCandidate candidate) {
+        return transactionalOperator.transactional(closeOne(candidate))
+                .onErrorResume(error -> {
+                    // La transaccion revierte el cambio de estado: la reserva sigue CONFIRMED y la
+                    // proxima ejecucion lo reintenta, en lugar de perder el evento.
+                    log.warn("Could not close reservation {}: {}",
+                            candidate.reservationId(), error.toString());
+                    return Mono.empty();
+                })
+                .then();
+    }
+
+    private Mono<Reservation> closeOne(ReservationCloseCandidate candidate) {
         return reservationRepo.findByIdForUpdate(candidate.reservationId())
                 .switchIfEmpty(Mono.empty())
                 .flatMap(reservation -> {
@@ -67,12 +88,6 @@ public class ExpiredReservationCleanupJob {
                 })
                 .flatMap(saved -> eventFactory.reservationChanged(saved)
                         .flatMap(outbox::enqueue)
-                        .thenReturn(saved))
-                .onErrorResume(error -> {
-                    log.warn("Could not close reservation {}: {}",
-                            candidate.reservationId(), error.toString());
-                    return Mono.empty();
-                })
-                .then();
+                        .thenReturn(saved));
     }
 }

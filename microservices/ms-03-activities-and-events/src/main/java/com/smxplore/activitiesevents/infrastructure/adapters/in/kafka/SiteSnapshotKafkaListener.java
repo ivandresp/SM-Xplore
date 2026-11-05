@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.kafka;
 
 import com.smxplore.activitiesevents.application.events.RefreshSiteSnapshotUseCase;
+import com.smxplore.activitiesevents.infrastructure.config.SiteConsumerConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,7 +32,8 @@ public class SiteSnapshotKafkaListener {
     @KafkaListener(
             id = "ms-03-site-snapshot",
             topics = SiteChangedEventDecoder.EVENT_TYPE,
-            groupId = "${app.events.site-consumer.group:ms-03-site-snapshot}")
+            groupId = "${app.events.site-consumer.group:ms-03-site-snapshot}",
+            containerFactory = SiteConsumerConfiguration.CONTAINER_FACTORY)
     public void onSiteChanged(ConsumerRecord<String, String> record) {
         var change = decoder.decode(record.value());
         if (change.isEmpty()) {

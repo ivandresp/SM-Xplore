@@ -6,7 +6,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviews
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ModerateReviewUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ChangeReviewStatusRequest;
-import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewResponse;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.AdminReviewResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReviewWebMapper;
 import com.smxplore.activitiesevents.infrastructure.config.JwtProperties;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,20 +40,20 @@ public class AdminReviewController {
 
     @GetMapping("/api/v1/admin/reviews")
     @Operation(summary = "List reviews by status across activities and events")
-    public Flux<ReviewResponse> findByStatus(
+    public Flux<AdminReviewResponse> findByStatus(
             @RequestParam(defaultValue = "PENDING_REVIEW") ReviewStatus status,
             @RequestParam(defaultValue = "200") int limit) {
         return consultReviews.handle(status, PaginationLimits.clamp(limit))
-                .map(mapper::toResponse);
+                .map(mapper::toAdminResponse);
     }
 
     @PatchMapping("/api/v1/reviews/{reviewId}/status")
     @Operation(summary = "Publish, hide, delete or return a review to the pending queue")
-    public Mono<ReviewResponse> moderate(@PathVariable UUID reviewId,
-                                         @Valid @RequestBody ChangeReviewStatusRequest request,
-                                         @AuthenticationPrincipal Jwt jwt) {
+    public Mono<AdminReviewResponse> moderate(@PathVariable UUID reviewId,
+                                              @Valid @RequestBody ChangeReviewStatusRequest request,
+                                              @AuthenticationPrincipal Jwt jwt) {
         return moderateReview.handle(reviewId, request.status(), subject(jwt), role(jwt))
-                .map(mapper::toResponse);
+                .map(mapper::toAdminResponse);
     }
 
     private String role(Jwt jwt) {

@@ -40,8 +40,12 @@ services:
       NEO4J_INITIALIZE_SCHEMA: ${NEO4J_INITIALIZE_SCHEMA:-true}
       JWK_SET_URI: ${JWK_SET_URI:-}
       JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      # Perfil local: el flag de JWKS inseguro solo se acepta con este perfil.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       JWT_ISSUER: ${JWT_ISSUER:-sm-xplore-ms-01}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-sm-xplore-services}
+      # Solo desarrollo: el JWKS local se sirve por HTTP dentro de la red de compose.
+      JWT_ALLOW_INSECURE_JWKS: ${JWT_ALLOW_INSECURE_JWKS:-true}
       JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
       JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
       JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}

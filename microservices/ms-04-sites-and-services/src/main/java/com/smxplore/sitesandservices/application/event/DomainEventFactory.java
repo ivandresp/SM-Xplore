@@ -3,6 +3,7 @@ package com.smxplore.sitesandservices.application.event;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.event.DomainEvent;
 import com.smxplore.sitesandservices.domain.model.event.EventTypes;
+import com.smxplore.sitesandservices.domain.model.event.EventVersions;
 import com.smxplore.sitesandservices.domain.model.reservation.Reservation;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.service.Service;
@@ -48,7 +49,7 @@ public class DomainEventFactory {
     public DomainEvent siteChanged(Site site, String correlationId) {
         return event(
                 EventTypes.CATALOG_SITE_CHANGED,
-                2,
+                EventVersions.CATALOG_SITE_CHANGED,
                 site.siteId(),
                 correlationId,
                 sitePayload(site)
@@ -137,7 +138,8 @@ public class DomainEventFactory {
             String correlationId,
             Map<String, Object> payload
     ) {
-        return event(eventType, 1, aggregateId, correlationId, payload);
+        // La version sale siempre de EventVersions: un productor no puede declarar una y emitir otra.
+        return event(eventType, EventVersions.of(eventType), aggregateId, correlationId, payload);
     }
 
     private DomainEvent event(

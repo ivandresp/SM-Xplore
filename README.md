@@ -63,7 +63,12 @@ ni con los compose por servicio.
 - `infrastructure/`: compose solo de Kafka, Kafka UI y Redis para trabajar sin el stack completo.
 - `deploy/`: scripts de inicializacion del stack integrado (bases y replica set).
 - `compose.yaml`: composicion integrada de infraestructura + cinco servicios.
-- `scripts/smoke.*`: verificacion rapida de salud, JWKS y endpoints publicos.
+- `scripts/smoke.*`: verificacion del stack completo: salud, JWKS, endpoints publicos,
+  `/actuator/prometheus` en los cinco servicios y un flujo de negocio real (categoria, zona, sitio,
+  actividad, resena y reserva de un turista registrado, con comprobacion del outbox cuando hay docker).
+- `.github/workflows/stack-ci.yml`: valida `compose.yaml`, cada compose por servicio, `deploy/**` y
+  `scripts/**`, y despues levanta el stack y corre el smoke (los workflows `ms-0X-ci.yml` validan un
+  servicio cada uno contra sus propias dependencias).
 - `docs/`: referencia de modelos, historias de usuario y SRS (solo lectura).
 
 ## Orden de arranque
@@ -73,6 +78,10 @@ ni con los compose por servicio.
 3. `ms-01` migra `smxplore_users`, genera la pareja RSA en el volumen `ms01_data` y publica JWKS.
 4. `ms-04` migra `smxplore`; `ms-02`, `ms-03` y `ms-05` esperan a ms-01 (y ms-03/ms-05 a ms-04).
 5. `ms-03` corre Flyway como `ms03_flyway` y la aplicacion conecta como `ms03_app`.
+
+El stack define `SPRING_PROFILES_ACTIVE=local` en cada servicio: el flag
+`JWT_ALLOW_INSECURE_JWKS=true` (necesario porque ms-01 se alcanza por HTTP en la red privada) solo
+se acepta con un perfil local, y el perfil `prod` lo prohibe y exige emisor y audiencia.
 
 ## Credenciales de desarrollo
 

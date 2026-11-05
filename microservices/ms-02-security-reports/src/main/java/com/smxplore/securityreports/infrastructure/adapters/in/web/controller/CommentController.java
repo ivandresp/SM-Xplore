@@ -8,6 +8,7 @@ import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageRespo
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,6 +32,7 @@ public class CommentController {
     private final SecurityReportWebMapper mapper;
     private final PageResponseMapper pageResponseMapper;
     private final JwtUserResolver jwtUserResolver;
+    private final ReportAccessGuard reportAccessGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -44,13 +46,15 @@ public class CommentController {
     }
 
     @GetMapping
-    @Operation(summary = "List the comments of a security report using cursor-based pagination")
+    @Operation(summary = "List the comments of a security report (its author or staff)")
     public Mono<PageResponse<CommentResponse>> findComments(
             @PathVariable UUID reportId,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
         var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
-        return consultReportCommentsUseCase.handle(reportId, pageRequest)
+        return reportAccessGuard.requireAuthorOrStaff(jwt, reportId)
+                .then(Mono.defer(() -> consultReportCommentsUseCase.handle(reportId, pageRequest)))
                 .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
     }
 }

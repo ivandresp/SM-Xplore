@@ -11,6 +11,9 @@ import java.util.UUID;
 @Document(collection = "event_reviews")
 @CompoundIndex(name = "event_review_item_user", def = "{'itemId': 1, 'user.id': 1}", unique = true)
 @CompoundIndex(name = "event_review_item_created", def = "{'itemId': 1, 'createdAt': -1}")
+// La cola de moderacion ordena por updatedAt filtrando por estado: sin este indice Mongo hace
+// collection scan + sort en memoria y el endpoint falla al superar el limite de 32 MB.
+@CompoundIndex(name = "event_review_status_updated", def = "{'status': 1, 'updatedAt': -1}")
 public record EventReviewDocument(
         @Id UUID id,
         UUID itemId,

@@ -44,6 +44,8 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
         CatalogExportPageResponse sites = export(adminId, "SITES", null, 0, 50);
         CatalogExportItemResponse exportedSite = itemWithId(sites, site.siteId());
         assertThat(exportedSite.eventType()).isEqualTo("catalog.site.changed");
+        // El feed debe declarar la version del payload: un sitio es v2 (managerId).
+        assertThat(exportedSite.eventVersion()).isEqualTo(2);
         assertThat(exportedSite.payload())
                 .containsEntry("siteId", site.siteId().toString())
                 .containsEntry("name", site.name())
@@ -54,6 +56,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
         CatalogExportPageResponse services = export(adminId, "SERVICES", null, 0, 50);
         CatalogExportItemResponse exportedService = itemWithId(services, service.serviceId());
         assertThat(exportedService.eventType()).isEqualTo("catalog.service.changed");
+        assertThat(exportedService.eventVersion()).isEqualTo(1);
         assertThat(exportedService.payload())
                 .containsEntry("serviceId", service.serviceId().toString())
                 .containsEntry("siteId", site.siteId().toString())
@@ -63,6 +66,7 @@ class CatalogExportWebIntegrationTests extends AbstractMongoPostgresIntegrationT
         CatalogExportPageResponse categories = export(adminId, "CATEGORIES", null, 0, 50);
         CatalogExportItemResponse exportedCategory = itemWithId(categories, category.categoryId());
         assertThat(exportedCategory.eventType()).isEqualTo("catalog.category.changed");
+        assertThat(exportedCategory.eventVersion()).isEqualTo(1);
         assertThat(exportedCategory.payload())
                 .containsEntry("categoryId", category.categoryId().toString())
                 .containsEntry("scope", "GENERAL")

@@ -53,6 +53,62 @@ class FlywayMigrationTest {
     }
 
     @Test
+    void theOutboxCarriesTheLeaseColumnsAndTheClaimIndexes() throws Exception {
+        flyway().migrate();
+
+        try (var connection = connection()) {
+            assertThat(columnExists(connection, "outbox_events", "status")).isTrue();
+            assertThat(columnExists(connection, "outbox_events", "locked_by")).isTrue();
+            assertThat(columnExists(connection, "outbox_events", "locked_until")).isTrue();
+            assertThat(columnExists(connection, "outbox_events", "next_attempt_at")).isTrue();
+
+            assertThat(indexExists(connection, "outbox_events_claim_idx")).isTrue();
+            assertThat(indexExists(connection, "outbox_events_lease_idx")).isTrue();
+            assertThat(indexExists(connection, "outbox_events_retention_idx")).isTrue();
+            // El indice anterior ya no existe: lo reemplaza el del claim.
+            assertThat(indexExists(connection, "outbox_events_pending_idx")).isFalse();
+        }
+    }
+
+    @Test
+    void aDeliveredLegacyOutboxRowBecomesPublishedOnUpgrade() throws Exception {
+        // La tabla existe desde V4; estas filas son anteriores a V7 (sin status ni lease).
+        flywayAt("4").migrate();
+        var eventId = UUID.randomUUID();
+        var pending = UUID.randomUUID();
+        try (var connection = connection(); var statement = connection.createStatement()) {
+            statement.execute("""
+                    INSERT INTO outbox_events (id, event_type, event_version, aggregate_id, correlation_id,
+                                               payload, occurred_at, published_at)
+                    VALUES ('%s', 'activities.activity.changed', 2, '%s', '%s', '{}'::jsonb,
+                            now(), now())
+                    """.formatted(eventId, UUID.randomUUID(), UUID.randomUUID()));
+            statement.execute("""
+                    INSERT INTO outbox_events (id, event_type, event_version, aggregate_id, correlation_id,
+                                               payload, occurred_at)
+                    VALUES ('%s', 'activities.activity.changed', 2, '%s', '%s', '{}'::jsonb, now())
+                    """.formatted(pending, UUID.randomUUID(), UUID.randomUUID()));
+        }
+
+        flyway().migrate();
+
+        try (var connection = connection(); var statement = connection.createStatement()) {
+            try (var result = statement.executeQuery(
+                    "SELECT status, attempts FROM outbox_events WHERE id = '%s'".formatted(eventId))) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("status")).isEqualTo("PUBLISHED");
+            }
+            try (var result = statement.executeQuery(
+                    "SELECT status, attempts FROM outbox_events WHERE id = '%s'".formatted(pending))) {
+                assertThat(result.next()).isTrue();
+                // Una fila pendiente conserva sus intentos y queda reclamable.
+                assertThat(result.getString("status")).isEqualTo("PENDING");
+                assertThat(result.getInt("attempts")).isZero();
+            }
+        }
+    }
+
+    @Test
     void legacySingleItemReservationIsMigratedAndArchived() throws Exception {
         flywayAtV1().migrate();
 
@@ -271,7 +327,11 @@ class FlywayMigrationTest {
     }
 
     private static Flyway flywayAtV1() {
-        return baseFlyway().target(MigrationVersion.fromVersion("1")).load();
+        return flywayAt("1");
+    }
+
+    private static Flyway flywayAt(String version) {
+        return baseFlyway().target(MigrationVersion.fromVersion(version)).load();
     }
 
     private static org.flywaydb.core.api.configuration.FluentConfiguration baseFlyway() {
@@ -342,6 +402,16 @@ class FlywayMigrationTest {
                 "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?")) {
             statement.setString(1, table);
             statement.setString(2, column);
+            try (var result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    private static boolean indexExists(Connection connection, String index) throws SQLException {
+        try (var statement = connection.prepareStatement(
+                "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?")) {
+            statement.setString(1, index);
             try (var result = statement.executeQuery()) {
                 return result.next();
             }

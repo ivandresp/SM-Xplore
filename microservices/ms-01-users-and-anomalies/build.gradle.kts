@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.caffeine)
     implementation(libs.openpdf)
 
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.r2dbc.postgresql)
     runtimeOnly(libs.flyway.postgresql)

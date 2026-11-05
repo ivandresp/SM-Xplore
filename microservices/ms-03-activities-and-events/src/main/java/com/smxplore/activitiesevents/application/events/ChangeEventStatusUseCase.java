@@ -1,7 +1,7 @@
 package com.smxplore.activitiesevents.application.events;
 
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
-import com.smxplore.activitiesevents.application.outbox.BestEffortPublisher;
+import com.smxplore.activitiesevents.application.outbox.OutboxPublisher;
 import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
@@ -19,7 +19,7 @@ public class ChangeEventStatusUseCase implements ChangeEventStatusUseCasePort {
 
     private final EventRepositoryPort eventRepo;
     private final EventChangedEventFactory eventEvents;
-    private final BestEffortPublisher publisher;
+    private final OutboxPublisher publisher;
 
     @Override
     public Mono<Event> handle(UUID eventId, EventStatus newStatus) {

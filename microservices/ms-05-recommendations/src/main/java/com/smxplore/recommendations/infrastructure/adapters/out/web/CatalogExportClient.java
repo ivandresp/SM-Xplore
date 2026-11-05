@@ -39,7 +39,8 @@ public class CatalogExportClient implements CatalogExportPort {
 
     static final String CORRELATION_ID = "ms-05-reindex";
     static final String PRODUCER = "ms-04";
-    static final int EVENT_VERSION = 1;
+    /** Version assumed when ms-04 does not send {@code eventVersion} (older builds). */
+    static final int LEGACY_EVENT_VERSION = 1;
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
@@ -139,10 +140,12 @@ public class CatalogExportClient implements CatalogExportPort {
                     "catalog export for " + entity + " returned eventType " + eventType);
         }
 
+        int eventVersion = eventVersion(item, entity, payload);
+
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", reindexEventId(eventType, aggregateId, updatedAt).toString());
         envelope.put("eventType", eventType);
-        envelope.put("eventVersion", EVENT_VERSION);
+        envelope.put("eventVersion", eventVersion);
         envelope.put("occurredAt", updatedAt.toString());
         envelope.put("aggregateId", aggregateId.toString());
         envelope.put("correlationId", CORRELATION_ID);
@@ -156,6 +159,31 @@ public class CatalogExportClient implements CatalogExportPort {
             throw new InvalidReindexException("catalog export item is not serializable", exception);
         }
         return decoder.decode(eventType, aggregateId.toString(), json);
+    }
+
+    /**
+     * Version of the exported payload.
+     *
+     * <p>ms-04 sends {@code eventVersion} in every item; when an older build omits it the version is
+     * inferred from the payload instead of assuming v1: a site payload that carries
+     * {@code managerId} is v2, so the projection applies the v2 validation (and does not accept a
+     * v2 payload while believing it is v1).
+     */
+    private int eventVersion(JsonNode item, CatalogEntity entity, JsonNode payload) {
+        JsonNode version = item.get("eventVersion");
+        if (version != null && version.isIntegralNumber() && version.canConvertToInt()) {
+            return version.asInt();
+        }
+        JsonNode unsupported = item.get("eventVersion");
+        if (unsupported != null && !unsupported.isNull()) {
+            throw new InvalidReindexException("catalog export eventVersion must be an integer");
+        }
+        // ms-04 publica catalog.site.changed v2 desde antes de exponer la version, asi que su feed
+        // siempre es v2; inferir v2 solo cuando hay managerId validaria como v1 un sitio sin gestora.
+        if (entity == CatalogEntity.SITES) {
+            return 2;
+        }
+        return LEGACY_EVENT_VERSION;
     }
 
     /**

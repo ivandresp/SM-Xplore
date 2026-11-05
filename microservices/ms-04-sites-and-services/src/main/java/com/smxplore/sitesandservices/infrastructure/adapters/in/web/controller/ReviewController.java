@@ -16,6 +16,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.C
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.CreateReviewRequest;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.RespondReviewRequest;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.AdminReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewSummaryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper.CatalogRequestMapper;
@@ -93,7 +94,7 @@ public class ReviewController {
 
     @PatchMapping("/{reviewId}/status")
     @Operation(summary = "Moderate a review")
-    public Mono<ReviewResponse> changeStatus(
+    public Mono<AdminReviewResponse> changeStatus(
             @PathVariable UUID reviewId,
             @Valid @RequestBody ChangeReviewStatusRequest request,
             @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId,
@@ -104,7 +105,7 @@ public class ReviewController {
                         requestMapper.toReviewStatus(reviewId, request),
                         actor,
                         correlationIdResolver.resolve(correlationId))
-                .map(webMapper::toResponse);
+                .map(webMapper::toAdminResponse);
     }
 
     @GetMapping("/summary")

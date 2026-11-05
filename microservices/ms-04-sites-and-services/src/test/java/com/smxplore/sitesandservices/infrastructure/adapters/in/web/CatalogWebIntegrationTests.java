@@ -145,7 +145,12 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         webTestClient.get().uri("/actuator/health")
                 .exchange()
                 .expectStatus().isOk();
-        webTestClient.get().uri("/actuator/prometheus")
+        // El scrape de metrics inicializa medidores y con la suite completa puede tardar mas que
+        // el timeout por defecto del WebTestClient; se le da margen para no fallar por lentitud.
+        webTestClient.mutate()
+                .responseTimeout(java.time.Duration.ofSeconds(30))
+                .build()
+                .get().uri("/actuator/prometheus")
                 .exchange()
                 .expectStatus().isOk();
     }

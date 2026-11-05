@@ -23,7 +23,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # En produccion solo el scrape: /actuator/metrics/{name} expone nombres y tags internos.
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never

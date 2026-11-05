@@ -1,10 +1,12 @@
 package com.smxplore.sitesandservices.infrastructure.config;
 
+import io.netty.channel.ChannelOption;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -16,19 +18,36 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 
+/**
+ * RS256 resource server aligned with ms-01: the public keys come from ms-01's JWKS endpoint
+ * (production) or from a PEM file (local development and tests). Shared HS256 secrets are not
+ * supported, the algorithm is pinned to RS256, an insecure JWKS (plain HTTP off loopback) is
+ * rejected unless {@code app.security.jwt.allow-insecure-jwks} is explicitly enabled for a local
+ * stack, and the JWKS request has a timeout so a hung issuer fails the request instead of pinning
+ * the connection pool.
+ */
 @Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
 public class JwtConfiguration {
+
+    private static final Duration JWKS_TIMEOUT = Duration.ofSeconds(5);
+    private static final String MFA_SCOPE = "mfa";
 
     private final JwtProperties properties;
     private final ResourceLoader resourceLoader;
@@ -45,43 +64,103 @@ public class JwtConfiguration {
     }
 
     private ReactiveJwtDecoder baseJwtDecoder() {
-        NimbusReactiveJwtDecoder decoder;
+        requireText(properties.getIssuer(), "app.security.jwt.issuer");
+        // La audiencia es parte del contrato (sintaxis JWT de AGENTS): sin ella cualquier token del
+        // emisor valdria para este servicio.
+        requireText(properties.getAudience(), "app.security.jwt.audience");
 
-        if (StringUtils.hasText(properties.getJwkSetUri())) {
-            decoder = NimbusReactiveJwtDecoder.withJwkSetUri(properties.getJwkSetUri()).build();
-        } else if (StringUtils.hasText(properties.getPublicKeyLocation())) {
-            decoder = NimbusReactiveJwtDecoder.withPublicKey(readPublicKey(properties.getPublicKeyLocation())).build();
-        } else {
-            throw new IllegalStateException(
-                    "Configure app.security.jwt.jwk-set-uri (production) or "
-                            + "app.security.jwt.public-key-location (local/tests). "
-                            + "RS256 is required; HS256 is not supported by ms-04.");
-        }
-
+        var decoder = buildDecoder();
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        if (StringUtils.hasText(properties.getIssuer())) {
-            validators.add(JwtValidators.createDefaultWithIssuer(properties.getIssuer()));
-        } else {
-            validators.add(JwtValidators.createDefault());
-        }
-        if (StringUtils.hasText(properties.getAudience())) {
-            validators.add(new JwtClaimValidator<List<String>>(
-                    JwtClaimNames.AUD,
-                    audience -> audience.contains(properties.getAudience())
-            ));
-        }
+        validators.add(JwtValidators.createDefaultWithIssuer(properties.getIssuer()));
+        validators.add(new JwtClaimValidator<List<String>>(
+                JwtClaimNames.AUD,
+                audience -> audience != null && audience.contains(properties.getAudience())));
+        validators.add(requireRs256());
         validators.add(notMfaChallenge());
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
     }
 
+    private NimbusReactiveJwtDecoder buildDecoder() {
+        if (StringUtils.hasText(properties.getJwkSetUri())) {
+            var jwkSetUri = validateJwksUri(properties.getJwkSetUri());
+            var httpClient = HttpClient.create()
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
+                    .responseTimeout(JWKS_TIMEOUT);
+            var webClient = WebClient.builder()
+                    .clientConnector(new ReactorClientHttpConnector(httpClient))
+                    .build();
+            return NimbusReactiveJwtDecoder.withJwkSetUri(jwkSetUri.toString())
+                    .webClient(webClient)
+                    .build();
+        }
+        if (StringUtils.hasText(properties.getPublicKeyLocation())) {
+            return NimbusReactiveJwtDecoder.withPublicKey(readPublicKey(properties.getPublicKeyLocation())).build();
+        }
+        throw new IllegalStateException(
+                "Configure app.security.jwt.jwk-set-uri (production) or "
+                        + "app.security.jwt.public-key-location (local/tests). "
+                        + "RS256 is required; HS256 is not supported by ms-04.");
+    }
+
+    private static void requireText(String value, String property) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalStateException(property + " is required.");
+        }
+    }
+
+    /**
+     * Plain HTTP is only accepted for a loopback JWKS or when the local flag is enabled (the
+     * Compose stack reaches the issuer as {@code http://ms-01:8081}). A remote key source must use
+     * HTTPS so a network attacker cannot substitute signing keys.
+     */
+    private URI validateJwksUri(String value) {
+        final URI uri;
+        try {
+            uri = URI.create(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("app.security.jwt.jwk-set-uri is not a valid URI.", exception);
+        }
+        var host = uri.getHost();
+        if (host == null) {
+            throw new IllegalStateException("app.security.jwt.jwk-set-uri must include a host.");
+        }
+        var loopback = "localhost".equalsIgnoreCase(host)
+                || "127.0.0.1".equals(host)
+                || "::1".equals(host)
+                || "[::1]".equals(host);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) && !loopback && !properties.isAllowInsecureJwks()) {
+            throw new IllegalStateException(
+                    "app.security.jwt.jwk-set-uri must use https outside loopback.");
+        }
+        return uri;
+    }
+
+    /** Only RS256 is accepted; this blocks an RSA algorithm substitution on the JWKS path. */
+    static OAuth2TokenValidator<Jwt> requireRs256() {
+        return jwt -> "RS256".equals(jwt.getHeaders().get("alg"))
+                ? OAuth2TokenValidatorResult.success()
+                : OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        "invalid_token", "Only RS256 tokens are accepted.", null));
+    }
+
+    /** MFA challenge tokens ({@code scope=mfa}) are short-lived tickets, not access tokens. */
     private static OAuth2TokenValidator<Jwt> notMfaChallenge() {
-        return token -> "mfa".equals(token.getClaimAsString("scope"))
+        return token -> containsMfa(token.getClaim("scope")) || containsMfa(token.getClaim("scp"))
                 ? OAuth2TokenValidatorResult.failure(new OAuth2Error(
-                        "invalid_token",
-                        "MFA challenge tokens cannot be used as access tokens",
-                        null))
+                        "invalid_token", "MFA challenge tokens are not access tokens.", null))
                 : OAuth2TokenValidatorResult.success();
+    }
+
+    private static boolean containsMfa(Object claim) {
+        if (claim instanceof Collection<?> values) {
+            return values.stream().anyMatch(value -> MFA_SCOPE.equalsIgnoreCase(String.valueOf(value)));
+        }
+        if (claim instanceof String value) {
+            return Arrays.stream(value.trim().split("\\s+"))
+                    .anyMatch(token -> MFA_SCOPE.equalsIgnoreCase(token));
+        }
+        return false;
     }
 
     private RSAPublicKey readPublicKey(String location) {
@@ -92,8 +171,8 @@ public class JwtConfiguration {
                     .replace("-----END PUBLIC KEY-----", "")
                     .replaceAll("\\s", "");
             byte[] decoded = Base64.getDecoder().decode(pem);
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            return (RSAPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(decoded));
+            return (RSAPublicKey) KeyFactory.getInstance("RSA")
+                    .generatePublic(new X509EncodedKeySpec(decoded));
         } catch (Exception exception) {
             throw new IllegalStateException("Could not read RSA public key from " + location, exception);
         }

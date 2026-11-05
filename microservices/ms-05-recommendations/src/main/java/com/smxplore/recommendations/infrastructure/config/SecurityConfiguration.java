@@ -36,7 +36,9 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/recommendations").hasAnyRole("TOURIST", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/v1/preferences").hasRole("TOURIST")

@@ -11,6 +11,7 @@ import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityR
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import com.smxplore.securityreports.infrastructure.config.JwtProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,6 +46,7 @@ public class SecurityReportController {
     private final PageResponseMapper pageResponseMapper;
     private final JwtUserResolver jwtUserResolver;
     private final JwtProperties jwtProperties;
+    private final ReportAccessGuard reportAccessGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -72,9 +74,12 @@ public class SecurityReportController {
     }
 
     @GetMapping("/{reportId}")
-    @Operation(summary = "Get one security report by id")
-    public Mono<SecurityReportResponse> findOne(@PathVariable UUID reportId) {
-        return consultOneReportUseCase.handle(reportId).map(mapper::toResponse);
+    @Operation(summary = "Get one security report by id (its author or staff)")
+    public Mono<SecurityReportResponse> findOne(@PathVariable UUID reportId,
+                                                @AuthenticationPrincipal Jwt jwt) {
+        return reportAccessGuard.requireAuthorOrStaff(jwt, reportId)
+                .then(Mono.defer(() -> consultOneReportUseCase.handle(reportId)))
+                .map(mapper::toResponse);
     }
 
     @GetMapping
@@ -149,8 +154,9 @@ public class SecurityReportController {
     }
 
     private boolean isAdminOrManager(Jwt jwt) {
-        var role = jwt.getClaimAsString(jwtProperties.getRoleClaim());
-        return UserRole.ADMIN.name().equals(role) || UserRole.DESTINATION_MANAGER.name().equals(role);
+        var role = UserRole.fromClaimOrNull(jwt == null ? null : jwt.getClaimAsString(
+                jwtProperties.getRoleClaim()));
+        return UserRole.ADMIN == role || UserRole.DESTINATION_MANAGER == role;
     }
 
     private void requireSelfOrStaff(Jwt jwt, UUID userId) {

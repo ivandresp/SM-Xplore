@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportReposit
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ReviewReportDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.ReviewReportMongoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,18 +31,22 @@ public class ReviewReportMongoAdapter implements ReviewReportRepositoryPort {
     }
 
     @Override
-    public Flux<ReviewReport> findByStatus(ReviewReportStatus status) {
-        return repository.findByStatusOrderByCreatedAtAsc(status).map(this::toDomain);
+    public Flux<ReviewReport> findByStatus(ReviewReportStatus status, int limit) {
+        if (status == null || limit < 1) {
+            return Flux.empty();
+        }
+        return repository.findByStatusOrderByCreatedAtAsc(status, PageRequest.of(0, limit))
+                .map(this::toDomain);
     }
 
     @Override
     public Flux<ReviewReport> findByStatusAndReviewIds(ReviewReportStatus status, Collection<UUID> reviewIds,
                                                        int limit) {
-        if (reviewIds == null || reviewIds.isEmpty()) {
+        if (status == null || limit < 1 || reviewIds == null || reviewIds.isEmpty()) {
             return Flux.empty();
         }
-        return repository.findByStatusAndReviewIdInOrderByCreatedAtAsc(status, reviewIds)
-                .take(limit)
+        return repository.findByStatusAndReviewIdInOrderByCreatedAtAsc(
+                        status, reviewIds, PageRequest.of(0, limit))
                 .map(this::toDomain);
     }
 

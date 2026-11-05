@@ -23,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SiteChangedEventDecoder {
 
-    static final String EVENT_TYPE = "catalog.site.changed";
+    public static final String EVENT_TYPE = "catalog.site.changed";
     private static final int FIRST_VERSION_WITH_MANAGER = 2;
 
     private final ObjectMapper objectMapper;

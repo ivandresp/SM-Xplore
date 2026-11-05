@@ -29,18 +29,49 @@ class JwtProductionGuardTest {
     }
 
     @Test
-    void allowsTheLocalStackOutsideProd() {
+    void allowsTheLocalStackWithTheLocalProfile() {
         var properties = new JwtProperties();
         properties.setAllowInsecureJwks(true);
         properties.setJwkSetUri("http://ms-01:8081/.well-known/jwks.json");
 
-        assertThatCode(() -> new JwtProductionGuard(properties, new StandardEnvironment()).afterPropertiesSet())
+        assertThatCode(() -> new JwtProductionGuard(properties, local()).afterPropertiesSet())
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsTheInsecureFlagWithoutALocalProfile() {
+        var properties = new JwtProperties();
+        properties.setAllowInsecureJwks(true);
+        properties.setJwkSetUri("http://ms-01:8081/.well-known/jwks.json");
+
+        // Un contenedor sin SPRING_PROFILES_ACTIVE no puede aceptar un JWKS por HTTP.
+        assertThatThrownBy(() -> new JwtProductionGuard(properties, new StandardEnvironment())
+                .afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("development flag");
+    }
+
+    @Test
+    void requiresIssuerAndAudienceInProd() {
+        var properties = new JwtProperties();
+        properties.setJwkSetUri("https://ms-01/.well-known/jwks.json");
+        properties.setIssuer("");
+        properties.setAudience("");
+
+        assertThatThrownBy(() -> new JwtProductionGuard(properties, prod()).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("issuer");
     }
 
     private static StandardEnvironment prod() {
         var environment = new StandardEnvironment();
         environment.setActiveProfiles("prod");
+        return environment;
+    }
+
+    private static StandardEnvironment local() {
+        var environment = new StandardEnvironment();
+        environment.setActiveProfiles("local");
         return environment;
     }
 }

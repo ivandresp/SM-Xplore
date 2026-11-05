@@ -106,11 +106,35 @@ public class AuthVersionValidator {
                                             current,
                                             Instant.now().plus(properties.getCacheTtl()))
                                     : existing);
+                    evictIfNeeded(Instant.now());
                     return updated.version() == tokenVersion ? Mono.empty() : invalidSession();
                 })
                 .onErrorMap(error -> error instanceof BadJwtException
                         ? error
                         : new BadJwtException("Could not validate the session version", error));
+    }
+
+    /**
+     * La caché no crece sin límite: al llegar a la cota se descartan las entradas vencidas y, si
+     * aun así sigue llena, se libera la mitad. Perder una entrada solo cuesta una consulta extra a
+     * ms-01 en la siguiente petición de ese usuario.
+     */
+    private void evictIfNeeded(Instant now) {
+        int max = properties.getCacheMaxEntries();
+        if (cache.size() < max) {
+            return;
+        }
+        cache.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+        int overflow = cache.size() - (max / 2);
+        if (overflow <= 0) {
+            return;
+        }
+        var iterator = cache.keySet().iterator();
+        while (overflow > 0 && iterator.hasNext()) {
+            iterator.next();
+            iterator.remove();
+            overflow--;
+        }
     }
 
     private Mono<Long> currentVersion(Jwt jwt) {

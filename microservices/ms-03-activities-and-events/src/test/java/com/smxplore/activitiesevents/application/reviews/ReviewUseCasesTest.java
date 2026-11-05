@@ -379,7 +379,7 @@ class ReviewUseCasesTest {
     @Test
     void listsPendingReports() {
         var report = ReviewReport.pending(UUID.randomUUID(), UUID.randomUUID(), "Spam");
-        given(reportRepo.findByStatus(ReviewReportStatus.PENDING)).willReturn(reactor.core.publisher.Flux.just(report));
+        given(reportRepo.findByStatus(ReviewReportStatus.PENDING, 10)).willReturn(reactor.core.publisher.Flux.just(report));
 
         StepVerifier.create(new ConsultReviewReportsUseCase(reportRepo)
                         .handle(ReviewReportStatus.PENDING, 10))
@@ -507,18 +507,48 @@ class ReviewUseCasesTest {
     }
 
     @Test
-    void theGuideOfTheActivityCanResolveItsReport() {
+    void theGuideOfTheActivityCanDismissItsReport() {
         var guideId = UUID.randomUUID();
         var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
         var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
-        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(guideId)));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
+                        .handle(report.id(), ReviewReportStatus.DISMISSED, guideId, "GUIDE"))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.DISMISSED))
+                .verifyComplete();
+
+        then(reviewRepo).should(org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void theGuideCannotHideAReviewOfItsOwnActivity() {
+        var guideId = UUID.randomUUID();
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
                         .handle(report.id(), ReviewReportStatus.RESOLVED, guideId, "GUIDE"))
+                .expectError(ReviewReportNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
+    void theManagerCanAcceptAReportAboutItsEvent() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
+                        .handle(report.id(), ReviewReportStatus.RESOLVED, managerId, "DESTINATION_MANAGER"))
                 .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
                 .verifyComplete();
 

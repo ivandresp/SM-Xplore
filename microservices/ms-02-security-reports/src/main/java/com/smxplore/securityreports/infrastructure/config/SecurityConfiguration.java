@@ -54,7 +54,9 @@ public class SecurityConfiguration {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
                         // Public: CORS preflight, authentication, API docs and health
-                        .pathMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**")
                         .permitAll()
                         // Security reports: everyone reports/comments; listing all and closing is admin/manager
@@ -79,10 +81,10 @@ public class SecurityConfiguration {
     public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter(JwtProperties jwtProperties) {
         var converter = new ReactiveJwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            var role = jwt.getClaimAsString(jwtProperties.getRoleClaim());
+            var role = UserRole.fromClaimOrNull(jwt.getClaimAsString(jwtProperties.getRoleClaim()));
             return role == null
                     ? Flux.empty()
-                    : Flux.just(new SimpleGrantedAuthority("ROLE_" + role));
+                    : Flux.just(new SimpleGrantedAuthority("ROLE_" + role.name()));
         });
         return converter;
     }
