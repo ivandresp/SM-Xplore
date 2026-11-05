@@ -22,7 +22,7 @@ class LittleLlmReviewAiFilterTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final ReviewAiRequest REQUEST =
-            new ReviewAiRequest("PRESTADORA_SERVICIOS", 5, "Excelente servicio, muy recomendado");
+            new ReviewAiRequest("SERVICE_PROVIDER", 5, "Excelente servicio, muy recomendado");
 
     @Test
     void parsesFlaggedResponseAndSendsTheConfiguredApiKey() {

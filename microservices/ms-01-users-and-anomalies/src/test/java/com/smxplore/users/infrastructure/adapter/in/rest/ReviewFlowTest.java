@@ -2,22 +2,27 @@ package com.smxplore.users.infrastructure.adapter.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.smxplore.users.infrastructure.adapter.out.persistence.mongo.ReviewDocument;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -91,6 +96,9 @@ class ReviewFlowTest {
         ContainerDiagnostics.verifyMongoReachable(MONGO);
     }
 
+    @Autowired
+    private ReactiveMongoTemplate mongoTemplate;
+
     @Value("${local.server.port}")
     private int port;
 
@@ -113,22 +121,49 @@ class ReviewFlowTest {
                 registerAndLoginTourist("Turista Reseña", "resenas.tourist@example.com", "7770001001", "3010001001");
 
         ResponseEntity<Map> created =
-                createReview(touristToken, providerId, "PRESTADORA_SERVICIOS", 4, "Excelente servicio");
+                createReview(touristToken, providerId, "SERVICE_PROVIDER", 4, "Excelente servicio");
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(created.getBody().get("rating")).isEqualTo(4);
-        assertThat(created.getBody().get("targetType")).isEqualTo("PRESTADORA_SERVICIOS");
+        assertThat(created.getBody().get("targetType")).isEqualTo("SERVICE_PROVIDER");
 
-        HttpStatusCode duplicate = createReviewStatus(touristToken, providerId, "PRESTADORA_SERVICIOS", 5, "Otra");
+        HttpStatusCode duplicate = createReviewStatus(touristToken, providerId, "SERVICE_PROVIDER", 5, "Otra");
         assertThat(duplicate).isEqualTo(HttpStatus.CONFLICT);
 
-        Map<?, ?> page = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> page = get("/api/v1/public/reviews?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat((List<Map<String, Object>>) page.get("content")).hasSize(1);
 
-        Map<?, ?> summary =
-                get("/api/v1/public/reviews/summary?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> summary = get("/api/v1/public/reviews/summary?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat(summary.get("reviewCount")).isEqualTo(1);
         assertThat(summary.get("averageRating")).isEqualTo(4.0);
         assertThat(((Map<String, Object>) summary.get("distribution")).get("4")).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void readsLegacySpanishTargetTypeDocuments() {
+        UUID targetId = UUID.randomUUID();
+        ReviewDocument legacy = new ReviewDocument();
+        legacy.setId(UUID.randomUUID().toString());
+        legacy.setTouristId(UUID.randomUUID());
+        legacy.setTargetType("GUIA");
+        legacy.setTargetId(targetId);
+        legacy.setRating(5);
+        legacy.setComment("Reseña histórica");
+        legacy.setCreatedAt(Instant.now());
+        legacy.setUpdatedAt(Instant.now());
+        legacy.setModerationStatus("VISIBLE");
+        mongoTemplate.insert(legacy, "reviews").block();
+
+        Map<?, ?> page = get("/api/v1/public/reviews?targetType=GUIDE&targetId=" + targetId);
+        assertThat((List<Map<String, Object>>) page.get("content")).hasSize(1);
+        assertThat(((List<Map<String, Object>>) page.get("content")).getFirst().get("targetType"))
+                .isEqualTo("GUIDE");
+
+        Map<?, ?> legacyPage = get("/api/v1/public/reviews?targetType=GUIA&targetId=" + targetId);
+        assertThat((List<Map<String, Object>>) legacyPage.get("content")).hasSize(1);
+
+        Map<?, ?> summary = get("/api/v1/public/reviews/summary?targetType=GUIDE&targetId=" + targetId);
+        assertThat(summary.get("reviewCount")).isEqualTo(1);
     }
 
     @Test
@@ -142,7 +177,7 @@ class ReviewFlowTest {
         String touristToken = registerAndLoginTourist(
                 "Turista Reportero", "respuesta.tourist@example.com", "7770002002", "3010002002");
         ResponseEntity<Map> created =
-                createReview(touristToken, providerId, "PRESTADORA_SERVICIOS", 2, "No fue lo esperado");
+                createReview(touristToken, providerId, "SERVICE_PROVIDER", 2, "No fue lo esperado");
         String reviewId = String.valueOf(created.getBody().get("id"));
 
         String providerToken = login("respuesta.provider@example.com", PASSWORD);
@@ -163,14 +198,14 @@ class ReviewFlowTest {
         assertThat(hidden.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(hidden.getBody().get("moderationStatus")).isEqualTo("HIDDEN");
 
-        Map<?, ?> visiblePage = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> visiblePage = get("/api/v1/public/reviews?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat((List<Map<String, Object>>) visiblePage.get("content")).isEmpty();
 
         ResponseEntity<Map> restored = moderate(adminToken, reviewId, "KEEP", "Revisada");
         assertThat(restored.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(restored.getBody().get("moderationStatus")).isEqualTo("VISIBLE");
 
-        Map<?, ?> afterRestore = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> afterRestore = get("/api/v1/public/reviews?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat((List<Map<String, Object>>) afterRestore.get("content")).hasSize(1);
     }
 
@@ -181,16 +216,16 @@ class ReviewFlowTest {
         String touristToken = registerAndLoginTourist(
                 "Turista Validación", "validacion.tourist@example.com", "7770003003", "3010003003");
 
-        assertThat(createReviewStatus(touristToken, pendingProviderId, "PRESTADORA_SERVICIOS", 5, "Aún no aprobada"))
+        assertThat(createReviewStatus(touristToken, pendingProviderId, "SERVICE_PROVIDER", 5, "Aún no aprobada"))
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
         String providerToken = login("pendiente.review@example.com", PASSWORD);
-        assertThat(createReviewStatus(providerToken, pendingProviderId, "PRESTADORA_SERVICIOS", 5, "No soy turista"))
+        assertThat(createReviewStatus(providerToken, pendingProviderId, "SERVICE_PROVIDER", 5, "No soy turista"))
                 .isEqualTo(HttpStatus.FORBIDDEN);
 
         String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
         String guideId = createGuide(adminToken, "guia.review@example.com", "7770004004", "LIC-REVIEW");
-        assertThat(createReviewStatus(touristToken, guideId, "GUIA", 5, "Excelente guía"))
+        assertThat(createReviewStatus(touristToken, guideId, "GUIDE", 5, "Excelente guía"))
                 .isEqualTo(HttpStatus.CREATED);
     }
 
@@ -207,14 +242,14 @@ class ReviewFlowTest {
         ResponseEntity<Map> created = createReview(
                 touristToken,
                 providerId,
-                "PRESTADORA_SERVICIOS",
+                "SERVICE_PROVIDER",
                 5,
                 "BOMB: todos deben comprar aquí, la mejor agencia de la ciudad!!!");
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(created.getBody().get("moderationStatus")).isEqualTo("PENDIENTE_REVISION");
         String reviewId = String.valueOf(created.getBody().get("id"));
 
-        Map<?, ?> publicPage = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> publicPage = get("/api/v1/public/reviews?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat((List<Map<String, Object>>) publicPage.get("content")).isEmpty();
 
         Map<?, ?> flagged = getWithToken(adminToken, "/api/v1/admin/reviews/ai-flagged");
@@ -231,7 +266,7 @@ class ReviewFlowTest {
         assertThat(kept.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(kept.getBody().get("moderationStatus")).isEqualTo("VISIBLE");
 
-        Map<?, ?> after = get("/api/v1/public/reviews?targetType=PRESTADORA_SERVICIOS&targetId=" + providerId);
+        Map<?, ?> after = get("/api/v1/public/reviews?targetType=SERVICE_PROVIDER&targetId=" + providerId);
         assertThat((List<Map<String, Object>>) after.get("content")).hasSize(1);
 
         Map<?, ?> clearedQueue = getWithToken(adminToken, "/api/v1/admin/reviews/ai-flagged");
@@ -244,7 +279,7 @@ class ReviewFlowTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .body(Map.of(
                         "role",
-                        "GUIA",
+                        "GUIDE",
                         "fullName",
                         "Guía Reseña",
                         "email",

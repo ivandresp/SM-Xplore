@@ -257,7 +257,7 @@ campo se devuelve en el perfil administrativo y en el perfil público de la pres
 Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colección `reviews`):
 
 - Solo un turista puede crearlas, con calificación de 1 a 5 y comentario opcional.
-- `targetType` acepta `GUIA` o `PRESTADORA_SERVICIOS`, y `targetId` es el UUID del perfil reseñado. Es un tipo de destino de reseña, no un código de rol.
+- `targetType` acepta `GUIDE` o `SERVICE_PROVIDER`, y `targetId` es el UUID del perfil reseñado. Es un tipo de destino de reseña, no un código de rol; los códigos históricos se aceptan como alias.
 - Solo se reseñan guías activos y prestadoras aprobadas; hay una reseña por turista y destino (índice único).
 - El destino puede responder una vez y cualquier usuario autenticado puede reportar la reseña.
 - El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
