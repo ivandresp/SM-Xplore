@@ -6,6 +6,13 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Review as the public catalog shows it.
+ *
+ * <p>It deliberately excludes the AI assessment ({@code ai}) and {@code aiRetained}: the verdict of
+ * the abuse filter, its model, score and categories are internal moderation data. The
+ * administrative view is {@link AdminReviewResponse}.
+ */
 public record ReviewResponse(
         UUID id,
         UUID itemId,
@@ -15,8 +22,6 @@ public record ReviewResponse(
         String comment,
         ReviewReplyResponse reply,
         ReviewStatus status,
-        ReviewAiAssessmentResponse ai,
-        boolean aiRetained,
         Instant createdAt,
         Instant updatedAt
 ) {

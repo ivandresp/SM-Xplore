@@ -56,6 +56,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
+import java.time.Duration;
 import java.util.UUID;
 
 import reactor.test.StepVerifier;
@@ -162,15 +163,16 @@ class ApplicationContextTest {
         var eventId = UUID.randomUUID();
         var event = new OutboxEvent(eventId, "bookings.reservation.changed", 1,
                 UUID.randomUUID(), UUID.randomUUID(), "{\"test\":true}", java.time.Instant.now());
+        var worker = UUID.randomUUID().toString();
 
         StepVerifier.create(outbox.enqueue(event)).verifyComplete();
-        assertThat(outbox.findPending(10).collectList().block())
-                .extracting(OutboxEvent::id)
-                .contains(eventId);
+        var claimed = outbox.claim(10, Duration.ofMinutes(1), 20, worker).collectList().block();
+        assertThat(claimed).isNotNull();
+        assertThat(claimed).extracting(claim -> claim.event().id()).contains(eventId);
 
-        StepVerifier.create(outbox.markPublished(eventId)).verifyComplete();
-        assertThat(outbox.findPending(10).collectList().block())
-                .extracting(OutboxEvent::id)
+        StepVerifier.create(outbox.markPublished(eventId, worker)).expectNext(true).verifyComplete();
+        assertThat(outbox.claim(10, Duration.ofMinutes(1), 20, worker).collectList().block())
+                .extracting(claim -> claim.event().id())
                 .doesNotContain(eventId);
     }
 

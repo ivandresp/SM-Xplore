@@ -1,7 +1,5 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
-import com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory;
-import com.smxplore.activitiesevents.application.outbox.BestEffortPublisher;
 import com.smxplore.activitiesevents.application.activities.CancelActivityUseCase;
 import com.smxplore.activitiesevents.application.activities.ChangeActivityStatusUseCase;
 import com.smxplore.activitiesevents.application.activities.ConsultActivitiesUseCase;
@@ -12,6 +10,8 @@ import com.smxplore.activitiesevents.application.activities.ManageSlotsUseCase;
 import com.smxplore.activitiesevents.application.activities.RegisterActivityUseCase;
 import com.smxplore.activitiesevents.application.activities.UpdateActivityUseCase;
 import com.smxplore.activitiesevents.application.activities.ViewActivityDetailsUseCase;
+import com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory;
+import com.smxplore.activitiesevents.application.outbox.OutboxPublisher;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
@@ -26,15 +26,24 @@ import com.smxplore.activitiesevents.domain.ports.usecases.activity.UpdateActivi
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ViewActivityDetailsUseCasePort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.reactive.TransactionalOperator;
 
+/**
+ * Los casos de uso que escriben una actividad publican {@code activities.activity.changed} en el
+ * outbox. La actividad y su evento viven en el mismo PostgreSQL, así que cada uno corre dentro de
+ * una transacción: si el INSERT del outbox falla, la escritura de la actividad se revierte y no
+ * queda una fila sin evento.
+ */
 @Configuration(proxyBeanMethods = false)
 public class ActivityUseCaseConfiguration {
 
     @Bean
     public RegisterActivityUseCasePort registerActivityUseCase(ActivityRepositoryPort activityRepository,
                                                                ActivityChangedEventFactory activityEvents,
-                                                               BestEffortPublisher publisher) {
-        return new RegisterActivityUseCase(activityRepository, activityEvents, publisher);
+                                                               OutboxPublisher publisher,
+                                                               TransactionalOperator transactionalOperator) {
+        var useCase = new RegisterActivityUseCase(activityRepository, activityEvents, publisher);
+        return activity -> transactionalOperator.transactional(useCase.handle(activity));
     }
 
     @Bean
@@ -60,8 +69,11 @@ public class ActivityUseCaseConfiguration {
     @Bean
     public UpdateActivityUseCasePort updateActivityUseCase(ActivityRepositoryPort activityRepository,
                                                            ActivityChangedEventFactory activityEvents,
-                                                           BestEffortPublisher publisher) {
-        return new UpdateActivityUseCase(activityRepository, activityEvents, publisher);
+                                                           OutboxPublisher publisher,
+                                                           TransactionalOperator transactionalOperator) {
+        var useCase = new UpdateActivityUseCase(activityRepository, activityEvents, publisher);
+        return (activityId, name, category, description, price) -> transactionalOperator
+                .transactional(useCase.handle(activityId, name, category, description, price));
     }
 
     @Bean
@@ -78,14 +90,19 @@ public class ActivityUseCaseConfiguration {
     @Bean
     public CancelActivityUseCasePort cancelActivityUseCase(ActivityRepositoryPort activityRepository,
                                                            ActivityChangedEventFactory activityEvents,
-                                                           BestEffortPublisher publisher) {
-        return new CancelActivityUseCase(activityRepository, activityEvents, publisher);
+                                                           OutboxPublisher publisher,
+                                                           TransactionalOperator transactionalOperator) {
+        var useCase = new CancelActivityUseCase(activityRepository, activityEvents, publisher);
+        return activityId -> transactionalOperator.transactional(useCase.handle(activityId));
     }
 
     @Bean
     public ChangeActivityStatusUseCasePort changeActivityStatusUseCase(ActivityRepositoryPort activityRepository,
                                                                        ActivityChangedEventFactory activityEvents,
-                                                                       BestEffortPublisher publisher) {
-        return new ChangeActivityStatusUseCase(activityRepository, activityEvents, publisher);
+                                                                       OutboxPublisher publisher,
+                                                                       TransactionalOperator transactionalOperator) {
+        var useCase = new ChangeActivityStatusUseCase(activityRepository, activityEvents, publisher);
+        return (activityId, newStatus) -> transactionalOperator.transactional(
+                useCase.handle(activityId, newStatus));
     }
 }

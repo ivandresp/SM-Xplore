@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,7 +43,8 @@ class ExpiredReservationCleanupJobTest {
     void closesStaleReservationsAndPublishesTheChange() {
         var grace = Duration.ofHours(24);
         var job = new ExpiredReservationCleanupJob(reservationRepo, outbox,
-                new ReservationEventFactory(new ObjectMapper().findAndRegisterModules()), grace);
+                new ReservationEventFactory(new ObjectMapper().findAndRegisterModules()),
+                passThroughTransactions(), grace);
         var before = Instant.now().minus(grace);
         var reservation = staleReservation();
         var candidate = new ReservationCloseCandidate(reservation.getId(), ReservationStatus.NO_SHOW);
@@ -68,8 +70,18 @@ class ExpiredReservationCleanupJobTest {
     @Test
     void rejectsNonPositiveGrace() {
         assertThatThrownBy(() -> new ExpiredReservationCleanupJob(reservationRepo, outbox,
-                new ReservationEventFactory(new ObjectMapper()), Duration.ZERO))
+                new ReservationEventFactory(new ObjectMapper()), passThroughTransactions(), Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** Sin base de datos no hay transaccion real: el operador devuelve el mismo flujo. */
+    @SuppressWarnings("unchecked")
+    private static org.springframework.transaction.reactive.TransactionalOperator passThroughTransactions() {
+        var operator = org.mockito.Mockito.mock(
+                org.springframework.transaction.reactive.TransactionalOperator.class);
+        lenient().when(operator.transactional(any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        return operator;
     }
 
     private static Reservation staleReservation() {

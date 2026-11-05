@@ -33,7 +33,7 @@ class EventUseCasesTest {
     @BeforeEach
     void setUp() {
         eventRepo = new FakeEventRepository();
-        var publisher = new com.smxplore.activitiesevents.application.outbox.BestEffortPublisher(
+        var publisher = new com.smxplore.activitiesevents.application.outbox.OutboxPublisher(
                 com.smxplore.activitiesevents.domain.ports.repository.OutboxPort.noop());
         var eventEvents = new com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory(
                 new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules());

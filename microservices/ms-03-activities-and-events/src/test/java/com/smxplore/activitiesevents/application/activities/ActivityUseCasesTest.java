@@ -38,7 +38,7 @@ class ActivityUseCasesTest {
     @BeforeEach
     void setUp() {
         activityRepo = new FakeActivityRepository();
-        var publisher = new com.smxplore.activitiesevents.application.outbox.BestEffortPublisher(
+        var publisher = new com.smxplore.activitiesevents.application.outbox.OutboxPublisher(
                 com.smxplore.activitiesevents.domain.ports.repository.OutboxPort.noop());
         var activityEvents = new com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory(
                 new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules());

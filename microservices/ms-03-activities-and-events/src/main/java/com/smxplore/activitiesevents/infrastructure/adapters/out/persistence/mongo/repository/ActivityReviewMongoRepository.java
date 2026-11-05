@@ -3,6 +3,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mo
 import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ActivityReviewDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.projection.ReviewMetricsProjection;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
@@ -24,7 +25,11 @@ public interface ActivityReviewMongoRepository extends ReactiveMongoRepository<A
 
     Flux<ActivityReviewDocument> findByItemIdIn(Collection<UUID> itemIds);
 
-    Flux<ActivityReviewDocument> findByStatusOrderByUpdatedAtDesc(ReviewStatus status);
+    /**
+     * Administrative queue, newest update first. The limit travels in the query: without it Mongo
+     * streams the whole status of the collection and the service trims it in memory.
+     */
+    Flux<ActivityReviewDocument> findByStatusOrderByUpdatedAtDescIdAsc(ReviewStatus status, Pageable pageable);
 
     @Query(value = "{ 'itemId': ?0, 'user.id': ?1 }", exists = true)
     Mono<Boolean> existsByItemAndUser(UUID itemId, UUID userId);

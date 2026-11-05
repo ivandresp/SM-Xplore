@@ -2,6 +2,27 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Outbox confiable y moderación acotada 2026-11-05]
+
+### Corregido
+- **Pérdida de eventos de actividades y eventos:** el encolado pasa a ser parte de la misma
+  transacción PostgreSQL (`OutboxPublisher` + `TransactionalOperator`). Antes `BestEffortPublisher`
+  se tragaba el error y la fila quedaba sin evento.
+- **Relay del outbox:** claim con `FOR UPDATE SKIP LOCKED`, lease por fila, backoff exponencial,
+  `OUTBOX_MAX_ATTEMPTS`, retención de filas terminales, métricas y conteo de los leases vencidos como
+  intento (migración `V7`). Un fallo ya no puede dejar una fila en reintento infinito ni perderse.
+- **Consumidor de `catalog.site.changed`:** reintentos y descarte a `catalog.site.changed.DLT`
+  mediante una container factory propia; `auto-offset-reset=earliest` para poner al día un grupo nuevo.
+- **DTO público de reseñas:** `ai` y `aiRetained` dejan de viajar en el catálogo; solo los expone
+  `AdminReviewResponse` en los endpoints administrativos.
+- **Cola de moderación:** el límite se empuja a Mongo con `Pageable` (reseñas y reportes) en lugar de
+  leer la colección completa y recortarla en memoria.
+- **Reportes de reseñas:** aceptar un reporte (`RESOLVED`, oculta la reseña) queda reservado a
+  `ADMIN`/gestora; el guía solo puede descartarlo, para que no retire reseñas sobre su actividad.
+
+### Agregado
+- `GET /api/v1/review-reports/inbox`: bandeja del guía con los reportes de sus actividades.
+- `/actuator/prometheus` y `/actuator/metrics` expuestos para el scraping en el stack local.
 ## [Notificaciones de reservas 2026-11-05]
 
 ### Agregado

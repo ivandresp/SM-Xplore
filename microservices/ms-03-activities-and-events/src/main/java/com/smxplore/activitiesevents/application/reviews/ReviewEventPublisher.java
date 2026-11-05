@@ -15,6 +15,11 @@ import reactor.core.publisher.Mono;
  * transaction. The review is saved first; if enqueueing fails the error is logged and the saved
  * review is still returned, because the user's write already succeeded. Nothing retries that event,
  * so a review without its event has to be reconciled out of band.
+ *
+ * TODO(ms-03): pending contract to close this window. Either the outbox moves to MongoDB (same
+ * transaction as the review) or a reconciliation job compares review_reviews/event_reviews with
+ * outbox_events and re-enqueues the missing reviews.review.changed. Until then this is the only
+ * place that can leave a review without its event, and the log is the only trace.
  */
 @Component
 @Slf4j

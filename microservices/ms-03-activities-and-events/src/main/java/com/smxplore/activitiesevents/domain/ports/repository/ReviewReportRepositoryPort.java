@@ -14,9 +14,10 @@ public interface ReviewReportRepositoryPort {
 
     Mono<ReviewReport> findById(UUID reportId);
 
-    Flux<ReviewReport> findByStatus(ReviewReportStatus status);
+    /** Administrative queue, oldest report first, bounded by {@code limit} in the database. */
+    Flux<ReviewReport> findByStatus(ReviewReportStatus status, int limit);
 
-    /** Reports of the given reviews, used to scope the list to a manager's catalog. */
+    /** Reports of the given reviews, used to scope the list to a manager's catalog or a guide. */
     Flux<ReviewReport> findByStatusAndReviewIds(ReviewReportStatus status, Collection<UUID> reviewIds, int limit);
 
     Mono<Boolean> existsByReviewAndReporter(UUID reviewId, UUID reporterId);

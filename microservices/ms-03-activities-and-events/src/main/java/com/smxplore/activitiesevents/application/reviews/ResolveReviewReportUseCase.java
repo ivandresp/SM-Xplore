@@ -26,6 +26,10 @@ import java.util.UUID;
  * <p>A {@link ReviewReportStatus#RESOLVED} report accepts the complaint and hides the review; a
  * dismissed report leaves it untouched. Hiding the review publishes {@code reviews.review.changed}
  * so ms-05 removes it from the reputation aggregates.
+ *
+ * <p>Only {@code ADMIN} and {@code DESTINATION_MANAGER} can accept a report, because accepting it
+ * hides a review about the very item the guide or manager owns: a guide may answer its reviews and
+ * dismiss a report, but it can never remove a review about itself.
  */
 @RequiredArgsConstructor
 public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePort {
@@ -44,6 +48,12 @@ public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePor
     public Mono<ReviewReport> handle(UUID reportId, ReviewReportStatus status, UUID resolverId, String role) {
         if (status != ReviewReportStatus.RESOLVED && status != ReviewReportStatus.DISMISSED) {
             return Mono.error(new InvalidReviewException("Report can only be resolved or dismissed."));
+        }
+        // Ocultar la reseña es moderación: el guía responde por su actividad, pero no puede
+        // retirar reseñas sobre sí mismo. Aceptar el reporte (RESOLVED) queda para el staff.
+        if (ReviewReportStatus.RESOLVED == status && GUIDE.equals(role)) {
+            return Mono.error(new ReviewReportNotAllowedException(
+                    "A guide can dismiss a report; only staff can hide the review."));
         }
         return reportRepo.findById(reportId)
                 .switchIfEmpty(Mono.error(new ReviewNotFoundException(reportId)))

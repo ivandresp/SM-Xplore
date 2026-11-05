@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: activities-and-events
+  task:
+    scheduling:
+      # El relay, la retencion y el cierre automatico comparten el scheduler: sin pool, un job
+      # bloqueado (el relay espera a Kafka) detiene a los demas.
+      pool:
+        size: ${SCHEDULING_POOL_SIZE:3}
   r2dbc:
     url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
     username: ${POSTGRES_USER}
@@ -36,10 +42,27 @@ springdoc:
   swagger-ui:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # El stack local scrapea /actuator/prometheus; en produccion se aisla por red.
+        include: health,info,metrics,prometheus
+
 app:
   outbox:
     enabled: ${OUTBOX_ENABLED:false}
-    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
+    batch-size: ${OUTBOX_BATCH_SIZE:10}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
+    initial-backoff: ${OUTBOX_INITIAL_BACKOFF:PT1S}
+    max-backoff: ${OUTBOX_MAX_BACKOFF:PT1M}
+    lease-duration: ${OUTBOX_LEASE_DURATION:PT3M}
+    send-timeout: ${OUTBOX_SEND_TIMEOUT:PT5S}
+    # Debe cubrir batch-size x send-timeout; el arranque falla si no lo hace.
+    cycle-timeout: ${OUTBOX_CYCLE_TIMEOUT:PT60S}
+    retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
   events:
     # Consumidor de catalog.site.changed v2 (ms-04): refresca sitio_nombre y manager_id de cada
     # evento. Apagado por defecto; sin el, la gestora se revalida en caliente al responder reseñas.
@@ -47,6 +70,10 @@ app:
       enabled: ${SITE_EVENTS_ENABLED:false}
       group: ${SITE_EVENTS_GROUP:ms-03-site-snapshot}
       timeout: ${SITE_EVENTS_TIMEOUT:PT10S}
+      # Un evento que no se puede aplicar se reintenta y termina en catalog.site.changed.DLT.
+      dlt-suffix: ${SITE_EVENTS_DLT_SUFFIX:.DLT}
+      retry-interval-ms: ${SITE_EVENTS_RETRY_INTERVAL_MS:1000}
+      retry-max-elapsed-ms: ${SITE_EVENTS_RETRY_MAX_ELAPSED_MS:60000}
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}
@@ -89,6 +116,8 @@ app:
       base-url: ${MS01_BASE_URL:}
       timeout: ${AUTH_VERSION_TIMEOUT:2s}
       cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
+      # Cota de entradas y de TTL (max 5 min): el TTL es la ventana real de revocacion.
+      cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
     mfa:
       require-admin: ${MFA_REQUIRE_ADMIN:false}
     cors:

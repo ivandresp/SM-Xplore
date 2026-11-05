@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.application.reviews.ConsultGuideReviewReportsUseCase;
 import com.smxplore.activitiesevents.application.reviews.ConsultManagerReviewReportsUseCase;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
@@ -40,6 +41,7 @@ public class ReviewReportController {
 
     private final ConsultReviewReportsUseCasePort consultReviewReportsUseCase;
     private final ConsultManagerReviewReportsUseCase consultManagerReviewReportsUseCase;
+    private final ConsultGuideReviewReportsUseCase consultGuideReviewReportsUseCase;
     private final ResolveReviewReportUseCasePort resolveReviewReportUseCase;
     private final ReviewReportWebMapper mapper;
     private final JwtProperties jwtProperties;
@@ -57,6 +59,17 @@ public class ReviewReportController {
         }
         return consultManagerReviewReportsUseCase
                 .handle(subject(jwt), jwt.getTokenValue(), status, pageSize)
+                .map(mapper::toResponse);
+    }
+
+    @GetMapping("/inbox")
+    @Operation(summary = "Pending reports about the activities of the authenticated guide")
+    public Flux<ReviewReportResponse> inbox(
+            @RequestParam(defaultValue = "200") int limit,
+            @RequestParam(defaultValue = "PENDING") ReviewReportStatus status,
+            @AuthenticationPrincipal Jwt jwt) {
+        return consultGuideReviewReportsUseCase
+                .handle(subject(jwt), status, PaginationLimits.clamp(limit))
                 .map(mapper::toResponse);
     }
 

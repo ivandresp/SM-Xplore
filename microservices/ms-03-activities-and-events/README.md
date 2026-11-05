@@ -85,7 +85,17 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox. |
 | `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. |
-| `OUTBOX_POLL_INTERVAL_MS` | `5000` | Frecuencia del relay. |
+| `OUTBOX_POLL_INTERVAL_MS` | `2000` | Frecuencia del relay. |
+| `OUTBOX_BATCH_SIZE` | `10` | Filas que reclama cada ciclo. El arranque falla si `batch-size × send-timeout > cycle-timeout`. |
+| `OUTBOX_MAX_ATTEMPTS` | `20` | Intentos antes de marcar la fila como `FAILED`. |
+| `OUTBOX_INITIAL_BACKOFF` / `OUTBOX_MAX_BACKOFF` | `PT1S` / `PT1M` | Backoff exponencial entre intentos. |
+| `OUTBOX_LEASE_DURATION` | `PT3M` | Lease del claim; al vencer, otra instancia retoma la fila. |
+| `OUTBOX_SEND_TIMEOUT` | `PT5S` | Timeout del envío a Kafka. |
+| `OUTBOX_CYCLE_TIMEOUT` | `PT60S` | Tope de un ciclo completo del relay; debe cubrir `batch-size × send-timeout`. |
+| `SCHEDULING_POOL_SIZE` | `3` | Hilos del scheduler: relay, retención y cierre automático no se bloquean entre sí. |
+| `OUTBOX_RETENTION_DAYS` | `30` | Retención de las filas `PUBLISHED`/`FAILED`. |
+| `SITE_EVENTS_RETRY_INTERVAL_MS` / `SITE_EVENTS_RETRY_MAX_ELAPSED_MS` | `1000` / `60000` | Reintentos del consumidor de sitios: backoff exponencial con tope de 60 s. |
+| `SITE_EVENTS_DLT_SUFFIX` | `.DLT` | Sufijo del topic de descarte; el topic se declara al arrancar. |
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 | `DEMAND_ZONE_ID` | `America/Bogota` | Zona horaria usada para agrupar la serie temporal y los días de la semana. |
@@ -184,7 +194,13 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 **Alcance por gestora:** `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=...` de ms-04 (reenviando el `Authorization` del usuario), luego sus eventos/actividades y finalmente sus reservas. Si no tiene sitios, devuelve una lista vacía. `ADMIN` sigue viendo todas.
 
-**Outbox de catálogo:** crear o modificar una actividad o un evento escribe `activities.activity.changed` v2 o `activities.event.changed` v2 en el outbox. La v2 usa el nombre de la categoría que el usuario escribe (no un `categoryId`), no publica coordenadas —son del sitio en ms-04— y admite los estados reales (`PAUSED`/`CANCELLED` en actividades, `POSTPONED` en eventos). El envío es best effort: si el encolado falla, la escritura ya se guardó, se registra el error y la petición responde bien.
+**Outbox de catálogo:** crear o modificar una actividad o un evento escribe `activities.activity.changed` v2 o `activities.event.changed` v2 en el outbox. La v2 usa el nombre de la categoría que el usuario escribe (no un `categoryId`), no publica coordenadas —son del sitio en ms-04— y admite los estados reales (`PAUSED`/`CANCELLED` en actividades, `POSTPONED` en eventos). El evento se escribe **en la misma transacción** que la fila de la actividad o del evento: si el `INSERT` del outbox falla, la escritura se revierte y no queda una fila sin evento.
+
+**Índices de la cola de moderación:** la consulta ordena por `updatedAt` filtrando por `status`, así que las colecciones declaran el índice compuesto `{status, updatedAt}`. Se crea al arrancar con `MONGO_AUTO_INDEX_CREATION=true`; con la creación automática apagada hay que crearlo a mano en cada entorno.
+
+**Despliegue del relay:** el relay anterior seleccionaba por `published_at IS NULL` e ignoraba `status`, así que durante un despliegue rodante publicaría lo que la versión nueva está marcando. Migrar con `OUTBOX_ENABLED=false` en la versión vieja o parar el relay antes de desplegar.
+
+**Relay con lease:** cada ciclo reclama un lote con `FOR UPDATE SKIP LOCKED` (dos instancias no publican la misma fila), marca la fila `PROCESSING` con `locked_until` y solo el dueño del lease puede publicarla o fallarla. Un fallo se reintenta con backoff exponencial; al llegar a `OUTBOX_MAX_ATTEMPTS` la fila queda `FAILED` con `last_error` (nunca desaparece en silencio) y un job de retención borra las filas terminales viejas. Los contadores `activities.outbox.published|failed|exhausted|lease_lost` se exponen en `/actuator/prometheus`.
 
 **Cierre automático:** un job diario (03:15, `America/Bogota`) marca `NO_SHOW` las reservas `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `RESERVATION_AUTO_CLOSE_GRACE` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`. Los ítems pausados o postergados no se tocan; cada cierre publica `bookings.reservation.changed` para notificar al turista y al guía/gestora. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
 
@@ -225,13 +241,15 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 | GET | `/api/v1/admin/reviews?status=PENDING_REVIEW` | `ADMIN`; cola global de reseñas retenidas |
 | PATCH | `/api/v1/reviews/{reviewId}/status` | `ADMIN`; publica, oculta, elimina o devuelve a la cola |
 | GET | `/api/v1/review-reports?status=PENDING` | `ADMIN` ve todos; `DESTINATION_MANAGER` solo los de sus sitios |
-| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN` o la entidad a cargo del ítem reseñado |
+| GET | `/api/v1/review-reports/inbox?status=PENDING` | Solo `GUIDE`: reportes de las reseñas de sus actividades (sin ella podía resolver un reporte por id, pero no descubrirlo). El staff usa el listado general |
+| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`/gestora aceptan (`RESOLVED`, oculta la reseña) o descartan; el `GUIDE` dueño solo puede descartar (`DISMISSED`): ocultar reseñas sobre su propia actividad es moderación, no respuesta |
 
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
 - Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
 - La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, la **gestora del sitio** (`managerId` guardado en el evento) o `ADMIN`.
-- La reseña expone `status` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`), `ai`, `aiRetained` y `updatedAt`. Los listados públicos y las métricas solo cuentan `PUBLISHED`; los documentos anteriores sin estado se leen como publicados.
+- La reseña pública expone `status` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`) y `updatedAt`, **no** el veredicto del filtro de IA: `ai` y `aiRetained` son datos internos de moderación y solo viajan en las respuestas administrativas (`AdminReviewResponse`). Los listados públicos y las métricas solo cuentan `PUBLISHED`; los documentos anteriores sin estado se leen como publicados.
+- **Cola de moderación acotada:** `GET /api/v1/admin/reviews` y `GET /api/v1/review-reports` empujan el límite a Mongo (`Pageable`) en lugar de leer la colección completa y recortarla en memoria.
 - **Filtro de IA:** con `REVIEW_AI_ENABLED=true` cada reseña con comentario pasa por el mismo littleLLM de ms-04. Si el score supera `REVIEW_AI_THRESHOLD`, queda `PENDING_REVIEW` (o `HIDDEN` con `REVIEW_AI_ACTION=HIDE`) y aparece en la cola administrativa. La decisión se guarda en `ai` para auditoría. Sin filtro, la reseña nace `PUBLISHED`.
 - **Moderación:** solo `ADMIN` cambia el estado. Cada cambio efectivo actualiza `updatedAt` y publica `reviews.review.changed`, para que ms-05 ajuste su agregado de reputación.
 - **Outbox de reseñas:** crear, responder o moderar una reseña escribe `reviews.review.changed` v1 en el outbox con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre **no** viaja en el evento.

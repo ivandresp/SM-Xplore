@@ -16,6 +16,7 @@ import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mon
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.ActivityReviewMongoRepository;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.EventReviewMongoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -76,12 +77,22 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
         };
     }
 
+    /**
+     * Administrative queue. Each collection is asked for {@code limit} rows, not for every row of
+     * the status: the page of one collection bounds the merge, so the result is still the global
+     * newest {@code limit} without materialising both collections in memory.
+     */
     @Override
     public Flux<Review> findByStatus(ReviewStatus status, int limit) {
-        return Flux.concat(
-                        eventReviews.findByStatusOrderByUpdatedAtDesc(status).map(this::toEventDomain),
-                        activityReviews.findByStatusOrderByUpdatedAtDesc(status).map(this::toActivityDomain))
-                .sort(Comparator.comparing(Review::updatedAt).reversed())
+        if (status == null || limit < 1) {
+            return Flux.empty();
+        }
+        var page = PageRequest.of(0, limit);
+        return Flux.merge(
+                        eventReviews.findByStatusOrderByUpdatedAtDescIdAsc(status, page).map(this::toEventDomain),
+                        activityReviews.findByStatusOrderByUpdatedAtDescIdAsc(status, page).map(this::toActivityDomain))
+                // Orden estable: dos reseñas con el mismo updatedAt no deben alternar entre llamadas.
+                .sort(Comparator.comparing(Review::updatedAt).reversed().thenComparing(Review::getId))
                 .take(limit);
     }
 

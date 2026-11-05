@@ -51,7 +51,9 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**")
                         .permitAll()
                         // Public catalog
@@ -76,8 +78,11 @@ public class SecurityConfiguration {
                         // Reservations: staff-only global listings; ownership is enforced in the controller
                         .pathMatchers(HttpMethod.GET, "/api/v1/reservations")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
-                        // El listado solo lo ven el admin y la gestora; el guia resuelve por id
-                        // (el caso de uso comprueba que sea el dueno de la actividad).
+                        // El guia descubre los reportes de sus actividades en su bandeja y los
+                        // resuelve por id (el caso de uso comprueba que sea el dueno).
+                        .pathMatchers(HttpMethod.GET, "/api/v1/review-reports/inbox")
+                        .hasRole(GUIDE)
+                        // El listado global y por id solo lo ven el admin y la gestora.
                         .pathMatchers(HttpMethod.GET, "/api/v1/review-reports", "/api/v1/review-reports/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/review-reports/**")
