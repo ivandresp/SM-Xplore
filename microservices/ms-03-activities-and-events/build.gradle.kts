@@ -27,7 +27,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.kafka:spring-kafka")
+    // starter y no spring-kafka suelto: sin el auto-configurador de Kafka no hay KafkaTemplate ni
+    // contenedor de listeners, asi que el relay del outbox y el consumidor de sitios no arrancaban.
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
     implementation("org.mapstruct:mapstruct:1.6.3")
 
@@ -68,6 +70,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.testcontainers:testcontainers-mongodb")
+    testImplementation("org.testcontainers:testcontainers-kafka")
     // Valida los eventos generados contra contracts/events/*.v1.json, como ms-02 y ms-05.
     testImplementation("com.networknt:json-schema-validator:1.5.9")
     testCompileOnly("org.projectlombok:lombok")

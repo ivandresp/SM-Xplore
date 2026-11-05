@@ -4,6 +4,9 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 
 ## [Consumidor de sitios 2026-11-05]
 
+### Corregido
+- **El relay del outbox nunca publicaba.** ms-03 dependia de `spring-kafka` suelto, sin el starter, y por eso el auto-configurador de Kafka no corria: no habia `KafkaTemplate` y el relay salia por el `ObjectProvider` vacio. Se cambia a `spring-boot-starter-kafka`; de paso llega el contenedor de listeners que necesita el consumidor nuevo.
+
 ### Agregado
 - Consumidor de `catalog.site.changed` v2 (ms-04): con `SITE_EVENTS_ENABLED=true` refresca `sitio_nombre` y `manager_id` de todos los eventos del sitio. Es el primer consumidor de Kafka de ms-03, que hasta ahora solo publicaba.
 - `V5`: columna `evento.sitio_actualizado_en`. El UPDATE solo aplica cuando el `updatedAt` del sitio es más nuevo que el último aplicado, así que un mensaje reordenado no revierte un cambio de gestora.

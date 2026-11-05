@@ -198,6 +198,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 Ese snapshot se usa como referencia, pero **responder una reseña lo revalida**: se consulta `GET /api/v1/sites/{siteId}` de ms-04 con el token del usuario y manda la gestora actual, así que una gestora reasignada pierde el derecho de inmediato. Si ms-04 no responde, o el sitio ya no existe, se usa el snapshot y se registra un `WARN`: la alternativa es rechazar todas las respuestas cada vez que el catálogo esté caído.
 
+**Kafka:** ms-03 usa `spring-boot-starter-kafka`. Sin el starter no hay `KafkaTemplate` ni contenedor de listeners: el relay del outbox y el consumidor de sitios quedan inertes aunque `KAFKA_BOOTSTRAP_SERVERS` esté definido.
+
 **Refresco por Kafka (opcional):** con `SITE_EVENTS_ENABLED=true`, un consumidor de `catalog.site.changed` v2 (ms-04) actualiza `sitio_nombre` y `manager_id` de todos los eventos de ese sitio. Solo aplica el evento si su `updatedAt` es más nuevo que el último aplicado (columna `sitio_actualizado_en`), así que un mensaje reordenado no devuelve el sitio a la gestora anterior. Los mensajes v1 se ignoran: no traen `managerId`.
 
 ## Pruebas
