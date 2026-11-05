@@ -4,6 +4,7 @@ import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ActivityReviewDocument;
@@ -84,12 +85,14 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
 
     private EventReviewDocument toEventDocument(Review review) {
         return new EventReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
-                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt());
+                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
+                review.getStatus(), review.updatedAt());
     }
 
     private ActivityReviewDocument toActivityDocument(Review review) {
         return new ActivityReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
-                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt());
+                review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
+                review.getStatus(), review.updatedAt());
     }
 
     private Review toEventDomain(EventReviewDocument document) {
@@ -102,7 +105,18 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .comment(document.comment())
                 .reply(toReplyDomain(document.reply()))
                 .createdAt(document.createdAt())
+                .status(statusOf(document.status()))
+                .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
                 .build();
+    }
+
+    /** Documents written before the status field existed are published reviews. */
+    private static ReviewStatus statusOf(ReviewStatus status) {
+        return status == null ? ReviewStatus.PUBLISHED : status;
+    }
+
+    private static java.time.Instant updatedAtOf(java.time.Instant updatedAt, java.time.Instant createdAt) {
+        return updatedAt == null ? createdAt : updatedAt;
     }
 
     private Review toActivityDomain(ActivityReviewDocument document) {
@@ -115,6 +129,8 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .comment(document.comment())
                 .reply(toReplyDomain(document.reply()))
                 .createdAt(document.createdAt())
+                .status(statusOf(document.status()))
+                .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
                 .build();
     }
 

@@ -182,6 +182,9 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
 - Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
 - La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, la **gestora del sitio** (`managerId` guardado en el evento) o `ADMIN`.
+- La reseña expone `status` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`) y `updatedAt`. ms-03 no modera: sus reseñas nacen `PUBLISHED`; los otros estados existen para representar lo que decida ms-04.
+- **Outbox de reseñas:** al crear una reseña se escribe `reviews.review.changed` v1 en el outbox con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre **no** viaja en el evento.
+- La reseña vive en MongoDB y el outbox en PostgreSQL: no comparten transacción. La reseña se guarda primero; si el evento no se puede encolar se registra el error y la reseña se devuelve igual, porque la escritura del usuario ya ocurrió. Ese evento no se reintenta.
 - **Reportes acotados:** `GET /api/v1/review-reports` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=` de ms-04, luego sus eventos, las reseñas de esos eventos y por último los reportes. Un reporte de una actividad no aparece en el listado de una gestora: las actividades son del guía. `ADMIN` conserva el listado global.
 - **Resolver un reporte** exige ser `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento), con la misma regla que la respuesta a la reseña.
 
