@@ -243,6 +243,46 @@ class ApplicationContextTest {
         assertThat(second.content()).isNotEmpty();
     }
 
+    @Test
+    void appliesTheSiteSnapshotOnlyWhenTheSiteEventIsNewer() {
+        var siteId = UUID.randomUUID();
+        var formerManager = UUID.randomUUID();
+        var newManager = UUID.randomUUID();
+        var itemStart = Instant.now().plusSeconds(86_400);
+
+        var saved = eventRepository.save(Event.builder()
+                .siteId(siteId)
+                .managerId(formerManager)
+                .siteName("Nombre viejo")
+                .name("Evento con snapshot")
+                .category("Cultura")
+                .status(EventStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("10000.00"))
+                .maxCapacity(10)
+                .startsAt(itemStart)
+                .endsAt(itemStart.plusSeconds(3_600))
+                .build()).block();
+        assertThat(saved).isNotNull();
+
+        var newer = Instant.now();
+        assertThat(eventRepository.applySiteSnapshot(siteId, "Nombre nuevo", newManager, newer).block())
+                .isEqualTo(1);
+
+        var refreshed = eventRepository.findById(saved.getId()).block();
+        assertThat(refreshed).isNotNull();
+        assertThat(refreshed.getManagerId()).isEqualTo(newManager);
+        assertThat(refreshed.getSiteName()).isEqualTo("Nombre nuevo");
+
+        // An older site event must not hand the site back to the previous manager.
+        assertThat(eventRepository.applySiteSnapshot(siteId, "Nombre viejo", formerManager,
+                newer.minusSeconds(60)).block()).isZero();
+
+        var stillNew = eventRepository.findById(saved.getId()).block();
+        assertThat(stillNew).isNotNull();
+        assertThat(stillNew.getManagerId()).isEqualTo(newManager);
+        assertThat(stillNew.getSiteName()).isEqualTo("Nombre nuevo");
+    }
+
     private static String token(String role) {
         var now = Instant.now();
         var claims = JwtClaimsSet.builder()

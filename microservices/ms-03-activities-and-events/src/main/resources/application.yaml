@@ -40,6 +40,13 @@ app:
   outbox:
     enabled: ${OUTBOX_ENABLED:false}
     poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+  events:
+    # Consumidor de catalog.site.changed v2 (ms-04): refresca sitio_nombre y manager_id de cada
+    # evento. Apagado por defecto; sin el, la gestora se revalida en caliente al responder reseñas.
+    site-consumer:
+      enabled: ${SITE_EVENTS_ENABLED:false}
+      group: ${SITE_EVENTS_GROUP:ms-03-site-snapshot}
+      timeout: ${SITE_EVENTS_TIMEOUT:PT10S}
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}

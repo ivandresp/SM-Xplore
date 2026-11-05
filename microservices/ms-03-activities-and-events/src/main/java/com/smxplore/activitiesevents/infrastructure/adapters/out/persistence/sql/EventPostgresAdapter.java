@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -83,5 +84,24 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     @Override
     public Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds) {
         return repository.findIdsBySiteIds(siteIds);
+    }
+
+    @Override
+    public Mono<Integer> applySiteSnapshot(UUID siteId, String siteName, UUID managerId, Instant siteUpdatedAt) {
+        return template.getDatabaseClient()
+                .sql("""
+                        UPDATE evento
+                        SET sitio_nombre = COALESCE(:siteName, sitio_nombre),
+                            manager_id = :managerId,
+                            sitio_actualizado_en = :siteUpdatedAt
+                        WHERE sitio_id = :siteId
+                          AND (sitio_actualizado_en IS NULL OR sitio_actualizado_en < :siteUpdatedAt)
+                        """)
+                .bind("siteName", siteName)
+                .bind("managerId", managerId)
+                .bind("siteUpdatedAt", siteUpdatedAt)
+                .bind("siteId", siteId)
+                .fetch().rowsUpdated()
+                .map(Long::intValue);
     }
 }

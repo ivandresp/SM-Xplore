@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory
 import com.smxplore.activitiesevents.application.events.ChangeEventStatusUseCase;
 import com.smxplore.activitiesevents.application.events.ConsultEventsUseCase;
 import com.smxplore.activitiesevents.application.events.EstimateEventAttendanceUseCase;
+import com.smxplore.activitiesevents.application.events.RefreshSiteSnapshotUseCase;
 import com.smxplore.activitiesevents.application.events.RegisterEventUseCase;
 import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
 import com.smxplore.activitiesevents.application.events.SearchEventsUseCase;
@@ -30,6 +31,11 @@ public class EventUseCaseConfiguration {
                                                          EventChangedEventFactory eventEvents,
                                                          BestEffortPublisher publisher) {
         return new RegisterEventUseCase(eventRepository, eventEvents, publisher);
+    }
+
+    @Bean
+    public RefreshSiteSnapshotUseCase refreshSiteSnapshotUseCase(EventRepositoryPort eventRepository) {
+        return new RefreshSiteSnapshotUseCase(eventRepository);
     }
 
     @Bean
