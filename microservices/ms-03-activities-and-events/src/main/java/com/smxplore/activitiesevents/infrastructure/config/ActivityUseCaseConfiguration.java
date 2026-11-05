@@ -1,5 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.config;
 
+import com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory;
+import com.smxplore.activitiesevents.application.outbox.BestEffortPublisher;
 import com.smxplore.activitiesevents.application.activities.CancelActivityUseCase;
 import com.smxplore.activitiesevents.application.activities.ChangeActivityStatusUseCase;
 import com.smxplore.activitiesevents.application.activities.ConsultActivitiesUseCase;
@@ -29,8 +31,10 @@ import org.springframework.context.annotation.Configuration;
 public class ActivityUseCaseConfiguration {
 
     @Bean
-    public RegisterActivityUseCasePort registerActivityUseCase(ActivityRepositoryPort activityRepository) {
-        return new RegisterActivityUseCase(activityRepository);
+    public RegisterActivityUseCasePort registerActivityUseCase(ActivityRepositoryPort activityRepository,
+                                                               ActivityChangedEventFactory activityEvents,
+                                                               BestEffortPublisher publisher) {
+        return new RegisterActivityUseCase(activityRepository, activityEvents, publisher);
     }
 
     @Bean
@@ -54,8 +58,10 @@ public class ActivityUseCaseConfiguration {
     }
 
     @Bean
-    public UpdateActivityUseCasePort updateActivityUseCase(ActivityRepositoryPort activityRepository) {
-        return new UpdateActivityUseCase(activityRepository);
+    public UpdateActivityUseCasePort updateActivityUseCase(ActivityRepositoryPort activityRepository,
+                                                           ActivityChangedEventFactory activityEvents,
+                                                           BestEffortPublisher publisher) {
+        return new UpdateActivityUseCase(activityRepository, activityEvents, publisher);
     }
 
     @Bean
@@ -70,12 +76,16 @@ public class ActivityUseCaseConfiguration {
     }
 
     @Bean
-    public CancelActivityUseCasePort cancelActivityUseCase(ActivityRepositoryPort activityRepository) {
-        return new CancelActivityUseCase(activityRepository);
+    public CancelActivityUseCasePort cancelActivityUseCase(ActivityRepositoryPort activityRepository,
+                                                           ActivityChangedEventFactory activityEvents,
+                                                           BestEffortPublisher publisher) {
+        return new CancelActivityUseCase(activityRepository, activityEvents, publisher);
     }
 
     @Bean
-    public ChangeActivityStatusUseCasePort changeActivityStatusUseCase(ActivityRepositoryPort activityRepository) {
-        return new ChangeActivityStatusUseCase(activityRepository);
+    public ChangeActivityStatusUseCasePort changeActivityStatusUseCase(ActivityRepositoryPort activityRepository,
+                                                                       ActivityChangedEventFactory activityEvents,
+                                                                       BestEffortPublisher publisher) {
+        return new ChangeActivityStatusUseCase(activityRepository, activityEvents, publisher);
     }
 }

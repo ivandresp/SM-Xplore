@@ -1,0 +1,23 @@
+{
+  "eventId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d61",
+  "eventType": "activities.event.changed",
+  "eventVersion": 2,
+  "occurredAt": "2026-11-05T03:00:00Z",
+  "aggregateId": "55555555-5555-5555-5555-555555555501",
+  "correlationId": "8e21b2c3-d4e5-4f60-9b0a-1d2e3f4a5b6c",
+  "producer": "ms-03",
+  "payload": {
+    "eventId": "55555555-5555-5555-5555-555555555501",
+    "siteId": "22222222-2222-2222-2222-222222222201",
+    "managerId": "66666666-6666-6666-6666-666666666601",
+    "siteName": "Quinta de San Pedro Alejandrino",
+    "name": "Feria artesanal",
+    "category": "Cultura",
+    "price": 25000,
+    "status": "POSTPONED",
+    "maxCapacity": 200,
+    "startsAt": "2026-12-01T15:00:00Z",
+    "endsAt": "2026-12-01T21:00:00Z",
+    "updatedAt": "2026-11-05T03:00:00Z"
+  }
+}
