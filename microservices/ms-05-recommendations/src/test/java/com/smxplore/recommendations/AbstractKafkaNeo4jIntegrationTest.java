@@ -9,6 +9,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
 
 import java.util.ArrayList;
+import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -20,7 +21,8 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class AbstractKafkaNeo4jIntegrationTest extends AbstractNeo4jIntegrationTest {
 
-    public static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0");
+    public static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0")
+            .withStartupTimeout(Duration.ofMinutes(3));
     private static final String GROUP_ID = "ms-05-test-" + UUID.randomUUID();
 
     static {
