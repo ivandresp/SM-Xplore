@@ -51,7 +51,7 @@ class JwtConfigurationTest {
 
         assertThat(decoded).isNotNull();
         assertThat(decoded.getSubject()).isEqualTo(USER_ID);
-        assertThat(decoded.getClaimAsString("role")).isEqualTo("TURISTA");
+        assertThat(decoded.getClaimAsString("role")).isEqualTo("TOURIST");
     }
 
     @Test
@@ -213,7 +213,7 @@ class JwtConfigurationTest {
                 .subject(USER_ID)
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
-                .claim("role", "TURISTA");
+                .claim("role", "TOURIST");
     }
 
     private static String token(KeyPair keyPair, JwtClaimsSet claims) {

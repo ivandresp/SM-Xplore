@@ -11,7 +11,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SecurityConfigurationTest {
 
     @Test
-    void mapsTheSpanishRoleCodeToTheInternalEnglishAuthority() {
+    void mapsTheEnglishRoleClaimToTheSpringAuthority() {
+        var converter = new SecurityConfiguration().jwtAuthenticationConverter(new JwtProperties());
+        var jwt = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .subject(UUID.randomUUID().toString())
+                .claim("role", "DESTINATION_MANAGER")
+                .build();
+
+        var authentication = converter.convert(jwt).block();
+
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_DESTINATION_MANAGER");
+    }
+
+    @Test
+    void stillMapsTheLegacySpanishRoleClaim() {
         var converter = new SecurityConfiguration().jwtAuthenticationConverter(new JwtProperties());
         var jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")

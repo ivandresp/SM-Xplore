@@ -125,7 +125,7 @@ class ApplicationContextTest {
                 .expectStatus().isUnauthorized();
 
         client.get().uri("/api/v1/reservations?status=CONFIRMED")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("TURISTA"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token("TOURIST"))
                 .exchange()
                 .expectStatus().isForbidden();
 

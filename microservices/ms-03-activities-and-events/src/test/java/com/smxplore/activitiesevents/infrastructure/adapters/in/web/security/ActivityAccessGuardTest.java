@@ -45,7 +45,7 @@ class ActivityAccessGuardTest {
         var jwt = Jwt.withTokenValue("token")
                 .header("alg", "RS256")
                 .subject(UUID.randomUUID().toString())
-                .claim("role", "GUIA")
+                .claim("role", "GUIDE")
                 .build();
 
         StepVerifier.create(guard.requireCanManage(ACTIVITY_ID, jwt))
