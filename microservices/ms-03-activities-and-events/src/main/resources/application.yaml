@@ -1,0 +1,59 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: activities-and-events
+  r2dbc:
+    url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    pool:
+      max-size: ${R2DBC_POOL_MAX_SIZE:20}
+      max-acquire-time: 5s
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  data:
+    mongodb:
+      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    url: "${FLYWAY_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
+    user: ${FLYWAY_USER}
+    password: ${FLYWAY_PASSWORD}
+    locations: classpath:db/migration
+    schemas: public
+    baseline-on-migrate: true
+    baseline-version: 0
+    connect-retries: ${FLYWAY_CONNECT_RETRIES:10}
+    clean-disabled: true
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
+
+app:
+  outbox:
+    enabled: ${OUTBOX_ENABLED:false}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+  ms04:
+    base-url: ${MS04_BASE_URL:http://localhost:8084}
+    timeout: ${MS04_TIMEOUT:3s}
+  reservations:
+    auto-close:
+      cron: "${RESERVATION_AUTO_CLOSE_CRON:0 15 3 * * *}"
+      grace: "${RESERVATION_AUTO_CLOSE_GRACE:P1D}"
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER}
+      audience: ${JWT_AUDIENCE}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}

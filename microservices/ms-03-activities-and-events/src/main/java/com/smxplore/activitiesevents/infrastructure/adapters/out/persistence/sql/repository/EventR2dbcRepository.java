@@ -1,0 +1,28 @@
+package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.repository;
+
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.entity.EventEntity;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.springframework.data.r2dbc.repository.Query;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.util.Collection;
+import java.util.UUID;
+
+public interface EventR2dbcRepository extends ReactiveCrudRepository<EventEntity, UUID> {
+
+    Flux<EventEntity> findByNameContainingIgnoreCase(String name);
+
+    @Query("SELECT * FROM evento WHERE status = 'PUBLISHED' ORDER BY starts_at, id")
+    Flux<EventEntity> findPublished();
+
+    @Query("SELECT * FROM evento WHERE status = 'PUBLISHED' "
+            + "AND name ILIKE '%' || :name || '%' ORDER BY starts_at, id")
+    Flux<EventEntity> searchPublishedByName(String name);
+
+    @Query("SELECT * FROM evento WHERE id = :id FOR UPDATE")
+    Mono<EventEntity> findByIdForUpdate(UUID id);
+
+    @Query("SELECT id FROM evento WHERE sitio_id IN (:siteIds)")
+    Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds);
+}
