@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
@@ -63,8 +64,13 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     @Override
-    public Flux<Reservation> findAllByStatus(ReservationStatus status, int limit) {
-        return repository.findAllByStatus(status, page(limit)).map(mapper::toDomain);
+    public Mono<PageResult<Reservation>> findPageByStatus(ReservationStatus status, int page, int size) {
+        return Mono.zip(
+                        repository.findAllByStatus(status, PageRequest.of(page, size, STABLE_ORDER))
+                                .map(mapper::toDomain)
+                                .collectList(),
+                        repository.countByStatus(status).defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override
@@ -89,11 +95,17 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     @Override
-    public Flux<Reservation> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
-                                               ReservationStatus status, int limit) {
+    public Mono<PageResult<Reservation>> findPageByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                                            ReservationStatus status, int page, int size) {
         var events = eventIds.isEmpty() ? Set.of(NO_ITEM) : eventIds;
         var activities = activityIds.isEmpty() ? Set.of(NO_ITEM) : activityIds;
-        return repository.findAllByItemRefs(events, activities, status.name(), limit).map(mapper::toDomain);
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.findPageByItemRefs(events, activities, status.name(), size, offset)
+                                .map(mapper::toDomain)
+                                .collectList(),
+                        repository.countByItemRefs(events, activities, status.name()).defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override

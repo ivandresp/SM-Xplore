@@ -31,16 +31,26 @@ public interface ReservationR2dbcRepository extends ReactiveCrudRepository<Reser
     @Query("SELECT * FROM reservations WHERE id = :id FOR UPDATE")
     Mono<ReservationEntity> findByIdForUpdate(UUID id);
 
+    Mono<Long> countByStatus(ReservationStatus status);
+
     @Query("""
             SELECT * FROM reservations
             WHERE ((item_type = 'EVENT' AND item_id IN (:eventIds))
                 OR (item_type = 'ACTIVITY' AND item_id IN (:activityIds)))
               AND status = :status
             ORDER BY booked_at DESC, id
-            LIMIT :limit
+            LIMIT :limit OFFSET :offset
             """)
-    Flux<ReservationEntity> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
-                                              String status, int limit);
+    Flux<ReservationEntity> findPageByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                               String status, int limit, long offset);
+
+    @Query("""
+            SELECT COUNT(*) FROM reservations
+            WHERE ((item_type = 'EVENT' AND item_id IN (:eventIds))
+                OR (item_type = 'ACTIVITY' AND item_id IN (:activityIds)))
+              AND status = :status
+            """)
+    Mono<Long> countByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds, String status);
 
     Mono<ReservationEntity> findByTouristIdAndIdempotencyKey(UUID touristId, String idempotencyKey);
 

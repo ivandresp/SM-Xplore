@@ -2,6 +2,17 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Paginación en base de datos 2026-11-04]
+
+### Cambiado
+- `GET /api/v1/reservations?status=` y su variante de gestora paginan en SQL: `LIMIT`/`OFFSET` más un `COUNT` del estado completo. Antes pedían hasta 200 filas y cortaban la página en memoria, así que no había página 2 ni `total` real.
+- `ReservationRepositoryPort` expone `findPageByStatus` y `findPageByItemRefs`, que devuelven un `PageResult` (contenido, página, tamaño y total) creado en el dominio. `PageResponse.from(PageResult, mapper)` arma el sobre HTTP sin recalcular nada.
+- Los puertos de caso de uso devuelven `Mono<PageResult<Reservation>>`; el controlador ya no hace `collectList()`.
+- Un gestora sin sitios o sin ítems recibe una página vacía con `total = 0` en vez de una lista vacía.
+
+### Pendiente
+- Los listados de catálogo (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}`) siguen trayendo el resultado completo y cortándolo en memoria: sus consultas no tienen `LIMIT`.
+
 ## [Refresco del snapshot 2026-11-04]
 
 ### Corregido
