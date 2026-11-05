@@ -1,5 +1,7 @@
 package com.smxplore.activitiesevents.application.reviews;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
@@ -13,9 +15,11 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewUseCasesTest {
@@ -49,12 +54,16 @@ class ReviewUseCasesTest {
     @Mock
     private ActivityRepositoryPort activityRepo;
 
+    @Mock
+    private OutboxPort outbox;
+
     private CreateReviewUseCase createReview;
     private RespondToReviewUseCase respondToReview;
 
     @BeforeEach
     void setUp() {
-        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo);
+        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, outbox,
+                new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()));
         respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo);
     }
 
@@ -66,13 +75,33 @@ class ReviewUseCasesTest {
         given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
                 .willReturn(Mono.just(false));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        given(outbox.enqueue(any())).willReturn(Mono.empty());
 
         StepVerifier.create(createReview.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
                 .assertNext(review -> {
                     assertThat(review.getUser().id()).isEqualTo(userId);
                     assertThat(review.getUser().name()).isEqualTo("Ana");
                     assertThat(review.getRating()).isEqualTo(5);
+                    assertThat(review.getStatus()).isEqualTo(ReviewStatus.PUBLISHED);
                 })
+                .verifyComplete();
+
+        then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
+                event -> "reviews.review.changed".equals(event.eventType())));
+    }
+
+    @Test
+    void keepsTheReviewWhenTheEventCannotBeEnqueued() {
+        var activity = activity(UUID.randomUUID());
+        var userId = UUID.randomUUID();
+        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
+                .willReturn(Mono.just(false));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        given(outbox.enqueue(any())).willReturn(Mono.error(new IllegalStateException("outbox down")));
+
+        StepVerifier.create(createReview.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
+                .assertNext(review -> assertThat(review.getRating()).isEqualTo(5))
                 .verifyComplete();
     }
 
