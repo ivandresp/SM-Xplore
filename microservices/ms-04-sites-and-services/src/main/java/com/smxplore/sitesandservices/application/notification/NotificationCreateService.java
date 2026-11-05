@@ -38,12 +38,8 @@ public class NotificationCreateService {
         if (type == null || message.items().isEmpty()) {
             return Mono.empty();
         }
-        if (message.items().stream()
-                .anyMatch(item -> !"SERVICE".equals(item.itemType()))) {
-            return Mono.empty();
-        }
 
-        String services = serviceNames(message.items());
+        String items = itemNames(message.items());
         int people = message.items().stream().mapToInt(ReservationChangedMessage.Item::people).sum();
         String date = message.bookedFor() == null
                 ? "la fecha indicada"
@@ -56,21 +52,17 @@ public class NotificationCreateService {
                 UserRole.TOURIST,
                 type,
                 touristTitle(type),
-                touristMessage(type, services, date, people)
+                touristMessage(type, items, date, people)
         ));
 
-        Set<UUID> providerIds = message.items().stream()
-                .map(ReservationChangedMessage.Item::providerId)
-                .filter(providerId -> providerId != null)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        for (UUID providerId : providerIds) {
+        for (Recipient recipient : recipients(message.items())) {
             notifications.add(notification(
                     message,
-                    providerId,
-                    UserRole.SERVICE_PROVIDER,
+                    recipient.id(),
+                    recipient.role(),
                     type,
-                    providerTitle(type),
-                    providerMessage(type, services, date, people)
+                    staffTitle(type),
+                    staffMessage(type, items, date, people)
             ));
         }
 
@@ -80,6 +72,27 @@ public class NotificationCreateService {
                                 ? delivery(notification)
                                 : Mono.empty()))
                 .then();
+    }
+
+    private Set<Recipient> recipients(List<ReservationChangedMessage.Item> items) {
+        Set<Recipient> recipients = new LinkedHashSet<>();
+        for (ReservationChangedMessage.Item item : items) {
+            switch (item.itemType()) {
+                case "SERVICE" -> addRecipient(recipients, item.providerId(), UserRole.SERVICE_PROVIDER);
+                case "ACTIVITY" -> addRecipient(recipients, item.guideId(), UserRole.GUIDE);
+                case "EVENT" -> addRecipient(recipients, item.managerId(), UserRole.DESTINATION_MANAGER);
+                default -> {
+                    // The decoder rejects unknown item types; keep the switch exhaustive for safety.
+                }
+            }
+        }
+        return recipients;
+    }
+
+    private static void addRecipient(Set<Recipient> recipients, UUID id, UserRole role) {
+        if (id != null) {
+            recipients.add(new Recipient(id, role));
+        }
     }
 
     private Mono<Void> delivery(Notification notification) {
@@ -103,7 +116,7 @@ public class NotificationCreateService {
             String messageText
     ) {
         UUID notificationId = UUID.nameUUIDFromBytes((
-                message.eventId() + "|" + recipientId + "|" + type.name()
+                message.eventId() + "|" + recipientId + "|" + recipientRole + "|" + type.name()
         ).getBytes(StandardCharsets.UTF_8));
         Notification notification = Notification.builder()
                 .notificationId(notificationId)
@@ -125,17 +138,33 @@ public class NotificationCreateService {
             case "CONFIRMED" -> NotificationType.RESERVATION_CONFIRMED;
             case "CANCELLED" -> NotificationType.RESERVATION_CANCELLED;
             case "COMPLETED" -> NotificationType.RESERVATION_COMPLETED;
+            case "NO_SHOW" -> NotificationType.RESERVATION_NO_SHOW;
             default -> null;
         };
     }
 
-    private String serviceNames(List<ReservationChangedMessage.Item> items) {
+    private String itemNames(List<ReservationChangedMessage.Item> items) {
         String names = items.stream()
-                .map(ReservationChangedMessage.Item::serviceName)
+                .map(this::itemName)
                 .filter(name -> name != null && !name.isBlank())
                 .distinct()
                 .collect(Collectors.joining(", "));
-        return names.isBlank() ? "el servicio reservado" : names;
+        return names.isBlank() ? "la reserva" : names;
+    }
+
+    private String itemName(ReservationChangedMessage.Item item) {
+        if (item.itemName() != null && !item.itemName().isBlank()) {
+            return item.itemName();
+        }
+        if (item.serviceName() != null && !item.serviceName().isBlank()) {
+            return item.serviceName();
+        }
+        return switch (item.itemType()) {
+            case "ACTIVITY" -> "la actividad reservada";
+            case "EVENT" -> "el evento reservado";
+            case "SERVICE" -> "el servicio reservado";
+            default -> "la reserva";
+        };
     }
 
     private String truncate(String value, int maxLength) {
@@ -147,46 +176,55 @@ public class NotificationCreateService {
             case RESERVATION_CONFIRMED -> "Reserva confirmada";
             case RESERVATION_CANCELLED -> "Reserva cancelada";
             case RESERVATION_COMPLETED -> "Reserva completada";
+            case RESERVATION_NO_SHOW -> "Reserva marcada como no show";
         };
     }
 
     private String touristMessage(
             NotificationType type,
-            String services,
+            String items,
             String date,
             int people
     ) {
         return switch (type) {
-            case RESERVATION_CONFIRMED -> "Tu reserva para " + services
+            case RESERVATION_CONFIRMED -> "Tu reserva para " + items
                     + " quedó confirmada para " + date + " (" + people + " personas).";
-            case RESERVATION_CANCELLED -> "Tu reserva para " + services
+            case RESERVATION_CANCELLED -> "Tu reserva para " + items
                     + " del " + date + " fue cancelada.";
-            case RESERVATION_COMPLETED -> "Tu reserva para " + services
+            case RESERVATION_COMPLETED -> "Tu reserva para " + items
                     + " del " + date + " fue completada.";
+            case RESERVATION_NO_SHOW -> "Tu reserva para " + items
+                    + " del " + date + " fue marcada como no show.";
         };
     }
 
-    private String providerTitle(NotificationType type) {
+    private String staffTitle(NotificationType type) {
         return switch (type) {
             case RESERVATION_CONFIRMED -> "Nueva reserva confirmada";
             case RESERVATION_CANCELLED -> "Reserva cancelada";
             case RESERVATION_COMPLETED -> "Reserva completada";
+            case RESERVATION_NO_SHOW -> "Reserva no show";
         };
     }
 
-    private String providerMessage(
+    private String staffMessage(
             NotificationType type,
-            String services,
+            String items,
             String date,
             int people
     ) {
         return switch (type) {
             case RESERVATION_CONFIRMED -> "Recibiste una reserva de " + people
-                    + " personas para " + services + " el " + date + ".";
+                    + " personas para " + items + " el " + date + ".";
             case RESERVATION_CANCELLED -> "La reserva de " + people
-                    + " personas para " + services + " del " + date + " fue cancelada.";
+                    + " personas para " + items + " del " + date + " fue cancelada.";
             case RESERVATION_COMPLETED -> "La reserva de " + people
-                    + " personas para " + services + " del " + date + " fue completada.";
+                    + " personas para " + items + " del " + date + " fue completada.";
+            case RESERVATION_NO_SHOW -> "La reserva de " + people
+                    + " personas para " + items + " del " + date + " fue marcada como no show.";
         };
+    }
+
+    private record Recipient(UUID id, UserRole role) {
     }
 }

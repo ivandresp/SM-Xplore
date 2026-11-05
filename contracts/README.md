@@ -17,6 +17,7 @@ contracts/
     ├── activities.event.changed.v1.json
     ├── activities.event.changed.v2.json
     ├── bookings.reservation.changed.v1.json
+    ├── bookings.reservation.changed.v2.json
     ├── catalog.category.changed.v1.json
     ├── catalog.service.changed.v1.json
     ├── catalog.site.changed.v1.json
@@ -66,7 +67,7 @@ evento `v2` no puede validarse contra él.
 | `activities.activity.changed` | ms-03 (v2) | sí |
 | `reviews.review.changed` | ms-03 / ms-04 | sí |
 | `security.report.changed` | ms-02 | **no** |
-| `bookings.reservation.changed` | ms-03 / ms-04 | **no** |
+| `bookings.reservation.changed` | ms-03 (v2) / ms-04 (v1) | **no** |
 
 `reviews.review.changed` lo publica ms-03 para actividades/eventos y ms-04 para sitios y
 servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin distinguir el
@@ -82,19 +83,20 @@ crear, responder y moderar; ms-04 al crear y moderar. Solo `PUBLISHED` alimenta 
 `bookings.reservation.changed` se mantiene porque notificaciones y analítica lo usan, pero
 **ms-05 no lo consume**. La recomendación no usa reservas: ver
 `microservices/ms-05-recommendations/docs/adr/0002-no-reservation-signal.md`.
-ms-03 lo publica para actividades/eventos y ms-04 para reservas de servicios
-(`payload.items[].itemType=SERVICE`). ms-04 también lo consume con el grupo
-`ms-04-notifications` para alimentar la bandeja de notificaciones; usa `eventId` para deduplicar.
-Los campos `payload.bookedFor` y `payload.items[].providerId/serviceName` son opcionales y
-aditivos para ese consumidor.
+ms-04 publica la **v1** para reservas de servicios (`payload.items[].itemType=SERVICE`) y la
+consume con el grupo `ms-04-notifications` para alimentar la bandeja. ms-03 publica la **v2** para
+actividades/eventos: agrega `payload.items[].itemName`, `guideId`, `managerId` y el estado
+`NO_SHOW`. ms-04 acepta ambas versiones y notifica al turista, al guía de la actividad y a la
+gestora del evento. `bookedFor`, `providerId`, `guideId`, `managerId`, `itemName` y `serviceName`
+son opcionales y aditivos para ese consumidor.
 
 Estado de fase 2:
 
 - ms-05 ya consume los seis topics marcados con “sí”.
 - ms-04 ya publica catálogo (los sitios en v2), reseñas y reservas de servicios desde su outbox. ms-03 publica
-  reservas y reseñas, y desde este cambio `activities.activity.changed` v2 y
-  `activities.event.changed` v2. Los tests de ms-05 publican los fixtures directamente en Kafka
-  para validar el contrato y la proyección.
+  reservas en v2, reseñas y `activities.activity.changed` v2 y `activities.event.changed` v2.
+  Los tests de ms-05 publican los fixtures directamente en Kafka para validar el contrato y la
+  proyección.
 - La key de cada mensaje debe ser el `aggregateId`. ms-05 rechaza una key distinta si viene
   informada.
 - Los errores de contrato van a `<topic>.dlq`.

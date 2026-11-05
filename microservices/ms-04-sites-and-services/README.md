@@ -107,8 +107,8 @@ src/main/java/com/smxplore/sitesandservices
   dentro de una transacción de MongoDB.
 - Las reservas guardan reserva + ítems + evento de outbox dentro de una transacción PostgreSQL,
   con `pg_advisory_xact_lock` por servicio y por turista para serializar cupos y cuotas.
-- El consumidor de notificaciones lee `bookings.reservation.changed` y guarda una notificación
-  idempotente por destinatario.
+- El consumidor de notificaciones lee `bookings.reservation.changed` v1/v2 y guarda una
+  notificación idempotente por destinatario (turista, guía, gestora o prestadora).
 
 ## Bases de datos
 
@@ -367,14 +367,15 @@ Topics publicados:
 | `catalog.site.changed` | Sitio creado/actualizado | `contracts/events/catalog.site.changed.v1.json` |
 | `catalog.service.changed` | Servicio creado/actualizado | `contracts/events/catalog.service.changed.v1.json` |
 | `reviews.review.changed` | Reseña creada/moderada | `contracts/events/reviews.review.changed.v1.json` |
-| `bookings.reservation.changed` | Reserva creada/cancelada/completada | `contracts/events/bookings.reservation.changed.v1.json` |
+| `bookings.reservation.changed` | Reserva creada/cancelada/completada | `contracts/events/bookings.reservation.changed.v1.json` (ms-04) / `.v2.json` (ms-03) |
 
 - La key de Kafka es el `aggregateId`.
 - El sobre incluye `eventId`, `eventVersion=1`, `occurredAt`, `correlationId` y `producer=ms-04`.
 - `reviews.review.changed` es compartido: ms-03 publica actividades/eventos y ms-04 sitios/servicios.
   El estado puede ser `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; los consumidores deben
   tratar `PENDING_REVIEW` igual que una reseña no visible.
-- `bookings.reservation.changed` se publica para reservas de servicios (`itemType=SERVICE`).
+- `bookings.reservation.changed` v1 se publica para reservas de servicios (`itemType=SERVICE`).
+  ms-03 publica la v2 para actividades/eventos con `itemName`, `guideId`, `managerId` y `NO_SHOW`.
 - El outbox de catálogo/reseñas se escribe en la misma transacción Mongo que la entidad. El outbox
   de reservas se escribe en `reservation_outbox`, en la misma transacción PostgreSQL que la reserva
   y sus ítems.
@@ -391,13 +392,14 @@ Topics consumidos:
 
 | Topic | Consumidor | Uso |
 |---|---|---|
-| `bookings.reservation.changed` | ms-04 (`ms-04-notifications`) | Crear notificaciones de bandeja para turista y prestadora |
+| `bookings.reservation.changed` | ms-04 (`ms-04-notifications`) | Crear notificaciones de bandeja para turista, guía, gestora y prestadora |
 
-- El consumidor procesa eventos con `itemType=SERVICE`, usa `eventId` para IDs determinísticos
-  de notificación y evita duplicados. Un grupo nuevo arranca en `latest`; los tests usan
-  `earliest` para no depender del orden de arranque.
-- El evento incluye `bookedFor`, `providerId` y `serviceName` como campos opcionales del contrato
-  para permitir notificaciones sin consultar otros servicios.
+- El consumidor acepta v1 y v2, procesa `SERVICE`, `ACTIVITY` y `EVENT`, usa `eventId` para IDs
+  determinísticos de notificación (incluye rol e id del destinatario) y evita duplicados. Un grupo
+  nuevo arranca en `latest`; los tests usan `earliest` para no depender del orden de arranque.
+- El evento incluye `bookedFor`, `itemName`, `providerId`/`guideId`/`managerId` y `serviceName`
+  como campos opcionales para permitir notificaciones sin consultar otros servicios. La v2 añade
+  `NO_SHOW`.
 - La entrega de notificaciones es una **bandeja interna**; el envío real por correo/push queda
   pendiente como adaptador de entrega.
 

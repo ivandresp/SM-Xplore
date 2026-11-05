@@ -94,7 +94,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                     return validateCapacity(reservation, activity.getMaxCapacity())
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, activity.getPrice(), activity.getStartsAt(),
-                                    activity.getGuideId(), null));
+                                    activity.getName(), activity.getGuideId(), null));
                 });
     }
 
@@ -106,7 +106,7 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
                     return validateCapacity(reservation, event.getMaxCapacity())
                             .then(Mono.defer(() -> validateActiveReservations(reservation)))
                             .thenReturn(priced(reservation, event.getPrice(), event.getStartsAt(),
-                                    null, event.getManagerId()));
+                                    event.getName(), null, event.getManagerId()));
                 });
     }
 
@@ -158,10 +158,11 @@ public class CreateReservationUseCase implements CreateReservationUseCasePort {
     }
 
     private Reservation priced(Reservation reservation, BigDecimal unitPrice, Instant startsAt,
-                               UUID guideId, UUID providerId) {
+                               String itemName, UUID guideId, UUID providerId) {
         var total = unitPrice.multiply(BigDecimal.valueOf(reservation.getNumberOfPeople()));
         return reservation.toBuilder()
                 .itemStartsAt(startsAt)
+                .itemName(itemName)
                 .unitPrice(unitPrice)
                 .total(total)
                 .bookedFor(startsAt)

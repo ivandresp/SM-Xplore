@@ -17,7 +17,10 @@ public record ReservationChangedMessage(
     public record Item(
             String itemType,
             UUID itemId,
+            String itemName,
             UUID providerId,
+            UUID guideId,
+            UUID managerId,
             String serviceName,
             int people,
             BigDecimal total

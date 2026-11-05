@@ -18,6 +18,7 @@ public record ReservationEntity(
         String idempotencyKey,
         ReservationItemType itemType,
         UUID itemId,
+        String itemName,
         Instant itemStartsAt,
         BigDecimal unitPrice,
         int numberOfPeople,

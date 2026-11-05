@@ -109,6 +109,49 @@ class NotificationInboxIntegrationTests extends AbstractKafkaMongoPostgresIntegr
         assertThat(inbox(providerId, "SERVICE_PROVIDER", true).total()).isEqualTo(1);
     }
 
+    @Test
+    void consumesV2ActivityAndEventEventsForTouristGuideAndManager() throws Exception {
+        UUID touristId = UUID.randomUUID();
+        UUID guideId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+        UUID activityReservationId = UUID.randomUUID();
+        UUID eventReservationId = UUID.randomUUID();
+
+        kafkaTemplate.send("bookings.reservation.changed", activityReservationId.toString(),
+                        eventJsonV2(UUID.randomUUID(), activityReservationId, touristId, "ACTIVITY",
+                                "Snorkel", guideId, null, "CONFIRMED"))
+                .get(10, TimeUnit.SECONDS);
+        kafkaTemplate.send("bookings.reservation.changed", eventReservationId.toString(),
+                        eventJsonV2(UUID.randomUUID(), eventReservationId, touristId, "EVENT",
+                                "Concierto", null, managerId, "CONFIRMED"))
+                .get(10, TimeUnit.SECONDS);
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            assertThat(inbox(touristId, "TOURIST", false).total()).isEqualTo(2);
+            assertThat(inbox(guideId, "GUIDE", false).total()).isEqualTo(1);
+            assertThat(inbox(managerId, "DESTINATION_MANAGER", false).total()).isEqualTo(1);
+        });
+        assertThat(inbox(guideId, "GUIDE", false).content().getFirst().message())
+                .contains("Snorkel");
+        assertThat(inbox(managerId, "DESTINATION_MANAGER", false).content().getFirst().message())
+                .contains("Concierto");
+
+        kafkaTemplate.send("bookings.reservation.changed", activityReservationId.toString(),
+                        eventJsonV2(UUID.randomUUID(), activityReservationId, touristId, "ACTIVITY",
+                                "Snorkel", guideId, null, "NO_SHOW"))
+                .get(10, TimeUnit.SECONDS);
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            assertThat(inbox(touristId, "TOURIST", false).total()).isEqualTo(3);
+            assertThat(inbox(guideId, "GUIDE", false).total()).isEqualTo(2);
+            var noShow = mongoTemplate.findOne(Query.query(Criteria.where("recipientId")
+                            .is(guideId.toString())
+                            .and("type").is("RESERVATION_NO_SHOW")), NotificationDocument.class)
+                    .block();
+            assertThat(noShow).isNotNull();
+        });
+    }
+
     private List<NotificationDocument> notifications(UUID touristId, UUID providerId) {
         return mongoTemplate.find(
                         Query.query(Criteria.where("recipientId").in(
@@ -138,6 +181,64 @@ class NotificationInboxIntegrationTests extends AbstractKafkaMongoPostgresIntegr
                 .defaultHeader(HttpHeaders.AUTHORIZATION,
                         "Bearer " + TestJwtSupport.bearer(jwtEncoder, userId, role, "Test User"))
                 .build();
+    }
+
+    private String eventJsonV2(
+            UUID eventId,
+            UUID reservationId,
+            UUID touristId,
+            String itemType,
+            String itemName,
+            UUID guideId,
+            UUID managerId,
+            String status
+    ) {
+        Instant now = Instant.now();
+        String recipient = guideId != null
+                ? "\"guideId\": \"" + guideId + "\""
+                : "\"managerId\": \"" + managerId + "\"";
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "bookings.reservation.changed",
+                  "eventVersion": 2,
+                  "occurredAt": "%s",
+                  "aggregateId": "%s",
+                  "correlationId": "%s",
+                  "producer": "ms-03-activities-and-events",
+                  "payload": {
+                    "reservationId": "%s",
+                    "touristId": "%s",
+                    "bookedFor": "%s",
+                    "status": "%s",
+                    "items": [
+                      {
+                        "itemType": "%s",
+                        "itemId": "%s",
+                        "itemName": "%s",
+                        %s,
+                        "people": 2,
+                        "total": 100000
+                      }
+                    ],
+                    "updatedAt": "%s"
+                  }
+                }
+                """.formatted(
+                eventId,
+                now,
+                reservationId,
+                UUID.randomUUID(),
+                reservationId,
+                touristId,
+                now.plus(Duration.ofDays(7)),
+                status,
+                itemType,
+                UUID.randomUUID(),
+                itemName,
+                recipient,
+                now
+        );
     }
 
     private String eventJson(

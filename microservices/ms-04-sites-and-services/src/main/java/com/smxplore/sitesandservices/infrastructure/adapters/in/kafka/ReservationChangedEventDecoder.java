@@ -43,8 +43,16 @@ public class ReservationChangedEventDecoder {
             List<ReservationChangedMessage.Item> items = new ArrayList<>();
             for (JsonNode itemNode : itemsNode.values()) {
                 String itemType = requiredText(itemNode, "itemType");
+                if (!"SERVICE".equals(itemType) && !"ACTIVITY".equals(itemType)
+                        && !"EVENT".equals(itemType)) {
+                    throw new InvalidNotificationEventException(
+                            "Unsupported booking itemType: " + itemType);
+                }
                 UUID itemId = requiredUuid(itemNode, "itemId");
                 UUID providerId = optionalUuid(itemNode, "providerId");
+                UUID guideId = optionalUuid(itemNode, "guideId");
+                UUID managerId = optionalUuid(itemNode, "managerId");
+                String itemName = itemNode.path("itemName").asStringOpt().orElse(null);
                 String serviceName = itemNode.path("serviceName").asStringOpt().orElse(null);
                 int people = itemNode.path("people").asInt(0);
                 if (people < 1) {
@@ -57,7 +65,10 @@ public class ReservationChangedEventDecoder {
                 items.add(new ReservationChangedMessage.Item(
                         itemType,
                         itemId,
+                        itemName,
                         providerId,
+                        guideId,
+                        managerId,
                         serviceName,
                         people,
                         total

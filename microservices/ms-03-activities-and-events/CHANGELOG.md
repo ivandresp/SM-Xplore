@@ -2,6 +2,20 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Notificaciones de reservas 2026-11-05]
+
+### Agregado
+- `bookings.reservation.changed` **v2** para reservas de actividades/eventos: incluye
+  `itemName`, `guideId`, `managerId` y el estado `NO_SHOW`. El nombre del ítem se copia a la
+  reserva al crearla (`item_name`, migración `V6`).
+- ms-04 consume la v2 y genera notificaciones para turista, guía (actividad) y gestora (evento),
+  además de las de servicios existentes.
+- Plantillas nuevas para `NO_SHOW` y mensajes con el nombre real de la actividad/evento.
+
+### Notas
+- El cierre automático ahora busca las reservas vencidas una por una, aplica la transición de
+  dominio y publica el evento; así también notifica los `NO_SHOW` y las cancelaciones masivas.
+
 ## [Indicadores de demanda 2026-11-05]
 
 ### Agregado

@@ -179,13 +179,13 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 **Privacidad:** los listados (`?status=`, `/tourists/{id}`, `/guides/{id}`, `/by-item`) usan un DTO sin `notes`; el texto libre solo se devuelve en `GET /api/v1/reservations/{id}`. Una `GESTORA_DESTINOS` ya no puede enumerar reservas ajenas por esos endpoints: solo `ADMIN` o el propio turista/guía.
 
-**Outbox:** las transiciones de reserva (`CONFIRMED`, `CANCELLED`, `COMPLETED`) escriben `bookings.reservation.changed` v1 en `outbox_events` dentro de la misma transacción. El relay está desactivado por defecto; con `OUTBOX_ENABLED=true` publica en Kafka usando `KAFKA_BOOTSTRAP_SERVERS`. `NO_SHOW` no se publica porque el contrato v1 no lo incluye.
+**Outbox:** las transiciones de reserva (`CONFIRMED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`) escriben `bookings.reservation.changed` v2 en `outbox_events` dentro de la misma transacción. El relay está desactivado por defecto; con `OUTBOX_ENABLED=true` publica en Kafka usando `KAFKA_BOOTSTRAP_SERVERS`. La v2 agrega `itemName`, `guideId`, `managerId` y `NO_SHOW`, y ms-04 la consume para notificar al turista, al guía y a la gestora. El nombre del ítem se copia a la reserva al crearla (`item_name`).
 
 **Alcance por gestora:** `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=...` de ms-04 (reenviando el `Authorization` del usuario), luego sus eventos/actividades y finalmente sus reservas. Si no tiene sitios, devuelve una lista vacía. `ADMIN` sigue viendo todas.
 
 **Outbox de catálogo:** crear o modificar una actividad o un evento escribe `activities.activity.changed` v2 o `activities.event.changed` v2 en el outbox. La v2 usa el nombre de la categoría que el usuario escribe (no un `categoryId`), no publica coordenadas —son del sitio en ms-04— y admite los estados reales (`PAUSED`/`CANCELLED` en actividades, `POSTPONED` en eventos). El envío es best effort: si el encolado falla, la escritura ya se guardó, se registra el error y la petición responde bien.
 
-**Cierre automático:** un job diario (03:15, `America/Bogota`) marca `NO_SHOW` las reservas `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `RESERVATION_AUTO_CLOSE_GRACE` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`. Los ítems pausados o postergados no se tocan. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
+**Cierre automático:** un job diario (03:15, `America/Bogota`) marca `NO_SHOW` las reservas `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `RESERVATION_AUTO_CLOSE_GRACE` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`. Los ítems pausados o postergados no se tocan; cada cierre publica `bookings.reservation.changed` para notificar al turista y al guía/gestora. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
 
 ## Indicadores de demanda
 

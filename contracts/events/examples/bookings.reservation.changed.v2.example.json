@@ -1,0 +1,26 @@
+{
+  "eventId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6f",
+  "eventType": "bookings.reservation.changed",
+  "eventVersion": 2,
+  "occurredAt": "2026-11-05T15:00:00Z",
+  "aggregateId": "3ab2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-03-activities-and-events",
+  "payload": {
+    "reservationId": "3ab2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "touristId": "66666666-6666-6666-6666-666666666601",
+    "bookedFor": "2026-11-12T15:00:00Z",
+    "status": "CONFIRMED",
+    "items": [
+      {
+        "itemType": "ACTIVITY",
+        "itemId": "44444444-4444-4444-4444-444444444401",
+        "itemName": "Snorkel en Playa Blanca",
+        "guideId": "55555555-5555-5555-5555-555555555501",
+        "people": 2,
+        "total": 160000
+      }
+    ],
+    "updatedAt": "2026-11-05T15:00:00Z"
+  }
+}

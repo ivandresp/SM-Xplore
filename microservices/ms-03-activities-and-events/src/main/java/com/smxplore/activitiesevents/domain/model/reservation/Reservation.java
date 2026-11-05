@@ -36,6 +36,9 @@ public class Reservation {
     private final ReservationItemType itemType;
     private final UUID itemId;
 
+    /** Name copied from the activity/event so booking notifications need no extra lookup. */
+    private final String itemName;
+
     /** Start of the booked event/activity, copied from the catalog when the reservation is created. */
     private final Instant itemStartsAt;
 

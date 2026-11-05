@@ -252,6 +252,9 @@ class FlywayMigrationTest {
                             '%s', '%s')
                     """.formatted(reservationId, UUID.randomUUID(), activityId, Timestamp.from(STARTS_AT),
                     Timestamp.from(STARTS_AT.minusSeconds(7200)), Timestamp.from(STARTS_AT)));
+            // The quarantine table is recreated from the current reservations shape when the
+            // history is dropped; leaving the old shape would make V2 insert one column less.
+            statement.execute("DROP TABLE IF EXISTS reservations_quarantine");
             statement.execute("DROP TABLE flyway_schema_history");
         }
 

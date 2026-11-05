@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smxplore.activitiesevents.domain.model.outbox.OutboxEvent;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,19 +13,19 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
- * Builds the v1 bookings.reservation.changed envelope from a reservation.
- * NO_SHOW is not part of the v1 contract, so it is not published until v2.
+ * Builds the v2 bookings.reservation.changed envelope from a reservation. Version 2 adds
+ * {@code itemName}, explicit {@code guideId}/{@code managerId} and the {@code NO_SHOW} status so
+ * ms-04 can notify tourists, guides and destination managers.
  */
 @Component
 @RequiredArgsConstructor
 public class ReservationEventFactory {
 
     private static final String EVENT_TYPE = "bookings.reservation.changed";
-    private static final int EVENT_VERSION = 1;
+    private static final int EVENT_VERSION = 2;
     private static final String PRODUCER = "ms-03-activities-and-events";
 
     private final ObjectMapper objectMapper;
@@ -41,11 +42,15 @@ public class ReservationEventFactory {
         var item = new LinkedHashMap<String, Object>();
         item.put("itemType", reservation.getItemType().name());
         item.put("itemId", reservation.getItemId());
+        item.put("itemName", itemName(reservation));
+        if (reservation.getGuideId() != null) {
+            item.put("guideId", reservation.getGuideId());
+        }
+        if (reservation.getItemType() == ReservationItemType.EVENT && reservation.getProviderId() != null) {
+            item.put("managerId", reservation.getProviderId());
+        }
         item.put("people", reservation.getNumberOfPeople());
         item.put("total", reservation.getTotal());
-        if (reservation.getProviderId() != null) {
-            item.put("providerId", reservation.getProviderId());
-        }
 
         var payload = new LinkedHashMap<String, Object>();
         payload.put("reservationId", reservation.getId());
@@ -77,12 +82,21 @@ public class ReservationEventFactory {
         }
     }
 
+    private static String itemName(Reservation reservation) {
+        if (reservation.getItemName() != null && !reservation.getItemName().isBlank()) {
+            return reservation.getItemName();
+        }
+        return reservation.getItemType() == ReservationItemType.EVENT
+                ? "Evento reservado"
+                : "Actividad reservada";
+    }
+
     private static String contractStatus(ReservationStatus status) {
         return switch (status) {
             case CONFIRMED -> "CONFIRMED";
             case CANCELLED -> "CANCELLED";
             case COMPLETED -> "COMPLETED";
-            case NO_SHOW -> null;
+            case NO_SHOW -> "NO_SHOW";
         };
     }
 }

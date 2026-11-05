@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.application.reservations;
 
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationCloseCandidate;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
@@ -118,7 +119,7 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     }
 
     @Override
-    public Mono<Integer> closeStaleConfirmed(Instant cutoff) {
-        return Mono.just(0);
+    public Flux<ReservationCloseCandidate> findStaleConfirmed(Instant cutoff) {
+        return Flux.empty();
     }
 }

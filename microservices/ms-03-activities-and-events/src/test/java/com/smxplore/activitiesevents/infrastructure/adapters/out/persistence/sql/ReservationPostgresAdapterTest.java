@@ -1,5 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql;
 
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationCloseCandidate;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import io.r2dbc.spi.ConnectionFactories;
 import io.r2dbc.spi.ConnectionFactory;
 import org.junit.jupiter.api.BeforeAll;
@@ -77,18 +79,40 @@ class ReservationPostgresAdapterTest {
 
         var completedReservation = insertReservation("EVENT", publishedEvent, "COMPLETED");
 
-        var closed = adapter.closeStaleConfirmed(now.minus(Duration.ofDays(1))).block();
+        var candidates = adapter.findStaleConfirmed(now.minus(Duration.ofDays(1)))
+                .collectList().block();
 
-        assertThat(closed).isEqualTo(5);
-        assertThat(statusOf(expiredEvent)).isEqualTo("NO_SHOW");
-        assertThat(statusOf(expiredActivity)).isEqualTo("NO_SHOW");
-        assertThat(statusOf(cancelledEventReservation)).isEqualTo("CANCELLED");
-        assertThat(statusOf(cancelledActivityReservation)).isEqualTo("CANCELLED");
+        assertThat(candidates).isNotNull().hasSize(5);
+        assertThat(candidates).extracting(ReservationCloseCandidate::reservationId)
+                .containsExactlyInAnyOrder(expiredEvent, expiredActivity, cancelledEventReservation,
+                        cancelledActivityReservation, futureCancelledReservation);
+        assertThat(candidateStatus(candidates, expiredEvent)).isEqualTo(ReservationStatus.NO_SHOW);
+        assertThat(candidateStatus(candidates, expiredActivity)).isEqualTo(ReservationStatus.NO_SHOW);
+        assertThat(candidateStatus(candidates, cancelledEventReservation))
+                .isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(candidateStatus(candidates, cancelledActivityReservation))
+                .isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(candidateStatus(candidates, futureCancelledReservation))
+                .isEqualTo(ReservationStatus.CANCELLED);
+
+        // The job, not the adapter, mutates the rows and publishes the event.
+        assertThat(statusOf(expiredEvent)).isEqualTo("CONFIRMED");
+        assertThat(statusOf(cancelledEventReservation)).isEqualTo("CONFIRMED");
         assertThat(statusOf(pausedActivityReservation)).isEqualTo("CONFIRMED");
         assertThat(statusOf(futureReservation)).isEqualTo("CONFIRMED");
         assertThat(statusOf(recentReservation)).isEqualTo("CONFIRMED");
-        assertThat(statusOf(futureCancelledReservation)).isEqualTo("CANCELLED");
         assertThat(statusOf(completedReservation)).isEqualTo("COMPLETED");
+    }
+
+    private static ReservationStatus candidateStatus(
+            java.util.List<ReservationCloseCandidate> candidates,
+            UUID reservationId
+    ) {
+        return candidates.stream()
+                .filter(candidate -> candidate.reservationId().equals(reservationId))
+                .findFirst()
+                .orElseThrow()
+                .targetStatus();
     }
 
     private static UUID insertItem(String table, String status, Instant endsAt) {

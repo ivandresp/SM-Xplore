@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.domain.ports.repository;
 
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationCloseCandidate;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import reactor.core.publisher.Flux;
@@ -56,6 +57,9 @@ public interface ReservationRepositoryPort {
     /** Keeps open reservations aligned when the item schedule changes. */
     Mono<Integer> rescheduleItem(UUID itemId, ReservationItemType type, Instant newStartsAt);
 
-    /** Closes CONFIRMED reservations of cancelled items and of published items ended before {@code cutoff}. */
-    Mono<Integer> closeStaleConfirmed(Instant cutoff);
+    /**
+     * CONFIRMED reservations to close: published items ended before {@code cutoff} become NO_SHOW,
+     * and cancelled items become CANCELLED. The caller mutates and publishes each one.
+     */
+    Flux<ReservationCloseCandidate> findStaleConfirmed(Instant cutoff);
 }

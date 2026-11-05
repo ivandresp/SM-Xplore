@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sq
 
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationCloseCandidate;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -158,49 +160,44 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     @Override
-    public Mono<Integer> closeStaleConfirmed(Instant cutoff) {
+    public Flux<ReservationCloseCandidate> findStaleConfirmed(Instant cutoff) {
         return template.getDatabaseClient()
                 .sql("""
-                        WITH stale AS (
-                            SELECT r.id, 'NO_SHOW' AS next_status
-                            FROM reservations r
-                            JOIN evento e ON e.id = r.item_id
-                            WHERE r.item_type = 'EVENT'
-                              AND r.status = 'CONFIRMED'
-                              AND e.status = 'PUBLISHED'
-                              AND e.ends_at < :cutoff
-                            UNION ALL
-                            SELECT r.id, 'CANCELLED'
-                            FROM reservations r
-                            JOIN evento e ON e.id = r.item_id
-                            WHERE r.item_type = 'EVENT'
-                              AND r.status = 'CONFIRMED'
-                              AND e.status = 'CANCELLED'
-                            UNION ALL
-                            SELECT r.id, 'NO_SHOW'
-                            FROM reservations r
-                            JOIN actividad a ON a.id = r.item_id
-                            WHERE r.item_type = 'ACTIVITY'
-                              AND r.status = 'CONFIRMED'
-                              AND a.status = 'PUBLISHED'
-                              AND a.ends_at < :cutoff
-                            UNION ALL
-                            SELECT r.id, 'CANCELLED'
-                            FROM reservations r
-                            JOIN actividad a ON a.id = r.item_id
-                            WHERE r.item_type = 'ACTIVITY'
-                              AND r.status = 'CONFIRMED'
-                              AND a.status = 'CANCELLED'
-                        )
-                        UPDATE reservations r
-                        SET status = stale.next_status
-                        FROM stale
-                        WHERE r.id = stale.id
+                        SELECT r.id AS reservation_id, 'NO_SHOW' AS target_status
+                        FROM reservations r
+                        JOIN evento e ON e.id = r.item_id
+                        WHERE r.item_type = 'EVENT'
                           AND r.status = 'CONFIRMED'
+                          AND e.status = 'PUBLISHED'
+                          AND e.ends_at < :cutoff
+                        UNION ALL
+                        SELECT r.id, 'CANCELLED'
+                        FROM reservations r
+                        JOIN evento e ON e.id = r.item_id
+                        WHERE r.item_type = 'EVENT'
+                          AND r.status = 'CONFIRMED'
+                          AND e.status = 'CANCELLED'
+                        UNION ALL
+                        SELECT r.id, 'NO_SHOW'
+                        FROM reservations r
+                        JOIN actividad a ON a.id = r.item_id
+                        WHERE r.item_type = 'ACTIVITY'
+                          AND r.status = 'CONFIRMED'
+                          AND a.status = 'PUBLISHED'
+                          AND a.ends_at < :cutoff
+                        UNION ALL
+                        SELECT r.id, 'CANCELLED'
+                        FROM reservations r
+                        JOIN actividad a ON a.id = r.item_id
+                        WHERE r.item_type = 'ACTIVITY'
+                          AND r.status = 'CONFIRMED'
+                          AND a.status = 'CANCELLED'
                         """)
                 .bind("cutoff", cutoff)
-                .fetch().rowsUpdated()
-                .map(Long::intValue);
+                .map((row, metadata) -> new ReservationCloseCandidate(
+                        row.get("reservation_id", UUID.class),
+                        ReservationStatus.valueOf(Objects.requireNonNull(row.get("target_status", String.class)))))
+                .all();
     }
 
     private PageRequest page(int limit) {
@@ -226,7 +223,8 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
 
     private ReservationEntity withCode(ReservationEntity entity, String code) {
         return new ReservationEntity(entity.id(), entity.touristId(), entity.idempotencyKey(), entity.itemType(),
-                entity.itemId(), entity.itemStartsAt(), entity.unitPrice(), entity.numberOfPeople(), entity.total(),
+                entity.itemId(), entity.itemName(), entity.itemStartsAt(), entity.unitPrice(), entity.numberOfPeople(),
+                entity.total(),
                 entity.paymentMethod(), entity.status(), entity.bookedAt(), entity.bookedFor(), entity.notes(),
                 entity.providerId(), entity.guideId(), code);
     }
