@@ -1,6 +1,8 @@
 package com.smxplore.activitiesevents;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
@@ -210,6 +212,35 @@ class ApplicationContextTest {
         assertThat(second.content())
                 .isNotEmpty()
                 .allSatisfy(reservation -> assertThat(first.content()).doesNotContain(reservation));
+    }
+
+    @Test
+    void publishedEventPagesAreLimitedInTheDatabase() {
+        var now = Instant.now();
+        for (int index = 0; index < 3; index++) {
+            eventRepository.save(Event.builder()
+                    .siteId(UUID.randomUUID())
+                    .managerId(UUID.randomUUID())
+                    .name("Evento de pagina " + index)
+                    .category("Cultura")
+                    .status(EventStatus.PUBLISHED)
+                    .price(new java.math.BigDecimal("10000.00"))
+                    .maxCapacity(10)
+                    .startsAt(now.plusSeconds(86_400 + index))
+                    .endsAt(now.plusSeconds(90_000 + index))
+                    .build()).block();
+        }
+
+        var first = eventRepository.findPublishedPage(0, 2).block();
+        var second = eventRepository.findPublishedPage(1, 2).block();
+
+        assertThat(first).isNotNull();
+        assertThat(first.content()).hasSize(2);
+        assertThat(first.total()).isGreaterThanOrEqualTo(3);
+
+        assertThat(second).isNotNull();
+        assertThat(second.page()).isEqualTo(1);
+        assertThat(second.content()).isNotEmpty();
     }
 
     private static String token(String role) {

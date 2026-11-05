@@ -122,10 +122,8 @@ public class EventController {
                                                      @RequestParam(defaultValue = "20") int size) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return consultEventsUseCase.handle()
-                .map(mapper::toResponse)
-                .collectList()
-                .map(events -> PageResponse.of(events, page, size));
+        return consultEventsUseCase.handle(page, size)
+                .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 
     @GetMapping("/search")
@@ -135,10 +133,8 @@ public class EventController {
                                                     @RequestParam(defaultValue = "20") int size) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return searchEventsUseCase.handle(name)
-                .map(mapper::toResponse)
-                .collectList()
-                .map(events -> PageResponse.of(events, page, size));
+        return searchEventsUseCase.handle(name, page, size)
+                .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 
     @PatchMapping("/{eventId}/status")

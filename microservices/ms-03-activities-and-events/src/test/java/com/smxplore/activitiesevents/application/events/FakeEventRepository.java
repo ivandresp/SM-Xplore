@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.application.events;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 
@@ -8,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -42,8 +44,19 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
-    public Flux<Event> findPublished() {
+    public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
+        var matches = publishedList().collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    }
+
+    private Flux<Event> publishedList() {
         return findAll().filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED);
+    }
+
+    private static PageResult<Event> page(List<Event> matches, int page, int size) {
+        int from = Math.min(page * size, matches.size());
+        int to = Math.min(from + size, matches.size());
+        return new PageResult<>(List.copyOf(matches.subList(from, to)), page, size, matches.size());
     }
 
     @Override
@@ -56,8 +69,11 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
-    public Flux<Event> searchPublishedByName(String name) {
-        return searchByName(name).filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED);
+    public Mono<PageResult<Event>> searchPublishedByNamePage(String name, int page, int size) {
+        var matches = searchByName(name)
+                .filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED)
+                .collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.mapper.ActivityPersistenceMapper;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.repository.ActivityR2dbcRepository;
@@ -54,8 +55,12 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublished() {
-        return repository.findPublished().map(mapper::toDomain);
+    public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.findPagePublished(size, offset).map(mapper::toDomain).collectList(),
+                        repository.countPublished().defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override
@@ -64,8 +69,14 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublishedByCategory(String category) {
-        return repository.findPublishedByCategory(category).map(mapper::toDomain);
+    public Mono<PageResult<Activity>> findPublishedByCategoryPage(String category, int page, int size) {
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.findPagePublishedByCategory(category, size, offset)
+                                .map(mapper::toDomain)
+                                .collectList(),
+                        repository.countPublishedByCategory(category).defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override
@@ -74,8 +85,14 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
-    public Flux<Activity> findPublishedBySiteId(UUID siteId) {
-        return repository.findPublishedBySiteId(siteId).map(mapper::toDomain);
+    public Mono<PageResult<Activity>> findPublishedBySiteIdPage(UUID siteId, int page, int size) {
+        var offset = (long) page * size;
+        return Mono.zip(
+                        repository.findPagePublishedBySiteId(siteId, size, offset)
+                                .map(mapper::toDomain)
+                                .collectList(),
+                        repository.countPublishedBySiteId(siteId).defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 
     @Override
