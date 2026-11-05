@@ -100,6 +100,8 @@ Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias q
 
 Los listados (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}` y `GET /reservations?status=`) aceptan `page` (>= 0) y `size` (1..100) y devuelven `PageResponse`: `content`, `page`, `size`, `total`, `totalPages`. Los errores usan RFC 9457 (`application/problem+json`).
 
+`GET /reservations?status=` (y su variante de gestora) pagina **en la base de datos**: aplica `LIMIT`/`OFFSET` y pide el `COUNT` de todo el estado, así que la página 2 y el total son reales y no dependen de cuántas filas quepan en memoria. Los listados de catálogo (`/events`, `/activities` y sus variantes) todavía traen el resultado completo y lo cortan en memoria.
+
 Los roles del JWT son los de ms-01, en inglés: `TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER` y `ADMIN`. Los códigos antiguos en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`) se aceptan solo como alias de lectura para tokens ya emitidos; ms-03 nunca los emite.
 
 ## Endpoints

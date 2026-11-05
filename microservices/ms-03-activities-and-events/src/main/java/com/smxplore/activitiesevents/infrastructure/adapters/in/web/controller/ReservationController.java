@@ -111,21 +111,17 @@ public class ReservationController {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
 
-        Flux<ReservationSummaryResponse> reservations;
         if (isAdmin(jwt)) {
-            reservations = consultReservationsByStatusUseCase
-                    .handle(status, PaginationLimits.MAX)
-                    .map(mapper::toSummary);
-        } else if (role(jwt) == UserRole.DESTINATION_MANAGER) {
-            reservations = consultManagerReservationsUseCase
-                    .handle(subjectAsUuid(jwt), jwt.getTokenValue(), status, PaginationLimits.MAX)
-                    .map(mapper::toSummary);
-        } else {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only admins and destination managers can list reservations by status.");
+            return consultReservationsByStatusUseCase.handle(status, page, size)
+                    .map(result -> PageResponse.from(result, mapper::toSummary));
         }
-        return reservations.collectList()
-                .map(all -> PageResponse.of(all, page, size));
+        if (role(jwt) == UserRole.DESTINATION_MANAGER) {
+            return consultManagerReservationsUseCase
+                    .handle(subjectAsUuid(jwt), jwt.getTokenValue(), status, page, size)
+                    .map(result -> PageResponse.from(result, mapper::toSummary));
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Only admins and destination managers can list reservations by status.");
     }
 
     @GetMapping("/tourists/{touristId}")

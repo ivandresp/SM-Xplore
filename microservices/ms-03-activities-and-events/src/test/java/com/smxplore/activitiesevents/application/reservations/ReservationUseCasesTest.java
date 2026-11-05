@@ -9,6 +9,7 @@ import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReserv
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidReservationTouristException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.ReservationNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.TooManyActiveReservationsException;
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
@@ -34,6 +35,7 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -383,13 +385,17 @@ class ReservationUseCasesTest {
         var touristId = UUID.randomUUID();
         var reservation = reservation(ReservationStatus.CONFIRMED);
         given(reservationRepo.findAllByTouristId(touristId, 50)).willReturn(Flux.just(reservation));
-        given(reservationRepo.findAllByStatus(ReservationStatus.CONFIRMED, 50)).willReturn(Flux.just(reservation));
+        given(reservationRepo.findPageByStatus(ReservationStatus.CONFIRMED, 0, 20))
+                .willReturn(Mono.just(new PageResult<>(List.of(reservation), 0, 20, 1L)));
 
         StepVerifier.create(consultReservationsByTouristUseCase.handle(touristId, 50))
                 .expectNext(reservation)
                 .verifyComplete();
-        StepVerifier.create(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 50))
-                .expectNext(reservation)
+        StepVerifier.create(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 0, 20))
+                .assertNext(page -> {
+                    assertThat(page.content()).containsExactly(reservation);
+                    assertThat(page.total()).isEqualTo(1);
+                })
                 .verifyComplete();
     }
 

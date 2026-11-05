@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
@@ -93,8 +94,8 @@ class ReservationControllerTest {
 
     @Test
     void listingOmitsTheNotesButKeepsTheTouristId() {
-        given(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 200))
-                .willReturn(Flux.just(reservation()));
+        given(consultReservationsByStatusUseCase.handle(ReservationStatus.CONFIRMED, 0, 20))
+                .willReturn(Mono.just(new PageResult<>(java.util.List.of(reservation()), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/reservations?status=CONFIRMED")
                 .exchange()

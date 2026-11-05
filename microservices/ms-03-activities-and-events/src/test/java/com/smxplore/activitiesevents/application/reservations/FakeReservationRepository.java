@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.application.reservations;
 
+import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
@@ -10,6 +11,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -49,9 +51,10 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     }
 
     @Override
-    public Flux<Reservation> findAllByStatus(ReservationStatus status, int limit) {
-        return Flux.fromIterable(reservations.values())
-                .filter(reservation -> status == reservation.getStatus());
+    public Mono<PageResult<Reservation>> findPageByStatus(ReservationStatus status, int page, int size) {
+        return Mono.just(page(reservations.values().stream()
+                .filter(reservation -> status == reservation.getStatus())
+                .toList(), page, size));
     }
 
     @Override
@@ -73,13 +76,20 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     }
 
     @Override
-    public Flux<Reservation> findAllByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
-                                               ReservationStatus status, int limit) {
-        return Flux.fromIterable(reservations.values())
+    public Mono<PageResult<Reservation>> findPageByItemRefs(Collection<UUID> eventIds, Collection<UUID> activityIds,
+                                                            ReservationStatus status, int page, int size) {
+        return Mono.just(page(reservations.values().stream()
                 .filter(reservation -> reservation.getStatus() == status)
                 .filter(reservation -> reservation.getItemType() == ReservationItemType.EVENT
                         ? eventIds.contains(reservation.getItemId())
-                        : activityIds.contains(reservation.getItemId()));
+                        : activityIds.contains(reservation.getItemId()))
+                .toList(), page, size));
+    }
+
+    private static PageResult<Reservation> page(List<Reservation> matches, int page, int size) {
+        int from = Math.min(page * size, matches.size());
+        int to = Math.min(from + size, matches.size());
+        return new PageResult<>(List.copyOf(matches.subList(from, to)), page, size, matches.size());
     }
 
     @Override

@@ -1,6 +1,9 @@
 package com.smxplore.activitiesevents;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
+import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
@@ -160,9 +163,53 @@ class ApplicationContextTest {
                 .verifyComplete();
         StepVerifier.create(activityRepository.findIdsBySiteIds(Set.of(itemId)))
                 .verifyComplete();
-        StepVerifier.create(reservationRepository.findAllByItemRefs(
-                        Set.of(itemId), Set.of(itemId), ReservationStatus.CONFIRMED, 10))
+        StepVerifier.create(reservationRepository.findPageByItemRefs(
+                        Set.of(itemId), Set.of(itemId), ReservationStatus.CONFIRMED, 0, 10))
+                .assertNext(page -> {
+                    assertThat(page.content()).isEmpty();
+                    assertThat(page.total()).isZero();
+                })
                 .verifyComplete();
+    }
+
+    @Test
+    void reservationPagesApplyTheOffsetInTheDatabaseAndReturnTheTotal() {
+        // booked_for must equal item_starts_at (reservations_booked_for_matches_start), so both
+        // columns get the same value instead of two separate clock reads.
+        var itemStart = Instant.now().plusSeconds(86_400);
+        for (int index = 0; index < 3; index++) {
+            reservationRepository.save(Reservation.builder()
+                    .id(UUID.randomUUID())
+                    .touristId(UUID.randomUUID())
+                    .itemType(ReservationItemType.ACTIVITY)
+                    .itemId(UUID.randomUUID())
+                    .numberOfPeople(1)
+                    .unitPrice(java.math.BigDecimal.TEN)
+                    .total(java.math.BigDecimal.TEN)
+                    .paymentMethod(PaymentMethod.CASH)
+                    .status(ReservationStatus.CONFIRMED)
+                    .itemStartsAt(itemStart)
+                    .bookedFor(itemStart)
+                    .build()).block();
+        }
+
+        var first = reservationRepository
+                .findPageByStatus(ReservationStatus.CONFIRMED, 0, 2).block();
+        var second = reservationRepository
+                .findPageByStatus(ReservationStatus.CONFIRMED, 1, 2).block();
+
+        assertThat(first).isNotNull();
+        assertThat(first.content()).hasSize(2);
+        // The total is computed by the database over the whole status, not over the page.
+        assertThat(first.total()).isGreaterThanOrEqualTo(3);
+        assertThat(first.totalPages()).isGreaterThanOrEqualTo(2);
+
+        assertThat(second).isNotNull();
+        assertThat(second.content()).isNotEmpty();
+        assertThat(second.page()).isEqualTo(1);
+        assertThat(second.content())
+                .isNotEmpty()
+                .allSatisfy(reservation -> assertThat(first.content()).doesNotContain(reservation));
     }
 
     private static String token(String role) {
