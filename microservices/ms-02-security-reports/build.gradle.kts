@@ -36,6 +36,17 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
     annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 
+    // Dependencias transitivas con CVE corregible que detecta el escaneo Trivy del pipeline.
+    // El cliente de Kafka arrastra compresión nativa: se fuerzan las versiones con los CVE cerrados.
+    constraints {
+        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+            because("CVE-2026-106451, ejecución de código por manejo inseguro de temporales")
+        }
+        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+            because("CVE-2026-108106 y CVE-2026-93451, denegación de servicio y desbordamiento de búfer")
+        }
+    }
+
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive-test")
     testImplementation("org.springframework.boot:spring-boot-starter-security-test")
