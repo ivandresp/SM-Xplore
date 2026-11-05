@@ -76,6 +76,23 @@ class AuthVersionValidatorTest {
     }
 
     @Test
+    void doesNotRegressTheCachedVersionWithAStaleResponse() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicLong current = new java.util.concurrent.atomic.AtomicLong(3);
+        startServer(current::get, calls);
+        AuthVersionValidator validator = validator(properties(true, baseUrl()), false);
+
+        assertThat(validator.validate(jwt("TOURIST", true, 3)).block()).isNotNull();
+        current.set(2);
+
+        assertThatThrownBy(() -> validator.validate(jwt("TOURIST", true, 4)).block())
+                .isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> validator.validate(jwt("TOURIST", true, 2)).block())
+                .isInstanceOf(BadJwtException.class)
+                .hasMessageContaining("session");
+    }
+
+    @Test
     void skipsTheRemoteCheckWhenDisabled() {
         AuthVersionValidator validator = validator(properties(false, null), false);
 
