@@ -9,6 +9,7 @@ on:
     branches: [main, microservicios, ms-sites-services]
     paths:
       - "microservices/ms-04-sites-and-services/**"
+      - "contracts/**"
       - "infrastructure/compose.yaml"
       - ".github/workflows/ms-04-ci.yml"
       # Si cambian los finales de línea, el build de la imagen puede romperse (./gradlew: not found).
@@ -16,6 +17,7 @@ on:
   pull_request:
     paths:
       - "microservices/ms-04-sites-and-services/**"
+      - "contracts/**"
       - "infrastructure/compose.yaml"
       - ".github/workflows/ms-04-ci.yml"
       - ".gitattributes"
@@ -72,7 +74,9 @@ jobs:
               except ElementTree.ParseError:
                   continue
               for case in suite.iter("testcase"):
-                  failure = case.find("failure") or case.find("error")
+                  failure = case.find("failure")
+                  if failure is None:
+                      failure = case.find("error")
                   if failure is None:
                       continue
                   message = (failure.get("message") or "").strip().splitlines()

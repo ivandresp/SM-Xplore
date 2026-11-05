@@ -101,6 +101,10 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       OUTBOX_ENABLED: ${OUTBOX_ENABLED:-false}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-5000}
+      # Consumidor de catalog.site.changed v2: refresca sitio_nombre y manager_id de los eventos.
+      SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-false}
+      SITE_EVENTS_GROUP: ${SITE_EVENTS_GROUP:-ms-03-site-snapshot}
+      SITE_EVENTS_TIMEOUT: ${SITE_EVENTS_TIMEOUT:-PT10S}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
       interval: 30s

@@ -9,12 +9,12 @@ Este README es la puerta de entrada al **stack integrado**. Cada servicio conser
 
 ## Arranque completo (un solo comando)
 
-Requisitos: Docker Desktop con al menos **8 GB de memoria** asignada (Kafka, Neo4j y cinco
-JVM conviven) y los puertos libres que lista la tabla de abajo.
+Requisitos: Docker Desktop con al menos **7 GB libres** (8 GB recomendados; el stack en reposo
+usa ~3,5 GiB) y los puertos libres que lista la tabla de abajo.
 
 ```powershell
 Copy-Item .env.example .env   # opcional: todos los valores tienen default
-docker compose up -d --build
+docker compose up -d --build --wait --wait-timeout 600
 ```
 
 ```bash
@@ -23,8 +23,9 @@ docker compose up -d --build
 ```
 
 El primer arranque compila las cinco imagenes (Gradle dentro de Docker) y puede tardar varios
-minutos. Los servicios esperan a que la infraestructura este sana y a que ms-01 publique su
-JWKS. Verifica el estado con:
+minutos. El flag `--wait` hace que el comando termine solo cuando todos los healthchecks estan
+`healthy`; sin el, "arrancado" no significa "listo". Los servicios esperan a que la
+infraestructura este sana y a que ms-01 publique su JWKS. Verifica el estado con:
 
 ```powershell
 docker compose ps
@@ -101,12 +102,13 @@ separadas por servicio) y los secretos viven en `.env`. En produccion:
 ```powershell
 docker compose ps                  # estado y salud
 docker compose logs -f ms-03       # logs de un servicio
-docker compose up -d --build ms-03 # reconstruir uno solo
-docker compose down                # detener (conserva datos)
+docker compose up -d --build --wait ms-03 # reconstruir uno solo
+docker compose down                # detener (conserva datos: los volumenes y Kafka persisten)
 docker compose down -v             # detener y borrar volumenes (reset total)
 ```
 
-Cada servicio tambien puede levantarse aislado con su propio compose; en ese caso necesita la
+Los contenedores rotan logs (`10 MB x 3` por servicio) para no llenar el disco. Cada servicio
+tambien puede levantarse aislado con su propio compose; en ese caso necesita la
 red `smxplore-net` (la crea `infrastructure/compose.yaml`) y sus propias bases. No ejecutes
 `infrastructure/compose.yaml` al mismo tiempo que este stack: ambos publican Kafka y Redis.
 
@@ -121,7 +123,7 @@ El script comprueba:
 - `/actuator/health` de los cinco servicios (estado `UP`).
 - JWKS de ms-01 con al menos una llave.
 - Endpoints publicos de catalogo de ms-03.
-- Que Kafka, Redis y Neo4j respondan en sus puertos.
+- Que Kafka UI, Mailpit y Neo4j respondan en sus puertos (Kafka y Redis se validan a traves de la salud de los servicios que los usan).
 
 Para las suites por servicio:
 
