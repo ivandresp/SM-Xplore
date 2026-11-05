@@ -99,7 +99,11 @@ Estado de fase 2:
   proyección.
 - La key de cada mensaje debe ser el `aggregateId`. ms-05 rechaza una key distinta si viene
   informada.
-- Los errores de contrato van a `<topic>.dlq`.
+- Los errores de contrato van al topic de descarte del consumidor. ms-05 usa `<topic>.dlq` y ms-03
+  `catalog.site.changed.DLT` (el topic se declara al arrancar); ambos consumidores reintentan con
+  backoff exponencial (~1 min) antes de descartar, y el offset avanza después del descarte.
+- El feed de reindexado de ms-04 (`/api/v1/admin/catalog/export`) incluye `eventVersion` en cada
+  ítem, así que ms-05 valida la versión del payload igual que en el camino de Kafka.
 
 ## Validación local
 
@@ -120,8 +124,9 @@ En ms-05, `EventContractTest` valida todos los ejemplos contra su schema y
 valida en runtime para no penalizar la latencia del consumidor; un mensaje inválido se detecta
 al construir el evento de dominio y termina en la DLQ.
 
-Cuando ms-03/ms-04 implementen el outbox, cada productor debe incluir la misma validación en su
-suite de tests.
+Los outboxes de ms-03 y ms-04 ya están implementados; cada productor mantiene su propia suite de
+contrato (`ActivityEventContractTest`, `ReservationEventContractTest`, `ReviewEventContractTest` en
+ms-03 y `EventContractTest` en ms-04) y debe seguir haciéndolo al cambiar un payload.
 
 ## Schema Registry
 

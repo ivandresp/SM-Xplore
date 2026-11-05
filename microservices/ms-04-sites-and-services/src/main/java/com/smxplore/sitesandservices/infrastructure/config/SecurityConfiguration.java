@@ -108,7 +108,11 @@ public class SecurityConfiguration {
                 return Flux.empty();
             }
             try {
-                return Flux.just(new SimpleGrantedAuthority("ROLE_" + UserRole.fromClaim(role).name()));
+                var userRole = UserRole.fromClaim(role);
+                // Un rol nuevo o desconocido no da autoridad, pero tampoco puede tumbar la peticion.
+                return userRole == null
+                        ? Flux.empty()
+                        : Flux.just(new SimpleGrantedAuthority("ROLE_" + userRole.name()));
             } catch (InvalidJwtException exception) {
                 return Flux.empty();
             }

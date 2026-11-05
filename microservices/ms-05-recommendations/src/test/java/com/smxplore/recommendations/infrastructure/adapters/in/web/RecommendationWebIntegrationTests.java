@@ -282,6 +282,7 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(ISSUER)
+                .audience(java.util.List.of("sm-xplore-services"))
                 .subject(touristId.toString())
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))

@@ -7,6 +7,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Review as the public catalog shows it.
+ *
+ * <p>It deliberately excludes the AI assessment ({@link ReviewAiAssessmentResponse}): the verdict of
+ * the abuse filter, its model, score and categories are internal moderation data. The
+ * administrative view is {@link AdminReviewResponse}.
+ */
 public record ReviewResponse(
         UUID reviewId,
         UUID touristId,
@@ -21,7 +28,6 @@ public record ReviewResponse(
         Instant respondedAt,
         int helpfulReactions,
         ReviewStatus status,
-        ReviewAiAssessmentResponse ai,
         Instant createdAt,
         Instant updatedAt
 ) {

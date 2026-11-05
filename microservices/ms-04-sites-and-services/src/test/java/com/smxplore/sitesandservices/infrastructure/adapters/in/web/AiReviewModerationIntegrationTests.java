@@ -4,6 +4,7 @@ import com.smxplore.sitesandservices.AbstractMongoPostgresIntegrationTest;
 import com.smxplore.sitesandservices.TestJwtSupport;
 import com.smxplore.sitesandservices.domain.model.review.ReviewStatus;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.PageResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.AdminReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -66,34 +67,38 @@ class AiReviewModerationIntegrationTests extends AbstractMongoPostgresIntegratio
                 cleanTourist, cleanSiteId, "Una reseña limpia de una visita real");
 
         assertThat(flagged.status()).isEqualTo(ReviewStatus.PENDING_REVIEW);
-        assertThat(flagged.ai()).isNotNull();
-        assertThat(flagged.ai().status()).isEqualTo("ASSESSED");
-        assertThat(flagged.ai().score()).isEqualTo(0.91);
         assertThat(clean.status()).isEqualTo(ReviewStatus.PUBLISHED);
-        assertThat(clean.ai()).isNotNull();
-        assertThat(clean.ai().flagged()).isFalse();
 
-        PageResponse<ReviewResponse> queue = clientFor(adminId, "ADMIN")
+        PageResponse<AdminReviewResponse> queue = clientFor(adminId, "ADMIN")
                 .get().uri("/api/v1/admin/reviews/ai-flagged?page=0&size=50")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(new ParameterizedTypeReference<PageResponse<ReviewResponse>>() {
+                .expectBody(new ParameterizedTypeReference<PageResponse<AdminReviewResponse>>() {
                 })
                 .returnResult()
                 .getResponseBody();
 
         assertThat(queue).isNotNull();
         assertThat(queue.content())
-                .extracting(ReviewResponse::reviewId)
+                .extracting(AdminReviewResponse::reviewId)
                 .contains(flagged.reviewId())
                 .doesNotContain(clean.reviewId());
+
+        // El veredicto de la IA solo viaja por la via administrativa.
+        AdminReviewResponse queued = queue.content().stream()
+                .filter(review -> review.reviewId().equals(flagged.reviewId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(queued.ai()).isNotNull();
+        assertThat(queued.ai().status()).isEqualTo("ASSESSED");
+        assertThat(queued.ai().score()).isEqualTo(0.91);
 
         clientFor(flaggedTourist, "TOURIST")
                 .get().uri("/api/v1/admin/reviews/ai-flagged")
                 .exchange()
                 .expectStatus().isForbidden();
 
-        ReviewResponse published = clientFor(adminId, "ADMIN")
+        AdminReviewResponse published = clientFor(adminId, "ADMIN")
                 .patch().uri("/api/v1/reviews/" + flagged.reviewId() + "/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -101,7 +106,7 @@ class AiReviewModerationIntegrationTests extends AbstractMongoPostgresIntegratio
                         """)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(ReviewResponse.class)
+                .expectBody(AdminReviewResponse.class)
                 .returnResult()
                 .getResponseBody();
 

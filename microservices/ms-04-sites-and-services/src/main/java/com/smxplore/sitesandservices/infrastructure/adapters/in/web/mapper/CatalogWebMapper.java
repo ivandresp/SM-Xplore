@@ -16,6 +16,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.catalog.
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.category.CategoryResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.AvailabilitySlotResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReputationResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.AdminReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewAiAssessmentResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewReportResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
@@ -103,8 +104,30 @@ public class CatalogWebMapper {
         );
     }
 
+    /** Public view: no AI assessment. */
     public ReviewResponse toResponse(Review review) {
         return new ReviewResponse(
+                review.reviewId(),
+                review.touristId(),
+                review.touristName(),
+                review.itemType(),
+                review.itemId(),
+                review.itemName(),
+                review.rating(),
+                review.commentary(),
+                review.photosUrls(),
+                review.response(),
+                review.respondedAt(),
+                review.helpfulReactions(),
+                review.status(),
+                review.createdAt(),
+                review.updatedAt()
+        );
+    }
+
+    /** Administrative view: includes the AI assessment. */
+    public AdminReviewResponse toAdminResponse(Review review) {
+        return new AdminReviewResponse(
                 review.reviewId(),
                 review.touristId(),
                 review.touristName(),
@@ -177,6 +200,7 @@ public class CatalogWebMapper {
     public CatalogExportItemResponse toResponse(CatalogExportItem item) {
         return new CatalogExportItemResponse(
                 item.eventType(),
+                item.eventVersion(),
                 item.aggregateId(),
                 item.updatedAt(),
                 item.payload()

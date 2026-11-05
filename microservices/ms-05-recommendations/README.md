@@ -136,6 +136,8 @@ proyección** que los consumidores de Kafka:
 - reenvía el token del administrador que invoca el endpoint (ms-05 no tiene credenciales propias);
 - cada ítem del feed se convierte en el evento equivalente (`catalog.site.changed`, etc.) y pasa
   por `ProjectionEventDecoder`, así que las validaciones de contrato son las mismas;
+- la versión del sobre es la que envía ms-04 en el ítem (`eventVersion`). Si un ms-04 antiguo no la
+  manda, ms-05 la infiere del payload (un sitio con `managerId` es v2) en lugar de asumir v1;
 - el `eventId` se deriva de `eventType + aggregateId + updatedAt`, de modo que repetir una página
   es idempotente y una entidad que cambió después genera un marcador nuevo;
 - `updatedSince` permite reanudar un recorrido interrumpido y `REINDEX_MAX_PAGES` evita bucles

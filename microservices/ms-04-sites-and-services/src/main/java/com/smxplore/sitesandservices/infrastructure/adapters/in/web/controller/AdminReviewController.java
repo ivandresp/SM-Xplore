@@ -2,7 +2,7 @@ package com.smxplore.sitesandservices.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.sitesandservices.domain.ports.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.common.PageResponse;
-import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.ReviewResponse;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.review.AdminReviewResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper.CatalogWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,11 +24,11 @@ public class AdminReviewController {
 
     @GetMapping("/ai-flagged")
     @Operation(summary = "List reviews retained by the automatic AI filter")
-    public Mono<PageResponse<ReviewResponse>> aiFlagged(
+    public Mono<PageResponse<AdminReviewResponse>> aiFlagged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return listAiFlaggedReviews.handle(page, size)
-                .map(result -> PageResponse.from(result, webMapper::toResponse));
+                .map(result -> PageResponse.from(result, webMapper::toAdminResponse));
     }
 }

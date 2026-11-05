@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record CatalogExportItemResponse(
         String eventType,
+        int eventVersion,
         UUID aggregateId,
         Instant updatedAt,
         Map<String, Object> payload

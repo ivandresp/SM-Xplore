@@ -20,6 +20,7 @@ public final class TestJwtSupport {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(ISSUER)
+                .audience(java.util.List.of("sm-xplore-services"))
                 .subject(userId.toString())
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(600))

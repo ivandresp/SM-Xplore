@@ -86,6 +86,7 @@ class CatalogExportClientTest {
                         "siteId": "%s",
                         "name": "Playa Cristal",
                         "categoryId": "%s",
+                        "managerId": "%s",
                         "latitude": 11.31,
                         "longitude": -74.17,
                         "status": "PUBLISHED",
@@ -99,7 +100,8 @@ class CatalogExportClientTest {
                   "hasNext": false,
                   "updatedSince": null
                 }
-                """.formatted(siteId, UPDATED_AT, siteId, UUID.randomUUID(), UPDATED_AT);
+                """.formatted(siteId, UPDATED_AT, siteId, UUID.randomUUID(), UUID.randomUUID(),
+                UPDATED_AT);
 
         CatalogExportPage page = client.fetch(TOKEN, CatalogEntity.SITES, 0, UPDATED_AT).block();
 
@@ -191,5 +193,76 @@ class CatalogExportClientTest {
                         .hasMessageContaining("authorization header is required"))
                 .verify();
         assertThat(requestUris).isEmpty();
+    }
+    @Test
+    void honoursTheEventVersionThatMs04Exports() {
+        UUID siteId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+        // El fixture siempre trae managerId (v2), asi que se declara una version distinta para
+        // demostrar que el cliente usa el valor exportado y no la heuristica del payload.
+        responseBody = sitePage(siteId, managerId, "2");
+
+        CatalogExportPage page = client.fetch(TOKEN, CatalogEntity.SITES, 0, UPDATED_AT).block();
+
+        assertThat(page).isNotNull();
+        SiteChangedEvent event = (SiteChangedEvent) page.content().getFirst();
+        assertThat(event.metadata().eventVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void rejectsANonIntegerEventVersion() {
+        UUID siteId = UUID.randomUUID();
+        responseBody = sitePage(siteId, UUID.randomUUID(), "\"2\"");
+
+        StepVerifier.create(client.fetch(TOKEN, CatalogEntity.SITES, 0, UPDATED_AT))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(InvalidReindexException.class)
+                        .hasMessageContaining("eventVersion"))
+                .verify();
+    }
+
+    @Test
+    void infersV2ForEverySiteOfAnOlderFeed() {
+        UUID siteId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+        responseBody = sitePage(siteId, managerId, null);
+
+        CatalogExportPage page = client.fetch(TOKEN, CatalogEntity.SITES, 0, UPDATED_AT).block();
+
+        assertThat(page).isNotNull();
+        SiteChangedEvent event = (SiteChangedEvent) page.content().getFirst();
+        // Un feed antiguo sin version sigue siendo v2: un sitio sin gestora es valido.
+        assertThat(event.metadata().eventVersion()).isEqualTo(2);
+    }
+
+    private static String sitePage(UUID siteId, UUID managerId, String eventVersion) {
+        String versionField = eventVersion == null ? "" : "\"eventVersion\": " + eventVersion + ",";
+        return """
+                {
+                  "content": [
+                    {
+                      "eventType": "catalog.site.changed",
+                      %s
+                      "aggregateId": "%s",
+                      "updatedAt": "%s",
+                      "payload": {
+                        "siteId": "%s",
+                        "name": "Playa Cristal",
+                        "categoryId": "%s",
+                        "managerId": "%s",
+                        "latitude": 11.31,
+                        "longitude": -74.17,
+                        "status": "PUBLISHED",
+                        "updatedAt": "%s"
+                      }
+                    }
+                  ],
+                  "page": 0,
+                  "size": 50,
+                  "total": 1,
+                  "hasNext": false,
+                  "updatedSince": null
+                }
+                """.formatted(versionField, siteId, UPDATED_AT, siteId, UUID.randomUUID(), managerId, UPDATED_AT);
     }
 }

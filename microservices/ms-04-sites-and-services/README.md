@@ -252,9 +252,11 @@ Filtros disponibles:
 - Exportación de catálogo: `entity` (`CATEGORIES`, `SITES`, `SERVICES`, obligatorio), `updatedSince` (ISO-8601, opcional), `page`, `size` (máximo 200).
 
 El feed `GET /api/v1/admin/catalog/export` existe para que ms-05 reconstruya su proyección desde cero:
-devuelve páginas del catálogo con **el mismo `eventType`, `aggregateId` y `payload`** que publican los
-eventos de Kafka, así que el consumidor reutiliza el mismo código de proyección. Cuando `hasNext` es
-`false`, ms-05 pasa a consumir los eventos incrementales.
+devuelve páginas del catálogo con **el mismo `eventType`, `eventVersion`, `aggregateId` y `payload`**
+que publican los eventos de Kafka, así que el consumidor reutiliza el mismo código de proyección y la
+misma validación de versión. `eventVersion` sale de `EventVersions` (`catalog.site.changed` es v2 por el
+`managerId`; el resto son v1). Cuando `hasNext` es `false`, ms-05 pasa a consumir los eventos
+incrementales.
 
 ### Moderación automática de reseñas
 
@@ -270,7 +272,9 @@ y el comentario público; no se envían datos del turista. El resultado se conse
 - `REVIEW_AI_FAIL_OPEN=true` (default) guarda la reseña visible cuando el LLM no responde; con
   `false` la creación falla con `503 Review filter unavailable`.
 - `GET /api/v1/admin/reviews/ai-flagged` lista las reseñas retenidas y `PATCH
-  /api/v1/reviews/{id}/status` permite publicarlas o mantenerlas ocultas.
+  /api/v1/reviews/{id}/status` permite publicarlas o mantenerlas ocultas. Ambas respuestas usan
+  `AdminReviewResponse` y son las únicas que devuelven el veredicto de la IA: `ReviewResponse`
+  (catálogo público) ya no lleva `ai`, para que un turista no pueda calibrar el filtro.
 - El evento `reviews.review.changed` incluye el nuevo estado `PENDING_REVIEW`; los consumidores que
   solo cuentan reseñas publicadas lo ignoran, igual que `HIDDEN`.
 
@@ -370,7 +374,9 @@ Topics publicados:
 | `bookings.reservation.changed` | Reserva creada/cancelada/completada | `contracts/events/bookings.reservation.changed.v1.json` (ms-04) / `.v2.json` (ms-03) |
 
 - La key de Kafka es el `aggregateId`.
-- El sobre incluye `eventId`, `eventVersion=1`, `occurredAt`, `correlationId` y `producer=ms-04`.
+- El sobre incluye `eventId`, `eventVersion`, `occurredAt`, `correlationId` y `producer=ms-04`. La versión
+  sale de `EventVersions`: `catalog.site.changed` es v2 (agrega `managerId`), `bookings.reservation.changed`
+  de ms-04 es v1 y los demás son v1.
 - `reviews.review.changed` es compartido: ms-03 publica actividades/eventos y ms-04 sitios/servicios.
   El estado puede ser `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; los consumidores deben
   tratar `PENDING_REVIEW` igual que una reseña no visible.

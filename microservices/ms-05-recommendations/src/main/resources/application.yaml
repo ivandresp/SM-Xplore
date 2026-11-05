@@ -43,6 +43,8 @@ app:
     jwt:
       jwk-set-uri: ${JWK_SET_URI:}
       public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      # Solo desarrollo: acepta HTTP cuando el JWKS no es loopback (stack de Compose).
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:false}
       issuer: ${JWT_ISSUER:sm-xplore-ms-01}
       audience: ${JWT_AUDIENCE:sm-xplore-services}
       user-id-claim: ${JWT_USER_ID_CLAIM:userId}
@@ -53,6 +55,8 @@ app:
       base-url: ${MS01_BASE_URL:}
       timeout: ${AUTH_VERSION_TIMEOUT:2s}
       cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
+      # Cota de entradas y de TTL (max 5 min): el TTL es la ventana real de revocacion.
+      cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
     mfa:
       require-admin: ${MFA_REQUIRE_ADMIN:false}
   cors:

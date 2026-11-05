@@ -13,7 +13,7 @@ app:
     jwt:
       public-key-location: classpath:keys/test-public.pem
       issuer: https://ms-05.local
-      audience: ""
+      audience: sm-xplore-services
       user-id-claim: userId
       role-claim: role
       name-claim: name
