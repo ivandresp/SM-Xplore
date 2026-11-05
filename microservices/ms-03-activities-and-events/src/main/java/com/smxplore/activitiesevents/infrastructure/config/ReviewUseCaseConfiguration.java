@@ -11,6 +11,7 @@ import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryP
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewsByItemUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewMetricsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewReportsUseCasePort;
@@ -39,8 +40,9 @@ public class ReviewUseCaseConfiguration {
     @Bean
     public RespondToReviewUseCasePort respondToReviewUseCase(ReviewRepositoryPort reviewRepository,
                                                              ActivityRepositoryPort activityRepository,
-                                                             EventRepositoryPort eventRepository) {
-        return new RespondToReviewUseCase(reviewRepository, activityRepository, eventRepository);
+                                                             EventRepositoryPort eventRepository,
+                                                             SiteCatalogPort siteCatalog) {
+        return new RespondToReviewUseCase(reviewRepository, activityRepository, eventRepository, siteCatalog);
     }
 
     @Bean

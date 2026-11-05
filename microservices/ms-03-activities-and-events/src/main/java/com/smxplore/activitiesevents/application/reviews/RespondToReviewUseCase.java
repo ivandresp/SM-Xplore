@@ -6,14 +6,17 @@ import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewExcep
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -23,6 +26,7 @@ import java.util.UUID;
  * Only the entity in charge may answer: the guide of the reviewed activity, or
  * an admin/destination manager for events (events belong to the destination).
  */
+@Slf4j
 @RequiredArgsConstructor
 public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
 
@@ -33,9 +37,11 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
     private final ReviewRepositoryPort reviewRepo;
     private final ActivityRepositoryPort activityRepo;
     private final EventRepositoryPort eventRepo;
+    private final SiteCatalogPort siteCatalog;
 
     @Override
-    public Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message) {
+    public Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message,
+                               String bearerToken) {
         if (message == null || message.isBlank()) {
             return Mono.error(new InvalidReviewException("Response message must not be blank."));
         }
@@ -45,7 +51,7 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
         }
         return reviewRepo.findById(reviewId)
                 .switchIfEmpty(Mono.error(new ReviewNotFoundException(reviewId)))
-                .flatMap(review -> canRespond(review, responderId, role)
+                .flatMap(review -> canRespond(review, responderId, role, bearerToken)
                         .then(Mono.defer(() -> {
                             if (review.getReply() != null) {
                                 return Mono.error(new ReviewAlreadyRespondedException(
@@ -56,21 +62,20 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
                         })));
     }
 
-    private Mono<Void> canRespond(Review review, UUID responderId, String role) {
+    private Mono<Void> canRespond(Review review, UUID responderId, String role, String bearerToken) {
         if (ADMIN.equals(role)) {
             return Mono.empty();
         }
         if (review.getItemType() == ReviewItemType.EVENT) {
-            // TODO(ms-04): managerId is a creation-time snapshot, so a reassigned manager keeps the
-            // reply right until the snapshot is refreshed. ms-04 now exposes GET /api/v1/sites/{siteId}
-            // and the managerId listing filter, so the revalidation is possible; it is not done here
-            // because it would add a remote call to every reply.
             return eventRepo.findById(review.getItemId())
                     .switchIfEmpty(Mono.error(new EventNotFoundException(review.getItemId())))
-                    .flatMap(event -> DESTINATION_MANAGER.equals(role) && responderId.equals(event.getManagerId())
-                            ? Mono.empty()
-                            : Mono.error(new ReviewResponseNotAllowedException(
-                                    "Only the destination manager in charge of the event can respond.")));
+                    .flatMap(event -> managerInCharge(event, bearerToken)
+                            .switchIfEmpty(Mono.error(new ReviewResponseNotAllowedException(
+                                    "The event does not have a destination manager.")))
+                            .flatMap(managerId -> DESTINATION_MANAGER.equals(role) && responderId.equals(managerId)
+                                    ? Mono.empty()
+                                    : Mono.error(new ReviewResponseNotAllowedException(
+                                            "Only the destination manager in charge of the event can respond."))));
         }
         return activityRepo.findById(review.getItemId())
                 .switchIfEmpty(Mono.error(new ActivityNotFoundException(review.getItemId())))
@@ -78,5 +83,28 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
                         ? Mono.empty()
                         : Mono.error(new ReviewResponseNotAllowedException(
                                 "Only the guide in charge of the activity can respond.")));
+    }
+
+    /**
+     * Resolves the manager that owns the site right now instead of trusting the snapshot taken when
+     * the event was created, so a reassigned manager loses the reply right immediately.
+     *
+     * <p>If ms-04 does not answer, or the site no longer exists, the stored snapshot is used: the
+     * alternative is rejecting every reply whenever the catalog is down. The warning is the only
+     * trace, so the fallback is visible in the logs.
+     */
+    private Mono<UUID> managerInCharge(Event event, String bearerToken) {
+        var snapshot = Mono.justOrEmpty(event.getManagerId());
+        if (event.getSiteId() == null || bearerToken == null || bearerToken.isBlank()) {
+            return snapshot;
+        }
+        return siteCatalog.findById(event.getSiteId(), bearerToken)
+                .map(SiteCatalogPort.SiteSnapshot::managerId)
+                .switchIfEmpty(snapshot)
+                .onErrorResume(error -> {
+                    log.warn("Could not revalidate the site manager of event {}: {}",
+                            event.getId(), error.toString());
+                    return snapshot;
+                });
     }
 }

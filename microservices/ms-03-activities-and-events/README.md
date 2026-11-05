@@ -185,7 +185,11 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 ## Snapshot de sitio en eventos
 
-`Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `GESTORA_DESTINOS`, `managerId` se toma del `sub` del JWT (no del body). Esto permite autorizar la respuesta a reseñas sin consultar ms-04 en caliente. Si cambia la gestora, el snapshot debe refrescarse (pendiente de contrato con ms-04).
+`Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `DESTINATION_MANAGER`, `managerId` se toma del `sub` del JWT (no del body).
+
+Ese snapshot se usa como referencia, pero **responder una reseña lo revalida**: se consulta `GET /api/v1/sites/{siteId}` de ms-04 con el token del usuario y manda la gestora actual, así que una gestora reasignada pierde el derecho de inmediato. Si ms-04 no responde, o el sitio ya no existe, se usa el snapshot y se registra un `WARN`: la alternativa es rechazar todas las respuestas cada vez que el catálogo esté caído.
+
+El snapshot en sí no se refresca desde Kafka: `catalog.site.changed` v1 no trae `managerId`.
 
 ## Pruebas
 
