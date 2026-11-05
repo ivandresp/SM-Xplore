@@ -45,7 +45,7 @@
               "maximum": 5
             },
             "status": {
-              "enum": ["PUBLISHED", "HIDDEN", "DELETED"]
+              "enum": ["PUBLISHED", "PENDING_REVIEW", "HIDDEN", "DELETED"]
             },
             "updatedAt": {
               "type": "string",

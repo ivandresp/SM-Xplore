@@ -74,6 +74,22 @@ public class MongoReviewRepositoryAdapter implements ReviewRepositoryPort {
     }
 
     @Override
+    public Mono<PageResult<Review>> findAiFlagged(int page, int size) {
+        Query query = Query.query(Criteria.where("aiRetained").is(true)
+                .and("status").in(ReviewStatus.PENDING_REVIEW.name(), ReviewStatus.HIDDEN.name()));
+        Query pageQuery = Query.of(query)
+                .with(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt")));
+
+        Mono<Long> total = mongoTemplate.count(query, ReviewDocument.class);
+        Mono<List<Review>> content = mongoTemplate.find(pageQuery, ReviewDocument.class)
+                .map(mapper::toDomain)
+                .collectList();
+
+        return Mono.zip(total, content)
+                .map(tuple -> new PageResult<>(tuple.getT2(), page, size, tuple.getT1()));
+    }
+
+    @Override
     public Mono<ReviewSummary> summarize(ItemType itemType, UUID itemId) {
         Aggregation aggregation = Aggregation.newAggregation(
                 Aggregation.match(Criteria.where("itemType").is(itemType.name())

@@ -63,7 +63,9 @@ Todos los eventos comparten el sobre de `envelope.v1.json`:
 
 `reviews.review.changed` lo publica ms-03 para actividades/eventos y ms-04 para sitios y
 servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin distinguir el
-productor. El sobre conserva `producer` para trazabilidad.
+productor. El sobre conserva `producer` para trazabilidad. `payload.status` puede ser
+`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; `PENDING_REVIEW` es una reseña retenida por
+el filtro de IA de ms-04 y no debe contarse como publicada.
 
 `security.report.changed` lo publica ms-02 para alertas, notificaciones y analítica; ms-05 no lo consume.
 

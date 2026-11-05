@@ -32,6 +32,9 @@ public final class Review {
     private final int helpfulReactions = 0;
     @Builder.Default
     private final ReviewStatus status = ReviewStatus.PUBLISHED;
+    private final ReviewAiAssessment aiAssessment;
+    @Builder.Default
+    private final boolean aiRetained = false;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -44,9 +47,35 @@ public final class Review {
         validateResponse(response, respondedAt);
         validateHelpfulReactions(helpfulReactions);
         validateStatus(status);
+        validateAiAssessment(aiAssessment, aiRetained);
         validateCreatedAt(createdAt);
         validateUpdatedAt(updatedAt);
         validateChronology(createdAt, updatedAt);
+    }
+
+    /**
+     * Guarda el resultado del filtro y, cuando la reseña se marca con confianza
+     * suficiente, la deja pendiente de revisión o la oculta según la política.
+     * La reseña es inmutable, así que devuelve una nueva instancia.
+     */
+    public Review withAiAssessment(ReviewAiAssessment assessment, ReviewAiPolicy policy, Instant now) {
+        if (assessment == null) {
+            throw new InvalidCatalogException("review AI assessment is required");
+        }
+        if (policy == null) {
+            throw new InvalidCatalogException("review AI policy is required");
+        }
+        boolean retained = policy.shouldFlag(assessment);
+        Review.ReviewBuilder builder = toBuilder()
+                .aiAssessment(assessment)
+                .aiRetained(retained);
+        if (retained) {
+            builder.status(policy.flaggedStatus())
+                    .updatedAt(now);
+        }
+        Review updated = builder.build();
+        updated.validate();
+        return updated;
     }
 
     private static void validateReviewId(UUID reviewId) {
@@ -106,6 +135,12 @@ public final class Review {
     private static void validateStatus(ReviewStatus status) {
         if (status == null) {
             throw new InvalidCatalogException("review status is required");
+        }
+    }
+
+    private static void validateAiAssessment(ReviewAiAssessment assessment, boolean retained) {
+        if (retained && assessment == null) {
+            throw new InvalidCatalogException("review aiRetained requires an AI assessment");
         }
     }
 

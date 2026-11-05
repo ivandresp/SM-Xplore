@@ -14,9 +14,11 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -72,6 +74,26 @@ public class MongoSiteRepositoryAdapter implements SiteRepositoryPort {
 
         return Mono.zip(total, content)
                 .map(tuple -> new PageResult<>(tuple.getT2(), page, size, tuple.getT1()));
+    }
+
+    @Override
+    public Flux<Site> findByManagerId(UUID managerId) {
+        return mongoTemplate.find(
+                        Query.query(Criteria.where("managerId").is(managerId.toString())),
+                        SiteDocument.class)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Site> findByIds(Collection<UUID> siteIds) {
+        if (siteIds == null || siteIds.isEmpty()) {
+            return Flux.empty();
+        }
+        List<String> ids = siteIds.stream().distinct().map(UUID::toString).toList();
+        return mongoTemplate.find(
+                        Query.query(Criteria.where("_id").in(ids)),
+                        SiteDocument.class)
+                .map(mapper::toDomain);
     }
 
     @Override

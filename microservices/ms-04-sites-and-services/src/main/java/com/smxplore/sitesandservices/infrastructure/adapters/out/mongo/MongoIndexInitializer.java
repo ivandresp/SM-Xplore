@@ -65,6 +65,11 @@ public class MongoIndexInitializer {
                                 .on("itemId", Sort.Direction.ASC)
                                 .on("status", Sort.Direction.ASC)
                                 .on("createdAt", Sort.Direction.DESC)),
+                mongoTemplate.indexOps(ReviewDocument.class)
+                        .createIndex(new Index()
+                                .on("aiRetained", Sort.Direction.ASC)
+                                .on("status", Sort.Direction.ASC)
+                                .on("updatedAt", Sort.Direction.DESC)),
                 mongoTemplate.indexOps(ReviewReportDocument.class)
                         .createIndex(new Index()
                                 .on("reviewId", Sort.Direction.ASC)

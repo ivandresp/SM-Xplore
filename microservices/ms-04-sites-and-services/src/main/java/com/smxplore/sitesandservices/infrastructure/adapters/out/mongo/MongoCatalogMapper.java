@@ -6,6 +6,7 @@ import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.common.ContentStatus;
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.review.Review;
+import com.smxplore.sitesandservices.domain.model.review.ReviewAiAssessment;
 import com.smxplore.sitesandservices.domain.model.review.ReviewReport;
 import com.smxplore.sitesandservices.domain.model.review.ReviewReportReason;
 import com.smxplore.sitesandservices.domain.model.review.ReviewReportStatus;
@@ -16,6 +17,7 @@ import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.AvailabilitySlotDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.CategoryDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ProviderSnapshotDocument;
+import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewAiAssessmentDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ReviewReportDocument;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.ServiceDocument;
@@ -167,6 +169,8 @@ public class MongoCatalogMapper {
                 .respondedAt(review.respondedAt())
                 .helpfulReactions(review.helpfulReactions())
                 .status(review.status().name())
+                .ai(aiDocument(review.aiAssessment()))
+                .aiRetained(review.aiRetained())
                 .createdAt(review.createdAt())
                 .updatedAt(review.updatedAt())
                 .build();
@@ -187,6 +191,8 @@ public class MongoCatalogMapper {
                 .respondedAt(document.getRespondedAt())
                 .helpfulReactions(document.getHelpfulReactions())
                 .status(ReviewStatus.valueOf(document.getStatus()))
+                .aiAssessment(aiDomain(document.getAi()))
+                .aiRetained(document.isAiRetained())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();
@@ -279,5 +285,35 @@ public class MongoCatalogMapper {
                         slot.getCapacity()
                 ))
                 .toList();
+    }
+
+    private ReviewAiAssessmentDocument aiDocument(ReviewAiAssessment assessment) {
+        if (assessment == null) {
+            return null;
+        }
+        return ReviewAiAssessmentDocument.builder()
+                .status(assessment.status().name())
+                .flagged(assessment.flagged())
+                .score(assessment.score())
+                .categories(assessment.categories())
+                .reason(assessment.reason())
+                .model(assessment.model())
+                .checkedAt(assessment.checkedAt())
+                .build();
+    }
+
+    private ReviewAiAssessment aiDomain(ReviewAiAssessmentDocument document) {
+        if (document == null) {
+            return null;
+        }
+        return new ReviewAiAssessment(
+                ReviewAiAssessment.Status.valueOf(document.getStatus()),
+                document.isFlagged(),
+                document.getScore(),
+                document.getCategories(),
+                document.getReason(),
+                document.getModel(),
+                document.getCheckedAt()
+        );
     }
 }

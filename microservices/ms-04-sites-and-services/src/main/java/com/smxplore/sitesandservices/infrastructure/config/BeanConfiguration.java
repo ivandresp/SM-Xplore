@@ -6,11 +6,13 @@ import com.smxplore.sitesandservices.application.catalog.CategoryGetService;
 import com.smxplore.sitesandservices.application.catalog.CategoryListService;
 import com.smxplore.sitesandservices.application.catalog.CategoryUpdateService;
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
+import com.smxplore.sitesandservices.application.indicator.DemandIndicatorService;
 import com.smxplore.sitesandservices.application.notification.NotificationAccess;
 import com.smxplore.sitesandservices.application.notification.NotificationContactService;
 import com.smxplore.sitesandservices.application.notification.NotificationCreateService;
 import com.smxplore.sitesandservices.application.notification.NotificationListService;
 import com.smxplore.sitesandservices.application.notification.NotificationMarkReadService;
+import com.smxplore.sitesandservices.application.review.ReviewAiFlaggedListService;
 import com.smxplore.sitesandservices.application.review.ReviewChangeStatusService;
 import com.smxplore.sitesandservices.application.review.ReviewCreateService;
 import com.smxplore.sitesandservices.application.review.ReviewGetService;
@@ -40,6 +42,7 @@ import com.smxplore.sitesandservices.application.site.SiteListService;
 import com.smxplore.sitesandservices.application.site.SiteUpdateService;
 import com.smxplore.sitesandservices.application.support.CatalogAccess;
 import com.smxplore.sitesandservices.application.support.CatalogLookup;
+import com.smxplore.sitesandservices.application.support.DemandAccess;
 import com.smxplore.sitesandservices.application.support.ReservationAccess;
 import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
 import com.smxplore.sitesandservices.application.support.ReservationPolicy;
@@ -49,6 +52,7 @@ import com.smxplore.sitesandservices.application.zone.ZoneCreateService;
 import com.smxplore.sitesandservices.application.zone.ZoneGetService;
 import com.smxplore.sitesandservices.application.zone.ZoneListService;
 import com.smxplore.sitesandservices.application.zone.ZoneUpdateService;
+import com.smxplore.sitesandservices.domain.model.review.ReviewAiPolicy;
 import com.smxplore.sitesandservices.domain.ports.in.AssignSiteZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeReservationStatusUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ChangeReviewStatusUseCase;
@@ -64,6 +68,7 @@ import com.smxplore.sitesandservices.domain.ports.in.CreateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.CreateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ExportCatalogUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetCategoryUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.GetDemandIndicatorsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReputationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReservationUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetReviewSummaryUseCase;
@@ -71,6 +76,7 @@ import com.smxplore.sitesandservices.domain.ports.in.GetReviewUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.GetZoneUseCase;
+import com.smxplore.sitesandservices.domain.ports.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListCategoriesUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListReviewReportsUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.ListNotificationsUseCase;
@@ -88,6 +94,7 @@ import com.smxplore.sitesandservices.domain.ports.in.UpdateServiceUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateSiteUseCase;
 import com.smxplore.sitesandservices.domain.ports.in.UpdateZoneUseCase;
 import com.smxplore.sitesandservices.domain.ports.out.CategoryRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.DemandQueryPort;
 import com.smxplore.sitesandservices.domain.ports.out.NotificationContactRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.NotificationDeliveryPort;
 import com.smxplore.sitesandservices.domain.ports.out.NotificationRepositoryPort;
@@ -95,6 +102,7 @@ import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationOutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationTransactionPort;
+import com.smxplore.sitesandservices.domain.ports.out.ReviewAiFilter;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewReportRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
@@ -416,10 +424,17 @@ public class BeanConfiguration {
     }
 
     @Bean
+    public ReviewAiPolicy reviewAiPolicy(ReviewAiProperties properties) {
+        return new ReviewAiPolicy(properties.threshold(), properties.action(), properties.failOpen());
+    }
+
+    @Bean
     public CreateReviewUseCase createReviewUseCase(
             ReviewRepositoryPort reviewRepository,
             CatalogLookup lookup,
             CatalogAccess access,
+            ReviewAiFilter aiFilter,
+            ReviewAiPolicy aiPolicy,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
             Clock clock
@@ -428,6 +443,8 @@ public class BeanConfiguration {
                 reviewRepository,
                 lookup,
                 access,
+                aiFilter,
+                aiPolicy,
                 outboxWriter,
                 eventFactory,
                 clock
@@ -471,6 +488,11 @@ public class BeanConfiguration {
     @Bean
     public ListReviewsUseCase listReviewsUseCase(ReviewRepositoryPort reviewRepository) {
         return new ReviewListService(reviewRepository);
+    }
+
+    @Bean
+    public ListAiFlaggedReviewsUseCase listAiFlaggedReviewsUseCase(ReviewRepositoryPort reviewRepository) {
+        return new ReviewAiFlaggedListService(reviewRepository);
     }
 
     @Bean
@@ -541,6 +563,32 @@ public class BeanConfiguration {
     @Bean
     public ReservationAccess reservationAccess() {
         return new ReservationAccess();
+    }
+
+    @Bean
+    public DemandAccess demandAccess() {
+        return new DemandAccess();
+    }
+
+    @Bean
+    public GetDemandIndicatorsUseCase getDemandIndicatorsUseCase(
+            DemandQueryPort demandQuery,
+            ServiceRepositoryPort serviceRepository,
+            SiteRepositoryPort siteRepository,
+            ZoneRepositoryPort zoneRepository,
+            DemandAccess access,
+            BookingProperties properties,
+            Clock clock
+    ) {
+        return new DemandIndicatorService(
+                demandQuery,
+                serviceRepository,
+                siteRepository,
+                zoneRepository,
+                access,
+                properties.zone(),
+                clock
+        );
     }
 
     @Bean

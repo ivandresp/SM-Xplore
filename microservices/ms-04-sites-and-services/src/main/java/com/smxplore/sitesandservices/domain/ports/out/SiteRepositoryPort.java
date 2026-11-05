@@ -4,9 +4,11 @@ import com.smxplore.sitesandservices.domain.model.common.PageResult;
 import com.smxplore.sitesandservices.domain.model.site.Site;
 import com.smxplore.sitesandservices.domain.model.site.SiteFilter;
 import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface SiteRepositoryPort {
@@ -18,6 +20,10 @@ public interface SiteRepositoryPort {
     Mono<PageResult<Site>> findAll(SiteFilter filter);
 
     Mono<PageResult<Site>> findUpdatedSince(Instant updatedSince, int page, int size);
+
+    Flux<Site> findByManagerId(UUID managerId);
+
+    Flux<Site> findByIds(Collection<UUID> siteIds);
 
     Mono<Void> updateZoneSnapshot(UUID zoneId, String zoneName, ZoneStatus zoneStatus);
 

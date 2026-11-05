@@ -6,6 +6,10 @@ Microservicio de catálogo turístico de SM-Xplore. Gestiona:
 - **Sitios** turísticos y **servicios** de prestadoras en MongoDB.
 - **Categorías** del catálogo en MongoDB.
 - **Reseñas** de sitios y servicios en MongoDB.
+- **Moderación automática de reseñas** con un LLM local compatible con OpenAI (filtro de
+  review bombing) y cola administrativa de reseñas retenidas.
+- **Indicadores de demanda** por servicio, sitio y zona para prestadoras y gestoras de
+  destinos, con comparación contra el periodo anterior y exportación CSV.
 - **Reservas simbólicas de servicios** en PostgreSQL: apartan cupos para uno o varios servicios
   de una sola prestadora, se confirman automáticamente y no procesan pagos.
 - **Bandeja de notificaciones** en MongoDB alimentada por el evento de reservas.
@@ -28,6 +32,8 @@ Primera entrega implementada:
 - CRUD y consultas de categorías, zonas, sitios, servicios y reseñas.
 - Filtros por zona, categoría, sitio, prestadora, estado, tipo y texto.
 - Reseñas con respuesta del propietario y moderación administrativa.
+- Filtro de IA para review bombing con cola `PENDING_REVIEW` y política fail-open/fail-closed.
+- Indicadores de demanda, ocupación y estacionalidad para prestadoras y gestoras.
 - Reportes de reseñas con resolución administrativa y métricas de reputación por sitio o servicio.
 - Eventos Kafka versionados según `contracts/events/`.
 - Outbox con relay, reintentos y métricas, tanto en MongoDB como en PostgreSQL.
@@ -55,6 +61,7 @@ src/main/java/com/smxplore/sitesandservices
 │   │   ├── catalog
 │   │   ├── common
 │   │   ├── event
+│   │   ├── indicator
 │   │   ├── notification
 │   │   ├── reservation
 │   │   ├── review
@@ -68,6 +75,7 @@ src/main/java/com/smxplore/sitesandservices
 ├── application
 │   ├── catalog
 │   ├── event
+│   ├── indicator
 │   ├── notification
 │   ├── reservation
 │   ├── review
@@ -209,6 +217,7 @@ una red o puerto privado.
 | POST | `/api/v1/reviews` | `TOURIST` | Crear reseña de sitio o servicio |
 | POST | `/api/v1/reviews/{id}/response` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Responder reseña |
 | PATCH | `/api/v1/reviews/{id}/status` | `ADMIN` | Moderar reseña |
+| GET | `/api/v1/admin/reviews/ai-flagged?page=&size=` | `ADMIN` | Reseñas retenidas por el filtro de IA |
 | GET | `/api/v1/reviews/summary?itemType=&itemId=` | autenticado | Promedio y número de reseñas |
 | GET | `/api/v1/reviews/reputation?itemType=&itemId=` | autenticado | Métricas de reputación (distribución, respuestas, ocultas) |
 | POST | `/api/v1/reviews/{id}/reports` | autenticado (no el autor) | Reportar una reseña |
@@ -220,6 +229,8 @@ una red o puerto privado.
 | GET | `/api/v1/reservations/{id}` | turista dueño, prestadora o `ADMIN` | Ver reserva |
 | GET | `/api/v1/reservations` | `TOURIST`, `SERVICE_PROVIDER`, `ADMIN` | Listar reservas según el actor |
 | PATCH | `/api/v1/reservations/{id}/status` | turista dueño (cancelar), prestadora o `ADMIN` | Cancelar o completar |
+| GET | `/api/v1/demand-indicators?from=&to=&zoneId=&siteId=&granularity=` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Indicadores de demanda según el alcance del actor |
+| GET | `/api/v1/demand-indicators/report?from=&to=&zoneId=&siteId=&granularity=` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Reporte CSV de indicadores |
 | GET | `/api/v1/notifications?unreadOnly=&page=&size=` | autenticado | Bandeja del usuario actual |
 | PATCH | `/api/v1/notifications/{id}/read` | destinatario o `ADMIN` | Marcar notificación como leída |
 | PUT | `/api/v1/admin/notification-contacts/{userId}` | `ADMIN` | Alta o cambio del correo de un destinatario |
@@ -244,6 +255,57 @@ El feed `GET /api/v1/admin/catalog/export` existe para que ms-05 reconstruya su 
 devuelve páginas del catálogo con **el mismo `eventType`, `aggregateId` y `payload`** que publican los
 eventos de Kafka, así que el consumidor reutiliza el mismo código de proyección. Cuando `hasNext` es
 `false`, ms-05 pasa a consumir los eventos incrementales.
+
+### Moderación automática de reseñas
+
+Cada reseña con comentario pasa por un filtro de IA antes de guardarse. El filtro llama a un servidor
+littleLLM compatible con `POST /v1/chat/completions` y espera un veredicto JSON con `flagged`,
+`score` (0–1), `categories` y `reason`. El texto analizado es solo el tipo de destino, la calificación
+y el comentario público; no se envían datos del turista. El resultado se conserva en el documento
+`reviews` (`ai` + `aiRetained`) para que el administrador pueda auditarlo.
+
+- Si `score >= REVIEW_AI_THRESHOLD` y el modelo marca la reseña, se aplica
+  `REVIEW_AI_ACTION=PENDING_REVIEW` (estado `PENDING_REVIEW`, visible solo para administración)
+  o `HIDE` (estado `HIDDEN`).
+- `REVIEW_AI_FAIL_OPEN=true` (default) guarda la reseña visible cuando el LLM no responde; con
+  `false` la creación falla con `503 Review filter unavailable`.
+- `GET /api/v1/admin/reviews/ai-flagged` lista las reseñas retenidas y `PATCH
+  /api/v1/reviews/{id}/status` permite publicarlas o mantenerlas ocultas.
+- El evento `reviews.review.changed` incluye el nuevo estado `PENDING_REVIEW`; los consumidores que
+  solo cuentan reseñas publicadas lo ignoran, igual que `HIDDEN`.
+
+### Indicadores de demanda
+
+`GET /api/v1/demand-indicators` calcula, a partir de las reservas de servicios, un resumen y un
+desglose por zona, sitio y servicio. El alcance depende del rol:
+
+- `SERVICE_PROVIDER`: solo sus propios servicios.
+- `DESTINATION_MANAGER`: solo sus zonas y sitios; si envía `zoneId` o `siteId` de otro gestor
+  recibe `403`.
+- `ADMIN`: visión global; `zoneId`/`siteId` actúan como filtro.
+
+Los guías **no** tienen servicios en ms-04: su oferta son actividades de ms-03 (`Guia ->
+Actividad` en el modelo de dominio). Por eso la demanda de actividades de `Guía US8` debe
+implementarse en ms-03, no aquí.
+
+Parámetros: `from` y `to` son instantes ISO-8601 (`from` inclusivo, `to` exclusivo; por defecto los
+últimos 30 días, máximo 366 días), `granularity` es `DAY` o `MONTH`. La respuesta incluye:
+
+- totales de reservas, personas, ingresos, cancelaciones, completadas, turistas únicos, tasa de
+  cancelación y promedio de personas por reserva;
+- comparación porcentual contra el periodo inmediatamente anterior de igual duración;
+- serie temporal (`timeline`), distribución por día de la semana y por hora;
+- desglose por zona, sitio y servicio con participación y ocupación estimada.
+
+La ocupación es una estimación: para servicios se usa `maxCapacity` por día, ajustada por la suma
+de cupos de las franjas de disponibilidad del día cuando existen; para sitios se usa
+`maxCapacity × días`; para zonas se suman las capacidades de los sitios distintos de la zona. La
+tasa se limita a `1.0` para no presentar sobreocupación como un porcentaje mayor a 100 %. Los
+ingresos son la suma de `reservation_items.total` de reservas no canceladas y **no** son un
+recaudo real: las reservas de ms-04 son simbólicas.
+
+`GET /api/v1/demand-indicators/report` devuelve el resumen, la comparación y los desgloses por
+zona, sitio y servicio en CSV para descargar como soporte de planificación.
 
 Ejemplo de creación (requiere header `Idempotency-Key`):
 
@@ -280,6 +342,8 @@ Las escrituras aceptan `X-Correlation-Id`; si no se envía, se genera uno.
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - Las reglas de propiedad se validan en la capa de aplicación: una prestadora solo modifica sus
   servicios; una gestora solo modifica sus zonas/sitios; el `ADMIN` puede moderar.
+- Los indicadores de demanda se limitan por rol: prestadora a sus servicios y gestora a sus
+  zonas/sitios.
 - En reservas, un turista solo crea, consulta y cancela las suyas. Como todos los ítems de una
   reserva pertenecen a una sola prestadora, esta solo ve y gestiona sus propias reservas. El
   `ADMIN` puede gestionar cualquiera. Las reservas se confirman automáticamente; no existe una
@@ -303,6 +367,8 @@ Topics publicados:
 - La key de Kafka es el `aggregateId`.
 - El sobre incluye `eventId`, `eventVersion=1`, `occurredAt`, `correlationId` y `producer=ms-04`.
 - `reviews.review.changed` es compartido: ms-03 publica actividades/eventos y ms-04 sitios/servicios.
+  El estado puede ser `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; los consumidores deben
+  tratar `PENDING_REVIEW` igual que una reseña no visible.
 - `bookings.reservation.changed` se publica para reservas de servicios (`itemType=SERVICE`).
 - El outbox de catálogo/reseñas se escribe en la misma transacción Mongo que la entidad. El outbox
   de reservas se escribe en `reservation_outbox`, en la misma transacción PostgreSQL que la reserva
@@ -376,6 +442,19 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado |
 | `JWT_AUDIENCE` | `sm-xplore-services` | Audiencia esperada |
 | `JWT_USER_ID_CLAIM` | `userId` | Claim de identidad si no viene `sub` |
+| `REVIEW_AI_ENABLED` | `false` | Activa el filtro de IA de reseñas |
+| `LITTLELLM_URL` | vacío | Base URL del servidor littleLLM compatible con OpenAI |
+| `LITTLELLM_API_KEY` | vacío | Llave enviada al LLM |
+| `LITTLELLM_API_KEY_HEADER` | `Authorization` | Cabecera de la llave |
+| `LITTLELLM_API_KEY_PREFIX` | `Bearer` | Prefijo de la llave |
+| `LITTLELLM_MODEL` | `littlellm` | Modelo solicitado |
+| `LITTLELLM_CHAT_PATH` | `/v1/chat/completions` | Ruta de chat completions |
+| `REVIEW_AI_TIMEOUT` | `PT5S` | Timeout de la llamada al LLM |
+| `REVIEW_AI_THRESHOLD` | `0.7` | Score mínimo para retener una reseña |
+| `REVIEW_AI_TEMPERATURE` | `0.0` | Temperatura del modelo |
+| `REVIEW_AI_ACTION` | `PENDING_REVIEW` | Acción al marcar: `PENDING_REVIEW` o `HIDE` |
+| `REVIEW_AI_FAIL_OPEN` | `true` | Si el LLM falla, guarda la reseña visible |
+| `REVIEW_AI_JSON_RESPONSE_FORMAT` | `false` | Envía `response_format=json_object` |
 | `OUTBOX_ENABLED` | `true` | Activa el relay |
 | `OUTBOX_PRODUCER` | `ms-04` | Campo `producer` del sobre |
 | `OUTBOX_POLL_INTERVAL_MS` | `1000` | Intervalo del relay |
@@ -431,7 +510,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **71 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **83 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
 
 La suite usa Testcontainers con:
 
@@ -452,6 +531,10 @@ Cubre:
 - auto-completado de reservas pasadas y emisión del evento `COMPLETED`;
 - disponibilidad de fechas pasadas y validación de reglas de propiedad y roles;
 - rechazo de reseñas duplicadas e ítems de reserva repetidos;
+- filtro de IA: parseo del veredicto, timeout y caída del LLM, política fail-open/fail-closed,
+  creación de reseña retenida en `PENDING_REVIEW`, cola administrativa y publicación posterior;
+- indicadores de demanda: alcance de prestadora y gestora, ocupación, timeline, comparación
+  contra el periodo anterior, `403` para guías/turistas y descarga CSV;
 - reporte de reseña ajena, duplicado (`409`), autorreporte (`403`), resolución administrativa que
   oculta la reseña y métricas de reputación agregadas;
 - listado paginado de reservas con carga de ítems en una sola consulta por página;
@@ -482,5 +565,11 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
 
 ## Pendiente
 
-- ms-05 todavía no consume el feed `GET /api/v1/admin/catalog/export` ni los eventos de este
-  servicio: cuando lo haga, el arranque en frío recorre el feed y después continúa con Kafka.
+- El filtro de IA es síncrono y fail-open por defecto. Si la latencia importa, mover la evaluación
+  a una cola y mantener la reseña `PENDING_REVIEW` hasta que termine.
+- El contrato real de littleLLM debe confirmarse contra el servidor desplegado; el adaptador asume
+  el esquema de chat completions de OpenAI.
+- La ocupación es estimada con capacidad diaria y franjas; no cruza reservas de actividades/eventos
+  de ms-03 ni datos de afluencia externos.
+- ms-05 ya consume el feed `GET /api/v1/admin/catalog/export`; queda extender el reindexado a
+  reseñas y a los indicadores de demanda si el producto los necesita.

@@ -20,6 +20,8 @@ public interface ReviewRepositoryPort {
 
     Mono<PageResult<Review>> findAll(ReviewFilter filter);
 
+    Mono<PageResult<Review>> findAiFlagged(int page, int size);
+
     Mono<ReviewSummary> summarize(ItemType itemType, UUID itemId);
 
     Mono<ReputationMetrics> reputation(ItemType itemType, UUID itemId);

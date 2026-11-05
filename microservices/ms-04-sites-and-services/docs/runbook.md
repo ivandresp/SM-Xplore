@@ -257,3 +257,45 @@ La respuesta trae `content` (cada elemento con `eventType`, `aggregateId`, `upda
 Para verificar el contrato desde el propio servicio, los tests
 `CatalogExportWebIntegrationTests` comparan el `eventType` y el `payload` del feed con el esquema
 de los eventos.
+
+## 13. Filtro de IA de reseñas
+
+- `REVIEW_AI_ENABLED=false` por defecto: las reseñas se guardan sin llamar a littleLLM y el
+  documento conserva un assessment `SKIPPED`.
+- Para activarlo, configure `LITTLELLM_URL` (por ejemplo `http://littlellm:8000`) y, si aplica,
+  `LITTLELLM_API_KEY`. El modelo debe exponer `POST /v1/chat/completions` con el esquema de OpenAI.
+- `REVIEW_AI_THRESHOLD` (0.7 por defecto) controla la confianza mínima para retener una reseña.
+  `REVIEW_AI_ACTION=PENDING_REVIEW` la deja en `PENDING_REVIEW`; `HIDE` la oculta de inmediato.
+- `REVIEW_AI_FAIL_OPEN=true` evita que una caída del LLM bloquee la creación de reseñas. Con
+  `false`, la API responde `503 Review filter unavailable`.
+- Las reseñas retenidas se consultan con:
+
+  ```bash
+  curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "http://localhost:8084/api/v1/admin/reviews/ai-flagged?page=0&size=50"
+  ```
+
+  Para publicar una reseña retenida: `PATCH /api/v1/reviews/{id}/status` con
+  `{"status":"PUBLISHED"}`. Para ocultarla definitivamente use `{"status":"HIDDEN"}`.
+- Si el LLM tarda, revise `REVIEW_AI_TIMEOUT`; el valor por defecto es `PT5S`. Los timeouts se
+  registran como `warn` y no exponen el texto de la reseña en el log.
+
+## 14. Indicadores de demanda
+
+`GET /api/v1/demand-indicators` lee reservas de PostgreSQL y las cruza con los snapshots de
+servicio/sitio de MongoDB. No escribe ni bloquea el catálogo.
+
+- `SERVICE_PROVIDER`: solo sus servicios.
+- `DESTINATION_MANAGER`: solo sus zonas y sitios; un `zoneId`/`siteId` ajeno responde `403`.
+- `ADMIN`: visión global.
+- Los guías no tienen servicios en ms-04; su demanda de actividades (`Guía US8`) corresponde a
+  ms-03, donde vive la entidad `Actividad`.
+- `from`/`to` son instantes ISO-8601; por defecto los últimos 30 días y máximo 366 días.
+- `granularity=DAY|MONTH` controla la serie temporal.
+- La ocupación es estimada: capacidad diaria del servicio ajustada por franjas, capacidad del
+  sitio por días y suma de capacidades de sitios distintos por zona. Los ingresos son simbólicos
+  (no hay pasarela de pagos).
+- El reporte CSV se descarga desde `GET /api/v1/demand-indicators/report` con los mismos filtros.
+
+Si un período devuelve cero, confirme que las reservas estén dentro de `[from, to)` y que los
+servicios sigan existiendo en MongoDB: un servicio borrado no se puede atribuir a zona/sitio.

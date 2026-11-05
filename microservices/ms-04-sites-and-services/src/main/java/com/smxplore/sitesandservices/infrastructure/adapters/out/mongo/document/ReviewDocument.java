@@ -33,6 +33,8 @@ public class ReviewDocument {
     private Instant respondedAt;
     private int helpfulReactions;
     private String status;
+    private ReviewAiAssessmentDocument ai;
+    private boolean aiRetained;
     private Instant createdAt;
     private Instant updatedAt;
 }
