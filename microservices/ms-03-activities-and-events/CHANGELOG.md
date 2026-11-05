@@ -2,6 +2,12 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Reportes de reseña 2026-11-04]
+
+### Corregido
+- `GET /api/v1/review-reports` ya no expone los reportes de todos los sitios: una `DESTINATION_MANAGER` solo ve los de sus sitios (ms-04 → sitios → eventos → reseñas → reportes) y `ADMIN` conserva el listado global. Los reportes de actividades no aparecen porque la actividad está a cargo de un guía.
+- `PATCH /api/v1/review-reports/{reportId}` valida que quien resuelve sea `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento). Antes cualquier gestora podía resolver reportes ajenos. El rechazo responde 403 con `ReviewReportNotAllowedException`.
+
 ## [Integración 2026-11-04]
 
 ### Integración con `microservicios`

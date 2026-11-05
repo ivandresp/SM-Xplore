@@ -175,13 +175,15 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 | GET | `/api/v1/reviews/activities/{activityId}/metrics` | Público |
 | POST | `/api/v1/reviews/{reviewId}/report` | Autenticado; un reporte por usuario y reseña |
 | POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o ADMIN |
-| GET | `/api/v1/review-reports?status=PENDING` | `ADMIN`, `GESTORA_DESTINOS` |
-| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN`, `GESTORA_DESTINOS` |
+| GET | `/api/v1/review-reports?status=PENDING` | `ADMIN` ve todos; `DESTINATION_MANAGER` solo los de sus sitios |
+| PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN` o la entidad a cargo del ítem reseñado |
 
 - Dos colecciones Mongo: `event_reviews` y `activity_reviews`.
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
 - Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
 - La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, la **gestora del sitio** (`managerId` guardado en el evento) o `ADMIN`.
+- **Reportes acotados:** `GET /api/v1/review-reports` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=` de ms-04, luego sus eventos, las reseñas de esos eventos y por último los reportes. Un reporte de una actividad no aparece en el listado de una gestora: las actividades son del guía. `ADMIN` conserva el listado global.
+- **Resolver un reporte** exige ser `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento), con la misma regla que la respuesta a la reseña.
 
 ## Snapshot de sitio en eventos
 

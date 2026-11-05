@@ -1,13 +1,15 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
-import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
+import com.smxplore.activitiesevents.application.reviews.ConsultManagerReviewReportsUseCase;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
+import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ConsultReviewReportsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.ResolveReviewReportUseCasePort;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.PaginationLimits;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ResolveReviewReportRequest;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewReportResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ReviewReportWebMapper;
+import com.smxplore.activitiesevents.infrastructure.config.JwtProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,29 +36,42 @@ import java.util.UUID;
 @Tag(name = "Review reports")
 public class ReviewReportController {
 
+    private static final String ADMIN = "ADMIN";
+
     private final ConsultReviewReportsUseCasePort consultReviewReportsUseCase;
+    private final ConsultManagerReviewReportsUseCase consultManagerReviewReportsUseCase;
     private final ResolveReviewReportUseCasePort resolveReviewReportUseCase;
     private final ReviewReportWebMapper mapper;
+    private final JwtProperties jwtProperties;
 
-    // TODO(ms-04): scope report lists to sites owned by the caller's managerId. The listing filter
-    // (GET /api/v1/sites?managerId=) is already merged in ms-04, so the scope is implementable;
-    // until then any destination manager sees every site's reports.
     @GetMapping
-    @Operation(summary = "List review reports by status (staff)")
+    @Operation(summary = "List review reports by status (admin sees every site, a manager only its own)")
     public Flux<ReviewReportResponse> findByStatus(
             @RequestParam(defaultValue = "200") int limit,
-            @RequestParam(defaultValue = "PENDING") ReviewReportStatus status) {
-        return consultReviewReportsUseCase.handle(status, PaginationLimits.clamp(limit))
+            @RequestParam(defaultValue = "PENDING") ReviewReportStatus status,
+            @AuthenticationPrincipal Jwt jwt) {
+        var pageSize = PaginationLimits.clamp(limit);
+        if (ADMIN.equals(role(jwt))) {
+            return consultReviewReportsUseCase.handle(status, pageSize)
+                    .map(mapper::toResponse);
+        }
+        return consultManagerReviewReportsUseCase
+                .handle(subject(jwt), jwt.getTokenValue(), status, pageSize)
                 .map(mapper::toResponse);
     }
 
     @PatchMapping("/{reportId}")
-    @Operation(summary = "Resolve or dismiss a review report (staff)")
+    @Operation(summary = "Resolve or dismiss a review report (admin or the entity in charge)")
     public Mono<ReviewReportResponse> resolve(@PathVariable UUID reportId,
                                               @Valid @RequestBody ResolveReviewReportRequest request,
                                               @AuthenticationPrincipal Jwt jwt) {
-        return resolveReviewReportUseCase.handle(reportId, request.status(), subject(jwt))
+        return resolveReviewReportUseCase.handle(reportId, request.status(), subject(jwt), role(jwt))
                 .map(mapper::toResponse);
+    }
+
+    private String role(Jwt jwt) {
+        var role = UserRole.fromClaim(jwt.getClaimAsString(jwtProperties.getRoleClaim()));
+        return role == null ? null : role.name();
     }
 
     private static UUID subject(Jwt jwt) {
