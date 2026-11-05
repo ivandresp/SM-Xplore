@@ -63,6 +63,14 @@ class ReviewListServiceTest {
     }
 
     @Test
+    void adminCanListAnotherTouristsReviews() {
+        service.handle(filter(OTHER_TOURIST_ID, null), admin()).block();
+
+        assertThat(repository.lastFilter.touristId()).isEqualTo(OTHER_TOURIST_ID);
+        assertThat(repository.lastFilter.status()).isEqualTo(ReviewStatus.PUBLISHED);
+    }
+
+    @Test
     void adminCanFilterByHiddenStatus() {
         service.handle(filter(null, ReviewStatus.HIDDEN), admin()).block();
 

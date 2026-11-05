@@ -226,7 +226,7 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@smxplore.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
     volumes:
       # El perfil dev genera y persiste la pareja RSA de JWT aqui.
       - ms01_data:/app/.local
@@ -256,7 +256,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -301,7 +301,7 @@ services:
       JWT_ALLOW_INSECURE_JWKS: "true"
       MS04_BASE_URL: http://ms-04:8080
       DEMAND_ZONE_ID: ${DEMAND_ZONE_ID:-America/Bogota}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -341,7 +341,7 @@ services:
       SMTP_PORT: "1025"
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-04
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -380,7 +380,7 @@ services:
       EVENTS_CONSUMER_ENABLED: "true"
       CATALOG_EXPORT_BASE_URL: http://ms-04:8080
       SEED_ENABLED: ${SEED_ENABLED:-true}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
