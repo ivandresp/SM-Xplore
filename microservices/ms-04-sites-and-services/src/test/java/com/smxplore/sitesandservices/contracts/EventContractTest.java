@@ -55,6 +55,15 @@ class EventContractTest {
     private final Path contractsDirectory =
             Path.of(System.getProperty("contracts.dir", "../../contracts/events"));
 
+    /** catalog.site.changed moved to v2 to carry managerId; the rest still publish v1. */
+    private static final Map<String, Integer> EVENT_VERSIONS = Map.of(
+            "catalog.category.changed", 1,
+            "catalog.site.changed", 2,
+            "catalog.service.changed", 1,
+            "reviews.review.changed", 1,
+            "bookings.reservation.changed", 1
+    );
+
     @Test
     void generatedEventsMatchTheirJsonSchemas() throws Exception {
         Map<String, JsonSchema> schemas = schemas();
@@ -73,7 +82,8 @@ class EventContractTest {
                     .as("Contract violations for %s", entry.getKey())
                     .isEmpty();
             assertThat(json.get("producer").asText()).isEqualTo("ms-04");
-            assertThat(json.get("eventVersion").asInt()).isEqualTo(1);
+            assertThat(json.get("eventVersion").asInt())
+                    .isEqualTo(EVENT_VERSIONS.get(entry.getKey()));
             assertThat(json.get("eventType").asText()).isEqualTo(entry.getKey());
         }
     }
@@ -103,7 +113,10 @@ class EventContractTest {
         Map<String, String> schemaTexts = new java.util.LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
             List<Path> files = paths
-                    .filter(path -> path.getFileName().toString().endsWith(".v1.json"))
+                    .filter(path -> {
+                        var name = path.getFileName().toString();
+                        return name.endsWith(".v1.json") || name.endsWith(".v2.json");
+                    })
                     .sorted()
                     .toList();
             for (Path path : files) {
@@ -117,13 +130,8 @@ class EventContractTest {
                 .formatAssertionsEnabled(true)
                 .build();
         Map<String, JsonSchema> schemas = new java.util.LinkedHashMap<>();
-        for (String eventType : List.of(
-                "catalog.category.changed",
-                "catalog.site.changed",
-                "catalog.service.changed",
-                "reviews.review.changed",
-                "bookings.reservation.changed")) {
-            String fileName = eventType + ".v1.json";
+        for (String eventType : EVENT_VERSIONS.keySet()) {
+            String fileName = eventType + ".v" + EVENT_VERSIONS.get(eventType) + ".json";
             schemas.put(eventType, schemaFactory.getSchema(
                     SchemaLocation.of(BASE_IRI + fileName),
                     schemaMapper.readTree(Files.readString(contractsDirectory.resolve(fileName))),

@@ -43,8 +43,8 @@ public record DomainEvent(
     }
 
     private static void validateEventVersion(int eventVersion) {
-        if (eventVersion != 1) {
-            throw new InvalidCatalogException("eventVersion must be 1");
+        if (eventVersion < 1) {
+            throw new InvalidCatalogException("eventVersion must be 1 or higher");
         }
     }
 
