@@ -8,11 +8,14 @@ import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface EventReviewMongoRepository extends ReactiveMongoRepository<EventReviewDocument, UUID> {
 
     Flux<EventReviewDocument> findByItemIdOrderByCreatedAtDesc(UUID itemId);
+
+    Flux<EventReviewDocument> findByItemIdIn(Collection<UUID> itemIds);
 
     @Query(value = "{ 'itemId': ?0, 'user.id': ?1 }", exists = true)
     Mono<Boolean> existsByItemAndUser(UUID itemId, UUID userId);

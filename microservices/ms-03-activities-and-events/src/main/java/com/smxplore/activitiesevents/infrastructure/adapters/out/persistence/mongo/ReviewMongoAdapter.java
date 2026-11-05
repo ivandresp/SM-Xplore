@@ -18,6 +18,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 /**
@@ -49,6 +50,17 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
         return switch (itemType) {
             case EVENT -> eventReviews.findByItemIdOrderByCreatedAtDesc(itemId).map(this::toEventDomain);
             case ACTIVITY -> activityReviews.findByItemIdOrderByCreatedAtDesc(itemId).map(this::toActivityDomain);
+        };
+    }
+
+    @Override
+    public Flux<Review> findByItemIds(Collection<UUID> itemIds, ReviewItemType itemType) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return Flux.empty();
+        }
+        return switch (itemType) {
+            case EVENT -> eventReviews.findByItemIdIn(itemIds).map(this::toEventDomain);
+            case ACTIVITY -> activityReviews.findByItemIdIn(itemIds).map(this::toActivityDomain);
         };
     }
 

@@ -3,6 +3,7 @@ package com.smxplore.activitiesevents.application.reviews;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
@@ -249,8 +250,8 @@ class ReviewUseCasesTest {
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo)
-                        .handle(report.id(), ReviewReportStatus.RESOLVED, UUID.randomUUID()))
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+                        .handle(report.id(), ReviewReportStatus.RESOLVED, UUID.randomUUID(), "ADMIN"))
                 .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
                 .verifyComplete();
     }
@@ -261,10 +262,59 @@ class ReviewUseCasesTest {
                 .resolve(ReviewReportStatus.RESOLVED, UUID.randomUUID());
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo)
-                        .handle(report.id(), ReviewReportStatus.DISMISSED, UUID.randomUUID()))
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+                        .handle(report.id(), ReviewReportStatus.DISMISSED, UUID.randomUUID(), "ADMIN"))
                 .expectError(InvalidReviewException.class)
                 .verify();
+    }
+
+    @Test
+    void onlyTheEntityInChargeCanResolveAReport() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
+
+        var useCase = new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo);
+
+        StepVerifier.create(useCase.handle(report.id(), ReviewReportStatus.RESOLVED,
+                        UUID.randomUUID(), "DESTINATION_MANAGER"))
+                .expectError(ReviewReportNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
+    void theManagerOfTheEventCanResolveItsReport() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+                        .handle(report.id(), ReviewReportStatus.DISMISSED, managerId, "DESTINATION_MANAGER"))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.DISMISSED))
+                .verifyComplete();
+    }
+
+    @Test
+    void theGuideOfTheActivityCanResolveItsReport() {
+        var guideId = UUID.randomUUID();
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(guideId)));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+                        .handle(report.id(), ReviewReportStatus.RESOLVED, guideId, "GUIDE"))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
+                .verifyComplete();
     }
 
     @Test

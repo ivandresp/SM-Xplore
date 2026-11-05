@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface ResolveReviewReportUseCasePort {
 
-    Mono<ReviewReport> handle(UUID reportId, ReviewReportStatus status, UUID resolverId);
+    Mono<ReviewReport> handle(UUID reportId, ReviewReportStatus status, UUID resolverId, String role);
 }

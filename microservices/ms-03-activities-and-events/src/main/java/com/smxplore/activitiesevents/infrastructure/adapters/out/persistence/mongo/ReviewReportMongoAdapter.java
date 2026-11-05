@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.UUID;
 
 @Repository
@@ -31,6 +32,17 @@ public class ReviewReportMongoAdapter implements ReviewReportRepositoryPort {
     @Override
     public Flux<ReviewReport> findByStatus(ReviewReportStatus status) {
         return repository.findByStatusOrderByCreatedAtAsc(status).map(this::toDomain);
+    }
+
+    @Override
+    public Flux<ReviewReport> findByStatusAndReviewIds(ReviewReportStatus status, Collection<UUID> reviewIds,
+                                                       int limit) {
+        if (reviewIds == null || reviewIds.isEmpty()) {
+            return Flux.empty();
+        }
+        return repository.findByStatusAndReviewIdInOrderByCreatedAtAsc(status, reviewIds)
+                .take(limit)
+                .map(this::toDomain);
     }
 
     @Override
