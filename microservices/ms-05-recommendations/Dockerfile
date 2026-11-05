@@ -14,6 +14,7 @@ RUN ./gradlew bootJar --no-daemon --console=plain
 FROM eclipse-temurin:25-jre
 
 RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system app \
