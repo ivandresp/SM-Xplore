@@ -101,11 +101,15 @@ foreach ($name in $ports.Keys) {
 }
 
 Write-Host "== Flujo de negocio (catalogo -> actividad -> resena -> reserva) =="
-function Invoke-SmokePost([string]$url, [string]$token, [object]$payload) {
-  $params = @{ Uri = $url; Method = "Post"; ContentType = "application/json"; Body = ($payload | ConvertTo-Json -Depth 6); TimeoutSec = 20; SkipHttpErrorCheck = $true }
+function Invoke-SmokeRequest([string]$url, [string]$token, [object]$payload, [string]$method = "Post") {
+  $params = @{ Uri = $url; Method = $method; ContentType = "application/json"; Body = ($payload | ConvertTo-Json -Depth 6); TimeoutSec = 20; SkipHttpErrorCheck = $true }
   if ($token) { $params.Headers = @{ Authorization = "Bearer " + $token } }
   $response = Invoke-WebRequest @params -UseBasicParsing
   [pscustomobject]@{ Status = [int]$response.StatusCode; Body = $response.Content }
+}
+
+function Invoke-SmokePost([string]$url, [string]$token, [object]$payload) {
+  Invoke-SmokeRequest -url $url -token $token -payload $payload
 }
 $flowToken = $null
 if ($login) { $flowToken = $login.accessToken }
@@ -143,7 +147,8 @@ if (-not $flowToken) {
       $activityId = ($created.Body | ConvertFrom-Json).id
       Pass "ms-03 creo la actividad ($activityId)"
       # Nace en DRAFT: sin publicarla el catalogo da 404 y la resena/reserva 400.
-      $published = Invoke-SmokePost ($base03 + "/api/v1/activities/" + $activityId + "/status") $flowToken @{ status = "PUBLISHED" }
+      # El endpoint de estado es PATCH, no POST.
+      $published = Invoke-SmokeRequest -url ($base03 + "/api/v1/activities/" + $activityId + "/status") -token $flowToken -payload @{ status = "PUBLISHED" } -method "Patch"
       if (($published.Body | ConvertFrom-Json).status -eq "PUBLISHED") { Pass "la actividad quedo PUBLISHED" } else { Fail "no se pudo publicar la actividad (HTTP $($published.Status)): $($published.Body)" }
     } else { Fail "ms-03 no creo la actividad (HTTP $($created.Status)): $($created.Body)" }
   }

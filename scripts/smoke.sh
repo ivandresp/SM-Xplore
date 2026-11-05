@@ -118,18 +118,27 @@ for entry in "ms-01:$MS01_PORT" "ms-02:$MS02_PORT" "ms-03:$MS03_PORT" "ms-04:$MS
   fi
 done
 
-# POST con cuerpo JSON: deja el status en RESP_CODE y el cuerpo en RESP_BODY.
-post_json() {
-  url=$1
-  bearer=$2
-  body=$3
+# Peticion con cuerpo JSON: deja el status en RESP_CODE y el cuerpo en RESP_BODY.
+send_json() {
+  method=$1
+  url=$2
+  bearer=$3
+  body=$4
   if [ -n "$bearer" ]; then
-    raw=$(curl -sS --max-time 20 -X POST "$url" -H "Content-Type: application/json" -H "Authorization: Bearer $bearer" -d "$body" -w '\n%{http_code}' 2>/dev/null || true)
+    raw=$(curl -sS --max-time 20 -X "$method" "$url" -H "Content-Type: application/json" -H "Authorization: Bearer $bearer" -d "$body" -w '\n%{http_code}' 2>/dev/null || true)
   else
-    raw=$(curl -sS --max-time 20 -X POST "$url" -H "Content-Type: application/json" -d "$body" -w '\n%{http_code}' 2>/dev/null || true)
+    raw=$(curl -sS --max-time 20 -X "$method" "$url" -H "Content-Type: application/json" -d "$body" -w '\n%{http_code}' 2>/dev/null || true)
   fi
   RESP_CODE=$(printf '%s' "$raw" | tail -n 1)
   RESP_BODY=$(printf '%s' "$raw" | sed '$d')
+}
+
+post_json() {
+  send_json POST "$1" "$2" "$3"
+}
+
+patch_json() {
+  send_json PATCH "$1" "$2" "$3"
 }
 
 # Primer campo de texto del JSON recibido: suficiente para un smoke.
@@ -189,7 +198,7 @@ else
     if [ -n "$activity_id" ]; then
       pass "ms-03 creo la actividad ($activity_id)"
       # La actividad nace en DRAFT: sin publicarla el catalogo da 404 y la resena/reserva 400.
-      post_json "$base03/api/v1/activities/$activity_id/status" "$token" "{\"status\":\"PUBLISHED\"}"
+      patch_json "$base03/api/v1/activities/$activity_id/status" "$token" "{\"status\":\"PUBLISHED\"}"
       activity_status=$(json_str "$RESP_BODY" status)
       if [ "$activity_status" = "PUBLISHED" ]; then
         pass "la actividad quedo PUBLISHED"
@@ -254,12 +263,26 @@ else
   # El outbox es la prueba de que el evento salio: se consulta si hay docker disponible.
   if [ -f compose.yaml ] && command -v docker >/dev/null 2>&1; then
     pg_user=smxplore
-    if [ -n "$POSTGRES_USER" ]; then pg_user=$POSTGRES_USER; fi
-    published=$(docker compose exec -T postgres psql -U "$pg_user" -d activities_events -tAc "SELECT count(*) FROM outbox_events WHERE status = 'PUBLISHED'" 2>/dev/null | tr -d '[:space:]')
-    if [ -n "$published" ] && [ "$published" -gt 0 ] 2>/dev/null; then
+    if [ -n "${POSTGRES_USER:-}" ]; then pg_user=$POSTGRES_USER; fi
+    # El relay publica cada 2 s: se reintenta la consulta en lugar de asumir que ya paso.
+    published=0
+    attempt=0
+    while [ "$attempt" -lt 10 ]; do
+      current=$(docker compose exec -T postgres psql -U "$pg_user" -d activities_events -tAc "SELECT count(*) FROM outbox_events WHERE status = 'PUBLISHED'" 2>/dev/null | tr -d '[:space:]' || true)
+      case "$current" in
+        ''|*[!0-9]*) ;;
+        *) published=$current ;;
+      esac
+      if [ "$published" -gt 0 ]; then
+        break
+      fi
+      attempt=$((attempt + 1))
+      sleep 2
+    done
+    if [ "$published" -gt 0 ]; then
       pass "el outbox de ms-03 publico $published evento(s)"
     else
-      fail "el outbox de ms-03 no registro eventos publicados"
+      fail "el outbox de ms-03 no registro eventos publicados tras 20 s"
     fi
   else
     printf '  SKIP outbox: sin docker en PATH o fuera del directorio del compose\n'
