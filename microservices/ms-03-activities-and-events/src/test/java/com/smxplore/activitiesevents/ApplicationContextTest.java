@@ -174,6 +174,9 @@ class ApplicationContextTest {
 
     @Test
     void reservationPagesApplyTheOffsetInTheDatabaseAndReturnTheTotal() {
+        // booked_for must equal item_starts_at (reservations_booked_for_matches_start), so both
+        // columns get the same value instead of two separate clock reads.
+        var itemStart = Instant.now().plusSeconds(86_400);
         for (int index = 0; index < 3; index++) {
             reservationRepository.save(Reservation.builder()
                     .id(UUID.randomUUID())
@@ -185,8 +188,8 @@ class ApplicationContextTest {
                     .total(java.math.BigDecimal.TEN)
                     .paymentMethod(PaymentMethod.CASH)
                     .status(ReservationStatus.CONFIRMED)
-                    .itemStartsAt(Instant.now().plusSeconds(86_400))
-                    .bookedFor(Instant.now().plusSeconds(86_400))
+                    .itemStartsAt(itemStart)
+                    .bookedFor(itemStart)
                     .build()).block();
         }
 
