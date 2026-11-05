@@ -82,4 +82,12 @@ class FakeEventRepository implements EventRepositoryPort {
                 .filter(event -> event.getSiteId() != null && siteIds.contains(event.getSiteId()))
                 .map(Event::getId);
     }
+
+    @Override
+    public Mono<Integer> applySiteSnapshot(UUID siteId, String siteName, UUID managerId, java.time.Instant siteUpdatedAt) {
+        var matches = findAll()
+                .filter(event -> siteId.equals(event.getSiteId()))
+                .collectList().block();
+        return Mono.just(matches == null ? 0 : matches.size());
+    }
 }

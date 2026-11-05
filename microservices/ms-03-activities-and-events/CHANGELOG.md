@@ -2,6 +2,17 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Consumidor de sitios 2026-11-05]
+
+### Agregado
+- Consumidor de `catalog.site.changed` v2 (ms-04): con `SITE_EVENTS_ENABLED=true` refresca `sitio_nombre` y `manager_id` de todos los eventos del sitio. Es el primer consumidor de Kafka de ms-03, que hasta ahora solo publicaba.
+- `V5`: columna `evento.sitio_actualizado_en`. El UPDATE solo aplica cuando el `updatedAt` del sitio es más nuevo que el último aplicado, así que un mensaje reordenado no revierte un cambio de gestora.
+- Los mensajes `v1` se ignoran con un log: no traen `managerId` y no hay nada que aplicar.
+
+### Notas
+- El consumidor está apagado por defecto; sin él la revalidación sigue ocurriendo en caliente al responder reseñas (`GET /api/v1/sites/{siteId}`).
+- Variables: `SITE_EVENTS_ENABLED`, `SITE_EVENTS_GROUP`, `SITE_EVENTS_TIMEOUT`.
+
 ## [Eventos de catálogo v2 2026-11-04]
 
 ### Agregado
