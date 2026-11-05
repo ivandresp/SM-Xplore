@@ -20,6 +20,7 @@ contracts/
     ├── catalog.category.changed.v1.json
     ├── catalog.service.changed.v1.json
     ├── catalog.site.changed.v1.json
+    ├── catalog.site.changed.v2.json
     ├── reviews.review.changed.v1.json
     ├── security.report.changed.v1.json
     └── examples/
@@ -58,7 +59,7 @@ evento `v2` no puede validarse contra él.
 
 | Topic / eventType | Productor | ms-05 |
 |---|---|---|
-| `catalog.site.changed` | ms-04 | sí |
+| `catalog.site.changed` | ms-04 (v2) | sí |
 | `catalog.service.changed` | ms-04 | sí |
 | `catalog.category.changed` | ms-04 | sí |
 | `activities.event.changed` | ms-03 (v2) | sí |
@@ -72,6 +73,8 @@ servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin
 productor. El sobre conserva `producer` para trazabilidad. `payload.status` puede ser
 `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; `PENDING_REVIEW` es una reseña retenida por
 el filtro de IA de ms-04 y no debe contarse como publicada.
+
+`catalog.site.changed` v2 agrega `payload.managerId`, obligatorio: ms-03 lo usa para saber qué gestora manda en el sitio y refrescar el snapshot que guarda en sus eventos. La v1 sigue en el repositorio para los consumidores que aún validan contra ella; ms-04 publica v2.
 
 `security.report.changed` lo publica ms-02 para alertas, notificaciones y analítica; ms-05 no lo consume.
 
@@ -87,7 +90,7 @@ aditivos para ese consumidor.
 Estado de fase 2:
 
 - ms-05 ya consume los seis topics marcados con “sí”.
-- ms-04 ya publica catálogo, reseñas y reservas de servicios desde su outbox. ms-03 publica
+- ms-04 ya publica catálogo (los sitios en v2), reseñas y reservas de servicios desde su outbox. ms-03 publica
   reservas y reseñas, y desde este cambio `activities.activity.changed` v2 y
   `activities.event.changed` v2. Los tests de ms-05 publican los fixtures directamente en Kafka
   para validar el contrato y la proyección.

@@ -41,9 +41,14 @@ public class DomainEventFactory {
         return payload;
     }
 
+    /**
+     * v2: adds {@code managerId}. ms-03 needs it to know which manager owns the site and refresh
+     * the snapshot it keeps on its events, so the field is required from this version on.
+     */
     public DomainEvent siteChanged(Site site, String correlationId) {
         return event(
                 EventTypes.CATALOG_SITE_CHANGED,
+                2,
                 site.siteId(),
                 correlationId,
                 sitePayload(site)
@@ -55,6 +60,7 @@ public class DomainEventFactory {
         payload.put("siteId", site.siteId().toString());
         payload.put("name", site.name());
         payload.put("categoryId", site.categoryId().toString());
+        payload.put("managerId", site.managerId() == null ? null : site.managerId().toString());
         payload.put("latitude", site.latitude());
         payload.put("longitude", site.longitude());
         payload.put("status", site.status().name());
@@ -131,6 +137,16 @@ public class DomainEventFactory {
             String correlationId,
             Map<String, Object> payload
     ) {
+        return event(eventType, 1, aggregateId, correlationId, payload);
+    }
+
+    private DomainEvent event(
+            String eventType,
+            int eventVersion,
+            UUID aggregateId,
+            String correlationId,
+            Map<String, Object> payload
+    ) {
         Instant now = Instant.now(clock);
         String effectiveCorrelationId = correlationId == null || correlationId.isBlank()
                 ? UUID.randomUUID().toString()
@@ -138,7 +154,7 @@ public class DomainEventFactory {
         return new DomainEvent(
                 UUID.randomUUID(),
                 eventType,
-                1,
+                eventVersion,
                 now,
                 aggregateId,
                 effectiveCorrelationId,
