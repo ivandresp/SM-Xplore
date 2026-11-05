@@ -85,10 +85,24 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox. |
 | `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. |
 | `OUTBOX_POLL_INTERVAL_MS` | `5000` | Frecuencia del relay. |
-
-Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `FLYWAY_PASSWORD`, `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `JWT_ISSUER` o `JWT_AUDIENCE`. Copia `.env.example`, completa los valores y usa un volumen limpio (`docker compose down -v`) la primera vez, porque los scripts de init solo corren en una base nueva.
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
+| `DEMAND_ZONE_ID` | `America/Bogota` | Zona horaria usada para agrupar la serie temporal y los días de la semana. |
+| `REVIEW_AI_ENABLED` | `false` | Activa el filtro automático de reseñas (mismo contrato que ms-04). |
+| `LITTLELLM_URL` | vacío | Base URL del servidor littleLLM compatible con OpenAI; obligatoria si el filtro se activa. |
+| `LITTLELLM_API_KEY` | vacío | Llave enviada al LLM. |
+| `LITTLELLM_API_KEY_HEADER` | `Authorization` | Cabecera de la llave. |
+| `LITTLELLM_API_KEY_PREFIX` | `Bearer` | Prefijo de la llave. |
+| `LITTLELLM_MODEL` | `littlellm` | Modelo solicitado. |
+| `LITTLELLM_CHAT_PATH` | `/v1/chat/completions` | Ruta de chat completions. |
+| `REVIEW_AI_TIMEOUT` | `PT5S` | Timeout de la llamada al filtro. |
+| `REVIEW_AI_THRESHOLD` | `0.7` | Score mínimo para retener una reseña marcada. |
+| `REVIEW_AI_TEMPERATURE` | `0.0` | Temperatura del modelo (0–2). |
+| `REVIEW_AI_ACTION` | `PENDING_REVIEW` | `PENDING_REVIEW` deja la cola; `HIDE` oculta de inmediato. |
+| `REVIEW_AI_FAIL_OPEN` | `true` | Si el filtro cae, publica la reseña; con `false` la creación responde 503. |
+| `REVIEW_AI_JSON_RESPONSE_FORMAT` | `false` | Pide `response_format=json_object` al modelo. |
+
+Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `FLYWAY_PASSWORD`, `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `JWT_ISSUER` o `JWT_AUDIENCE`. Copia `.env.example`, completa los valores y usa un volumen limpio (`docker compose down -v`) la primera vez, porque los scripts de init solo corren en una base nueva.
 
 ## Alcance
 
@@ -135,11 +149,11 @@ Al crear un evento, ms-03 valida el sitio con `GET /api/v1/sites/{siteId}` de ms
 | PATCH | `/api/v1/activities/{activityId}/status` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
 | POST | `/api/v1/activities/{activityId}/cancel` | `ADMIN`, `GESTORA_DESTINOS`, `GUIA` |
 
-Los errores usan el formato uniforme `{timestamp, status, error, message, path}`.
+Los errores usan RFC 9457 (`application/problem+json`): `type`, `title`, `status`, `detail` e
+`instance`.
 
 ## Limitaciones conocidas
 
-- Los listados paginan en memoria; el catálogo es pequeño. Cuando crezca, mover la paginación al repositorio.
 - No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
 - La búsqueda por nombre usa `ILIKE` sin índice `pg_trgm`.
 - La cobertura de integración es parcial: cierre automático de reservas y migraciones Flyway.
@@ -173,6 +187,29 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 **Cierre automático:** un job diario (03:15, `America/Bogota`) marca `NO_SHOW` las reservas `CONFIRMED` cuyo ítem `PUBLISHED` terminó hace más de `RESERVATION_AUTO_CLOSE_GRACE` (24 h por defecto). Las reservas de ítems `CANCELLED` pasan a `CANCELLED`. Los ítems pausados o postergados no se tocan. Un `NO_SHOW` se puede corregir a `COMPLETED` registrando la asistencia.
 
+## Indicadores de demanda
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| GET | `/api/v1/demand-indicators?from=&to=&zoneId=&siteId=&granularity=` | `GUIDE`, `DESTINATION_MANAGER`, `ADMIN` |
+| GET | `/api/v1/demand-indicators/report?...` | Igual que el anterior; descarga CSV |
+| GET | `/api/v1/demand-indicators/report.pdf?...` | Igual que el anterior; descarga PDF |
+
+- **Guía (US8):** ve solo sus actividades, con reservas, personas, ingresos, ocupación,
+  actividades más solicitadas y comparación contra el periodo anterior. No se consultan servicios.
+- **Gestora (US10/US11):** ve las actividades y eventos de sus sitios, agrupados por zona y sitio,
+  con afluencia esperada vs. reservada de cada evento y el reporte CSV/PDF del periodo. Además, ms-03
+  compone la demanda de **servicios** llamando a `GET /api/v1/demand-indicators` de ms-04 con el
+  mismo filtro y el token de la gestora: la respuesta es una sola vista del destino. Si ms-04 no
+  responde, se devuelven actividades/eventos con `partial=true` y `services=[]`.
+- **Admin:** visión global o filtrada por `zoneId`/`siteId`.
+- `from` es inclusivo y `to` exclusivo; por defecto, últimos 30 días y máximo 366. `granularity` es
+  `DAY` o `MONTH`. Los importes son simbólicos (no representan recaudo real).
+- La ocupación de una actividad/evento es `personas reservadas / maxCapacity` y se limita a `1.0`.
+  La capacidad de un sitio o zona suma la capacidad de sus actividades/eventos en el alcance.
+- Los nombres y zonas de los sitios se resuelven contra ms-04; si el catálogo no responde, se usa el
+  snapshot del evento o el `siteId` como respaldo y la vista sigue siendo útil.
+
 ## Reseñas
 
 | Método | Ruta | Acceso |
@@ -184,6 +221,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 | GET | `/api/v1/reviews/activities/{activityId}/metrics` | Público |
 | POST | `/api/v1/reviews/{reviewId}/report` | Autenticado; un reporte por usuario y reseña |
 | POST | `/api/v1/reviews/{reviewId}/response` | Entidad a cargo (guía de la actividad o gestor del evento) o ADMIN |
+| GET | `/api/v1/admin/reviews?status=PENDING_REVIEW` | `ADMIN`; cola global de reseñas retenidas |
+| PATCH | `/api/v1/reviews/{reviewId}/status` | `ADMIN`; publica, oculta, elimina o devuelve a la cola |
 | GET | `/api/v1/review-reports?status=PENDING` | `ADMIN` ve todos; `DESTINATION_MANAGER` solo los de sus sitios |
 | PATCH | `/api/v1/review-reports/{reportId}` | `ADMIN` o la entidad a cargo del ítem reseñado |
 
@@ -191,11 +230,13 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 - `user` se guarda anidado con solo `{id, name}`; sale del JWT, no del body.
 - Una reseña por usuario e ítem. Sin “likes / ¿te resultó útil?”.
 - La respuesta solo la puede escribir la entidad a cargo: guía dueño de la actividad; para eventos, la **gestora del sitio** (`managerId` guardado en el evento) o `ADMIN`.
-- La reseña expone `status` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`) y `updatedAt`. ms-03 no modera: sus reseñas nacen `PUBLISHED`; los otros estados existen para representar lo que decida ms-04.
-- **Outbox de reseñas:** al crear una reseña se escribe `reviews.review.changed` v1 en el outbox con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre **no** viaja en el evento.
+- La reseña expone `status` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`), `ai`, `aiRetained` y `updatedAt`. Los listados públicos y las métricas solo cuentan `PUBLISHED`; los documentos anteriores sin estado se leen como publicados.
+- **Filtro de IA:** con `REVIEW_AI_ENABLED=true` cada reseña con comentario pasa por el mismo littleLLM de ms-04. Si el score supera `REVIEW_AI_THRESHOLD`, queda `PENDING_REVIEW` (o `HIDDEN` con `REVIEW_AI_ACTION=HIDE`) y aparece en la cola administrativa. La decisión se guarda en `ai` para auditoría. Sin filtro, la reseña nace `PUBLISHED`.
+- **Moderación:** solo `ADMIN` cambia el estado. Cada cambio efectivo actualiza `updatedAt` y publica `reviews.review.changed`, para que ms-05 ajuste su agregado de reputación.
+- **Outbox de reseñas:** crear, responder o moderar una reseña escribe `reviews.review.changed` v1 en el outbox con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre **no** viaja en el evento.
 - La reseña vive en MongoDB y el outbox en PostgreSQL: no comparten transacción. La reseña se guarda primero; si el evento no se puede encolar se registra el error y la reseña se devuelve igual, porque la escritura del usuario ya ocurrió. Ese evento no se reintenta.
 - **Reportes acotados:** `GET /api/v1/review-reports` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=` de ms-04, luego sus eventos, las reseñas de esos eventos y por último los reportes. Un reporte de una actividad no aparece en el listado de una gestora: las actividades son del guía. `ADMIN` conserva el listado global.
-- **Resolver un reporte** exige ser `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento), con la misma regla que la respuesta a la reseña.
+- **Resolver un reporte** exige ser `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento), con la misma regla que la respuesta a la reseña. Un reporte `RESOLVED` (aceptado) oculta la reseña y publica el evento; `DISMISSED` la deja publicada.
 
 ## Snapshot de sitio en eventos
 

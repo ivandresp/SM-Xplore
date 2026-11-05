@@ -7,6 +7,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundExce
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
@@ -21,6 +22,10 @@ import java.util.UUID;
  * Resolves or dismisses a report. Only {@code ADMIN} or the entity in charge of the reviewed item
  * can act on it: the guide of the activity or the manager of the event, the same rule that governs
  * the review response.
+ *
+ * <p>A {@link ReviewReportStatus#RESOLVED} report accepts the complaint and hides the review; a
+ * dismissed report leaves it untouched. Hiding the review publishes {@code reviews.review.changed}
+ * so ms-05 removes it from the reputation aggregates.
  */
 @RequiredArgsConstructor
 public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePort {
@@ -33,6 +38,7 @@ public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePor
     private final ReviewRepositoryPort reviewRepo;
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;
+    private final ReviewEventPublisher publisher;
 
     @Override
     public Mono<ReviewReport> handle(UUID reportId, ReviewReportStatus status, UUID resolverId, String role) {
@@ -46,7 +52,28 @@ public class ResolveReviewReportUseCase implements ResolveReviewReportUseCasePor
                     if (report.status() != ReviewReportStatus.PENDING) {
                         return Mono.error(new InvalidReviewException("The report was already resolved."));
                     }
-                    return reportRepo.save(report.resolve(status, resolverId));
+                    var hidden = status == ReviewReportStatus.RESOLVED
+                            ? hideReview(report.reviewId())
+                            : Mono.<Void>empty();
+                    return hidden.then(reportRepo.save(report.resolve(status, resolverId)));
+                });
+    }
+
+    /**
+     * Hides the reported review when the complaint is accepted. A review that is already hidden or
+     * deleted is left as it is, so no redundant event is published.
+     */
+    private Mono<Void> hideReview(UUID reviewId) {
+        return reviewRepo.findById(reviewId)
+                .switchIfEmpty(Mono.error(new ReviewNotFoundException(reviewId)))
+                .flatMap(review -> {
+                    if (review.getStatus() == ReviewStatus.HIDDEN
+                            || review.getStatus() == ReviewStatus.DELETED) {
+                        return Mono.empty();
+                    }
+                    return reviewRepo.save(review.withStatus(ReviewStatus.HIDDEN))
+                            .flatMap(publisher::publish)
+                            .then();
                 });
     }
 

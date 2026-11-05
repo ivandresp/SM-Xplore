@@ -59,6 +59,45 @@ class ReviewTest {
         assertThat(replied.updatedAt()).isAfter(createdAt);
     }
 
+    @Test
+    void retainsAFlaggedReviewInPendingReview() {
+        var review = review().build();
+        var assessment = ReviewAiAssessment.assessed(true, 0.9, java.util.List.of("SPAM"),
+                "spam", "littlellm", Instant.now());
+        var policy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, true);
+
+        var assessed = review.withAiAssessment(assessment, policy, Instant.now());
+
+        assertThat(assessed.getStatus()).isEqualTo(ReviewStatus.PENDING_REVIEW);
+        assertThat(assessed.isAiRetained()).isTrue();
+        assertThat(assessed.getAiAssessment()).isEqualTo(assessment);
+    }
+
+    @Test
+    void hidesAFlaggedReviewWhenThePolicyHides() {
+        var review = review().build();
+        var assessment = ReviewAiAssessment.assessed(true, 0.9, java.util.List.of("SPAM"),
+                "spam", "littlellm", Instant.now());
+        var policy = new ReviewAiPolicy(0.7, ReviewAiAction.HIDE, true);
+
+        var assessed = review.withAiAssessment(assessment, policy, Instant.now());
+
+        assertThat(assessed.getStatus()).isEqualTo(ReviewStatus.HIDDEN);
+    }
+
+    @Test
+    void keepsAnUnflaggedReviewPublished() {
+        var review = review().build();
+        var assessment = ReviewAiAssessment.assessed(false, 0.1, java.util.List.of(), null,
+                "littlellm", Instant.now());
+        var policy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, true);
+
+        var assessed = review.withAiAssessment(assessment, policy, Instant.now());
+
+        assertThat(assessed.getStatus()).isEqualTo(ReviewStatus.PUBLISHED);
+        assertThat(assessed.isAiRetained()).isFalse();
+    }
+
     private static Review.ReviewBuilder review() {
         return Review.builder()
                 .itemId(UUID.randomUUID())

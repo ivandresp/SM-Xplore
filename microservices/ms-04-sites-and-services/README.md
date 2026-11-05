@@ -285,8 +285,9 @@ desglose por zona, sitio y servicio. El alcance depende del rol:
 - `ADMIN`: visión global; `zoneId`/`siteId` actúan como filtro.
 
 Los guías **no** tienen servicios en ms-04: su oferta son actividades de ms-03 (`Guia ->
-Actividad` en el modelo de dominio). Por eso la demanda de actividades de `Guía US8` debe
-implementarse en ms-03, no aquí.
+Actividad` en el modelo de dominio). La demanda de actividades de `Guía US8` vive en ms-03. La
+vista consolidada de la gestora también está en `GET /api/v1/demand-indicators` de ms-03, que
+consulta este endpoint y suma actividades/eventos + servicios en una sola respuesta.
 
 Parámetros: `from` y `to` son instantes ISO-8601 (`from` inclusivo, `to` exclusivo; por defecto los
 últimos 30 días, máximo 366 días), `granularity` es `DAY` o `MONTH`. La respuesta incluye:

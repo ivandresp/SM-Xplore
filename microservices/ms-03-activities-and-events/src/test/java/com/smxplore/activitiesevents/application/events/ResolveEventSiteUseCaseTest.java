@@ -32,6 +32,11 @@ class ResolveEventSiteUseCaseTest {
         public Flux<SiteSnapshot> findByManagerId(UUID managerId, String token) {
             return Flux.empty();
         }
+
+        @Override
+        public Flux<SiteSnapshot> findByZoneId(UUID zoneId, String token) {
+            return Flux.empty();
+        }
     };
     private final ResolveEventSiteUseCase useCase = new ResolveEventSiteUseCase(sites);
 

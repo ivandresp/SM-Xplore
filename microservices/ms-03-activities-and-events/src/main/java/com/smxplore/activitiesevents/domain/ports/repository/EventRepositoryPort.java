@@ -21,6 +21,8 @@ public interface EventRepositoryPort {
 
     Flux<Event> findAll();
 
+    Flux<Event> findByIds(Collection<UUID> ids);
+
     /** One page of the published catalogue, limited by the database. */
     Mono<PageResult<Event>> findPublishedPage(int page, int size);
 

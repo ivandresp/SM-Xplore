@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper;
 
 import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewAiAssessmentResponse;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto.ReviewResponse;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,8 @@ public class ReviewWebMapper {
                         : new ReviewResponse.ReviewReplyResponse(review.getReply().message(),
                         review.getReply().createdAt()),
                 review.getStatus(),
+                ReviewAiAssessmentResponse.from(review.getAiAssessment()),
+                review.isAiRetained(),
                 review.getCreatedAt(),
                 review.updatedAt()
         );

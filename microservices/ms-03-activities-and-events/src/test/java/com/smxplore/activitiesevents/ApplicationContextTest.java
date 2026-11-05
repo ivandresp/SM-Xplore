@@ -1,16 +1,26 @@
 package com.smxplore.activitiesevents;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
+import com.smxplore.activitiesevents.domain.model.indicator.DemandQuery;
+import com.smxplore.activitiesevents.domain.model.indicator.DemandRecord;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
+import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
+import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.DemandQueryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.model.outbox.OutboxEvent;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -86,6 +96,12 @@ class ApplicationContextTest {
     @Autowired
     private OutboxPort outbox;
 
+    @Autowired
+    private ReviewRepositoryPort reviewRepository;
+
+    @Autowired
+    private DemandQueryPort demandQueryPort;
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         var jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(
@@ -98,7 +114,8 @@ class ApplicationContextTest {
         registry.add("spring.flyway.url", () -> jdbcUrl);
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
-        registry.add("spring.mongodb.uri", MONGO::getReplicaSetUrl);
+        registry.add("spring.mongodb.uri",
+                () -> MONGO.getReplicaSetUrl() + "?uuidRepresentation=standard");
         registry.add("spring.data.mongodb.auto-index-creation", () -> "false");
         registry.add("app.security.jwt.public-key-location", () -> PUBLIC_KEY.toUri().toString());
         registry.add("app.security.jwt.issuer", () -> "sm-xplore-ms-01");
@@ -155,6 +172,135 @@ class ApplicationContextTest {
         assertThat(outbox.findPending(10).collectList().block())
                 .extracting(OutboxEvent::id)
                 .doesNotContain(eventId);
+    }
+
+    @Test
+    void publicReviewQueriesOnlyCountPublishedDocuments() {
+        var itemId = UUID.randomUUID();
+        var now = Instant.now();
+        var published = reviewRepository.save(Review.builder()
+                .itemId(itemId)
+                .itemType(ReviewItemType.ACTIVITY)
+                .user(new ReviewUser(UUID.randomUUID(), "Publicada"))
+                .rating(5)
+                .status(ReviewStatus.PUBLISHED)
+                .createdAt(now.minusSeconds(120))
+                .updatedAt(now.minusSeconds(120))
+                .build()).block();
+        reviewRepository.save(Review.builder()
+                .itemId(itemId)
+                .itemType(ReviewItemType.ACTIVITY)
+                .user(new ReviewUser(UUID.randomUUID(), "Pendiente"))
+                .rating(4)
+                .status(ReviewStatus.PENDING_REVIEW)
+                .createdAt(now.minusSeconds(60))
+                .updatedAt(now.minusSeconds(60))
+                .build()).block();
+        reviewRepository.save(Review.builder()
+                .itemId(itemId)
+                .itemType(ReviewItemType.ACTIVITY)
+                .user(new ReviewUser(UUID.randomUUID(), "Oculta"))
+                .rating(1)
+                .status(ReviewStatus.HIDDEN)
+                .createdAt(now)
+                .updatedAt(now)
+                .build()).block();
+
+        var listed = reviewRepository.findByItem(itemId, ReviewItemType.ACTIVITY).collectList().block();
+        assertThat(listed).isNotNull();
+        assertThat(listed).extracting(Review::getId).containsExactly(published.getId());
+
+        var metrics = reviewRepository.metrics(itemId, ReviewItemType.ACTIVITY).block();
+        assertThat(metrics).isNotNull();
+        assertThat(metrics.count()).isEqualTo(1);
+        assertThat(metrics.averageRating()).isEqualTo(5.0);
+
+        var pending = reviewRepository.findByStatus(ReviewStatus.PENDING_REVIEW, 10)
+                .collectList().block();
+        assertThat(pending).isNotNull();
+        assertThat(pending).extracting(Review::getStatus).containsExactly(ReviewStatus.PENDING_REVIEW);
+    }
+
+    @Test
+    void demandQueryJoinsReservationsWithActivitiesAndEvents() {
+        var now = Instant.now();
+        var start = now.plusSeconds(86_400);
+        var activitySite = UUID.randomUUID();
+        var eventSite = UUID.randomUUID();
+        var activity = activityRepository.save(Activity.builder()
+                .siteId(activitySite)
+                .guideId(UUID.randomUUID())
+                .name("Buceo de demanda")
+                .category("Aventura")
+                .status(ActivityStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("10000.00"))
+                .maxCapacity(12)
+                .durationMinutes(90)
+                .startsAt(start)
+                .endsAt(start.plusSeconds(5_400))
+                .build()).block();
+        var event = eventRepository.save(Event.builder()
+                .siteId(eventSite)
+                .siteName("Sitio del evento")
+                .managerId(UUID.randomUUID())
+                .name("Concierto de demanda")
+                .category("Cultura")
+                .status(EventStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("20000.00"))
+                .maxCapacity(30)
+                .expectedAttendance(25)
+                .startsAt(start)
+                .endsAt(start.plusSeconds(7_200))
+                .build()).block();
+        assertThat(activity).isNotNull();
+        assertThat(event).isNotNull();
+
+        reservationRepository.save(Reservation.builder()
+                .touristId(UUID.randomUUID())
+                .itemType(ReservationItemType.ACTIVITY)
+                .itemId(activity.getId())
+                .itemStartsAt(start)
+                .unitPrice(new java.math.BigDecimal("10000.00"))
+                .numberOfPeople(2)
+                .total(new java.math.BigDecimal("20000.00"))
+                .paymentMethod(PaymentMethod.CASH)
+                .status(ReservationStatus.CONFIRMED)
+                .bookedFor(start)
+                .build()).block();
+        reservationRepository.save(Reservation.builder()
+                .touristId(UUID.randomUUID())
+                .itemType(ReservationItemType.EVENT)
+                .itemId(event.getId())
+                .itemStartsAt(start)
+                .unitPrice(new java.math.BigDecimal("20000.00"))
+                .numberOfPeople(3)
+                .total(new java.math.BigDecimal("60000.00"))
+                .paymentMethod(PaymentMethod.CASH)
+                .status(ReservationStatus.CONFIRMED)
+                .bookedFor(start)
+                .build()).block();
+
+        var records = demandQueryPort.find(new DemandQuery(now.minusSeconds(3_600),
+                        now.plusSeconds(172_800), null, List.of(activity.getId()),
+                        List.of(event.getId())))
+                .collectList().block();
+
+        assertThat(records).isNotNull().hasSize(2);
+        assertThat(records).extracting(DemandRecord::itemName)
+                .containsExactlyInAnyOrder("Buceo de demanda", "Concierto de demanda");
+        var activityRecord = records.stream()
+                .filter(record -> record.itemType() == ReservationItemType.ACTIVITY)
+                .findFirst().orElseThrow();
+        assertThat(activityRecord.siteId()).isEqualTo(activitySite);
+        assertThat(activityRecord.maxCapacity()).isEqualTo(12);
+        assertThat(activityRecord.guideId()).isEqualTo(activity.getGuideId());
+        var eventRecord = records.stream()
+                .filter(record -> record.itemType() == ReservationItemType.EVENT)
+                .findFirst().orElseThrow();
+        assertThat(eventRecord.siteName()).isEqualTo("Sitio del evento");
+        assertThat(eventRecord.managerId()).isEqualTo(event.getManagerId());
+        assertThat(eventRecord.expectedAttendance()).isEqualTo(25);
+        assertThat(eventRecord.maxCapacity()).isEqualTo(30);
     }
 
     @Test

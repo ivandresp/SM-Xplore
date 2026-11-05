@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Reads a site snapshot from ms-04 over HTTP. The endpoint is the public
- * GET /api/v1/sites/{siteId}; ms-03 does not own site data.
+ * Reads a site snapshot from ms-04 over HTTP. The site endpoint is the source of truth for the
+ * site name, zone and manager of the event/activity demand indicators.
  */
 @Component
 public class Ms04SiteCatalogAdapter implements SiteCatalogPort {
@@ -39,37 +39,64 @@ public class Ms04SiteCatalogAdapter implements SiteCatalogPort {
                 .bodyToMono(SiteResponse.class)
                 .timeout(timeout)
                 .onErrorResume(WebClientResponseException.NotFound.class, exception -> Mono.empty())
-                .map(site -> new SiteSnapshot(site.siteId(), site.managerId(), site.name()));
+                .map(this::snapshot);
     }
 
     @Override
     public Flux<SiteSnapshot> findByManagerId(UUID managerId, String bearerToken) {
-        return page(managerId, 0, bearerToken);
+        return page(uriBuilder -> uriBuilder.path("/api/v1/sites")
+                .queryParam("managerId", managerId), bearerToken);
     }
 
-    private Flux<SiteSnapshot> page(UUID managerId, int page, String bearerToken) {
+    @Override
+    public Flux<SiteSnapshot> findByZoneId(UUID zoneId, String bearerToken) {
+        return page(uriBuilder -> uriBuilder.path("/api/v1/sites")
+                .queryParam("zoneId", zoneId), bearerToken);
+    }
+
+    private Flux<SiteSnapshot> page(java.util.function.Consumer<org.springframework.web.util.UriBuilder> path,
+                                    String bearerToken) {
+        return page(path, 0, bearerToken);
+    }
+
+    private Flux<SiteSnapshot> page(
+            java.util.function.Consumer<org.springframework.web.util.UriBuilder> path,
+            int page,
+            String bearerToken) {
         return webClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/api/v1/sites")
-                        .queryParam("managerId", managerId)
-                        .queryParam("page", page)
-                        .queryParam("size", PAGE_SIZE)
-                        .build())
+                .uri(uriBuilder -> {
+                    path.accept(uriBuilder);
+                    return uriBuilder.queryParam("page", page)
+                            .queryParam("size", PAGE_SIZE)
+                            .build();
+                })
                 .headers(headers -> headers.setBearerAuth(bearerToken))
                 .retrieve()
                 .bodyToMono(SitePage.class)
                 .timeout(timeout)
                 .flatMapMany(result -> {
-                    var current = Flux.fromIterable(result.content())
-                            .map(site -> new SiteSnapshot(site.siteId(), site.managerId(), site.name()));
+                    var current = Flux.fromIterable(result.content()).map(this::snapshot);
                     return page + 1 < result.totalPages()
-                            ? current.concatWith(page(managerId, page + 1, bearerToken))
+                            ? current.concatWith(page(path, page + 1, bearerToken))
                             : current;
                 });
+    }
+
+    private SiteSnapshot snapshot(SiteResponse site) {
+        return new SiteSnapshot(site.siteId(), site.managerId(), site.name(), site.zoneId(),
+                site.zoneName(), site.zoneStatus());
     }
 
     private record SitePage(List<SiteResponse> content, int page, int size, long total, int totalPages) {
     }
 
-    private record SiteResponse(UUID siteId, UUID managerId, String name) {
+    private record SiteResponse(
+            UUID siteId,
+            UUID managerId,
+            String name,
+            UUID zoneId,
+            String zoneName,
+            String zoneStatus
+    ) {
     }
 }

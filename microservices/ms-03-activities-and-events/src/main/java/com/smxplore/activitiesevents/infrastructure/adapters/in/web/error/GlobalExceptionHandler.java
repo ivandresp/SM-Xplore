@@ -16,6 +16,8 @@ import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventRequest
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidExpectedAttendanceException;
+import com.smxplore.activitiesevents.domain.exceptions.indicator.DemandAccessDeniedException;
+import com.smxplore.activitiesevents.domain.exceptions.indicator.InvalidDemandFilterException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.CancellationWindowClosedException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidBookingDateException;
 import com.smxplore.activitiesevents.domain.exceptions.reservation.InvalidNumberOfPeopleException;
@@ -31,6 +33,8 @@ import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewExcep
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewModerationNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
@@ -72,10 +76,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
-    @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class})
+    @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class,
+            ReviewModerationNotAllowedException.class, DemandAccessDeniedException.class})
     public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewFilterUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(
+            ReviewFilterUnavailableException exception, ServerWebExchange exchange) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
@@ -103,7 +114,8 @@ public class GlobalExceptionHandler {
             InvalidReservationTouristException.class,
             InvalidReservationItemException.class,
             InvalidReservationItemPriceException.class,
-            InvalidReviewException.class
+            InvalidReviewException.class,
+            InvalidDemandFilterException.class
     })
     public ResponseEntity<ProblemDetail> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);

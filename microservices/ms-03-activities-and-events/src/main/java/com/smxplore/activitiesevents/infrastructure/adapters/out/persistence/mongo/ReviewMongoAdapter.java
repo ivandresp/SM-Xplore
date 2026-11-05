@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo;
 
 import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiAssessment;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
@@ -9,6 +10,7 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ActivityReviewDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.EventReviewDocument;
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ReviewAiAssessmentDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ReviewReplyDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ReviewUserDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.ActivityReviewMongoRepository;
@@ -18,7 +20,9 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.UUID;
 
 /**
@@ -48,8 +52,8 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
     @Override
     public Flux<Review> findByItem(UUID itemId, ReviewItemType itemType) {
         return switch (itemType) {
-            case EVENT -> eventReviews.findByItemIdOrderByCreatedAtDesc(itemId).map(this::toEventDomain);
-            case ACTIVITY -> activityReviews.findByItemIdOrderByCreatedAtDesc(itemId).map(this::toActivityDomain);
+            case EVENT -> eventReviews.findPublishedByItem(itemId).map(this::toEventDomain);
+            case ACTIVITY -> activityReviews.findPublishedByItem(itemId).map(this::toActivityDomain);
         };
     }
 
@@ -73,6 +77,15 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
     }
 
     @Override
+    public Flux<Review> findByStatus(ReviewStatus status, int limit) {
+        return Flux.concat(
+                        eventReviews.findByStatusOrderByUpdatedAtDesc(status).map(this::toEventDomain),
+                        activityReviews.findByStatusOrderByUpdatedAtDesc(status).map(this::toActivityDomain))
+                .sort(Comparator.comparing(Review::updatedAt).reversed())
+                .take(limit);
+    }
+
+    @Override
     public Mono<ReviewMetrics> metrics(UUID itemId, ReviewItemType itemType) {
         var aggregate = switch (itemType) {
             case EVENT -> eventReviews.aggregateMetrics(itemId);
@@ -86,13 +99,15 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
     private EventReviewDocument toEventDocument(Review review) {
         return new EventReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
                 review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
-                review.getStatus(), review.updatedAt());
+                review.getStatus(), review.updatedAt(), toAssessmentDocument(review.getAiAssessment()),
+                review.isAiRetained());
     }
 
     private ActivityReviewDocument toActivityDocument(Review review) {
         return new ActivityReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
                 review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
-                review.getStatus(), review.updatedAt());
+                review.getStatus(), review.updatedAt(), toAssessmentDocument(review.getAiAssessment()),
+                review.isAiRetained());
     }
 
     private Review toEventDomain(EventReviewDocument document) {
@@ -107,16 +122,9 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .createdAt(document.createdAt())
                 .status(statusOf(document.status()))
                 .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
+                .aiAssessment(toAssessmentDomain(document.aiAssessment()))
+                .aiRetained(document.aiRetained())
                 .build();
-    }
-
-    /** Documents written before the status field existed are published reviews. */
-    private static ReviewStatus statusOf(ReviewStatus status) {
-        return status == null ? ReviewStatus.PUBLISHED : status;
-    }
-
-    private static java.time.Instant updatedAtOf(java.time.Instant updatedAt, java.time.Instant createdAt) {
-        return updatedAt == null ? createdAt : updatedAt;
     }
 
     private Review toActivityDomain(ActivityReviewDocument document) {
@@ -131,7 +139,18 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .createdAt(document.createdAt())
                 .status(statusOf(document.status()))
                 .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
+                .aiAssessment(toAssessmentDomain(document.aiAssessment()))
+                .aiRetained(document.aiRetained())
                 .build();
+    }
+
+    /** Documents written before the status field existed are published reviews. */
+    private static ReviewStatus statusOf(ReviewStatus status) {
+        return status == null ? ReviewStatus.PUBLISHED : status;
+    }
+
+    private static Instant updatedAtOf(Instant updatedAt, Instant createdAt) {
+        return updatedAt == null ? createdAt : updatedAt;
     }
 
     private ReviewUserDocument toUserDocument(ReviewUser user) {
@@ -148,5 +167,17 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
 
     private ReviewReply toReplyDomain(ReviewReplyDocument reply) {
         return reply == null ? null : new ReviewReply(reply.message(), reply.responderId(), reply.createdAt());
+    }
+
+    private ReviewAiAssessmentDocument toAssessmentDocument(ReviewAiAssessment assessment) {
+        return assessment == null ? null : new ReviewAiAssessmentDocument(
+                assessment.status(), assessment.flagged(), assessment.score(), assessment.categories(),
+                assessment.reason(), assessment.model(), assessment.checkedAt());
+    }
+
+    private ReviewAiAssessment toAssessmentDomain(ReviewAiAssessmentDocument assessment) {
+        return assessment == null ? null : new ReviewAiAssessment(
+                assessment.status(), assessment.flagged(), assessment.score(), assessment.categories(),
+                assessment.reason(), assessment.model(), assessment.checkedAt());
     }
 }

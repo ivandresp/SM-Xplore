@@ -44,6 +44,11 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
+    public Flux<Event> findByIds(Collection<UUID> ids) {
+        return Flux.fromIterable(ids).flatMap(this::findById);
+    }
+
+    @Override
     public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
         var matches = publishedList().collectList().block();
         return Mono.just(page(matches == null ? List.of() : matches, page, size));

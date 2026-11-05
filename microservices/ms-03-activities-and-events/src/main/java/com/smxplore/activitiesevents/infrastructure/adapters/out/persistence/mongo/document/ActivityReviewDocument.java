@@ -20,6 +20,8 @@ public record ActivityReviewDocument(
         ReviewReplyDocument reply,
         Instant createdAt,
         ReviewStatus status,
-        Instant updatedAt
+        Instant updatedAt,
+        ReviewAiAssessmentDocument aiAssessment,
+        boolean aiRetained
 ) {
 }

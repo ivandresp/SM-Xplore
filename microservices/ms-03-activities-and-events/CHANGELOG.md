@@ -2,6 +2,43 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Indicadores de demanda 2026-11-05]
+
+### Agregado
+- **Guía US8:** `GET /api/v1/demand-indicators` con reservas, personas, ingresos, ocupación,
+  actividades más solicitadas y comparación contra el periodo anterior, acotado a las actividades
+  del guía autenticado.
+- **Gestora US10/US11:** el mismo endpoint devuelve actividades y eventos de sus sitios, agrupados
+  por zona y sitio, con afluencia esperada vs. reservada por evento. También consulta la demanda de
+  servicios de ms-04 y la combina en una sola respuesta; `partial=true` si ms-04 no responde.
+- `GET /api/v1/demand-indicators/report` descarga el reporte CSV del periodo (zonas, sitios,
+  actividades, eventos y servicios); `GET /api/v1/demand-indicators/report.pdf` entrega el mismo
+  reporte en PDF para planificación.
+- `DEMAND_ZONE_ID` (default `America/Bogota`) controla la serie temporal, días de la semana y horas.
+- Consulta SQL `PostgresDemandQueryAdapter` que une `reservations` con `actividad`/`evento` y
+  proyecta capacidad, afluencia esperada, guía y gestora sin cruzar bases.
+
+### Notas
+- Los importes siguen siendo simbólicos; la ocupación se limita a `100 %`.
+- El alcance de la gestora exige que el `zoneId`/`siteId` solicitado pertenezca a sus sitios; si no,
+  responde `403`.
+
+## [Moderación de reseñas 2026-11-05]
+
+### Agregado
+- **Filtro automático de IA en ms-03**, con el mismo contrato y variables que ms-04 (`REVIEW_AI_*`, `LITTLELLM_*`). Las reseñas marcadas quedan en `PENDING_REVIEW` o pasan a `HIDDEN` según `REVIEW_AI_ACTION`; la evaluación se guarda en el documento (`ai`, `aiRetained`) para auditoría.
+- **Cola administrativa:** `GET /api/v1/admin/reviews?status=PENDING_REVIEW` lista reseñas de actividades y eventos; `PATCH /api/v1/reviews/{reviewId}/status` publica, oculta, elimina o devuelve una reseña a la cola. Solo `ADMIN`.
+- **Eventos de cambio:** crear, responder o moderar una reseña publica `reviews.review.changed`; ms-05 recalcula el agregado de reputación al recibir estados distintos de `PUBLISHED`.
+- **Reportes aceptados:** resolver un reporte como `RESOLVED` oculta la reseña y publica el evento; `DISMISSED` no la toca.
+
+### Corregido
+- Los listados públicos (`GET /reviews/events|activities/{id}`) y las métricas solo cuentan `PUBLISHED`; los documentos anteriores sin estado se siguen leyendo como publicados.
+- Una reseña `HIDDEN` o `DELETED` ya no se puede responder.
+- Respuestas y moderación actualizan `updatedAt`; queda documentado que el outbox de reseñas sigue siendo best effort porque Mongo y PostgreSQL no comparten transacción.
+
+### Notas
+- Se duplicó el filtro de IA de ms-04 en lugar de extraer un módulo común: cada servicio se compila y despliega por separado. La política, el prompt y las variables de entorno se mantienen alineados.
+
 ## [Consumidor de sitios 2026-11-05]
 
 ### Corregido

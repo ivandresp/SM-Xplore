@@ -72,7 +72,8 @@ evento `v2` no puede validarse contra él.
 servicios. El campo `payload.itemType` indica el origen; ms-05 consume ambos sin distinguir el
 productor. El sobre conserva `producer` para trazabilidad. `payload.status` puede ser
 `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` o `DELETED`; `PENDING_REVIEW` es una reseña retenida por
-el filtro de IA de ms-04 y no debe contarse como publicada.
+el filtro de IA (ms-03 o ms-04) y no debe contarse como publicada. ms-03 emite el evento al
+crear, responder y moderar; ms-04 al crear y moderar. Solo `PUBLISHED` alimenta la reputación.
 
 `catalog.site.changed` v2 agrega `payload.managerId`, obligatorio: ms-03 lo usa para saber qué gestora manda en el sitio y refrescar el snapshot que guarda en sus eventos. La v1 sigue en el repositorio para los consumidores que aún validan contra ella; ms-04 publica v2.
 

@@ -50,10 +50,30 @@ app:
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}
+  reviews:
+    # Mismo contrato y variables que el filtro de ms-04. Apagado por defecto; al encenderlo exige
+    # LITTLELLM_URL. Con fail-open=true una caida del modelo deja la resena publicada; con false
+    # la creacion responde 503.
+    ai-filter:
+      enabled: ${REVIEW_AI_ENABLED:false}
+      base-url: ${LITTLELLM_URL:}
+      api-key: ${LITTLELLM_API_KEY:}
+      api-key-header: ${LITTLELLM_API_KEY_HEADER:Authorization}
+      api-key-prefix: ${LITTLELLM_API_KEY_PREFIX:Bearer}
+      model: ${LITTLELLM_MODEL:littlellm}
+      chat-path: ${LITTLELLM_CHAT_PATH:/v1/chat/completions}
+      timeout: ${REVIEW_AI_TIMEOUT:PT5S}
+      threshold: ${REVIEW_AI_THRESHOLD:0.7}
+      temperature: ${REVIEW_AI_TEMPERATURE:0.0}
+      action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
   reservations:
     auto-close:
       cron: "${RESERVATION_AUTO_CLOSE_CRON:0 15 3 * * *}"
       grace: "${RESERVATION_AUTO_CLOSE_GRACE:P1D}"
+  demand:
+    zone-id: ${DEMAND_ZONE_ID:America/Bogota}
   security:
     jwt:
       jwk-set-uri: ${JWK_SET_URI:}

@@ -20,6 +20,10 @@ public interface ActivityRepositoryPort {
 
     Flux<Activity> findAll();
 
+    Flux<Activity> findByIds(Collection<UUID> ids);
+
+    Flux<Activity> findAllByGuideId(UUID guideId);
+
     /** One page of the published catalogue, limited by the database. */
     Mono<PageResult<Activity>> findPublishedPage(int page, int size);
 

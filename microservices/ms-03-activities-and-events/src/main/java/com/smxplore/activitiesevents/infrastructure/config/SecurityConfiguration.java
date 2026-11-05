@@ -58,6 +58,11 @@ public class SecurityConfiguration {
                         .pathMatchers(HttpMethod.GET, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
                         .pathMatchers(HttpMethod.HEAD, "/api/v1/events/**", "/api/v1/activities/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/reviews/**").permitAll()
+                        // Review moderation is admin-only (same action path as ms-04)
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/reviews/*/status").hasRole(ADMIN)
+                        .pathMatchers(HttpMethod.GET, "/api/v1/demand-indicators",
+                                "/api/v1/demand-indicators/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         // Events: destination managers (and admins) manage the offer
                         .pathMatchers(HttpMethod.POST, "/api/v1/events/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
@@ -73,6 +78,7 @@ public class SecurityConfiguration {
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
                         .pathMatchers("/api/v1/review-reports/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
+                        .pathMatchers("/api/v1/admin/**").hasRole(ADMIN)
                         .pathMatchers("/api/v1/reservations/**").authenticated()
                         .anyExchange().authenticated())
                 .exceptionHandling(exceptions -> exceptions

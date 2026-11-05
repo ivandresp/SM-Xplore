@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository;
 
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.EventReviewDocument;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.projection.ReviewMetricsProjection;
 import org.springframework.data.mongodb.repository.Aggregation;
@@ -13,15 +14,23 @@ import java.util.UUID;
 
 public interface EventReviewMongoRepository extends ReactiveMongoRepository<EventReviewDocument, UUID> {
 
-    Flux<EventReviewDocument> findByItemIdOrderByCreatedAtDesc(UUID itemId);
+    /**
+     * Public listing of published reviews. {@code status: null} also matches documents written
+     * before the field existed, which were published by definition.
+     */
+    @Query(value = "{ 'itemId': ?0, '$or': [ { 'status': 'PUBLISHED' }, { 'status': null } ] }",
+            sort = "{ 'createdAt': -1 }")
+    Flux<EventReviewDocument> findPublishedByItem(UUID itemId);
 
     Flux<EventReviewDocument> findByItemIdIn(Collection<UUID> itemIds);
+
+    Flux<EventReviewDocument> findByStatusOrderByUpdatedAtDesc(ReviewStatus status);
 
     @Query(value = "{ 'itemId': ?0, 'user.id': ?1 }", exists = true)
     Mono<Boolean> existsByItemAndUser(UUID itemId, UUID userId);
 
     @Aggregation(pipeline = {
-            "{ '$match': { 'itemId': ?0 } }",
+            "{ '$match': { 'itemId': ?0, '$or': [ { 'status': 'PUBLISHED' }, { 'status': null } ] } }",
             "{ '$group': { '_id': null, 'count': { '$sum': 1 }, 'average': { '$avg': '$rating' } } }",
             "{ '$project': { '_id': 0, 'count': 1, 'average': 1 } }"
     })

@@ -44,6 +44,16 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
+    public Flux<Activity> findByIds(Collection<UUID> ids) {
+        return Flux.fromIterable(ids).flatMap(this::findById);
+    }
+
+    @Override
+    public Flux<Activity> findAllByGuideId(UUID guideId) {
+        return findAll().filter(activity -> guideId.equals(activity.getGuideId()));
+    }
+
+    @Override
     public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
         var matches = publishedList().collectList().block();
         return Mono.just(page(matches == null ? List.of() : matches, page, size));

@@ -4,10 +4,9 @@ package com.smxplore.activitiesevents.domain.model.review;
  * Visibility of a review. The names are the ones in
  * {@code contracts/events/reviews.review.changed.v1.json}.
  *
- * <p>ms-03 has no moderation filter of its own, so its reviews are born {@link #PUBLISHED}.
- * {@link #PENDING_REVIEW} belongs to reviews retained by the ms-04 AI filter, and
- * {@link #HIDDEN}/{@link #DELETED} to moderation outcomes; ms-03 can represent them but does not
- * produce them yet.
+ * <p>{@link #PUBLISHED} is the only state that public listings, metrics and consumers count.
+ * {@link #PENDING_REVIEW} retains reviews flagged by the automatic filter until an administrator
+ * publishes or hides them; {@link #HIDDEN} and {@link #DELETED} are moderation outcomes.
  */
 public enum ReviewStatus {
     PUBLISHED,

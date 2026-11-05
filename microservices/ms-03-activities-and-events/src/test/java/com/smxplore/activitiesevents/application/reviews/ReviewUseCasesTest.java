@@ -3,21 +3,27 @@ package com.smxplore.activitiesevents.application.reviews;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
-import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewModerationNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiAction;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiAssessment;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiPolicy;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewMetrics;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
+import com.smxplore.activitiesevents.domain.ports.ai.ReviewAiFilter;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
@@ -34,12 +40,14 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewUseCasesTest {
@@ -62,14 +70,24 @@ class ReviewUseCasesTest {
     @Mock
     private OutboxPort outbox;
 
+    @Mock
+    private ReviewAiFilter aiFilter;
+
+    private ReviewEventPublisher publisher;
+    private ReviewAiPolicy aiPolicy;
     private CreateReviewUseCase createReview;
     private RespondToReviewUseCase respondToReview;
 
     @BeforeEach
     void setUp() {
-        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, outbox,
+        aiPolicy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, true);
+        publisher = new ReviewEventPublisher(outbox,
                 new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()));
-        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo, siteCatalog);
+        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, aiPolicy,
+                publisher);
+        respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo, siteCatalog,
+                publisher);
+        lenient().when(outbox.enqueue(any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -79,8 +97,9 @@ class ReviewUseCasesTest {
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
         given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
                 .willReturn(Mono.just(false));
+        given(aiFilter.assess(any())).willReturn(Mono.just(
+                ReviewAiAssessment.skipped(Instant.now())));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
-        given(outbox.enqueue(any())).willReturn(Mono.empty());
 
         StepVerifier.create(createReview.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
                 .assertNext(review -> {
@@ -88,6 +107,7 @@ class ReviewUseCasesTest {
                     assertThat(review.getUser().name()).isEqualTo("Ana");
                     assertThat(review.getRating()).isEqualTo(5);
                     assertThat(review.getStatus()).isEqualTo(ReviewStatus.PUBLISHED);
+                    assertThat(review.isAiRetained()).isFalse();
                 })
                 .verifyComplete();
 
@@ -102,6 +122,8 @@ class ReviewUseCasesTest {
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
         given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
                 .willReturn(Mono.just(false));
+        given(aiFilter.assess(any())).willReturn(Mono.just(
+                ReviewAiAssessment.skipped(Instant.now())));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         given(outbox.enqueue(any())).willReturn(Mono.error(new IllegalStateException("outbox down")));
 
@@ -124,6 +146,65 @@ class ReviewUseCasesTest {
     }
 
     @Test
+    void retainsAFlaggedReviewInTheModerationQueue() {
+        var activity = activity(UUID.randomUUID());
+        var userId = UUID.randomUUID();
+        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
+                .willReturn(Mono.just(false));
+        given(aiFilter.assess(any())).willReturn(Mono.just(ReviewAiAssessment.assessed(
+                true, 0.9, List.of("SPAM"), "spam", "littlellm", Instant.now())));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(createReview.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
+                .assertNext(review -> {
+                    assertThat(review.getStatus()).isEqualTo(ReviewStatus.PENDING_REVIEW);
+                    assertThat(review.isAiRetained()).isTrue();
+                    assertThat(review.getAiAssessment().flagged()).isTrue();
+                })
+                .verifyComplete();
+
+        then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
+                event -> event.payload().contains("\"status\":\"PENDING_REVIEW\"")));
+    }
+
+    @Test
+    void hidesAFlaggedReviewWhenThePolicySaysSo() {
+        var activity = activity(UUID.randomUUID());
+        var userId = UUID.randomUUID();
+        var hidePolicy = new ReviewAiPolicy(0.7, ReviewAiAction.HIDE, true);
+        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, hidePolicy,
+                publisher);
+        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
+                .willReturn(Mono.just(false));
+        given(aiFilter.assess(any())).willReturn(Mono.just(ReviewAiAssessment.assessed(
+                true, 0.9, List.of("SPAM"), "spam", "littlellm", Instant.now())));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(useCase.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
+                .assertNext(review -> assertThat(review.getStatus()).isEqualTo(ReviewStatus.HIDDEN))
+                .verifyComplete();
+    }
+
+    @Test
+    void rejectsCreationWhenTheFilterFailsAndThePolicyIsClosed() {
+        var activity = activity(UUID.randomUUID());
+        var userId = UUID.randomUUID();
+        var closedPolicy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, false);
+        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, closedPolicy,
+                publisher);
+        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
+                .willReturn(Mono.just(false));
+        given(aiFilter.assess(any())).willReturn(Mono.just(ReviewAiAssessment.unavailable(Instant.now())));
+
+        StepVerifier.create(useCase.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
+                .expectError(ReviewFilterUnavailableException.class)
+                .verify();
+    }
+
+    @Test
     void guideInChargeCanRespondToActivityReview() {
         var guideId = UUID.randomUUID();
         var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
@@ -138,6 +219,9 @@ class ReviewUseCasesTest {
                     assertThat(updated.getReply().responderId()).isEqualTo(guideId);
                 })
                 .verifyComplete();
+
+        then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
+                event -> event.payload().contains("\"reviewId\":\"" + review.getId() + "\"")));
     }
 
     @Test
@@ -304,14 +388,76 @@ class ReviewUseCasesTest {
     }
 
     @Test
-    void resolvesPendingReport() {
-        var report = ReviewReport.pending(UUID.randomUUID(), UUID.randomUUID(), "Spam");
+    void acceptingAReportHidesTheReviewAndPublishesTheChange() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
+        given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
+                        .handle(report.id(), ReviewReportStatus.RESOLVED, UUID.randomUUID(), "ADMIN"))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
+                .verifyComplete();
+
+        then(reviewRepo).should().save(org.mockito.ArgumentMatchers.argThat(
+                saved -> saved.getStatus() == ReviewStatus.HIDDEN));
+        then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
+                event -> event.payload().contains("\"status\":\"HIDDEN\"")));
+    }
+
+    @Test
+    void dismissingAReportKeepsTheReviewPublished() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
-                        .handle(report.id(), ReviewReportStatus.RESOLVED, UUID.randomUUID(), "ADMIN"))
-                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
+                        .handle(report.id(), ReviewReportStatus.DISMISSED, UUID.randomUUID(), "ADMIN"))
+                .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.DISMISSED))
+                .verifyComplete();
+
+        then(reviewRepo).shouldHaveNoInteractions();
+        then(outbox).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void adminCanModerateAReviewAndPublishesTheChange() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(new ModerateReviewUseCase(reviewRepo, publisher)
+                        .handle(review.getId(), ReviewStatus.HIDDEN, UUID.randomUUID(), "ADMIN"))
+                .assertNext(updated -> assertThat(updated.getStatus()).isEqualTo(ReviewStatus.HIDDEN))
+                .verifyComplete();
+
+        then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
+                event -> event.payload().contains("\"status\":\"HIDDEN\"")));
+    }
+
+    @Test
+    void nonAdminCannotModerateAReview() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+
+        StepVerifier.create(new ModerateReviewUseCase(reviewRepo, publisher)
+                        .handle(review.getId(), ReviewStatus.HIDDEN, UUID.randomUUID(), "GUIDE"))
+                .expectError(ReviewModerationNotAllowedException.class)
+                .verify();
+    }
+
+    @Test
+    void listsReviewsInTheModerationQueue() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID()).withStatus(
+                ReviewStatus.PENDING_REVIEW);
+        given(reviewRepo.findByStatus(ReviewStatus.PENDING_REVIEW, 10))
+                .willReturn(reactor.core.publisher.Flux.just(review));
+
+        StepVerifier.create(new ConsultReviewsForModerationUseCase(reviewRepo)
+                        .handle(ReviewStatus.PENDING_REVIEW, 10))
+                .assertNext(found -> assertThat(found.getStatus()).isEqualTo(ReviewStatus.PENDING_REVIEW))
                 .verifyComplete();
     }
 
@@ -321,7 +467,7 @@ class ReviewUseCasesTest {
                 .resolve(ReviewReportStatus.RESOLVED, UUID.randomUUID());
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
                         .handle(report.id(), ReviewReportStatus.DISMISSED, UUID.randomUUID(), "ADMIN"))
                 .expectError(InvalidReviewException.class)
                 .verify();
@@ -336,7 +482,7 @@ class ReviewUseCasesTest {
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
 
-        var useCase = new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo);
+        var useCase = new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher);
 
         StepVerifier.create(useCase.handle(report.id(), ReviewReportStatus.RESOLVED,
                         UUID.randomUUID(), "DESTINATION_MANAGER"))
@@ -354,7 +500,7 @@ class ReviewUseCasesTest {
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
                         .handle(report.id(), ReviewReportStatus.DISMISSED, managerId, "DESTINATION_MANAGER"))
                 .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.DISMISSED))
                 .verifyComplete();
@@ -367,13 +513,17 @@ class ReviewUseCasesTest {
         var report = ReviewReport.pending(review.getId(), UUID.randomUUID(), "Spam");
         given(reportRepo.findById(report.id())).willReturn(Mono.just(report));
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         given(activityRepo.findById(review.getItemId())).willReturn(Mono.just(activity(guideId)));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo)
+        StepVerifier.create(new ResolveReviewReportUseCase(reportRepo, reviewRepo, eventRepo, activityRepo, publisher)
                         .handle(report.id(), ReviewReportStatus.RESOLVED, guideId, "GUIDE"))
                 .assertNext(updated -> assertThat(updated.status()).isEqualTo(ReviewReportStatus.RESOLVED))
                 .verifyComplete();
+
+        then(reviewRepo).should().save(org.mockito.ArgumentMatchers.argThat(
+                saved -> saved.getStatus() == ReviewStatus.HIDDEN));
     }
 
     @Test

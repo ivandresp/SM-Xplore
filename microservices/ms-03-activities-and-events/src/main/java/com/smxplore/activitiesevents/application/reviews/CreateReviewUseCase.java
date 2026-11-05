@@ -1,49 +1,54 @@
 package com.smxplore.activitiesevents.application.reviews;
 
-import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiAssessment;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiPolicy;
+import com.smxplore.activitiesevents.domain.model.review.ReviewAiRequest;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
+import com.smxplore.activitiesevents.domain.ports.ai.ReviewAiFilter;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
-import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
 
 /** Users can review a published event/activity without having a reservation. */
-@Slf4j
 @RequiredArgsConstructor
 public class CreateReviewUseCase implements CreateReviewUseCasePort {
 
     private final ReviewRepositoryPort reviewRepo;
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;
-    private final OutboxPort outbox;
-    private final ReviewEventFactory reviewEvents;
+    private final ReviewAiFilter aiFilter;
+    private final ReviewAiPolicy aiPolicy;
+    private final ReviewEventPublisher publisher;
 
     @Override
     public Mono<Review> handle(UUID itemId, ReviewItemType itemType, UUID userId, String userName,
                                int rating, String comment) {
+        var now = Instant.now();
         var review = Review.builder()
                 .itemId(itemId)
                 .itemType(itemType)
                 .user(new ReviewUser(userId, userName))
                 .rating(rating)
                 .comment(comment)
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
         review.validate();
 
@@ -52,24 +57,28 @@ public class CreateReviewUseCase implements CreateReviewUseCasePort {
                 .flatMap(exists -> exists
                         ? Mono.error(new ReviewAlreadyExistsException(
                                 "The user already reviewed this item."))
-                        : reviewRepo.save(review))
-                .flatMap(this::publish);
+                        : assess(review, now))
+                .flatMap(reviewRepo::save)
+                .flatMap(publisher::publish);
     }
 
     /**
-     * The review lives in MongoDB and the outbox in PostgreSQL, so the two writes cannot share a
-     * transaction. The review is saved first; if enqueueing the event fails it is logged and the
-     * review is still returned, because the user's write already succeeded. Nothing retries that
-     * event, so a review without its event has to be reconciled out of band.
+     * Runs the automatic filter unless the comment is empty. An outage follows the configured
+     * policy: fail-open leaves the review published, fail-closed returns 503.
      */
-    private Mono<Review> publish(Review saved) {
-        return reviewEvents.reviewChanged(saved)
-                .flatMap(outbox::enqueue)
-                .thenReturn(saved)
-                .onErrorResume(exception -> {
-                    log.error("Could not enqueue reviews.review.changed for review {}",
-                            saved.getId(), exception);
-                    return Mono.just(saved);
+    private Mono<Review> assess(Review review, Instant now) {
+        if (review.getComment() == null || review.getComment().isBlank()) {
+            return Mono.just(review.withAiAssessment(ReviewAiAssessment.skipped(now), aiPolicy, now));
+        }
+        var request = new ReviewAiRequest(review.getItemType().name(), review.getRating(),
+                review.getComment());
+        return aiFilter.assess(request)
+                .onErrorResume(error -> Mono.just(ReviewAiAssessment.unavailable(now)))
+                .flatMap(assessment -> {
+                    if (aiPolicy.shouldRejectOnFailure(assessment)) {
+                        return Mono.error(new ReviewFilterUnavailableException());
+                    }
+                    return Mono.just(review.withAiAssessment(assessment, aiPolicy, now));
                 });
     }
 

@@ -10,6 +10,7 @@ import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
@@ -38,6 +39,7 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
     private final ActivityRepositoryPort activityRepo;
     private final EventRepositoryPort eventRepo;
     private final SiteCatalogPort siteCatalog;
+    private final ReviewEventPublisher publisher;
 
     @Override
     public Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message,
@@ -53,12 +55,18 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
                 .switchIfEmpty(Mono.error(new ReviewNotFoundException(reviewId)))
                 .flatMap(review -> canRespond(review, responderId, role, bearerToken)
                         .then(Mono.defer(() -> {
+                            if (review.getStatus() == ReviewStatus.HIDDEN
+                                    || review.getStatus() == ReviewStatus.DELETED) {
+                                return Mono.error(new InvalidReviewException(
+                                        "A hidden or deleted review cannot be answered."));
+                            }
                             if (review.getReply() != null) {
                                 return Mono.error(new ReviewAlreadyRespondedException(
                                         "This review already has a response."));
                             }
                             return reviewRepo.save(review.withReply(
-                                    new ReviewReply(message, responderId, Instant.now())));
+                                            new ReviewReply(message, responderId, Instant.now())))
+                                    .flatMap(publisher::publish);
                         })));
     }
 

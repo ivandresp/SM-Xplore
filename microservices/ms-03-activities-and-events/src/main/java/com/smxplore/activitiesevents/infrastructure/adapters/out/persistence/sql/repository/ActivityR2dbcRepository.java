@@ -30,6 +30,8 @@ public interface ActivityR2dbcRepository extends ReactiveCrudRepository<Activity
 
     Flux<ActivityEntity> findAllBySiteId(UUID siteId);
 
+    Flux<ActivityEntity> findAllByGuideId(UUID guideId);
+
     @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' AND sitio_id = :siteId "
             + "ORDER BY name, id LIMIT :limit OFFSET :offset")
     Flux<ActivityEntity> findPagePublishedBySiteId(UUID siteId, int limit, long offset);

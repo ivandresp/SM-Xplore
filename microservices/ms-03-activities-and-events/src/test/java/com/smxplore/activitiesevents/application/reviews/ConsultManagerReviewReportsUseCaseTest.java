@@ -84,6 +84,11 @@ class ConsultManagerReviewReportsUseCaseTest {
                 return Flux.fromArray(siteIds)
                         .map(id -> new SiteSnapshot(id, managerId, "Sitio"));
             }
+
+            @Override
+            public Flux<SiteSnapshot> findByZoneId(UUID zoneId, String bearerToken) {
+                return Flux.empty();
+            }
         };
     }
 }

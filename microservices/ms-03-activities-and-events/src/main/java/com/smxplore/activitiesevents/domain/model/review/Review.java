@@ -25,6 +25,13 @@ public class Review {
     @Builder.Default
     private final ReviewStatus status = ReviewStatus.PUBLISHED;
 
+    /** Result of the automatic moderation filter; {@code null} on legacy documents. */
+    private final ReviewAiAssessment aiAssessment;
+
+    /** True when the automatic filter retained the review (pending review or hidden). */
+    @Builder.Default
+    private final boolean aiRetained = false;
+
     /** Set on every change; {@link #updatedAt()} falls back to {@code createdAt} for old documents. */
     private final Instant updatedAt;
 
@@ -50,6 +57,33 @@ public class Review {
         if (status == null) {
             throw new InvalidReviewException("Review status is mandatory.");
         }
+        if (aiRetained && aiAssessment == null) {
+            throw new InvalidReviewException("A retained review requires an AI assessment.");
+        }
+    }
+
+    /**
+     * Stores the filter verdict and, when the policy flags the review with enough confidence, leaves
+     * it pending or hides it. Reviews are immutable, so a new instance is returned.
+     */
+    public Review withAiAssessment(ReviewAiAssessment assessment, ReviewAiPolicy policy, Instant now) {
+        if (assessment == null) {
+            throw new InvalidReviewException("Review AI assessment is mandatory.");
+        }
+        if (policy == null) {
+            throw new InvalidReviewException("Review AI policy is mandatory.");
+        }
+        boolean retained = policy.shouldFlag(assessment);
+        var builder = toBuilder()
+                .aiAssessment(assessment)
+                .aiRetained(retained);
+        if (retained) {
+            builder.status(policy.flaggedStatus())
+                    .updatedAt(now);
+        }
+        var updated = builder.build();
+        updated.validate();
+        return updated;
     }
 
     /**

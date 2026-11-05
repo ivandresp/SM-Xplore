@@ -55,6 +55,19 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
+    public Flux<Activity> findByIds(Collection<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Flux.empty();
+        }
+        return repository.findAllById(ids).map(mapper::toDomain);
+    }
+
+    @Override
+    public Flux<Activity> findAllByGuideId(UUID guideId) {
+        return repository.findAllByGuideId(guideId).map(mapper::toDomain);
+    }
+
+    @Override
     public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
         var offset = (long) page * size;
         return Mono.zip(

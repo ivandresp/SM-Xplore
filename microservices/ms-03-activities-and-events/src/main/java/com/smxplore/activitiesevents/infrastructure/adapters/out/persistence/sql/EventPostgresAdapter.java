@@ -56,6 +56,14 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
+    public Flux<Event> findByIds(Collection<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Flux.empty();
+        }
+        return repository.findAllById(ids).map(mapper::toDomain);
+    }
+
+    @Override
     public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
         var offset = (long) page * size;
         return Mono.zip(

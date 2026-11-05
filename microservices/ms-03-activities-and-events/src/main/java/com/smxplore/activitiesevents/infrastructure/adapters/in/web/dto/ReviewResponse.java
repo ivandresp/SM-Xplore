@@ -15,6 +15,8 @@ public record ReviewResponse(
         String comment,
         ReviewReplyResponse reply,
         ReviewStatus status,
+        ReviewAiAssessmentResponse ai,
+        boolean aiRetained,
         Instant createdAt,
         Instant updatedAt
 ) {
