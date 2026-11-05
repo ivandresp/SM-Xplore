@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.dto;
 
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,7 +14,9 @@ public record ReviewResponse(
         int rating,
         String comment,
         ReviewReplyResponse reply,
-        Instant createdAt
+        ReviewStatus status,
+        Instant createdAt,
+        Instant updatedAt
 ) {
     public record ReviewUserResponse(String name) {
     }

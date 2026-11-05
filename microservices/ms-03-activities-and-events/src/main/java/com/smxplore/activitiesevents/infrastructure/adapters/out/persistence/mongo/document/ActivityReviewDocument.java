@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document;
 
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -17,6 +18,8 @@ public record ActivityReviewDocument(
         int rating,
         String comment,
         ReviewReplyDocument reply,
-        Instant createdAt
+        Instant createdAt,
+        ReviewStatus status,
+        Instant updatedAt
 ) {
 }

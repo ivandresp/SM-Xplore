@@ -19,7 +19,9 @@ public class ReviewWebMapper {
                 review.getReply() == null ? null
                         : new ReviewResponse.ReviewReplyResponse(review.getReply().message(),
                         review.getReply().createdAt()),
-                review.getCreatedAt()
+                review.getStatus(),
+                review.getCreatedAt(),
+                review.updatedAt()
         );
     }
 }

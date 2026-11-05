@@ -32,6 +32,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExist
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyReportedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -71,7 +72,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
-    @ExceptionHandler(ReviewResponseNotAllowedException.class)
+    @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class})
     public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);

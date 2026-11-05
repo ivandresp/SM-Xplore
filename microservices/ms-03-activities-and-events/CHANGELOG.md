@@ -11,6 +11,24 @@ Cambios de este microservicio. La documentación del curso (`docs/`) no se modif
 ### Pendiente
 - El snapshot `siteName`/`managerId` del evento sigue sin refrescarse desde Kafka: `catalog.site.changed` v1 no incluye `managerId` y haría falta un contrato v2.
 
+## [Reportes de reseña 2026-11-04]
+
+### Corregido
+- `GET /api/v1/review-reports` ya no expone los reportes de todos los sitios: una `DESTINATION_MANAGER` solo ve los de sus sitios (ms-04 → sitios → eventos → reseñas → reportes) y `ADMIN` conserva el listado global. Los reportes de actividades no aparecen porque la actividad está a cargo de un guía.
+- `PATCH /api/v1/review-reports/{reportId}` valida que quien resuelve sea `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento). Antes cualquier gestora podía resolver reportes ajenos. El rechazo responde 403 con `ReviewReportNotAllowedException`.
+
+## [Eventos de reseña 2026-11-04]
+
+### Agregado
+- `reviews.review.changed` v1: al crear una reseña se escribe el evento en el outbox V4 con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre no se publica.
+- `ReviewStatus` (`PUBLISHED`, `PENDING_REVIEW`, `HIDDEN`, `DELETED`) y `updatedAt` en el modelo y en las dos colecciones de Mongo. Las reseñas nuevas nacen `PUBLISHED`; los documentos anteriores se leen como `PUBLISHED` con `updatedAt = createdAt`.
+- `ReviewResponse` expone `status` y `updatedAt`.
+- Pruebas: fábrica del evento, contrato JSON contra `contracts/events/reviews.review.changed.v1.json` (`com.networknt:json-schema-validator`) y reglas del dominio.
+
+### Limitaciones
+- La reseña (MongoDB) y el outbox (PostgreSQL) no comparten transacción: si el encolado falla después de guardar, el evento se pierde y solo queda el log. Conciliar fuera de banda.
+- No se publica nada al responder una reseña: el payload v1 no incluye la respuesta y se omitiría un evento sin información nueva.
+
 ## [Integración 2026-11-04]
 
 ### Integración con `microservicios`

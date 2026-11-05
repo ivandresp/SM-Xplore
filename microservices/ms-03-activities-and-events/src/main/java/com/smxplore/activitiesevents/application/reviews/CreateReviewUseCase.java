@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.application.reviews;
 
+import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
@@ -13,21 +14,26 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
 
 /** Users can review a published event/activity without having a reservation. */
+@Slf4j
 @RequiredArgsConstructor
 public class CreateReviewUseCase implements CreateReviewUseCasePort {
 
     private final ReviewRepositoryPort reviewRepo;
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;
+    private final OutboxPort outbox;
+    private final ReviewEventFactory reviewEvents;
 
     @Override
     public Mono<Review> handle(UUID itemId, ReviewItemType itemType, UUID userId, String userName,
@@ -46,7 +52,25 @@ public class CreateReviewUseCase implements CreateReviewUseCasePort {
                 .flatMap(exists -> exists
                         ? Mono.error(new ReviewAlreadyExistsException(
                                 "The user already reviewed this item."))
-                        : reviewRepo.save(review));
+                        : reviewRepo.save(review))
+                .flatMap(this::publish);
+    }
+
+    /**
+     * The review lives in MongoDB and the outbox in PostgreSQL, so the two writes cannot share a
+     * transaction. The review is saved first; if enqueueing the event fails it is logged and the
+     * review is still returned, because the user's write already succeeded. Nothing retries that
+     * event, so a review without its event has to be reconciled out of band.
+     */
+    private Mono<Review> publish(Review saved) {
+        return reviewEvents.reviewChanged(saved)
+                .flatMap(outbox::enqueue)
+                .thenReturn(saved)
+                .onErrorResume(exception -> {
+                    log.error("Could not enqueue reviews.review.changed for review {}",
+                            saved.getId(), exception);
+                    return Mono.just(saved);
+                });
     }
 
     private Mono<Void> validateItem(UUID itemId, ReviewItemType itemType, UUID userId) {
