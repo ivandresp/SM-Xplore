@@ -86,6 +86,8 @@ try {
     $headers = @{ Authorization = "Bearer " + $login.accessToken }
     $sites = Invoke-WebRequest -Uri ("http://" + $HostName + ":" + $ms04 + "/api/v1/sites") -Headers $headers -TimeoutSec 5 -UseBasicParsing
     if ($sites.StatusCode -eq 200) { Pass "ms-04 valida el JWT emitido por ms-01 (GET /api/v1/sites)" } else { Fail "ms-04 respondio $($sites.StatusCode)" }
+    $reservations = Invoke-WebRequest -Uri ("http://" + $HostName + ":" + $ms03 + "/api/v1/reservations?status=CONFIRMED") -Headers $headers -TimeoutSec 5 -UseBasicParsing
+    if ($reservations.StatusCode -eq 200) { Pass "ms-03 valida el JWT con su JWKS (GET /api/v1/reservations)" } else { Fail "ms-03 respondio $($reservations.StatusCode)" }
   } else { Fail "login sin accessToken" }
 } catch { Fail "login/JWT fallo: $_" }
 

@@ -90,6 +90,12 @@ if [ -n "$token" ]; then
   else
     fail "ms-04 rechazo el JWT (codigo $code)"
   fi
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Authorization: Bearer $token" "http://$HOST:$MS03_PORT/api/v1/reservations?status=CONFIRMED" || true)
+  if [ "$code" = "200" ]; then
+    pass "ms-03 valida el JWT con su JWKS (GET /api/v1/reservations)"
+  else
+    fail "ms-03 rechazo el JWT (codigo $code)"
+  fi
 else
   fail "no se pudo iniciar sesion con el administrador dev"
 fi

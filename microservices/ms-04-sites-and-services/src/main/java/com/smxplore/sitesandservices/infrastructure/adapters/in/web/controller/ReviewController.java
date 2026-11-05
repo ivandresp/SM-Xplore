@@ -127,8 +127,12 @@ public class ReviewController {
 
     @GetMapping("/{reviewId}")
     @Operation(summary = "Get a review")
-    public Mono<ReviewResponse> get(@PathVariable UUID reviewId) {
-        return getUseCase.handle(reviewId).map(webMapper::toResponse);
+    public Mono<ReviewResponse> get(
+            @PathVariable UUID reviewId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Actor actor = jwtUserResolver.resolve(jwt);
+        return getUseCase.handle(reviewId, actor).map(webMapper::toResponse);
     }
 
     @GetMapping
