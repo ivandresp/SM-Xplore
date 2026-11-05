@@ -183,6 +183,15 @@ class JwtConfigurationTest {
     }
 
     @Test
+    void acceptsPlainHttpJwksForANonLoopbackHostWhenExplicitlyAllowed() {
+        var properties = properties();
+        properties.setAllowInsecureJwks(true);
+        properties.setJwkSetUri("http://ms-01:8081/.well-known/jwks.json");
+
+        assertThat(new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder()).isNotNull();
+    }
+
+    @Test
     void acceptsHttpsJwksWithoutFetchingItAtStartup() {
         var properties = properties();
         properties.setJwkSetUri("https://issuer.example/.well-known/jwks.json");

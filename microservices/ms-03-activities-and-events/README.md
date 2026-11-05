@@ -71,6 +71,7 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `MONGO_ROOT_USER` / `MONGO_ROOT_PASSWORD` | `root` / vacío | Superusuario; solo init de Mongo. |
 | `MONGO_APP_USER` / `MONGO_APP_PASSWORD` | `reviews_app` / vacío | Usuario `readWrite` solo sobre `reviews`. |
 | `JWK_SET_URI` | vacío | URL del JWKS de ms-01. Obligatoria si no hay PEM; fuera de loopback debe ser `https://`. |
+| `JWT_ALLOW_INSECURE_JWKS` | `false` | Solo desarrollo: acepta el JWKS por HTTP cuando el host no es loopback (por ejemplo `http://ms-01:8081` dentro del stack de Compose). En producción debe quedar en `false`. |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Ruta o URL de la llave pública PEM (local/tests). |
 | `JWT_ISSUER` | vacío (obligatoria) | Issuer esperado en el token. |
 | `JWT_AUDIENCE` | vacío (obligatoria) | Audiencia esperada en el token. |

@@ -105,10 +105,12 @@ public class JwtConfiguration {
     }
 
     /**
-     * Plain HTTP is only accepted for a loopback JWKS (local development). Any remote
-     * key source must use HTTPS so a network attacker cannot substitute signing keys.
+     * Plain HTTP is only accepted for a loopback JWKS (local development) or when
+     * {@code app.security.jwt.allow-insecure-jwks} is explicitly enabled for a local
+     * stack (for example {@code http://ms-01:8081} inside Compose). Any remote key
+     * source must use HTTPS so a network attacker cannot substitute signing keys.
      */
-    private static URI validateJwksUri(String value) {
+    private URI validateJwksUri(String value) {
         final URI uri;
         try {
             uri = URI.create(value);
@@ -123,7 +125,7 @@ public class JwtConfiguration {
                 || "127.0.0.1".equals(host)
                 || "::1".equals(host)
                 || "[::1]".equals(host);
-        if (!"https".equalsIgnoreCase(uri.getScheme()) && !loopback) {
+        if (!"https".equalsIgnoreCase(uri.getScheme()) && !loopback && !properties.isAllowInsecureJwks()) {
             throw new IllegalStateException(
                     "app.security.jwt.jwk-set-uri must use https outside loopback.");
         }
