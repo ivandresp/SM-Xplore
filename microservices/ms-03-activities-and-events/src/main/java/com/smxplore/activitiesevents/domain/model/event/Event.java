@@ -25,8 +25,9 @@ public class Event {
     @Builder.Default
     private final UUID id = UUID.randomUUID();
     private final UUID siteId;
-    // TODO(ms-04): siteName and managerId are a snapshot of the site. Refresh them when ms-04
-    // exposes the site manager contract; the source of truth is the sites microservice.
+    // TODO(ms-04): siteName and managerId are a creation-time snapshot of the site; ms-04 owns the
+    // source of truth. catalog.site.changed v1 does not carry managerId, so a manager change cannot
+    // be applied from Kafka yet: it needs a contract v2 or a re-read of GET /api/v1/sites/{siteId}.
     private final String siteName;
     private final UUID managerId;
     private String name;

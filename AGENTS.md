@@ -6,24 +6,26 @@ SM-Xplore is a tourism management platform for Santa Marta, Colombia. This repos
 
 Integration branch: `microservicios` (the branch `microservices` does not exist). This file is tracked and shared: keep it accurate when the repository state changes.
 
-## Repository state (2026-11-03)
+## Repository state (2026-11-04)
 
 | Service | Folder | Status | Host port | Auth |
 |---|---|---|---|---|
 | ms-01 users and anomalies | `microservices/ms-01-users-and-anomalies/` | Merged in `microservicios`; identity, MFA, admin, reviews, anomalies | 8081 | RS256/JWKS (issuer) |
-| ms-02 security reports | `microservices/ms-02-security-reports/` | Merged (PR #33) | 8080 | HS256, migration pending |
+| ms-02 security reports | `microservices/ms-02-security-reports/` | Merged (PR #33); reports, comments, outbox, Kafka events | 8080 | RS256 (JWKS or PEM) |
 | ms-03 activities and events | `microservices/ms-03-activities-and-events/` | Current work, branch `ms-03-symbolic-reservations` | 8082 | RS256 (JWKS or PEM) |
-| ms-04 sites and services | `microservices/ms-04-sites-and-services/` | Merged (PR #34); catalog, reservations, notifications, outbox | 8084 | RS256 (JWKS or PEM) |
-| ms-05 recommendations | `microservices/ms-05-recommendations/` | Branch `ms-recommendations`, not merged | 8085 | RS256 |
+| ms-04 sites and services | `microservices/ms-04-sites-and-services/` | Merged (PR #34); catalog with the `managerId` filter (PR #36), reservations, notifications, outbox | 8084 | RS256 (JWKS or PEM) |
+| ms-05 recommendations | `microservices/ms-05-recommendations/` | Merged (PR #35); Neo4j, Kafka consumers, Redis cache, metrics | 8085 | RS256 |
 
 Shared at the repository root:
 
-- `contracts/`: event envelope, seven versioned schemas and fixtures.
+- `contracts/`: event envelope, eight versioned schemas and fixtures.
 - `infrastructure/`: Kafka, Kafka UI and Redis compose for local integration.
-- `.github/workflows/`: `ms-01-ci.yml`, `ms-03-ci.yml` and `ms-04-ci.yml`.
+- `.github/workflows/`: `ms-01-ci.yml`, `ms-02-ci.yml`, `ms-03-ci.yml`, `ms-04-ci.yml` and `ms-05-ci.yml`.
 - `docs/`: read-only reference (models, user stories, SRS).
 
-`ms-03-activities-and-events` is the older ms-03 branch, contained in `ms-03-symbolic-reservations`. Never merge it separately.
+`ms-03-activities-and-events` is the older ms-03 branch, contained in `ms-03-symbolic-reservations`. Never merge it separately. The remote `microservicios` still carries only that older code inside `microservices/ms-03-activities-and-events/`.
+
+`AGENTS.md` was deleted on `microservicios` (`42fdcf6`); this branch keeps it and the integration merge restores it, so the pull request that brings ms-03 also re-adds this file. Keep it as the single shared copy.
 
 ## Canonical paths
 
@@ -84,19 +86,21 @@ Canonical contract, with ms-01 as issuer:
 - `iss=sm-xplore-ms-01`, `aud=sm-xplore-services`.
 - Public keys at `GET /.well-known/jwks.json`.
 - Claims: `sub` and `id` (the same user UUID), `name`, `role`, `ver`, `mfa`, optional `providerStatus`, plus `iss`, `aud`, `iat`, `exp`, `jti`.
-- Role wire values (Spanish): `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`, `ADMIN`.
+- Role wire values (English): `TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN`. ms-01 migrated them in `V10__english_role_codes`; the Spanish codes are read-only aliases while tokens issued before the migration expire. Every service must accept the English code first and the legacy Spanish alias second, and must never emit the Spanish one.
 - Tokens carrying `scope=mfa` are not access tokens; reject them.
 - ms-01 enforces `ver` revocation; the other services validate signature, `iss`, `aud` and `exp` only.
-- ms-01, ms-03, ms-04 and ms-05 validate with `JWK_SET_URI` (production) or a PEM public key (local/tests). ms-02 still uses HS256 and must migrate.
+- ms-01, ms-02, ms-03, ms-04 and ms-05 validate with `JWK_SET_URI` (production) or a PEM public key (local/tests). No service uses HS256 any more.
 - Never copy ms-01 signing code or private keys into another service.
 
 ## Events and contracts
 
 - Every event uses `contracts/events/envelope.v1.json`: `eventId`, `eventType`, `eventVersion`, `occurredAt`, `aggregateId`, `correlationId`, `producer` and `payload`.
 - Schemas are versioned; renaming, removing or retyping a field requires `v2`.
-- Producers: `catalog.*` from ms-04; `activities.*` from ms-03 (pending); `reviews.review.changed` from ms-03/ms-04; `bookings.reservation.changed` from ms-03/ms-04.
+- Producers: `catalog.*` from ms-04; `activities.*` from ms-03 (pending); `reviews.review.changed` from ms-04 (ms-03 pending); `bookings.reservation.changed` from ms-03/ms-04; `security.report.changed` from ms-02 (ms-05 does not consume it).
 - ms-04 has a transactional outbox with relay, retries, metrics and admin reprocess endpoints; use it as the reference.
 - ms-03 publishes `bookings.reservation.changed` v1 for reservation create/cancel/attendance through the V4 outbox. `NO_SHOW` is skipped because v1 does not include it. Activity/event/review events still need contract v2 or model enrichment (`categoryId`, `latitude`, `longitude`, `updatedAt`, review `status`).
+- `reviews.review.changed` v1 now allows `PUBLISHED`, `PENDING_REVIEW`, `HIDDEN` and `DELETED`. `PENDING_REVIEW` is a review retained by the ms-04 AI filter and must not be counted as published. ms-03 does not model review status yet.
+- `catalog.site.changed` v1 has no `managerId`, so it cannot refresh the manager snapshot ms-03 keeps on events; that needs a contract v2 or a re-read of `GET /api/v1/sites/{siteId}`.
 - Data copied from another service is eventually consistent; document how it is refreshed.
 
 ## ms-03 activities and events
@@ -109,10 +113,10 @@ Canonical contract, with ms-01 as issuer:
 - Flyway: `V1` baseline, `V2` symbolic reservations, `V3` query indexes and `NOT VALID` integrity checks. `V2` archives originals in `reservations_legacy`/`reservation_items_legacy` and quarantines unrepresentable rows (no item, multi-item, missing catalog, start before booking, non-divisible total, `PENDING` over capacity); it preserves `total` and deletes only the IDs captured in that run. Review `reservations_quarantine` after upgrading.
 - Port 8082. Key environment variables: `R2DBC_URL`, `MONGODB_URI`, `JWK_SET_URI`, `JWT_PUBLIC_KEY_LOCATION`, `JWT_ISSUER`, `JWT_AUDIENCE`, `FLYWAY_URL`, `FLYWAY_ENABLED`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS`, `OUTBOX_ENABLED`, `OUTBOX_POLL_INTERVAL_MS`, `MS04_BASE_URL`, `MS04_TIMEOUT`, `CORS_ALLOWED_ORIGINS`, `RESERVATION_AUTO_CLOSE_CRON`, `RESERVATION_AUTO_CLOSE_GRACE`.
 - Current gaps, in order:
-  1. `TODO(ms-04)`: ms-04 still has to deploy the `managerId` filter on `GET /api/v1/sites`; ms-03 already consumes it, forwards the user token, and scopes the reservation listing by the manager's sites. Refresh the `siteName`/`managerId` snapshot when the manager changes.
+  1. `TODO(ms-04)`: the `managerId` filter on `GET /api/v1/sites` is merged (PR #36) and ms-03 consumes it, forwards the user token and scopes the reservation listing by the manager's sites. What remains is the `siteName`/`managerId` snapshot ms-03 stores on each event: `catalog.site.changed` v1 does not carry `managerId`, so a manager change needs a contract v2 or a re-read of `GET /api/v1/sites/{siteId}` before authorizing a review response.
   2. Events/outbox: reservation lifecycle events use the V4 outbox and `bookings.reservation.changed` v1. `NO_SHOW` is skipped because v1 lacks it; activity/event/review events still need contract v2 or model enrichment.
   3. Hardening: required `paymentMethod`, and a real DB-level pagination for the largest listings.
-- 212 tests as of 2026-11-04, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
+- 213 tests as of 2026-11-04, including Testcontainers PostgreSQL/MongoDB tests and a Spring context test.
 
 ## Cross-service rules
 
@@ -133,4 +137,4 @@ Canonical contract, with ms-01 as issuer:
 - Work stays on the service branch (`ms-03-symbolic-reservations` for ms-03).
 - Commit messages are in English with the prefixes `Add:`, `Fix:` or `Update:`.
 - Do not commit secrets, `.env` files, build artifacts or IDE files.
-- This file is tracked in `microservicios`; update it when the repository state changes instead of keeping a private copy.
+- This file was deleted on `microservicios`; keep the branch copy as the single shared version and update it when the repository state changes instead of keeping a private variant.

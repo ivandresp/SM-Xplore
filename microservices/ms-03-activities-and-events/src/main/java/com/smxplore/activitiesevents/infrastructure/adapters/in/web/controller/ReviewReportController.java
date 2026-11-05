@@ -38,8 +38,9 @@ public class ReviewReportController {
     private final ResolveReviewReportUseCasePort resolveReviewReportUseCase;
     private final ReviewReportWebMapper mapper;
 
-    // TODO(ms-04): scope report lists to sites owned by the caller's managerId;
-    // currently any destination manager sees every site's reports.
+    // TODO(ms-04): scope report lists to sites owned by the caller's managerId. The listing filter
+    // (GET /api/v1/sites?managerId=) is already merged in ms-04, so the scope is implementable;
+    // until then any destination manager sees every site's reports.
     @GetMapping
     @Operation(summary = "List review reports by status (staff)")
     public Flux<ReviewReportResponse> findByStatus(

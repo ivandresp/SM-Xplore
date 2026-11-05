@@ -2,16 +2,26 @@
 
 Cambios de este microservicio. La documentación del curso (`docs/`) no se modifica.
 
+## [Integración 2026-11-04]
+
+### Integración con `microservicios`
+- Se fusiona `origin/microservicios` (`a793069`) en `ms-03-symbolic-reservations`. El único conflicto fue `AGENTS.md` (borrado en el remoto y modificado aquí); se conservó la versión de la rama.
+- **Roles en inglés**: ms-01 migró los códigos de rol a `TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER` y `ADMIN` (`V10__english_role_codes`). `UserRole.code()` devuelve el código inglés y los códigos en español quedan como alias de lectura (`legacyCode()`) para los tokens ya emitidos.
+- **Filtro `managerId` de ms-04**: `GET /api/v1/sites?managerId=` ya está en `microservicios` (PR #36). ms-04 responde `403` cuando el `managerId` no es el del token y quien llama no es `ADMIN`; la paginación `content/page/size/total/totalPages` coincide con la que consume el adaptador de ms-03.
+- **CVEs de compresión de Kafka**: se fijan `lz4-java 1.11.4` y `snappy-java 1.1.10.9`, como en ms-02 y ms-05, para que el escaneo Trivy del pipeline no marque la imagen.
+- `reviews.review.changed` v1 añadió `PENDING_REVIEW`. ms-03 todavía no publica ese evento ni modela el estado de la reseña.
+- 212 pruebas en verde sobre el árbol fusionado.
+
 ## [No publicado] — 2026-11-03
 
 ### Cambiado
 - **JWT RS256**: el decoder valida con el JWKS de ms-01 (`JWK_SET_URI`) o con una llave pública PEM (`JWT_PUBLIC_KEY_LOCATION`). Se elimina `JWT_SECRET` y el soporte HS256.
-- **Roles en español**: el claim `role` usa `TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS` y `ADMIN`. La autorización interna conserva los identificadores ingleses; los nombres ingleses anteriores se aceptan durante la migración.
+- **Roles en inglés**: el claim `role` usa `TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER` y `ADMIN`, como ms-01 desde la migración `V10__english_role_codes`. Los códigos en español quedan como alias de lectura (`legacyCode()`) para los tokens ya emitidos; la autorización interna usa los identificadores ingleses.
 - Los tokens con `scope=mfa` se rechazan como tokens de acceso.
 - **Flyway**: migraciones versionadas en `db/migration` (`V1` baseline, `V2` reservas simbólicas). Se eliminan `schema.sql` y `SQL_INIT_MODE`; el DDL deja de ejecutarse en cada arranque. `V2` archiva las filas originales y mueve a cuarentena las reservas no representables.
 - **Seguridad**: principal nulo → 401 en guardas y actividades; `guideId` sale del token para guías. `JWT_AUDIENCE` es obligatoria; el JWKS remoto exige HTTPS y timeouts; `scope`/`scp=mfa` se rechazan.
-- **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas es `ADMIN` y el de gestora queda acotado a sus sitios. Una gestora ya no puede enumerar reservas ajenas por `/tourists/{id}`, `/guides/{id}` o `/by-item`. `exists` aplica el mismo filtro de visibilidad. Los roles se comparan de forma exacta en español (los alias ingleses quedan explícitos). Swagger se desactiva por defecto.
-- **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `GESTORA_DESTINOS` solo puede usar sus propios sitios. El `Authorization` del usuario se reenvía a ms-04.
+- **Catálogo y reservas**: el detalle público solo devuelve `PUBLISHED` a anónimos; el listado global de reservas es `ADMIN` y el de gestora queda acotado a sus sitios. Una gestora ya no puede enumerar reservas ajenas por `/tourists/{id}`, `/guides/{id}` o `/by-item`. `exists` aplica el mismo filtro de visibilidad. Los roles se comparan de forma exacta: primero el código inglés canónico y luego el alias español heredado. Swagger se desactiva por defecto.
+- **Sitio del evento**: al crear un evento se consulta `GET /api/v1/sites/{siteId}` de ms-04; `siteName` y `managerId` salen del sitio, no del body. Una `DESTINATION_MANAGER` solo puede usar sus propios sitios. El `Authorization` del usuario se reenvía a ms-04.
 - **Reservas por gestora**: `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con el nuevo filtro `managerId` de ms-04 y devuelve solo las reservas de sus eventos/actividades. `ADMIN` conserva el listado global.
 - **Usuarios de base de datos**: PostgreSQL usa `ms03_flyway` para DDL y `ms03_app` para DML; MongoDB usa `reviews_app` con `readWrite` solo en `reviews`. Los usuarios root quedan únicamente para el init y ya no hay credenciales por defecto en Compose.
 - **V3**: índices para catálogo/reservas y checks `NOT VALID` de precio, cupo, duración, horario y estado en `evento`/`actividad`.
