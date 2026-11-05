@@ -127,8 +127,12 @@ public class ReviewController {
 
     @GetMapping("/{reviewId}")
     @Operation(summary = "Get a review")
-    public Mono<ReviewResponse> get(@PathVariable UUID reviewId) {
-        return getUseCase.handle(reviewId).map(webMapper::toResponse);
+    public Mono<ReviewResponse> get(
+            @PathVariable UUID reviewId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Actor actor = jwtUserResolver.resolve(jwt);
+        return getUseCase.handle(reviewId, actor).map(webMapper::toResponse);
     }
 
     @GetMapping
@@ -139,11 +143,12 @@ public class ReviewController {
             @RequestParam(required = false) UUID touristId,
             @RequestParam(required = false) ReviewStatus status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        ReviewStatus effectiveStatus = status == null ? ReviewStatus.PUBLISHED : status;
-        ReviewFilter filter = new ReviewFilter(itemType, itemId, touristId, effectiveStatus, page, size);
-        return listUseCase.handle(filter)
+        Actor actor = jwtUserResolver.resolve(jwt);
+        ReviewFilter filter = new ReviewFilter(itemType, itemId, touristId, status, page, size);
+        return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));
     }
 }

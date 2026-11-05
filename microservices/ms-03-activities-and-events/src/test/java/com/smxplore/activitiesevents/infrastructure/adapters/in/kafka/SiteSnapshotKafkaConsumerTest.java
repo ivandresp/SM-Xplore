@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +55,8 @@ class SiteSnapshotKafkaConsumerTest {
     @Container
     private static final MongoDBContainer MONGO = new MongoDBContainer("mongo:7.0");
 
-    private static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0");
+    private static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0")
+            .withStartupTimeout(Duration.ofMinutes(3));
 
     private static final KeyPair KEYS = generateKeys();
     private static final Path PUBLIC_KEY = writePublicKey(KEYS);

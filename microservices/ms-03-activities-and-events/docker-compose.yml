@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/01-app-users.sh:/docker-entrypoint-initdb.d/01-app-users.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ROOT_USER:-postgres} -d ${POSTGRES_DB:-activities_events}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_ROOT_USER:-postgres} -d ${POSTGRES_DB:-activities_events}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -101,6 +101,10 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       OUTBOX_ENABLED: ${OUTBOX_ENABLED:-false}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-5000}
+      # Consumidor de catalog.site.changed v2: refresca sitio_nombre y manager_id de los eventos.
+      SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-false}
+      SITE_EVENTS_GROUP: ${SITE_EVENTS_GROUP:-ms-03-site-snapshot}
+      SITE_EVENTS_TIMEOUT: ${SITE_EVENTS_TIMEOUT:-PT10S}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
       interval: 30s

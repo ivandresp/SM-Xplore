@@ -20,4 +20,10 @@ public class JwtProperties {
     private String audience;
     private String roleClaim = "role";
     private String nameClaim = "name";
+    /**
+     * Solo desarrollo: permite un JWKS por HTTP cuando el emisor no es loopback (por
+     * ejemplo, {@code http://ms-01:8081} dentro del stack de Compose). En produccion debe
+     * quedar en false para exigir HTTPS.
+     */
+    private boolean allowInsecureJwks = false;
 }

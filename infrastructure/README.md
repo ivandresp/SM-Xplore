@@ -56,7 +56,7 @@ docker compose down -v
   herramientas del host.
 - `kafka-ui` permite ver topics, consumer groups, lag y DLQ.
 
-Topics de fase 2 (ms-05 ya implementa los consumidores; ms-04 ya publica catálogo, reseñas y reservas de servicios; ms-03 sigue pendiente):
+Topics de fase 2 (ms-05 implementa los consumidores; ms-04 publica catálogo, reseñas y reservas de servicios; ms-03 publica actividades, eventos, reseñas y reservas):
 
 | Topic | Productor | Consumidor ms-05 |
 |---|---|---|
@@ -70,6 +70,9 @@ Topics de fase 2 (ms-05 ya implementa los consumidores; ms-04 ya publica catálo
 | `bookings.reservation.changed` | ms-03 / ms-04 | **no** (ms-05 no usa reservas) |
 
 ms-02 publica `security.report.changed` para alertas, notificaciones y analítica; ms-05 no lo consume.
+
+El stack completo (infraestructura + cinco servicios) vive en el `compose.yaml` de la raíz del
+repositorio; este compose sigue siendo útil para levantar solo Kafka, Kafka UI y Redis.
 
 ms-05 crea `<topic>.dlq` para los mensajes que no puede procesar. En desarrollo los topics se
 autocreatan; en producción deben crearse de forma controlada. La decisión de excluir `RESERVO`

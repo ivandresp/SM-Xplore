@@ -10,12 +10,14 @@ on:
     branches: [main, microservicios, ms-03-symbolic-reservations]
     paths:
       - "microservices/ms-03-activities-and-events/**"
+      - "contracts/**"
       - ".github/workflows/ms-03-ci.yml"
       # Si cambian los finales de línea, el build de la imagen puede romperse (./gradlew: not found).
       - ".gitattributes"
   pull_request:
     paths:
       - "microservices/ms-03-activities-and-events/**"
+      - "contracts/**"
       - ".github/workflows/ms-03-ci.yml"
       - ".gitattributes"
   workflow_dispatch:
@@ -85,7 +87,9 @@ jobs:
               except ElementTree.ParseError:
                   continue
               for case in suite.iter("testcase"):
-                  failure = case.find("failure") or case.find("error")
+                  failure = case.find("failure")
+                  if failure is None:
+                      failure = case.find("error")
                   if failure is None:
                       continue
                   message = (failure.get("message") or "").strip().splitlines()

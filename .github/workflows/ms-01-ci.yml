@@ -5,7 +5,7 @@ name: ms-01 CI
 
 on:
   push:
-    branches: [main, micro-users]
+    branches: [main, micro-users, microservicios]
     paths:
       - "microservices/ms-01-users-and-anomalies/**"
       - ".github/workflows/ms-01-ci.yml"

@@ -76,8 +76,12 @@ public class SecurityConfiguration {
                         // Reservations: staff-only global listings; ownership is enforced in the controller
                         .pathMatchers(HttpMethod.GET, "/api/v1/reservations")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
-                        .pathMatchers("/api/v1/review-reports/**")
+                        // El listado solo lo ven el admin y la gestora; el guia resuelve por id
+                        // (el caso de uso comprueba que sea el dueno de la actividad).
+                        .pathMatchers(HttpMethod.GET, "/api/v1/review-reports", "/api/v1/review-reports/**")
                         .hasAnyRole(ADMIN, DESTINATION_MANAGER)
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/review-reports/**")
+                        .hasAnyRole(ADMIN, DESTINATION_MANAGER, GUIDE)
                         .pathMatchers("/api/v1/admin/**").hasRole(ADMIN)
                         .pathMatchers("/api/v1/reservations/**").authenticated()
                         .anyExchange().authenticated())

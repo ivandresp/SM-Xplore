@@ -86,15 +86,28 @@ public class AuthVersionValidator {
         Instant now = Instant.now();
         CachedVersion cached = cache.get(userId);
         if (cached != null && cached.expiresAt().isAfter(now)) {
-            return cached.version() == tokenVersion
-                    ? Mono.empty()
-                    : invalidSession();
+            if (cached.version() == tokenVersion) {
+                return Mono.empty();
+            }
+            if (tokenVersion < cached.version()) {
+                return invalidSession();
+            }
+            // Un token mas nuevo que la cache significa que la sesion se renovo
+            // (logout/login, cambio de contrasena o de rol): hay que reconsultar
+            // ms-01 antes de rechazarlo.
         }
         return currentVersion(jwt)
-                .doOnNext(current -> cache.put(
-                        userId,
-                        new CachedVersion(current, now.plus(properties.getCacheTtl()))))
-                .flatMap(current -> current == tokenVersion ? Mono.empty() : invalidSession())
+                .flatMap(current -> {
+                    // La cache no retrocede: una respuesta lenta de ms-01 no puede
+                    // reactivar un token ya revocado con una version menor.
+                    CachedVersion updated = cache.compute(userId, (key, existing) ->
+                            existing == null || current > existing.version()
+                                    ? new CachedVersion(
+                                            current,
+                                            Instant.now().plus(properties.getCacheTtl()))
+                                    : existing);
+                    return updated.version() == tokenVersion ? Mono.empty() : invalidSession();
+                })
                 .onErrorMap(error -> error instanceof BadJwtException
                         ? error
                         : new BadJwtException("Could not validate the session version", error));

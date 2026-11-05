@@ -3,10 +3,12 @@ package com.smxplore.sitesandservices;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
+import java.time.Duration;
 
 public abstract class AbstractKafkaMongoPostgresIntegrationTest extends AbstractMongoPostgresIntegrationTest {
 
-    public static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0");
+    public static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0")
+            .withStartupTimeout(Duration.ofMinutes(3));
 
     static {
         KAFKA.start();

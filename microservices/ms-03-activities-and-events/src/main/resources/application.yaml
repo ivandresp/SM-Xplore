@@ -77,6 +77,8 @@ app:
   security:
     jwt:
       jwk-set-uri: ${JWK_SET_URI:}
+      # Solo desarrollo: acepta HTTP cuando el JWKS no es loopback (stack de Compose).
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:false}
       public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
       issuer: ${JWT_ISSUER}
       audience: ${JWT_AUDIENCE}
