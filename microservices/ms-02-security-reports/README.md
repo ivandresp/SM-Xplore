@@ -119,6 +119,10 @@ Reportes: orden `createdAt DESC`, `_id DESC`. Comentarios: orden `createdAt ASC`
 
 ## Seguridad
 
+En `prod`, este servicio valida el claim `ver` contra ms-01 (`MS01_BASE_URL`) y exige
+`mfa=true` a los administradores. La validación es fail-closed: si ms-01 no responde, las
+peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABLED=false`.
+
 - Solo se acepta RS256; el token lo emite ms-01.
 - El `issuer` (`iss`) debe ser `sm-xplore-ms-01` y la audiencia `sm-xplore-services`.
 - Los roles usados son los códigos en inglés: `ADMIN`, `DESTINATION_MANAGER`, `GUIDE`, `SERVICE_PROVIDER`, `TOURIST`.

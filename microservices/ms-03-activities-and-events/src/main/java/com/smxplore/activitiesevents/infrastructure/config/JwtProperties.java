@@ -3,7 +3,6 @@ package com.smxplore.activitiesevents.infrastructure.config;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * RS256 resource-server configuration. The public key comes either from ms-01's
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
  */
 @Getter
 @Setter
-@Component
 @ConfigurationProperties(prefix = "app.security.jwt")
 public class JwtProperties {
 

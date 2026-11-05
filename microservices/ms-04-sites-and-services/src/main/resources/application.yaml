@@ -64,6 +64,13 @@ app:
       user-id-claim: ${JWT_USER_ID_CLAIM:userId}
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
+    auth-version:
+      enabled: ${AUTH_VERSION_ENABLED:false}
+      base-url: ${MS01_BASE_URL:}
+      timeout: ${AUTH_VERSION_TIMEOUT:2s}
+      cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
+    mfa:
+      require-admin: ${MFA_REQUIRE_ADMIN:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
   outbox:

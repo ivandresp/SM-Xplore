@@ -333,6 +333,10 @@ Las escrituras aceptan `X-Correlation-Id`; si no se envía, se genera uno.
 
 ## Seguridad
 
+En `prod`, este servicio valida el claim `ver` contra ms-01 (`MS01_BASE_URL`) y exige
+`mfa=true` a los administradores. La validación es fail-closed: si ms-01 no responde, las
+peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABLED=false`.
+
 - Solo RS256. No se acepta HS256.
 - Producción / ms-01: `JWK_SET_URI=https://ms-01/.../.well-known/jwks.json`.
 - Local/tests: `JWT_PUBLIC_KEY_LOCATION=file:/ruta/public.pem`.

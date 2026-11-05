@@ -1,5 +1,6 @@
 package com.smxplore.users.infrastructure.adapter.in.rest;
 
+import com.smxplore.users.application.dto.AuthVersionView;
 import com.smxplore.users.application.dto.ChangePasswordCommand;
 import com.smxplore.users.application.dto.UpdateProfileCommand;
 import com.smxplore.users.application.dto.UserView;
@@ -47,6 +48,11 @@ public class UserController {
     @GetMapping("/me")
     public Mono<UserView> me(@AuthenticationPrincipal Jwt jwt) {
         return getCurrentUser.get(userId(jwt));
+    }
+
+    @GetMapping("/me/auth-version")
+    public Mono<AuthVersionView> authVersion(@AuthenticationPrincipal Jwt jwt) {
+        return getCurrentUser.get(userId(jwt)).map(user -> new AuthVersionView(user.id(), user.authVersion()));
     }
 
     @PatchMapping("/me")

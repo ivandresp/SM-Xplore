@@ -13,7 +13,8 @@ public record UserView(
         String role,
         UserStatus status,
         RoleDetailsView profile,
-        Instant signedUpAt) {
+        Instant signedUpAt,
+        long authVersion) {
 
     public static UserView from(Usuario user) {
         return new UserView(
@@ -24,6 +25,7 @@ public record UserView(
                 user.role().code(),
                 user.status(),
                 RoleDetailsView.from(user),
-                user.signedUpAt());
+                user.signedUpAt(),
+                user.authVersion());
     }
 }

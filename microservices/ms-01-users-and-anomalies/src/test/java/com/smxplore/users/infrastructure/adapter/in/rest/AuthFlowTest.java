@@ -99,6 +99,15 @@ class AuthFlowTest {
 
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(me.getBody().get("email")).isEqualTo("ada@example.com");
+
+        ResponseEntity<Map> authVersion = client.get()
+                .uri("/api/v1/users/me/auth-version")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .retrieve()
+                .toEntity(Map.class);
+
+        assertThat(authVersion.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(authVersion.getBody().get("authVersion")).isEqualTo(0);
     }
 
     @Test

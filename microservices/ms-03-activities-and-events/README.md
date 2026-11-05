@@ -92,6 +92,11 @@ Docker Compose **no arranca** si faltan `POSTGRES_ROOT_PASSWORD`, `POSTGRES_PASS
 
 ## Alcance
 
+En `prod`, este servicio valida el claim `ver` contra ms-01 (`MS01_BASE_URL`) y exige
+`mfa=true` a los administradores. La validación es fail-closed: si ms-01 no responde, las
+peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABLED=false`.
+
+
 - Actividades y eventos (registro, consulta, estado, cupos).
 - Reservas de actividades y eventos.
 - Reseñas de actividades y eventos.

@@ -40,7 +40,17 @@ public class JwtConfiguration {
     private final ResourceLoader resourceLoader;
 
     @Bean
+    public ReactiveJwtDecoder jwtDecoder(AuthVersionValidator authVersionValidator) {
+        ReactiveJwtDecoder delegate = baseJwtDecoder();
+        return token -> delegate.decode(token).flatMap(authVersionValidator::validate);
+    }
+
+    /** Decoder without the per-request validators, kept for unit tests and direct construction. */
     public ReactiveJwtDecoder jwtDecoder() {
+        return baseJwtDecoder();
+    }
+
+    private ReactiveJwtDecoder baseJwtDecoder() {
         validateIssuer(properties.getIssuer());
 
         NimbusReactiveJwtDecoder decoder;
