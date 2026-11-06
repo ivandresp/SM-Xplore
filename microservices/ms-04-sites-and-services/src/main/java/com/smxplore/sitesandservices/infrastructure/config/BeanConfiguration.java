@@ -7,6 +7,8 @@ import com.smxplore.sitesandservices.application.catalog.CategoryListService;
 import com.smxplore.sitesandservices.application.catalog.CategoryUpdateService;
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
 import com.smxplore.sitesandservices.application.indicator.DemandIndicatorService;
+import com.smxplore.sitesandservices.application.notification.LowCapacityAlertService;
+import com.smxplore.sitesandservices.application.notification.LowCapacityPolicy;
 import com.smxplore.sitesandservices.application.notification.NotificationAccess;
 import com.smxplore.sitesandservices.application.notification.NotificationContactService;
 import com.smxplore.sitesandservices.application.notification.NotificationCreateService;
@@ -114,6 +116,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
+import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
 public class BeanConfiguration {
@@ -631,10 +634,25 @@ public class BeanConfiguration {
     @Bean
     public NotificationCreateService notificationCreateService(
             NotificationRepositoryPort notificationRepository,
-            NotificationDeliveryPort notificationDelivery,
+            List<NotificationDeliveryPort> notificationDeliveries,
             Clock clock
     ) {
-        return new NotificationCreateService(notificationRepository, notificationDelivery, clock);
+        return new NotificationCreateService(
+                notificationRepository, notificationDeliveries, clock);
+    }
+
+    @Bean
+    public LowCapacityAlertService lowCapacityAlertService(
+            NotificationRepositoryPort notificationRepository,
+            List<NotificationDeliveryPort> notificationDeliveries,
+            NotificationLowCapacityProperties properties,
+            Clock clock
+    ) {
+        return new LowCapacityAlertService(
+                notificationRepository,
+                notificationDeliveries,
+                new LowCapacityPolicy(properties.isEnabled(), properties.getThresholdPercent()),
+                clock);
     }
 
     @Bean
@@ -690,6 +708,7 @@ public class BeanConfiguration {
             ReservationAccess access,
             DomainEventFactory eventFactory,
             ReservationPolicy policy,
+            LowCapacityAlertService lowCapacityAlertService,
             Clock clock
     ) {
         return new ReservationCreateService(
@@ -702,6 +721,7 @@ public class BeanConfiguration {
                 access,
                 eventFactory,
                 policy,
+                lowCapacityAlertService,
                 clock
         );
     }

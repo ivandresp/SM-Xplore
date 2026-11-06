@@ -523,7 +523,11 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **83 tests, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual: **130 pruebas en 34 clases, 0 fallos; bootJar BUILD SUCCESSFUL**.
+
+La suite incluye `ArchitectureTest` (reglas del hexágono y nombres de puertos),
+`ReservationChangedEventDecoderContractTest` (destinatarios de notificación para reservas v1 y v2) y
+las pruebas de la alerta de cupo bajo (umbral, deduplicación y no repetición) y del canal push.
 
 La suite usa Testcontainers con:
 
@@ -575,6 +579,19 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   disponible), levanta Kafka desde `infrastructure/compose.yaml` para tener la red `smxplore-net`,
   arranca PostgreSQL, MongoDB y Mailpit con `mongo-init`, y ejecuta el contenedor con la clave
   pública de pruebas hasta que `/actuator/health` responde `UP` y `/v3/api-docs` responde `200`.
+
+## Notificaciones internas (P2-9)
+
+- La bandeja de notificaciones en MongoDB sigue siendo la fuente de verdad. El canal de correo se
+  eligió en el P1 y ahora convive con un canal de push de extensión: `PushNotificationDelivery`
+  registra el intento (`notifications.push.attempts`) o la omisión
+  (`notifications.push.skipped`) cuando `app.notifications.push.enabled=false`, sin proveedor
+  externo (punto de extensión documentado en el javadoc).
+- Al cruzar el umbral de cupo bajo de un servicio se emite una notificación `LOW_CAPACITY_ALERT`
+  (RF66) al proveedor y a la gestora del sitio: umbral `ceil(capacidad * threshold-percent / 100)`
+  configurable con `app.notifications.low-capacity.*`, id determinista (replay idempotente) y
+  entrega best-effort que nunca tumba la reserva.
+- La clave compartida del endpoint interno de contactos de ms-01 se pasa con `INTERNAL_API_KEY`.
 
 ## Pendiente
 

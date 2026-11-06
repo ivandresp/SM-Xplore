@@ -53,6 +53,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.awaitility:awaitility")
     testImplementation("com.networknt:json-schema-validator:1.5.9")
+    testImplementation(libs.archunit.junit5)
 
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

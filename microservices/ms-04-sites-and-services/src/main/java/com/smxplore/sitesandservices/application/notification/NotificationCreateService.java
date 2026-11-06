@@ -30,8 +30,20 @@ public class NotificationCreateService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC);
 
     private final NotificationRepositoryPort notificationRepository;
-    private final NotificationDeliveryPort notificationDelivery;
+    private final List<NotificationDeliveryPort> notificationDeliveries;
     private final Clock clock;
+
+    /**
+     * Compatibilidad con los llamadores que solo registran un canal (por ejemplo, tests
+     * antiguos). En producción Spring inyecta la lista completa de canales.
+     */
+    public NotificationCreateService(
+            NotificationRepositoryPort notificationRepository,
+            NotificationDeliveryPort notificationDelivery,
+            Clock clock
+    ) {
+        this(notificationRepository, List.of(notificationDelivery), clock);
+    }
 
     public Mono<Void> handle(ReservationChangedMessage message) {
         NotificationType type = typeFor(message.status());
@@ -96,15 +108,17 @@ public class NotificationCreateService {
     }
 
     private Mono<Void> delivery(Notification notification) {
-        return notificationDelivery.deliver(notification)
-                .onErrorResume(exception -> {
-                    log.warn(
-                            "Notification {} for recipient {} was stored in the inbox but not delivered: {}",
-                            notification.notificationId(),
-                            notification.recipientId(),
-                            exception.getMessage());
-                    return Mono.empty();
-                });
+        return Flux.fromIterable(notificationDeliveries)
+                .concatMap(channel -> channel.deliver(notification)
+                        .onErrorResume(exception -> {
+                            log.warn(
+                                    "Notification {} for recipient {} was stored in the inbox but not delivered: {}",
+                                    notification.notificationId(),
+                                    notification.recipientId(),
+                                    exception.getMessage());
+                            return Mono.empty();
+                        }))
+                .then();
     }
 
     private Notification notification(
@@ -177,6 +191,9 @@ public class NotificationCreateService {
             case RESERVATION_CANCELLED -> "Reserva cancelada";
             case RESERVATION_COMPLETED -> "Reserva completada";
             case RESERVATION_NO_SHOW -> "Reserva marcada como no show";
+            // Este tipo lo redacta LowCapacityAlertService (RF66); aquí no debería llegar.
+            case LOW_CAPACITY_ALERT -> throw new IllegalStateException(
+                    "LOW_CAPACITY_ALERT is built by LowCapacityAlertService");
         };
     }
 
@@ -195,6 +212,8 @@ public class NotificationCreateService {
                     + " del " + date + " fue completada.";
             case RESERVATION_NO_SHOW -> "Tu reserva para " + items
                     + " del " + date + " fue marcada como no show.";
+            case LOW_CAPACITY_ALERT -> throw new IllegalStateException(
+                    "LOW_CAPACITY_ALERT is built by LowCapacityAlertService");
         };
     }
 
@@ -204,6 +223,8 @@ public class NotificationCreateService {
             case RESERVATION_CANCELLED -> "Reserva cancelada";
             case RESERVATION_COMPLETED -> "Reserva completada";
             case RESERVATION_NO_SHOW -> "Reserva no show";
+            case LOW_CAPACITY_ALERT -> throw new IllegalStateException(
+                    "LOW_CAPACITY_ALERT is built by LowCapacityAlertService");
         };
     }
 
@@ -222,6 +243,8 @@ public class NotificationCreateService {
                     + " personas para " + items + " del " + date + " fue completada.";
             case RESERVATION_NO_SHOW -> "La reserva de " + people
                     + " personas para " + items + " del " + date + " fue marcada como no show.";
+            case LOW_CAPACITY_ALERT -> throw new IllegalStateException(
+                    "LOW_CAPACITY_ALERT is built by LowCapacityAlertService");
         };
     }
 

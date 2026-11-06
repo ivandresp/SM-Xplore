@@ -1,9 +1,12 @@
 package com.smxplore.sitesandservices.application.reservation;
 
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
+import com.smxplore.sitesandservices.application.notification.LowCapacityAlertService;
+import com.smxplore.sitesandservices.application.notification.LowCapacitySnapshot;
 import com.smxplore.sitesandservices.application.support.ReservationAccess;
 import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
 import com.smxplore.sitesandservices.application.support.ReservationPolicy;
+import com.smxplore.sitesandservices.domain.model.event.DomainEvent;
 import com.smxplore.sitesandservices.domain.exception.DomainStateException;
 import com.smxplore.sitesandservices.domain.exception.InvalidCatalogException;
 import com.smxplore.sitesandservices.domain.exception.ReservationConflictException;
@@ -38,6 +41,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -57,6 +61,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
     private final ReservationAccess access;
     private final DomainEventFactory eventFactory;
     private final ReservationPolicy policy;
+    private final LowCapacityAlertService lowCapacityAlertService;
     private final Clock clock;
 
     @Override
@@ -148,7 +153,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
     ) {
         return requireSingleProvider(requested)
                 .then(requireSitesAvailable(requested))
-                .then(Flux.fromIterable(requested)
+                .flatMap(sites -> Flux.fromIterable(requested)
                         .concatMap(item -> requireAvailable(reservation.bookedFor(), item))
                         .then(Mono.fromSupplier(() -> buildReservation(
                                 reservation,
@@ -157,15 +162,17 @@ public class ReservationCreateService implements CreateReservationUseCase {
                                 now,
                                 idempotencyKey,
                                 requestFingerprint
-                        ))))
-                .flatMap(created -> transaction.execute(Mono.defer(() -> createIdempotently(
-                        created,
-                        requested,
-                        tourist.userId(),
-                        idempotencyKey,
-                        requestFingerprint,
-                        correlationId
-                ))));
+                        )))
+                        .flatMap(created -> transaction.execute(Mono.defer(() ->
+                                createIdempotently(
+                                        created,
+                                        requested,
+                                        sites,
+                                        tourist.userId(),
+                                        idempotencyKey,
+                                        requestFingerprint,
+                                        correlationId
+                                )))));
     }
 
     private Mono<Void> requireSingleProvider(List<RequestedService> requested) {
@@ -195,7 +202,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
      * borrarse) después de publicar el servicio, así que se consulta el estado actual
      * antes de aceptar la reserva.
      */
-    private Mono<Void> requireSitesAvailable(List<RequestedService> requested) {
+    private Mono<Map<UUID, Site>> requireSitesAvailable(List<RequestedService> requested) {
         List<UUID> siteIds = requested.stream()
                 .map(item -> item.service().siteId())
                 .distinct()
@@ -214,7 +221,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
                                     "Service " + item.service().name()
                                             + " is not available: " + problem));
                         })
-                        .then());
+                        .then(Mono.just(sites)));
     }
 
     private Reservation buildReservation(
@@ -275,6 +282,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
     private Mono<Reservation> createIdempotently(
             Reservation created,
             List<RequestedService> requested,
+            Map<UUID, Site> sites,
             UUID touristId,
             String idempotencyKey,
             String requestFingerprint,
@@ -292,6 +300,7 @@ public class ReservationCreateService implements CreateReservationUseCase {
                 .switchIfEmpty(Mono.defer(() -> persist(
                         created,
                         requested,
+                        sites,
                         correlationId
                 )));
     }
@@ -299,16 +308,22 @@ public class ReservationCreateService implements CreateReservationUseCase {
     private Mono<Reservation> persist(
             Reservation created,
             List<RequestedService> requested,
+            Map<UUID, Site> sites,
             String correlationId
     ) {
         return reservationRepository.lockTourist(created.touristId())
                 .then(checkTouristLimits(created.touristId()))
                 .then(lockServices(requested))
-                .then(checkCapacity(created, requested))
-                .then(reservationRepository.save(created))
-                .flatMap(saved -> outbox.append(
-                                eventFactory.reservationChanged(saved, correlationId))
-                        .thenReturn(saved));
+                .then(checkCapacity(created, requested, sites))
+                .flatMap(snapshots -> reservationRepository.save(created)
+                        .flatMap(saved -> {
+                            DomainEvent event = eventFactory.reservationChanged(
+                                    saved, correlationId);
+                            return outbox.append(event)
+                                    .then(lowCapacityAlertService.handle(
+                                            saved, event.eventId(), snapshots))
+                                    .thenReturn(saved);
+                        }));
     }
 
     private Mono<Void> checkTouristLimits(UUID touristId) {
@@ -346,20 +361,30 @@ public class ReservationCreateService implements CreateReservationUseCase {
 
     /**
      * Aplica dos topes: la capacidad diaria del servicio y, si el turno reservado declara
-     * cupo propio, la capacidad de ese turno. El más restrictivo gana.
+     * cupo propio, la capacidad de ese turno. El más restrictivo gana. Devuelve una foto
+     * del cupo por servicio para que RF66 decida si la reserva cruzó el umbral de baja
+     * capacidad.
      */
-    private Mono<Void> checkCapacity(Reservation created, List<RequestedService> requested) {
+    private Mono<List<LowCapacitySnapshot>> checkCapacity(
+            Reservation created,
+            List<RequestedService> requested,
+            Map<UUID, Site> sites
+    ) {
         Instant bookedFor = created.bookedFor();
         return Flux.fromIterable(requested)
                 .concatMap(item -> {
                     Service service = item.service();
                     AvailabilitySlot slot = availabilityPolicy.slotFor(service, bookedFor);
+                    int dailyCapacity = service.maxCapacity();
+                    int slotCapacity = slot == null || slot.capacity() == null
+                            ? dailyCapacity
+                            : Math.min(dailyCapacity, slot.capacity());
                     Mono<Integer> dailyRemaining = reservationRepository
                             .reservedPeople(
                                     service.serviceId(),
                                     availabilityPolicy.dayStart(bookedFor),
                                     availabilityPolicy.dayEnd(bookedFor))
-                            .map(reserved -> Math.max(0, service.maxCapacity() - reserved));
+                            .map(reserved -> Math.max(0, dailyCapacity - reserved));
                     Mono<Integer> slotRemaining = slot == null || slot.capacity() == null
                             ? Mono.just(Integer.MAX_VALUE)
                             : reservationRepository.reservedPeople(
@@ -372,21 +397,30 @@ public class ReservationCreateService implements CreateReservationUseCase {
                                 int daily = remaining.getT1();
                                 int perSlot = remaining.getT2();
                                 int available = Math.min(daily, perSlot);
-                                if (item.reservation().people() <= available) {
-                                    return Mono.empty();
+                                if (item.reservation().people() > available) {
+                                    String scope = perSlot < daily
+                                            ? " in the selected time slot"
+                                            : "";
+                                    return Mono.error(new ReservationConflictException(
+                                            "Service " + service.name()
+                                                    + " has only " + available
+                                                    + " places left on "
+                                                    + availabilityPolicy.serviceDate(bookedFor)
+                                                    + scope));
                                 }
-                                String scope = perSlot < daily
-                                        ? " in the selected time slot"
-                                        : "";
-                                return Mono.error(new ReservationConflictException(
-                                        "Service " + service.name()
-                                                + " has only " + available
-                                                + " places left on "
-                                                + availabilityPolicy.serviceDate(bookedFor)
-                                                + scope));
+                                Site site = sites.get(service.siteId());
+                                return Mono.just(new LowCapacitySnapshot(
+                                        service.serviceId(),
+                                        service.name(),
+                                        service.providerId(),
+                                        site == null ? null : site.managerId(),
+                                        Math.min(dailyCapacity, slotCapacity),
+                                        available,
+                                        Math.max(0, available - item.reservation().people()),
+                                        bookedFor));
                             });
                 })
-                .then();
+                .collectList();
     }
 
     private void validateDraft(Reservation reservation) {

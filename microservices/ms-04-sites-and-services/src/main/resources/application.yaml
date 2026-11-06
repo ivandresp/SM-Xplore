@@ -114,6 +114,14 @@ app:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}
       from: ${NOTIFICATIONS_EMAIL_FROM:no-reply@smxplore.local}
       subject-prefix: ${NOTIFICATIONS_EMAIL_SUBJECT_PREFIX:[SM-Xplore] }
+    push:
+      # Canal push aún sin proveedor externo: por defecto solo deja rastro del intento.
+      enabled: ${NOTIFICATIONS_PUSH_ENABLED:false}
+      provider: ${NOTIFICATIONS_PUSH_PROVIDER:noop}
+    low-capacity:
+      # RF66: avisa al proveedor y al gestor cuando el cupo restante cruza el umbral.
+      enabled: ${NOTIFICATIONS_LOW_CAPACITY_ENABLED:true}
+      threshold-percent: ${NOTIFICATIONS_LOW_CAPACITY_THRESHOLD_PERCENT:20}
 
   bookings:
     zone-id: ${BOOKINGS_ZONE_ID:America/Bogota}
