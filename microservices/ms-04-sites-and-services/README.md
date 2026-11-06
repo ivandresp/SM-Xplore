@@ -592,6 +592,30 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   configurable con `app.notifications.low-capacity.*`, id determinista (replay idempotente) y
   entrega best-effort que nunca tumba la reserva.
 - La clave compartida del endpoint interno de contactos de ms-01 se pasa con `INTERNAL_API_KEY`.
+- ms-04 es el **hub de notificaciones** del sistema (P3-4 firmada): ningún otro servicio envía
+  correo ni push. El hub decide el destinatario con los ids que trae el evento
+  (`bookings.reservation.changed` v1/v2) y entrega por los canales configurados:
+
+  | Evento | Destinatario | Rol | Canales |
+  |---|---|---|---|
+  | Reserva de servicio | Proveedor del servicio | `SERVICE_PROVIDER` | bandeja + email + push (si está encendido) |
+  | Reserva de servicio | Gestora del sitio (si no es la misma) | `DESTINATION_MANAGER` | bandeja + email + push |
+  | Reserva de actividad | Guía de la actividad | `GUIDE` | bandeja + email + push |
+  | Reserva de evento | Gestora del evento | `DESTINATION_MANAGER` | bandeja + email + push |
+  | Cruce de cupo bajo (RF66) | Proveedor y gestora del sitio | `SERVICE_PROVIDER` / `DESTINATION_MANAGER` | bandeja + email + push |
+  | Reserva confirmada/cancelada | Turista que reservó | `TOURIST` | bandeja (+ email si está encendido) |
+
+## Catálogo semilla y taxonomía (P3-10)
+
+- `app.catalog.seed-enabled` (`CATALOG_SEED_ENABLED`, **apagado por defecto**) crea al arrancar las
+  categorías base que falten: `AVENTURA`, `CULTURA`, `GASTRONOMIA`, `NATURALEZA`, `BIENESTAR`,
+  `RECREACION`, todas `GENERAL`. Es idempotente (compara por nombre sin distinguir mayúsculas), no
+  borra ni renombra nada y si Mongo no responde el servicio arranca igual (`CatalogSeedRunner`
+  registra el aviso). En el stack local viene encendido.
+- Las categorías hijas (`parentId`, un nivel) y las de alcance específico las crea el
+  administrador por la API. La taxonomía es de ms-04 porque es el dueño del catálogo.
+- Las zonas llevan `type` libre y estado `ACTIVE|CONGESTED|INACTIVE`; la congestión se marca
+  **manualmente**, no hay fuente automática en esta entrega.
 
 ## Pendiente
 

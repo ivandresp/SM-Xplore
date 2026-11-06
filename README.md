@@ -171,8 +171,18 @@ produccion, topicos y DLQ explicitos, alertas, backup/restore, pruebas de carga)
 (endpoint interno de contactos, canal push y alerta de cupo bajo RF66, pruebas de arquitectura y
 de contrato del lado consumidor, trazabilidad de los requisitos del SRS).
 
-Lo que sigue abierto son las decisiones de equipo P3 (reservas multi-item, mapeo canonico de
-estados, PSE e itinerario, auth servicio-a-servicio, consumidor de `security.report.changed`,
-taxonomia de categorias, TLS de produccion y despliegue del stack productivo), el frontend y la
-documentacion UML de los cinco servicios. El detalle por decision esta en los `README.md` de cada
-servicio y en el resumen de integracion del equipo.
+Las decisiones de equipo P3 quedaron firmadas el 2026-11-06 y ya estan aplicadas en contratos,
+codigo y documentacion: reservas multi-item solo en ms-04 (actividades y eventos siempre un item),
+tabla canonica de estados de contenido y de resena, proyeccion de coordenadas por snapshot, ms-04
+como hub unico de notificaciones, moderacion con IA alineada en los tres servicios,
+`security.report.changed` sin consumidor a proposito, catalogo semilla y congestion manual, auth
+servicio-a-servicio con JWT de usuario y red privada, y gateway nginx como punto de entrada (TLS
+real y balanceador en la infraestructura).
+
+**Pagos: fuera de alcance por decision del PL (P3-7, 2026-11-06).** No hay PSE, pasarela ni cobro de
+ningun tipo; `paymentMethod` es solo una preferencia declarativa. RF60 y RF61 quedan fuera del
+alcance de la entrega.
+
+Lo que sigue abierto: frontend (repo aparte), documentacion UML de los cinco servicios y el
+despliegue real del stack productivo (imagenes en GHCR, secretos y TLS de la infraestructura). El
+detalle por decision esta en los `README.md` de cada servicio y en `contracts/README.md`.

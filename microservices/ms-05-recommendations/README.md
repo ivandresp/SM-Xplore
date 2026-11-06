@@ -366,11 +366,24 @@ salud de la cache: si cae a cero con Redis arriba, revisar `ms05:graph:version` 
 - `../../contracts/README.md`: contratos de eventos.
 - `../../infrastructure/README.md`: Kafka/Redis compartidos.
 
+## Decisiones de datos (P3-3)
+
+- ms-05 no consulta las coordenadas del catálogo de ms-04 en vivo: el punto (`latitude`/`longitude`)
+  se proyecta como **snapshot** del evento `catalog.site.changed` v2. Si un sitio mueve su punto, la
+  recomendación por proximidad usa el punto del último evento proyectado.
+- La proximidad solo se calcula para ítems con punto en el payload; los que no lo tienen caen al
+  ranking por afinidad/calidad. Decisión firmada (P3-3, opción A) para no acoplar ms-05 a la base
+  de ms-04.
+
 ## Fuera de alcance en esta fase
 
-- Outbox y publicación real de eventos en ms-03/ms-04. ms-05 ya consume; los productores se
-  implementan en sus ramas.
-- Reindexado desde ms-03 (actividades, eventos y reseñas): ms-03 todavía no expone un feed
-  equivalente al de ms-04, así que solo el catálogo se puede reconstruir hoy.
 - Circuit breaker explícito y alertas de DLQ/lag (fases 3-4); la cache ya degrada sin Redis.
 - Recomendaciones para guías (US10/US17).
+- Consumo de `security.report.changed`: decidido sin consumidor (P3-9, opción A).
+
+## Actualizado el 2026-11-06 (ya no está fuera de alcance)
+
+- Outbox y publicación real de eventos en ms-03/ms-04: implementados en P0 (ms-03 con relay
+  arrendado y DLT, ms-04 con sus dos outboxes).
+- Reindexado completo: `POST /internal/admin/reindex` acepta `CATEGORIES`, `SITES`, `SERVICES`
+  (feed de ms-04) y `ACTIVITIES`, `EVENTS` (feed de ms-03), con paginación y `updatedSince`.

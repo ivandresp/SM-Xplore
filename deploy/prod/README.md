@@ -167,3 +167,22 @@ antes de volver.
 - **Sin HA de aplicación**: una réplica por servicio; el proxy externo debería reintentar.
 - **Secretos en archivos del host**: Docker Compose los monta en `/run/secrets` (0444). Rotarlos es
   recrear contenedores; para producción real, usar el gestor de secretos del orquestador.
+
+## 9. Decisiones de despliegue (P3-8 y P3-11, firmadas el 2026-11-06)
+
+- **Quién termina TLS (P3-11, opción C)**: el balanceador o proxy de la infraestructura, no este
+  stack. El servicio `gateway` es el punto único de entrada y admite dos modos:
+  - TLS en el propio gateway (`TLS_SELF_SIGNED=false` y secretos `gateway_tls_cert` /
+    `gateway_tls_key` montados en `/etc/nginx/certs`), o
+  - HTTP detrás del balanceador (el balanceador termina TLS, inyecta `X-Forwarded-Proto: https` y
+    redirige 80→443). En este modo el gateway no redirige para no duplicar el `listen`; si se
+    quiere forzar HTTPS dentro del stack, se agrega un `conf.d/00-redirect.conf` como explica
+    `deploy/gateway/README.md`.
+- **Auth entre servicios (P3-8, opción A)**: los servicios se autentican con el JWT del usuario y la
+  red privada `smxplore-stack`; solo el gateway publica 80/443 y las 808x quedan en 127.0.0.1 para
+  operación. No hay `client_credentials` en esta entrega: si se agrega, ms-01 emite un token de
+  servicio y cada resource server lo declara como emisor permitido.
+- **Pagos (P3-7)**: no se procesan pagos de ningún tipo. Las reservas nacen `CONFIRMED`;
+  `paymentMethod` es solo una preferencia declarativa.
+- **Catálogo semilla (P3-10)**: `CATALOG_SEED_ENABLED=false` por defecto en producción; se enciende
+  solo en una instalación nueva y se apaga después del primer arranque.
