@@ -318,7 +318,7 @@ El seed es idempotente (`MERGE`).
 ```
 
 Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafka
-(`apache/kafka:4.1.0`) y Docker. Son **25 clases y 116 pruebas**, todas en verde. La suite cubre:
+(`apache/kafka:4.1.0`) y Docker. Son **27 clases y 148 pruebas**, todas en verde. La suite cubre:
 
 - scoring bayesiano, proximidad, novedad y normalización;
 - topes de diversidad por sitio/categoría;
@@ -328,6 +328,9 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
 - consultas Neo4j y ausencia total de aristas `RESERVO`;
 - contexto completo con seed;
 - validación de todos los ejemplos contra los JSON Schema de `contracts/`;
+- `ArchitectureTest` (reglas del hexágono, con los puertos reactivos como única excepción) y pruebas
+  de contrato del consumidor que mutan el ejemplo real de cada tópico y exigen `InvalidEventException`
+  cuando falta un campo obligatorio;
 - cache en memoria + Redis, invalidación por versión del grafo y degradación sin Redis;
 - consumidores Kafka, idempotencia, eventos viejos, DLQ y agregados de reseñas;
 - purga de marcadores `ProcessedEvent` por lotes y con corte por antigüedad;

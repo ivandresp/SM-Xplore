@@ -227,6 +227,23 @@ class ProjectionEventDecoderTest {
         assertThat(site.zoneId()).isNull();
     }
 
+    @Test
+    void decodesTheZoneExampleFromContracts() throws Exception {
+        String json = Files.readString(examplePath(EventTopics.CATALOG_ZONE_CHANGED));
+        var event = decoder.decode(
+                EventTopics.CATALOG_ZONE_CHANGED,
+                objectMapper.readTree(json).get("aggregateId").asString(),
+                json);
+
+        assertThat(event).isInstanceOf(ZoneChangedEvent.class);
+        ZoneChangedEvent zone = (ZoneChangedEvent) event;
+        assertThat(zone.zoneId()).isEqualTo(UUID.fromString("33333333-3333-3333-3333-333333333301"));
+        assertThat(zone.name()).isEqualTo("Centro Histórico");
+        assertThat(zone.type()).isEqualTo("URBANA");
+        assertThat(zone.status()).isEqualTo(ZoneStatus.ACTIVE);
+        assertThat(zone.updatedAt()).isEqualTo(Instant.parse("2026-11-05T04:00:00Z"));
+    }
+
     private String envelope(String eventType, UUID aggregateId, int eventVersion, String payload) {
         return """
                 {

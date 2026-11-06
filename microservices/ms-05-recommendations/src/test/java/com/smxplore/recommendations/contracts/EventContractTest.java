@@ -10,9 +10,18 @@ import com.networknt.schema.SchemaValidatorsConfig;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import com.smxplore.recommendations.domain.exception.InvalidEventException;
+import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
+import com.smxplore.recommendations.domain.model.event.CategoryChangedEvent;
+import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventTopics;
+import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
+import com.smxplore.recommendations.domain.model.event.ServiceChangedEvent;
+import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
+import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -107,8 +116,25 @@ class EventContractTest {
 
                 assertThat(event.eventType()).isEqualTo(topic);
                 assertThat(event.metadata().eventVersion()).isEqualTo(version);
+                assertThat(event)
+                        .as("Example of %s v%d must decode to %s", topic, version, expectedEventType(topic))
+                        .isInstanceOf(expectedEventType(topic));
             }
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("consumedTopics")
+    void everyConsumedTopicRejectsAnEventWithAMissingRequiredField(String topic) throws Exception {
+        String json = Files.readString(examplePath(topic));
+        String key = eventMapper.readTree(json).get("aggregateId").asString();
+        var invalid = eventMapper.readTree(json);
+        ((tools.jackson.databind.node.ObjectNode) invalid.get("payload"))
+                .remove(requiredPayloadField(topic));
+
+        assertThatThrownBy(() -> decoder.decode(topic, key, eventMapper.writeValueAsString(invalid)))
+                .as("Removing %s from the %s example must be rejected", requiredPayloadField(topic), topic)
+                .isInstanceOf(InvalidEventException.class);
     }
 
     @Test
@@ -162,6 +188,35 @@ class EventContractTest {
 
     private Path examplePath(String topic, int version) {
         return contractsDirectory.resolve("examples").resolve(topic + ".v" + version + ".example.json");
+    }
+
+    private static Stream<String> consumedTopics() {
+        return EventTopics.CONSUMED.stream();
+    }
+
+    /**
+     * Campo obligatorio del payload de cada topico consumido. Se elimina del ejemplo real del
+     * contrato para verificar que el decoder lanza {@link InvalidEventException} y no acepta a
+     * medias un evento incompleto. No inventa payloads: muta el fixture versionado.
+     */
+    private static String requiredPayloadField(String topic) {
+        return switch (topic) {
+            case EventTopics.REVIEWS_REVIEW_CHANGED -> "rating";
+            default -> "name";
+        };
+    }
+
+    private static Class<?> expectedEventType(String topic) {
+        return switch (topic) {
+            case EventTopics.CATALOG_SITE_CHANGED -> SiteChangedEvent.class;
+            case EventTopics.CATALOG_SERVICE_CHANGED -> ServiceChangedEvent.class;
+            case EventTopics.CATALOG_CATEGORY_CHANGED -> CategoryChangedEvent.class;
+            case EventTopics.CATALOG_ZONE_CHANGED -> ZoneChangedEvent.class;
+            case EventTopics.ACTIVITIES_EVENT_CHANGED -> EventItemChangedEvent.class;
+            case EventTopics.ACTIVITIES_ACTIVITY_CHANGED -> ActivityChangedEvent.class;
+            case EventTopics.REVIEWS_REVIEW_CHANGED -> ReviewChangedEvent.class;
+            default -> throw new IllegalArgumentException("Unexpected consumed topic: " + topic);
+        };
     }
 
     private static List<Integer> versionsFor(String topic) {
