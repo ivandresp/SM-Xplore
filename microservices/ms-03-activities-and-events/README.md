@@ -274,4 +274,4 @@ Ese snapshot se usa como referencia, pero **responder una reseña lo revalida**:
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers (PostgreSQL y MongoDB) y requieren Docker. `ApplicationContextTest` levanta el contexto completo, ejecuta Flyway y valida el wiring RS256; los tests sin Docker se omiten.
+Las pruebas de integración usan Testcontainers (PostgreSQL y MongoDB) y requieren Docker. `ApplicationContextTest` levanta el contexto completo, ejecuta Flyway y valida el wiring RS256; los tests sin Docker se omiten. La suite completa son **49 clases y 331 pruebas** e incluye `ArchitectureTest` (dominio sin frameworks, application sin infrastructure y controladores que devuelven `Publisher`) y `SiteChangedEventConsumerContractTest` (contrato consumidor de `catalog.site.changed` v2, v1 ignorado y fallo explícito cuando falta `managerId`, que en producción termina en `catalog.site.changed.DLT`).

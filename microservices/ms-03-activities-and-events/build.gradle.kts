@@ -75,6 +75,10 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-kafka")
     // Valida los eventos generados contra contracts/events/*.v1.json, como ms-02 y ms-05.
     testImplementation("com.networknt:json-schema-validator:1.5.9")
+    // ArchUnit: reglas de arquitectura espejo del ArchitectureTest de ms-01. ms-03 no usa catalogo de
+    // versiones (todas sus dependencias van con version literal), asi que se fija la misma version
+    // que declara el catalogo de ms-01 (`archunit = "1.5.1"`).
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testAnnotationProcessor("org.projectlombok:lombok")
