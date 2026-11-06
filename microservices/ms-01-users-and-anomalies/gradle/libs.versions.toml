@@ -36,4 +36,4 @@ testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-jun
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
-spotless = { id = "com.diffplug.spotless", version = "8.10.4" }
+spotless = { id = "com.diffplug.spotless", version = "8.11.0" }
