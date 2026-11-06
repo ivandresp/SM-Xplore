@@ -32,6 +32,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 
+# Git Bash (MSYS/Cygwin) reescribe las rutas internas del contenedor (/backup) a
+# rutas de Windows y rompe `docker run -v host:/contenedor`. Convertimos el path
+# de host con cygpath y desactivamos la conversion automatica de MSYS.
+if command -v cygpath >/dev/null 2>&1; then
+  export MSYS_NO_PATHCONV=1
+  host_path() { cygpath -w "$1" | tr '\\' '/'; }
+else
+  host_path() { printf '%s' "$1"; }
+fi
+
 BACKUP_DIR=""
 TARGET="all"
 ASSUME_YES=0
@@ -269,7 +279,7 @@ restore_neo4j() {
   if ! docker run --rm \
     --volumes-from "${NEO4J_CONTAINER}" \
     --user 7474:7474 \
-    -v "${BACKUP_DIR}/neo4j:/backup:ro" \
+    -v "$(host_path "${BACKUP_DIR}/neo4j"):/backup:ro" \
     "${NEO4J_IMAGE}" \
     neo4j-admin database load "${NEO4J_DATABASE}" --from-path=/backup --overwrite-destination=true; then
     warn "fallo neo4j-admin database load"
