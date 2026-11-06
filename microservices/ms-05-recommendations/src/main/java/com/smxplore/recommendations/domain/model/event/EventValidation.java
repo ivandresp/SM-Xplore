@@ -25,6 +25,15 @@ public record EventValidation() {
         }
     }
 
+    /**
+     * Optional text field: absent is valid, but a present blank value is not.
+     */
+    static void optionalText(String value, String field) {
+        if (value != null && value.isBlank()) {
+            throw new InvalidEventException(field + " must not be blank");
+        }
+    }
+
     static void instant(Instant value, String field) {
         if (value == null) {
             throw new InvalidEventException(field + " is required");

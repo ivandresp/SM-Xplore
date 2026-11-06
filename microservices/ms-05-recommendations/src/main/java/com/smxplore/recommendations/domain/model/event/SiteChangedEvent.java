@@ -10,6 +10,7 @@ public record SiteChangedEvent(
         UUID siteId,
         String name,
         UUID categoryId,
+        UUID zoneId,
         double latitude,
         double longitude,
         ContentStatus status,
@@ -25,5 +26,22 @@ public record SiteChangedEvent(
         EventValidation.longitude(longitude);
         EventValidation.required(status, "status");
         EventValidation.instant(updatedAt, "updatedAt");
+    }
+
+    /**
+     * Compatibility constructor for payloads without a zone (v1, or v2 before ms-04 emits
+     * {@code zoneId}).
+     */
+    public SiteChangedEvent(
+            EventMetadata metadata,
+            UUID siteId,
+            String name,
+            UUID categoryId,
+            double latitude,
+            double longitude,
+            ContentStatus status,
+            Instant updatedAt
+    ) {
+        this(metadata, siteId, name, categoryId, null, latitude, longitude, status, updatedAt);
     }
 }

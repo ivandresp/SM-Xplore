@@ -22,6 +22,9 @@ FOR (v:Servicio) REQUIRE v.serviceId IS UNIQUE;
 CREATE CONSTRAINT processed_event_id IF NOT EXISTS
 FOR (p:ProcessedEvent) REQUIRE p.eventId IS UNIQUE;
 
+CREATE CONSTRAINT zona_id IF NOT EXISTS
+FOR (z:Zona) REQUIRE z.zoneId IS UNIQUE;
+
 CREATE INDEX catalog_item_status IF NOT EXISTS
 FOR (i:CatalogItem) ON (i.status);
 

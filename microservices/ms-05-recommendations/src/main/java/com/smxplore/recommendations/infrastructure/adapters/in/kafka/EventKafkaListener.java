@@ -26,6 +26,7 @@ public class EventKafkaListener {
                     EventTopics.CATALOG_SITE_CHANGED,
                     EventTopics.CATALOG_SERVICE_CHANGED,
                     EventTopics.CATALOG_CATEGORY_CHANGED,
+                    EventTopics.CATALOG_ZONE_CHANGED,
                     EventTopics.ACTIVITIES_EVENT_CHANGED,
                     EventTopics.ACTIVITIES_ACTIVITY_CHANGED,
                     EventTopics.REVIEWS_REVIEW_CHANGED

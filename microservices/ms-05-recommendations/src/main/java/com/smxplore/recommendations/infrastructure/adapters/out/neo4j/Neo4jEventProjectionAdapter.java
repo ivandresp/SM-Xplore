@@ -8,6 +8,7 @@ import com.smxplore.recommendations.domain.model.event.ProjectionResult;
 import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ServiceChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
+import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import com.smxplore.recommendations.domain.ports.out.EventProjectionPort;
 import lombok.RequiredArgsConstructor;
 import org.neo4j.driver.Driver;
@@ -84,6 +85,9 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         if (event instanceof CategoryChangedEvent category) {
             query = Neo4jProjectionQueries.STALE_CATEGORY;
             params.put("id", category.categoryId().toString());
+        } else if (event instanceof ZoneChangedEvent zone) {
+            query = Neo4jProjectionQueries.STALE_ZONE;
+            params.put("id", zone.zoneId().toString());
         } else if (event instanceof ReviewChangedEvent review) {
             query = Neo4jProjectionQueries.STALE_REVIEW;
             params.put("touristId", review.touristId().toString());
@@ -104,6 +108,8 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         return switch (event) {
             case CategoryChangedEvent category ->
                     run(transaction, Neo4jProjectionQueries.UPSERT_CATEGORY, categoryParams(category));
+            case ZoneChangedEvent zone ->
+                    run(transaction, Neo4jProjectionQueries.UPSERT_ZONE, zoneParams(zone));
             case SiteChangedEvent site ->
                     run(transaction, Neo4jProjectionQueries.UPSERT_SITE, siteParams(site));
             case ServiceChangedEvent service ->
@@ -148,6 +154,19 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         return params;
     }
 
+    private Map<String, Object> zoneParams(ZoneChangedEvent event) {
+        Map<String, Object> params = baseParams(
+                "zoneId", event.zoneId(),
+                "updatedAt", event.updatedAt()
+        );
+        params.put("managerId", event.managerId().toString());
+        params.put("name", event.name());
+        params.put("type", event.type());
+        params.put("description", event.description());
+        params.put("status", event.status().name());
+        return params;
+    }
+
     private Map<String, Object> siteParams(SiteChangedEvent event) {
         Map<String, Object> params = baseParams(
                 "siteId", event.siteId(),
@@ -155,6 +174,7 @@ public class Neo4jEventProjectionAdapter implements EventProjectionPort {
         );
         params.put("name", event.name());
         params.put("categoryId", event.categoryId().toString());
+        params.put("zoneId", event.zoneId() == null ? null : event.zoneId().toString());
         params.put("latitude", event.latitude());
         params.put("longitude", event.longitude());
         params.put("status", event.status().name());

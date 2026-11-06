@@ -4,6 +4,7 @@ import com.smxplore.recommendations.domain.exception.InvalidEventException;
 import com.smxplore.recommendations.domain.model.catalog.CategoryScope;
 import com.smxplore.recommendations.domain.model.catalog.ContentStatus;
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.catalog.ZoneStatus;
 import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.CategoryChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
@@ -14,6 +15,7 @@ import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ReviewStatus;
 import com.smxplore.recommendations.domain.model.event.ServiceChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
+import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -59,6 +61,7 @@ public class ProjectionEventDecoder {
 
         return switch (topic) {
             case EventTopics.CATALOG_CATEGORY_CHANGED -> decodeCategory(metadata, payload);
+            case EventTopics.CATALOG_ZONE_CHANGED -> decodeZone(metadata, payload);
             case EventTopics.CATALOG_SITE_CHANGED -> decodeSite(metadata, payload);
             case EventTopics.CATALOG_SERVICE_CHANGED -> decodeService(metadata, payload);
             case EventTopics.ACTIVITIES_ACTIVITY_CHANGED -> decodeActivity(metadata, payload);
@@ -77,7 +80,23 @@ public class ProjectionEventDecoder {
                 categoryId,
                 requiredText(payload, "name"),
                 requiredEnum(payload, "scope", CategoryScope.class),
-                optionalUuid(payload),
+                optionalUuid(payload, "parentId"),
+                requiredInstant(payload, "updatedAt")
+        );
+    }
+
+    private ProjectedEvent decodeZone(EventMetadata metadata, JsonNode payload) {
+        requireVersion(metadata, 1);
+        UUID zoneId = requiredUuid(payload, "zoneId");
+        requireAggregate(metadata, zoneId, "zoneId");
+        return new ZoneChangedEvent(
+                metadata,
+                zoneId,
+                requiredUuid(payload, "managerId"),
+                requiredText(payload, "name"),
+                optionalText(payload, "type"),
+                optionalText(payload, "description"),
+                requiredEnum(payload, "status", ZoneStatus.class),
                 requiredInstant(payload, "updatedAt")
         );
     }
@@ -95,6 +114,7 @@ public class ProjectionEventDecoder {
                 siteId,
                 requiredText(payload, "name"),
                 requiredUuid(payload, "categoryId"),
+                optionalUuid(payload, "zoneId"),
                 requiredDouble(payload, "latitude"),
                 requiredDouble(payload, "longitude"),
                 requiredEnum(payload, "status", ContentStatus.class),
@@ -270,19 +290,31 @@ public class ProjectionEventDecoder {
         }
     }
 
-    private UUID optionalUuid(JsonNode parent) {
-        JsonNode node = parent.get("parentId");
+    private UUID optionalUuid(JsonNode parent, String field) {
+        JsonNode node = parent.get(field);
         if (node == null || node.isNull()) {
             return null;
         }
         if (!node.isString()) {
-            throw new InvalidEventException("parentId must be a UUID or null");
+            throw new InvalidEventException(field + " must be a UUID or null");
         }
         try {
             return UUID.fromString(node.asString());
         } catch (IllegalArgumentException exception) {
-            throw new InvalidEventException("parentId must be a UUID", exception);
+            throw new InvalidEventException(field + " must be a UUID", exception);
         }
+    }
+
+    private String optionalText(JsonNode parent, String field) {
+        JsonNode node = parent.get(field);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isString()) {
+            throw new InvalidEventException(field + " must be a string or null");
+        }
+        String value = node.asString();
+        return value.isBlank() ? null : value;
     }
 
     private int requiredInt(JsonNode parent, String field) {

@@ -30,6 +30,11 @@ public record Neo4jProjectionQueries() {
             RETURN c.updatedAt IS NOT NULL AND c.updatedAt >= datetime($updatedAt) AS stale
             """;
 
+    static final String STALE_ZONE = """
+            MATCH (z:Zona {zoneId: $id})
+            RETURN z.updatedAt IS NOT NULL AND z.updatedAt >= datetime($updatedAt) AS stale
+            """;
+
     static final String STALE_ITEM = """
             MATCH (i:CatalogItem {itemId: $id})
             RETURN i.updatedAt IS NOT NULL AND i.updatedAt >= datetime($updatedAt) AS stale
@@ -74,6 +79,16 @@ public record Neo4jProjectionQueries() {
             )
             """;
 
+    static final String UPSERT_ZONE = """
+            MERGE (z:Zona {zoneId: $zoneId})
+            SET z.managerId = $managerId,
+                z.name = $name,
+                z.type = $type,
+                z.description = $description,
+                z.status = $status,
+                z.updatedAt = datetime($updatedAt)
+            """;
+
     static final String UPSERT_SITE = """
             MERGE (s:CatalogItem {itemId: $siteId})
             SET s:Sitio,
@@ -94,6 +109,15 @@ public record Neo4jProjectionQueries() {
             OPTIONAL MATCH (category:Categoria {categoriaId: $categoryId})
             FOREACH (_ IN CASE WHEN category IS NULL THEN [] ELSE [1] END |
                 MERGE (s)-[:ES_DE_TIPO]->(category)
+            )
+            WITH s
+            OPTIONAL MATCH (s)-[oldZone:PERTENECE_A]->(zoneOld:Zona)
+            FOREACH (rel IN CASE WHEN oldZone IS NULL OR $zoneId IS NULL OR zoneOld.zoneId = $zoneId
+                                 THEN [] ELSE [oldZone] END | DELETE rel)
+            WITH s
+            FOREACH (_ IN CASE WHEN $zoneId IS NULL THEN [] ELSE [1] END |
+                MERGE (zone:Zona {zoneId: $zoneId})
+                MERGE (s)-[:PERTENECE_A]->(zone)
             )
             WITH s
             OPTIONAL MATCH (child:CatalogItem)

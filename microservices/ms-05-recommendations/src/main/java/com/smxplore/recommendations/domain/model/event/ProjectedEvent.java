@@ -7,6 +7,7 @@ import java.time.Instant;
  */
 public sealed interface ProjectedEvent permits
         CategoryChangedEvent,
+        ZoneChangedEvent,
         SiteChangedEvent,
         ServiceChangedEvent,
         ActivityChangedEvent,

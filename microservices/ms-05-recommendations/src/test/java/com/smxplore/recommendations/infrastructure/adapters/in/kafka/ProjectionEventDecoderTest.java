@@ -2,16 +2,21 @@ package com.smxplore.recommendations.infrastructure.adapters.in.kafka;
 
 import com.smxplore.recommendations.domain.exception.InvalidEventException;
 import com.smxplore.recommendations.domain.model.catalog.ContentStatus;
+import com.smxplore.recommendations.domain.model.catalog.ZoneStatus;
 import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventTopics;
+import com.smxplore.recommendations.domain.model.event.ProjectedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
+import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -116,6 +121,125 @@ class ProjectionEventDecoderTest {
                 EventTopics.CATALOG_SITE_CHANGED, null, "{\"eventType\":"))
                 .isInstanceOf(InvalidEventException.class)
                 .hasMessageContaining("valid JSON");
+    }
+
+    @Test
+    void decodesAZoneChangedEvent() {
+        UUID zoneId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_ZONE_CHANGED, zoneId, 1, """
+                "zoneId": "%s",
+                "managerId": "%s",
+                "name": "Zona Norte",
+                "type": "BEACH",
+                "description": "Arenas blancas",
+                "status": "CONGESTED",
+                "updatedAt": "2026-11-02T15:00:00Z"
+                """.formatted(zoneId, UUID.randomUUID()));
+
+        ProjectedEvent event = decoder.decode(
+                EventTopics.CATALOG_ZONE_CHANGED, zoneId.toString(), json);
+
+        assertThat(event).isInstanceOf(ZoneChangedEvent.class);
+        ZoneChangedEvent zone = (ZoneChangedEvent) event;
+        assertThat(zone.zoneId()).isEqualTo(zoneId);
+        assertThat(zone.name()).isEqualTo("Zona Norte");
+        assertThat(zone.type()).isEqualTo("BEACH");
+        assertThat(zone.description()).isEqualTo("Arenas blancas");
+        assertThat(zone.status()).isEqualTo(ZoneStatus.CONGESTED);
+        assertThat(zone.updatedAt()).isEqualTo(Instant.parse("2026-11-02T15:00:00Z"));
+    }
+
+    @Test
+    void acceptsAZoneWithoutOptionalFields() {
+        UUID zoneId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_ZONE_CHANGED, zoneId, 1, """
+                "zoneId": "%s",
+                "managerId": "%s",
+                "name": "Zona Centro",
+                "status": "ACTIVE",
+                "updatedAt": "2026-11-02T15:00:00Z"
+                """.formatted(zoneId, UUID.randomUUID()));
+
+        ZoneChangedEvent zone = (ZoneChangedEvent) decoder.decode(
+                EventTopics.CATALOG_ZONE_CHANGED, zoneId.toString(), json);
+
+        assertThat(zone.type()).isNull();
+        assertThat(zone.description()).isNull();
+        assertThat(zone.status()).isEqualTo(ZoneStatus.ACTIVE);
+    }
+
+    @Test
+    void rejectsAZoneWithAnUnsupportedStatus() {
+        UUID zoneId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_ZONE_CHANGED, zoneId, 1, """
+                "zoneId": "%s",
+                "managerId": "%s",
+                "name": "Zona Sur",
+                "status": "OPEN",
+                "updatedAt": "2026-11-02T15:00:00Z"
+                """.formatted(zoneId, UUID.randomUUID()));
+
+        assertThatThrownBy(() -> decoder.decode(
+                EventTopics.CATALOG_ZONE_CHANGED, zoneId.toString(), json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("status");
+    }
+
+    @Test
+    void decodesV2SiteWithItsZone() {
+        UUID siteId = UUID.randomUUID();
+        UUID zoneId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 2, """
+                "siteId": "%s",
+                "name": "Playa Cristal",
+                "categoryId": "%s",
+                "managerId": "%s",
+                "zoneId": "%s",
+                "latitude": 11.31,
+                "longitude": -74.17,
+                "status": "PUBLISHED",
+                "updatedAt": "2026-11-02T15:00:00Z"
+                """.formatted(siteId, UUID.randomUUID(), UUID.randomUUID(), zoneId));
+
+        SiteChangedEvent site = (SiteChangedEvent) decoder.decode(
+                EventTopics.CATALOG_SITE_CHANGED, siteId.toString(), json);
+
+        assertThat(site.zoneId()).isEqualTo(zoneId);
+    }
+
+    @Test
+    void acceptsV2SiteWithoutZone() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 2, """
+                "siteId": "%s",
+                "name": "Playa Cristal",
+                "categoryId": "%s",
+                "managerId": "%s",
+                "latitude": 11.31,
+                "longitude": -74.17,
+                "status": "PUBLISHED",
+                "updatedAt": "2026-11-02T15:00:00Z"
+                """.formatted(siteId, UUID.randomUUID(), UUID.randomUUID()));
+
+        SiteChangedEvent site = (SiteChangedEvent) decoder.decode(
+                EventTopics.CATALOG_SITE_CHANGED, siteId.toString(), json);
+
+        assertThat(site.zoneId()).isNull();
+    }
+
+    private String envelope(String eventType, UUID aggregateId, int eventVersion, String payload) {
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "%s",
+                  "eventVersion": %d,
+                  "occurredAt": "2026-11-02T15:00:00Z",
+                  "aggregateId": "%s",
+                  "correlationId": "test-correlation",
+                  "producer": "ms-04",
+                  "payload": {%s}
+                }
+                """.formatted(UUID.randomUUID(), eventType, eventVersion, aggregateId, payload);
     }
 
     private Path examplePath(String topic) {

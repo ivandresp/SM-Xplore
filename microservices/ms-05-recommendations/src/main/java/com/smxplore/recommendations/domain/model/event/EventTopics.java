@@ -12,6 +12,8 @@ public record EventTopics() {
     public static final String CATALOG_SITE_CHANGED = "catalog.site.changed";
     public static final String CATALOG_SERVICE_CHANGED = "catalog.service.changed";
     public static final String CATALOG_CATEGORY_CHANGED = "catalog.category.changed";
+    /** Zones are enriched by ms-04; ms-05 only keeps the reference for the site graph. */
+    public static final String CATALOG_ZONE_CHANGED = "catalog.zone.changed";
     public static final String ACTIVITIES_EVENT_CHANGED = "activities.event.changed";
     public static final String ACTIVITIES_ACTIVITY_CHANGED = "activities.activity.changed";
     public static final String REVIEWS_REVIEW_CHANGED = "reviews.review.changed";
@@ -22,6 +24,7 @@ public record EventTopics() {
             CATALOG_SITE_CHANGED,
             CATALOG_SERVICE_CHANGED,
             CATALOG_CATEGORY_CHANGED,
+            CATALOG_ZONE_CHANGED,
             ACTIVITIES_EVENT_CHANGED,
             ACTIVITIES_ACTIVITY_CHANGED,
             REVIEWS_REVIEW_CHANGED
