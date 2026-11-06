@@ -1,0 +1,276 @@
+# Reglas de alerta del stack SM-Xplore.
+#
+# Las evalua Prometheus (ver prometheus.yml); no hay Alertmanager en esta
+# entrega, asi que se ven en la pestana Alerts y no se notifican a nadie.
+#
+# Origen de las metricas:
+#   - Lag y offsets: kafka-exporter (job kafka-exporter).
+#   - Outbox: contadores Micrometer de ms-03 y ms-04 (job ms-03 / ms-04). Un
+#     Counter "a.b.c" se publica en Prometheus como "a_b_c_total".
+#   - HTTP: metricas Micrometer de Spring (http_server_requests_seconds_*).
+#
+# Antes de confiar en una regla, comprueba el nombre exacto de la metrica en
+#   curl -s http://localhost:8082/actuator/prometheus | grep outbox
+# porque Micrometer cambia el sufijo _total al exportar contadores.
+
+groups:
+  # ---------------------------------------------------------------------------
+  # Kafka: lag de los consumer groups y actividad en las DLQ.
+  # ---------------------------------------------------------------------------
+  - name: smxplore-kafka
+    rules:
+      # Grupos reales (ver SiteSnapshotKafkaListener, ReservationNotificationListener
+      # y EventKafkaListener): ms-03-site-snapshot, ms-04-notifications y
+      # ms-05-recommendations.
+      - alert: KafkaConsumerGroupLagHigh
+        expr: max by (consumergroup, topic) (kafka_consumergroup_lag{consumergroup=~"ms-03-site-snapshot|ms-04-notifications|ms-05-recommendations"}) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lag alto en el grupo {{ $labels.consumergroup }} ({{ $labels.topic }})"
+          description: >-
+            El grupo {{ $labels.consumergroup }} va mas de 1000 mensajes por
+            detras en {{ $labels.topic }} durante 5 minutos. Revisa la salud del
+            consumidor y la tasa de produccion antes de que crezca.
+
+      - alert: KafkaConsumerGroupLagCritical
+        expr: max by (consumergroup, topic) (kafka_consumergroup_lag{consumergroup=~"ms-03-site-snapshot|ms-04-notifications|ms-05-recommendations"}) > 10000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Lag critico en el grupo {{ $labels.consumergroup }} ({{ $labels.topic }})"
+          description: >-
+            El grupo {{ $labels.consumergroup }} acumula mas de 10000 mensajes
+            de retraso en {{ $labels.topic }}. La proyeccion de ms-05 o las
+            notificaciones de ms-04 van muy por detras.
+
+      # kafka-exporter no expone "numero de mensajes" por topico: expone el
+      # offset final por particion. Un incremento del offset final equivale a
+      # mensajes nuevos escritos, que en una DLQ solo ocurre cuando un
+      # consumidor descarta un mensaje.
+      - alert: KafkaDeadLetterTopicReceivingMessages
+        expr: sum by (topic) (increase(kafka_topic_partition_current_offset{topic=~".*\\.(dlq|DLT)$"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mensajes nuevos en la DLQ {{ $labels.topic }}"
+          description: >-
+            Han entrado mensajes en el topico de descarte {{ $labels.topic }} en
+            los ultimos 5 minutos. Un mensaje en DLQ es un contrato roto o un
+            error permanente: inspecciona el payload y re-publica con
+            scripts/kafka-dlq-replay.sh --dlq {{ $labels.topic }} --dry-run.
+
+      - alert: KafkaDeadLetterTopicGrowthCritical
+        expr: sum by (topic) (increase(kafka_topic_partition_current_offset{topic=~".*\\.(dlq|DLT)$"}[15m])) > 100
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "La DLQ {{ $labels.topic }} crece sin control"
+          description: >-
+            Mas de 100 mensajes nuevos en 15 minutos en {{ $labels.topic }}: un
+            productor esta emitiendo eventos invalidos de forma sistemica.
+
+      - alert: KafkaExporterDown
+        expr: up{job="kafka-exporter"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kafka-exporter no responde"
+          description: >-
+            Sin kafka-exporter no hay lag ni offsets: las alertas de Kafka estan
+            ciegas. Comprueba el servicio del compose de observabilidad (P1-5).
+
+  # ---------------------------------------------------------------------------
+  # Outbox: eventos que no llegan a Kafka.
+  #
+  # Metricas reales disponibles hoy:
+  #   ms-03: activities_outbox_published_total, activities_outbox_failed_total,
+  #          activities_outbox_exhausted_total, activities_outbox_lease_lost_total
+  #          (todas con label event_type).
+  #   ms-04: catalog_outbox_published_total, catalog_outbox_failed_total,
+  #          booking_outbox_published_total, booking_outbox_failed_total
+  #          (todas con label event_type).
+  # NO existen gauges de eventos pendientes ni de antiguedad del pendiente mas
+  # antiguo; por eso esas reglas quedan comentadas al final del grupo. Si se
+  # anaden en el codigo, basta con descomentarlas.
+  # ---------------------------------------------------------------------------
+  - name: smxplore-outbox
+    rules:
+      - alert: OutboxFailedEventsActivities
+        expr: sum by (job, event_type) (increase(activities_outbox_failed_total[15m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ms-03 acumula fallos de publicacion ({{ $labels.event_type }})"
+          description: >-
+            Mas de 5 intentos fallidos de publicar {{ $labels.event_type }} en 15
+            minutos. El relay reintenta con backoff; si sigue asi, Kafka o el
+            broker estan degradados y el outbox crece.
+
+      - alert: OutboxEventsExhaustedActivities
+        expr: sum by (job, event_type) (increase(activities_outbox_exhausted_total[30m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ms-03 agoto los reintentos de {{ $labels.event_type }}"
+          description: >-
+            Hay eventos marcados como agotados: se dejaron de reintentar y el
+            resto de servicios no los vera nunca. Hay que corregir la causa y
+            reinyectar los eventos desde la tabla outbox_events.
+
+      - alert: OutboxFailedEventsCatalogBooking
+        expr: sum by (job, event_type) (increase({__name__=~"(catalog|booking)_outbox_failed_total"}[15m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ms-04 acumula fallos de publicacion ({{ $labels.event_type }})"
+          description: >-
+            Mas de 5 intentos fallidos de publicar {{ $labels.event_type }} en 15
+            minutos desde el outbox de ms-04.
+
+      - alert: OutboxLeaseLost
+        expr: sum by (job, event_type) (increase(activities_outbox_lease_lost_total[30m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ms-03 perdio el lease de un evento del outbox"
+          description: >-
+            Otro relay reclamo el evento antes de que terminara: se publica dos
+            veces o se descarto. Con una sola instancia de ms-03 no deberia
+            ocurrir; con varias, revisa el timeout del lease (app.outbox.lease).
+
+      # --- Pendientes y antiguedad: FALTA LA METRICA -------------------------
+      # El codigo actual solo emite contadores (published/failed/exhausted/
+      # lease_lost). No hay gauge de eventos pendientes ni de la edad del mas
+      # antiguo, asi que estas reglas no se pueden activar sin inventar series.
+      # Metrica necesaria (a implementar en OutboxMetrics + relay):
+      #   ms-03: activities.outbox.pending (gauge) y
+      #          activities.outbox.oldest_pending_age_seconds (gauge)
+      #   ms-04: catalog.outbox.pending / booking.outbox.pending y sus *_age
+      #   (en Prometheus: activities_outbox_pending, etc.)
+      #
+      # - alert: OutboxPendingEventsHigh
+      #   expr: sum by (job) (activities_outbox_pending) > 500
+      #   for: 10m
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "Outbox de ms-03 con eventos pendientes acumulados"
+      #
+      # - alert: OutboxOldestPendingEventTooOld
+      #   expr: max by (job) (activities_outbox_oldest_pending_age_seconds) > 300
+      #   for: 5m
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: "Un evento lleva mas de 5 minutos sin publicarse"
+      #     description: >-
+      #       El eventPublishedAt de las resenas y el retraso de las
+      #       proyecciones dependen de que el outbox drene; si se atasca hay
+      #       que mirar Kafka y el relay.
+
+  # ---------------------------------------------------------------------------
+  # Infraestructura: exporters caidos (sin ellos no hay metricas de dependencias).
+  # ---------------------------------------------------------------------------
+  - name: smxplore-infra
+    rules:
+      - alert: ExporterDown
+        expr: up{job=~"kafka-exporter|postgres-exporter|redis-exporter"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} no responde"
+          description: >-
+            Prometheus no puede hacer scrape de {{ $labels.job }} desde hace 10
+            minutos. Sin ese exporter faltan las metricas de la dependencia
+            (Kafka lag, Postgres, Redis) y las alertas que las usan quedan
+            ciegas.
+
+  # ---------------------------------------------------------------------------
+  # API: tasa de errores 5xx y latencia p95 por servicio.
+  # Micrometer exporta http.server.requests como http_server_requests_seconds_*
+  # con tags status, uri, method y outcome; el tag "job" lo pone Prometheus.
+  # Los endpoints de actuator se excluyen para no alertar por el propio scrape.
+  # ---------------------------------------------------------------------------
+  - name: smxplore-api
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"ms-0[1-5]"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} no responde en /actuator/prometheus"
+          description: >-
+            Prometheus no puede hacer scrape de {{ $labels.job }} desde hace 2
+            minutos. Comprueba el contenedor y /actuator/health.
+
+      - alert: ApiServerErrorRateHigh
+        expr: >-
+          sum by (job) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"/actuator.*"}[5m]))
+          /
+          sum by (job) (rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m]))
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} supera el 5% de respuestas 5xx"
+          description: >-
+            Mas del 5% de las peticiones de {{ $labels.job }} terminan en 5xx
+            durante 10 minutos. Mira los logs del servicio y las dependencias
+            (Postgres, MongoDB, Kafka, Neo4j).
+
+      - alert: ApiServerErrorRateCritical
+        expr: >-
+          sum by (job) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"/actuator.*"}[5m]))
+          /
+          sum by (job) (rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m]))
+          > 0.20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} supera el 20% de respuestas 5xx"
+          description: >-
+            Uno de cada cinco requests falla. Es una caida funcional, no una
+            degradacion.
+
+      - alert: ApiLatencyP95High
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, job) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 de {{ $labels.job }} por encima de 1 s"
+          description: >-
+            El 95% de las peticiones de {{ $labels.job }} tarda mas de un
+            segundo durante 10 minutos. Revisa base de datos, llamadas a ms-04 y
+            el filtro de IA de resenas.
+
+      - alert: ApiLatencyP95Critical
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, job) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*"}[5m]))
+          ) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "p95 de {{ $labels.job }} por encima de 3 s"
+          description: >-
+            Latencia inaceptable para el usuario final en {{ $labels.job }}.
+            Las recomendaciones y el catalogo dependen de esta respuesta.
