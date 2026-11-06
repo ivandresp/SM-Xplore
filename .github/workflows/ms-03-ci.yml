@@ -2,6 +2,9 @@
 ## la imagen Docker, escaneo con Trivy y smoke test del contenedor con PostgreSQL y MongoDB.
 ## El smoke test arranca el servicio con una URL JWKS inalcanzable a propósito: valida el
 ## arranque, Flyway y Actuator sin depender de ms-01.
+##
+## Docker es obligatorio: si Testcontainers no puede arrancar, el job falla en vez de omitir
+## pruebas en silencio (scripts/assert-no-skipped-tests.py).
 
 name: ms-03 CI
 
@@ -14,12 +17,14 @@ on:
       - ".github/workflows/ms-03-ci.yml"
       # Si cambian los finales de línea, el build de la imagen puede romperse (./gradlew: not found).
       - ".gitattributes"
+      - ".github/scripts/assert-no-skipped-tests.py"
   pull_request:
     paths:
       - "microservices/ms-03-activities-and-events/**"
       - "contracts/**"
       - ".github/workflows/ms-03-ci.yml"
       - ".gitattributes"
+      - ".github/scripts/assert-no-skipped-tests.py"
   workflow_dispatch:
 
 permissions:
@@ -65,6 +70,12 @@ jobs:
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Comprobar que Docker está disponible
+        # Sin Docker, Testcontainers marca las pruebas como omitidas y el job quedaría en verde.
+        run: |
+          docker info > /dev/null
+          docker version --format 'Docker cliente {{.Client.Version}} / servidor {{.Server.Version}}'
+
       - name: Ejecutar pruebas y empaquetar
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
@@ -72,6 +83,11 @@ jobs:
           mkdir -p build
           set -o pipefail
           ./gradlew test bootJar --no-daemon --console=plain 2>&1 | tee build/test.log
+
+      - name: Fallar si alguna prueba se omitió
+        # P2-11: ninguna prueba que necesite Docker puede omitirse en silencio.
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: python3 "$GITHUB_WORKSPACE/.github/scripts/assert-no-skipped-tests.py" --root .
 
       - name: Anotar los fallos de las pruebas
         if: failure()

@@ -1,5 +1,8 @@
 ## Integración continua de ms-01: compilación, pruebas con Testcontainers, ArchUnit y Spotless,
 ## además del build de la imagen Docker y un smoke test del contenedor contra PostgreSQL y MongoDB.
+##
+## Docker es obligatorio: si Testcontainers no puede arrancar, el job falla en vez de omitir
+## pruebas en silencio (scripts/assert-no-skipped-tests.py).
 
 name: ms-01 CI
 
@@ -9,10 +12,12 @@ on:
     paths:
       - "microservices/ms-01-users-and-anomalies/**"
       - ".github/workflows/ms-01-ci.yml"
+      - ".github/scripts/assert-no-skipped-tests.py"
   pull_request:
     paths:
       - "microservices/ms-01-users-and-anomalies/**"
       - ".github/workflows/ms-01-ci.yml"
+      - ".github/scripts/assert-no-skipped-tests.py"
   workflow_dispatch:
 
 permissions:
@@ -44,6 +49,12 @@ jobs:
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Comprobar que Docker está disponible
+        # Sin Docker, Testcontainers marca las pruebas como omitidas y el job quedaría en verde.
+        run: |
+          docker info > /dev/null
+          docker version --format 'Docker cliente {{.Client.Version}} / servidor {{.Server.Version}}'
+
       - name: Ejecutar check (pruebas, ArchUnit y Spotless)
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
@@ -51,6 +62,11 @@ jobs:
           mkdir -p build
           set -o pipefail
           ./gradlew check --no-daemon --console=plain 2>&1 | tee build/check.log
+
+      - name: Fallar si alguna prueba se omitió
+        # P2-11: ninguna prueba que necesite Docker puede omitirse en silencio.
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: python3 "$GITHUB_WORKSPACE/.github/scripts/assert-no-skipped-tests.py" --root .
 
       - name: Anotar los fallos de la verificación
         if: failure()
