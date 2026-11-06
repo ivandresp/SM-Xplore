@@ -74,7 +74,7 @@ services:
     image: mongo:${MONGO_VERSION:-8.2}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 1g
+    mem_limit: 768m
     # Replica set de un solo nodo: ms-02 y ms-04 usan transacciones (outbox).
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
@@ -92,7 +92,7 @@ services:
     image: mongo:${MONGO_VERSION:-8.2}
     restart: "no"
     logging: *default-logging
-    mem_limit: 256m
+    mem_limit: 128m
     depends_on:
       mongo:
         condition: service_healthy
@@ -104,7 +104,7 @@ services:
     image: ${KAFKA_IMAGE:-apache/kafka:4.1.0}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 1536m
+    mem_limit: 1024m
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -136,7 +136,7 @@ services:
     image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:v0.7.2}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 512m
+    mem_limit: 192m
     depends_on:
       kafka:
         condition: service_healthy
@@ -150,7 +150,7 @@ services:
     image: ${REDIS_IMAGE:-redis:7-alpine}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 256m
+    mem_limit: 192m
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
@@ -166,12 +166,12 @@ services:
     image: neo4j:${NEO4J_VERSION:-5.26-community}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 2g
+    mem_limit: 1536m
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}
-      NEO4J_server_memory_heap_initial__size: 512m
-      NEO4J_server_memory_heap_max__size: 1G
-      NEO4J_server_memory_pagecache_size: 256m
+      NEO4J_server_memory_heap_initial__size: 384m
+      NEO4J_server_memory_heap_max__size: 768m
+      NEO4J_server_memory_pagecache_size: 192m
     ports:
       - "127.0.0.1:${NEO4J_HTTP_PORT:-7474}:7474"
       - "127.0.0.1:${NEO4J_BOLT_PORT:-7687}:7687"
@@ -188,7 +188,7 @@ services:
     image: ${MAILPIT_IMAGE:-axllent/mailpit:v1.27}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 256m
+    mem_limit: 128m
     ports:
       - "127.0.0.1:${SMTP_PORT:-1025}:1025"
       - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
@@ -204,7 +204,7 @@ services:
     image: smxplore/ms-01:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,7 +231,7 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@smxplore.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
     volumes:
       # El perfil dev genera y persiste la pareja RSA de JWT aqui.
       - ms01_data:/app/.local
@@ -246,7 +246,7 @@ services:
     image: smxplore/ms-02:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     depends_on:
       mongo-init:
         condition: service_completed_successfully
@@ -261,7 +261,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -274,7 +274,7 @@ services:
     image: smxplore/ms-03:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,7 +306,7 @@ services:
       JWT_ALLOW_INSECURE_JWKS: "true"
       MS04_BASE_URL: http://ms-04:8080
       DEMAND_ZONE_ID: ${DEMAND_ZONE_ID:-America/Bogota}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -319,7 +319,7 @@ services:
     image: smxplore/ms-04:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     depends_on:
       postgres:
         condition: service_healthy
@@ -346,7 +346,7 @@ services:
       SMTP_PORT: "1025"
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-04
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
@@ -359,7 +359,7 @@ services:
     image: smxplore/ms-05:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     depends_on:
       neo4j:
         condition: service_healthy
@@ -386,7 +386,7 @@ services:
       CATALOG_EXPORT_BASE_URL: http://ms-04:8080
       MS03_BASE_URL: http://ms-03:8082
       SEED_ENABLED: ${SEED_ENABLED:-true}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck

@@ -15,6 +15,17 @@ build/
 .local/
 application-local.yml
 
+# Producción (P1-5) y persistencia (P1-7): secretos generados por el operador, nunca versionados
+deploy/prod/.env.prod
+deploy/prod/secrets/
+deploy/mongo/secrets/
+deploy/mongo/certs/
+deploy/backup/out/
+deploy/backups/
+
+# Salidas de las pruebas de carga (P1-8)
+loadtests/results/
+
 # Logs and scratch folders used while diagnosing CI
 *.log
 logs*/

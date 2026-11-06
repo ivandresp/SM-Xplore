@@ -10,7 +10,10 @@ Este README es la puerta de entrada al **stack integrado**. Cada servicio conser
 ## Arranque completo (un solo comando)
 
 Requisitos: Docker Desktop con al menos **7 GB libres** (8 GB recomendados; el stack en reposo
-usa ~3,5 GiB) y los puertos libres que lista la tabla de abajo.
+usa ~3,5 GiB). La suma de los `mem_limit` de `compose.yaml` es **7,5 GiB** (antes 10 GiB), así
+que una VM de 8 GiB cubre el techo completo del stack local. Las pruebas de carga (`loadtests/`)
+documentan el presupuesto por contenedor y los SLOs. También deben estar libres los puertos que
+lista la tabla de abajo.
 
 ```powershell
 Copy-Item .env.example .env   # opcional: todos los valores tienen default
