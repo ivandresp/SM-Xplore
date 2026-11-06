@@ -95,6 +95,21 @@ casos vigentes son:
 
 `security.report.changed` lo publica ms-02 para alertas, notificaciones y analítica; ms-05 no lo consume.
 
+### `security.report.changed`: producido sin consumidor a propósito (P2-10 / P3-9)
+
+- **Productor**: ms-02 (outbox transaccional, `producer=ms-02`, key = `aggregateId`). **Consumidores: ninguno en
+  esta entrega**, y la columna de ms-05 en la tabla de arriba lo dice explícitamente: no es un olvido.
+- **Motivo**: el reporte de seguridad ya se opera por la API de ms-02 (crear, listar por estado, cerrar, resolver,
+  comentar). No hay un caso de producto aprobado para un consumidor; agregarlo sin ese caso sumaría acoplamiento,
+  otro tópico que operar y riesgo de notificaciones duplicadas. Se publica igual para conservar la señal y para que
+  el contrato v1 quede cubierto por el test de contrato del productor.
+- **Decisión pendiente P3-9**: (a) mantener el evento documentado como señal sin consumidor, o (b) que ms-05 lo
+  consuma como señal adicional (por ejemplo, proximidad a zonas con reportes) con proyección propia y su contract
+  test de consumidor sobre `security.report.changed.v1.json`. Hasta la firma de P3-9 no se agrega consumidor.
+- **Si P3-9 elige consumidor**: el nuevo consumidor debe validar el fixture
+  `security.report.changed.v1.example.json` contra el schema y tratar el evento como at-least-once (deduplicar por
+  `eventId`), igual que el resto de consumidores de este directorio.
+
 `bookings.reservation.changed` se mantiene porque notificaciones y analítica lo usan, pero
 **ms-05 no lo consume**. La recomendación no usa reservas: ver
 `microservices/ms-05-recommendations/docs/adr/0002-no-reservation-signal.md`.

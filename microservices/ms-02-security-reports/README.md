@@ -91,6 +91,20 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 - Se publica al crear, cambiar contenido/fotos, cerrar y resolver un reporte.
 - ms-05 no lo consume; está pensado para alertas, notificaciones y analítica.
 
+### Sin consumidor en esta entrega (P2-10 → P3-9)
+
+- El evento **se produce** (outbox transaccional → Kafka) pero **ningún servicio lo consume a propósito** en esta
+  entrega. No es un olvido: la tabla de consumidores de `contracts/README.md` también lo marca como «no».
+- **Motivo**: el ciclo del reporte ya se cubre por la API (crear, listar, cerrar, resolver, comentar). Un consumidor
+  sin caso de producto cerrado agregaría acoplamiento, otro tópico que operar y riesgo de doble notificación. El
+  evento se publica igual para no perder la señal y para mantener el contrato v1 validado y estable (tests de
+  contrato del productor).
+- **Decisión pendiente P3-9**: (a) dejar `security.report.changed` solo documentado como señal de dominio sin
+  consumidor, o (b) que ms-05 lo consuma como señal (por ejemplo, penalizar la proximidad de una zona reportada) con
+  su proyección y su contract test de consumidor. Hasta que P3-9 se firme, **no se agrega consumidor**.
+- **Consecuencia operativa**: el outbox publica igualmente y la retención purga `PUBLISHED`/`FAILED` a los 30 días.
+  No hay alertas push ni correo de reportes (RF80 queda diferido; ver la trazabilidad P2-13).
+
 ## Paginación por cursor
 
 Los listados usan scroll infinito con cursor opaco:
@@ -150,4 +164,4 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **38 pruebas** y valida el contrato `security.report.changed`, el evento generado, la geolocalización y los errores RFC 9457.
+Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **44 pruebas** y valida el contrato `security.report.changed`, el evento generado, la geolocalización y los errores RFC 9457.
