@@ -163,6 +163,16 @@ Las pruebas de integracion usan Testcontainers y requieren Docker.
 
 Los servicios compilan y sus suites pasan. El gateway nginx ya es el punto de entrada del stack
 local (TLS en produccion sigue pendiente de la decision P3-11: certificados reales y terminacion
-TLS definitiva). Lo que sigue abierto (frontend, TLS de produccion, reindexado completo de ms-05,
-taxonomia de categorias y zona/congestion) esta descrito en el resumen de integracion del equipo y
-en los `README.md` de cada servicio.
+TLS definitiva).
+
+Entregado y verificado: P0 (reindexado completo de ms-05, durabilidad de eventos de resena,
+eventos de zona y respuesta de resena, higiene de contratos), P1 (imagenes y manifiestos de
+produccion, topicos y DLQ explicitos, alertas, backup/restore, pruebas de carga) y P2
+(endpoint interno de contactos, canal push y alerta de cupo bajo RF66, pruebas de arquitectura y
+de contrato del lado consumidor, trazabilidad de los requisitos del SRS).
+
+Lo que sigue abierto son las decisiones de equipo P3 (reservas multi-item, mapeo canonico de
+estados, PSE e itinerario, auth servicio-a-servicio, consumidor de `security.report.changed`,
+taxonomia de categorias, TLS de produccion y despliegue del stack productivo), el frontend y la
+documentacion UML de los cinco servicios. El detalle por decision esta en los `README.md` de cada
+servicio y en el resumen de integracion del equipo.
