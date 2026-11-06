@@ -589,6 +589,52 @@ services:
       retries: 20
       start_period: 120s
 
+  # ---------------------------------------------------------------------------------------------
+  # Punto de entrada HTTP(S): nginx enruta /api/v1/** y /svc/ms-0N/** a los servicios.
+  # Sustituye al "gateway externo" que dejaba abierto P3-11: TLS se termina aquí con los
+  # certificados del operador; si se quiere un balanceador delante, este contenedor sigue siendo
+  # el único destino. Configuracion y runbook: deploy/gateway/README.md.
+  # ---------------------------------------------------------------------------------------------
+  gateway:
+    image: ${GATEWAY_IMAGE:?}
+    restart: always
+    mem_limit: 128m
+    logging: *prod-logging
+    environment:
+      # false = exige certificados reales; entrypoint.sh no se ejecuta en esta imagen, pero la
+      # variable queda documentada para que nadie arranque el gateway con autofirmado en produccion.
+      TLS_SELF_SIGNED: "false"
+    ports:
+      - "${GATEWAY_HTTP_PORT:?}:80"
+      - "${GATEWAY_HTTPS_PORT:?}:443"
+    volumes:
+      - ../gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../gateway/conf.d:/etc/nginx/conf.d:ro
+      - ../gateway/snippets:/etc/nginx/snippets:ro
+    secrets:
+      # Rutas absolutas: nginx espera /etc/nginx/certs/tls.crt y tls.key.
+      - source: gateway_tls_cert
+        target: /etc/nginx/certs/tls.crt
+      - source: gateway_tls_key
+        target: /etc/nginx/certs/tls.key
+    depends_on:
+      ms-01:
+        condition: service_healthy
+      ms-02:
+        condition: service_healthy
+      ms-03:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+      ms-05:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
 networks:
   default:
     name: smxplore-prod
@@ -617,3 +663,7 @@ secrets:
     file: ${MONGO_CA_FILE:?}
   mongo_server_cert:
     file: ${MONGO_SERVER_CERT_FILE:?}
+  gateway_tls_cert:
+    file: ${GATEWAY_TLS_CERT_FILE:?}
+  gateway_tls_key:
+    file: ${GATEWAY_TLS_KEY_FILE:?}
