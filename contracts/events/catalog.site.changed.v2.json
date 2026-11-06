@@ -45,6 +45,10 @@
               "type": "string",
               "format": "uuid"
             },
+            "zoneId": {
+              "type": "string",
+              "format": "uuid"
+            },
             "latitude": {
               "type": "number",
               "minimum": -90,

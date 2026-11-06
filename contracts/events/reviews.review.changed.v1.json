@@ -47,6 +47,22 @@
             "status": {
               "enum": ["PUBLISHED", "PENDING_REVIEW", "HIDDEN", "DELETED"]
             },
+            "response": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text", "respondedAt"],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "respondedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "updatedAt": {
               "type": "string",
               "format": "date-time"

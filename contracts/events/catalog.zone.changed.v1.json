@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/catalog.zone.changed.v1.json",
+  "title": "catalog.zone.changed.v1",
+  "description": "Zona creada o modificada. La emite ms-04 y la consume ms-05 para construir el grafo (:Zona) y enlazar los sitios que pertenecen a la zona. managerId identifica a la gestora que administra la zona.",
+  "allOf": [
+    {
+      "$ref": "./envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "catalog.zone.changed"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "zoneId",
+            "managerId",
+            "name",
+            "status",
+            "updatedAt"
+          ],
+          "properties": {
+            "zoneId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "managerId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "type": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "status": {
+              "enum": ["ACTIVE", "CONGESTED", "INACTIVE"]
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

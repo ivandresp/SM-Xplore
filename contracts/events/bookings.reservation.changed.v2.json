@@ -13,6 +13,9 @@
         "eventType": {
           "const": "bookings.reservation.changed"
         },
+        "eventVersion": {
+          "const": 2
+        },
         "payload": {
           "type": "object",
           "required": [

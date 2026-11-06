@@ -22,6 +22,7 @@ contracts/
     ├── catalog.service.changed.v1.json
     ├── catalog.site.changed.v1.json
     ├── catalog.site.changed.v2.json
+    ├── catalog.zone.changed.v1.json
     ├── reviews.review.changed.v1.json
     ├── security.report.changed.v1.json
     └── examples/
@@ -61,6 +62,7 @@ evento `v2` no puede validarse contra él.
 | Topic / eventType | Productor | ms-05 |
 |---|---|---|
 | `catalog.site.changed` | ms-04 (v2) | sí |
+| `catalog.zone.changed` | ms-04 (v1) | sí |
 | `catalog.service.changed` | ms-04 | sí |
 | `catalog.category.changed` | ms-04 | sí |
 | `activities.event.changed` | ms-03 (v2) | sí |
@@ -78,6 +80,19 @@ crear, responder y moderar; ms-04 al crear y moderar. Solo `PUBLISHED` alimenta 
 
 `catalog.site.changed` v2 agrega `payload.managerId`, obligatorio: ms-03 lo usa para saber qué gestora manda en el sitio y refrescar el snapshot que guarda en sus eventos. La v1 sigue en el repositorio para los consumidores que aún validan contra ella; ms-04 publica v2.
 
+`catalog.zone.changed` (v1) lo publica ms-04 cuando se crea, actualiza o cambia de estado una zona y lo consume ms-05 para construir el vértice `:Zona` y enlazar `(:Sitio)-[:PERTENECE_A]->(:Zona)`. El payload lleva `zoneId`, `managerId` (gestora dueña de la zona), `name`, `status` (`ACTIVE`, `CONGESTED`, `INACTIVE`) y `updatedAt`; `type` y `description` son opcionales.
+
+### Campos opcionales aditivos (sin subir de versión)
+
+Siguiendo la regla de versionado, un campo nuevo y opcional no abre una versión nueva. Los dos
+casos vigentes son:
+
+- `catalog.site.changed` **v2**: `payload.zoneId` (UUID, opcional). ms-04 la emite siempre que el
+  sitio tenga zona; ms-05 la usa para enlazar el sitio con su zona y lo ignora si falta.
+- `reviews.review.changed` **v1**: `payload.response` (objeto opcional con `text` 1..2000 y
+  `respondedAt` date-time). Lo incluye ms-04 cuando la reseña ya tiene respuesta; ms-03 no lo
+  incluye. Un consumidor que no lo conozca simplemente lo ignora.
+
 `security.report.changed` lo publica ms-02 para alertas, notificaciones y analítica; ms-05 no lo consume.
 
 `bookings.reservation.changed` se mantiene porque notificaciones y analítica lo usan, pero
@@ -89,6 +104,29 @@ actividades/eventos: agrega `payload.items[].itemName`, `guideId`, `managerId` y
 `NO_SHOW`. ms-04 acepta ambas versiones y notifica al turista, al guía de la actividad y a la
 gestora del evento. `bookedFor`, `providerId`, `guideId`, `managerId`, `itemName` y `serviceName`
 son opcionales y aditivos para ese consumidor.
+
+### Estados de reserva: mapeo entre v1 y v2
+
+Tomado de los enums reales de cada esquema (no hay traducción de nombres: el estado se publica con
+el mismo literal en ambas versiones).
+
+| Estado | `bookings.reservation.changed.v1` (ms-04, reservas de servicio) | `bookings.reservation.changed.v2` (ms-03, actividades/eventos) |
+|---|---|---|
+| `PENDING` | sí | sí |
+| `CONFIRMED` | sí | sí |
+| `CANCELLED` | sí | sí |
+| `COMPLETED` | sí | sí |
+| `NO_SHOW` | **no** (no representable en v1) | sí |
+
+Consecuencias prácticas:
+
+- La v1 es un subconjunto estricto de estados de la v2: un `NO_SHOW` de ms-03 nunca viaja en v1, y
+  un consumidor que solo entienda v1 no debe esperar ese literal.
+- El payload v1 **no** valida contra el esquema v2 (`items[].itemName` es obligatorio en v2 y
+  opcional en v1), así que cada versión se valida contra su propio esquema y el consumidor
+  (ms-04, grupo `ms-04-notifications`) despacha por `eventVersion`.
+- Las reservas de servicio de ms-04 no emiten `NO_SHOW`; ese estado solo existe hoy en el camino de
+  actividades/eventos de ms-03.
 
 Estado de fase 2:
 
@@ -118,6 +156,10 @@ npx ajv-cli@5 validate -s contracts/events/reviews.review.changed.v1.json \
 `--strict=false` evita que AJV falle por no tener `ajv-formats` instalado: valida la estructura
 y emite warnings por los formatos desconocidos. La validación estricta de `uuid` y `date-time`
 la hace la suite Java con Draft 2020-12 y `formatAssertionsEnabled(true)`.
+
+El workflow `.github/workflows/contracts-ci.yml` repite esa validación para **todos** los pares
+schema/ejemplo en cada push a `main`/`microservicios` o PR que toque `contracts/`, y además exige
+que todo `*.v2.json` fije `eventVersion` con `const 2`. No levanta el stack ni necesita Docker.
 
 En ms-05, `EventContractTest` valida todos los ejemplos contra su schema y
 `ProjectionEventDecoderTest` valida que el consumidor pueda deserializarlos. El esquema no se
