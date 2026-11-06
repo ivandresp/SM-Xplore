@@ -35,13 +35,15 @@ docker compose ps
 bash scripts/smoke.sh          # o: pwsh scripts/smoke.ps1
 ```
 
-Cuando todo esta `healthy`, la plataforma queda disponible en `http://localhost:8081` (ms-01)
-y los puertos de la tabla siguiente.
+Cuando todo esta `healthy`, la plataforma queda disponible en `http://127.0.0.1:8088` (gateway,
+unico punto de entrada: HTTP en 8088 y HTTPS en 8443) y, si se necesitan, en los puertos directos
+de la tabla siguiente.
 
 ## Servicios y puertos
 
 | Componente | Host | Contenedor | Notas |
 |---|---:|---:|---|
+| gateway (nginx) | 8088 / 8443 | 80 / 443 | Punto de entrada: `/api/v1/**` y `/svc/ms-0N/**`; TLS autofirmado en desarrollo |
 | ms-01 users-and-anomalies | 8081 | 8081 | Emisor JWT; JWKS en `/.well-known/jwks.json` |
 | ms-02 security-reports | 8080 | 8080 | Reportes y comentarios |
 | ms-03 activities-and-events | 8082 | 8082 | Actividades, eventos, reservas y reseñas |
@@ -65,6 +67,7 @@ ni con los compose por servicio.
 - `contracts/`: sobres de eventos y esquemas versionados (`v1`, `v2`).
 - `infrastructure/`: compose solo de Kafka, Kafka UI y Redis para trabajar sin el stack completo.
 - `deploy/`: scripts de inicializacion del stack integrado (bases y replica set).
+- `deploy/gateway/`: API gateway nginx (rutas, TLS y runbook paso a paso en su `README.md`).
 - `compose.yaml`: composicion integrada de infraestructura + cinco servicios.
 - `scripts/smoke.*`: verificacion del stack completo: salud, JWKS, endpoints publicos,
   `/actuator/prometheus` en los cinco servicios y un flujo de negocio real (categoria, zona, sitio,
@@ -158,6 +161,8 @@ Las pruebas de integracion usan Testcontainers y requieren Docker.
 
 ## Estado del proyecto
 
-Los servicios compilan y sus suites pasan. Lo que sigue abierto (frontend, gateway, TLS,
-reindexado completo de ms-05, taxonomia de categorias y zona/congestion) esta descrito en el
-resumen de integracion del equipo y en los `README.md` de cada servicio.
+Los servicios compilan y sus suites pasan. El gateway nginx ya es el punto de entrada del stack
+local (TLS en produccion sigue pendiente de la decision P3-11: certificados reales y terminacion
+TLS definitiva). Lo que sigue abierto (frontend, TLS de produccion, reindexado completo de ms-05,
+taxonomia de categorias y zona/congestion) esta descrito en el resumen de integracion del equipo y
+en los `README.md` de cada servicio.
