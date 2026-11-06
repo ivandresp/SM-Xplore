@@ -1,0 +1,133 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: activities-and-events
+  task:
+    scheduling:
+      # El relay, la retencion, el cierre automatico y la conciliacion de resenas comparten el
+      # scheduler: sin pool, un job bloqueado (el relay espera a Kafka) detiene a los demas.
+      pool:
+        size: ${SCHEDULING_POOL_SIZE:4}
+  r2dbc:
+    url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    pool:
+      max-size: ${R2DBC_POOL_MAX_SIZE:20}
+      max-acquire-time: 5s
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  data:
+    mongodb:
+      auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    url: "${FLYWAY_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
+    user: ${FLYWAY_USER}
+    password: ${FLYWAY_PASSWORD}
+    locations: classpath:db/migration
+    schemas: public
+    baseline-on-migrate: true
+    baseline-version: 0
+    connect-retries: ${FLYWAY_CONNECT_RETRIES:10}
+    clean-disabled: true
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # El stack local scrapea /actuator/prometheus; en produccion se aisla por red.
+        include: health,info,metrics,prometheus
+
+app:
+  outbox:
+    enabled: ${OUTBOX_ENABLED:false}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
+    batch-size: ${OUTBOX_BATCH_SIZE:10}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
+    initial-backoff: ${OUTBOX_INITIAL_BACKOFF:PT1S}
+    max-backoff: ${OUTBOX_MAX_BACKOFF:PT1M}
+    lease-duration: ${OUTBOX_LEASE_DURATION:PT3M}
+    send-timeout: ${OUTBOX_SEND_TIMEOUT:PT5S}
+    # Debe cubrir batch-size x send-timeout; el arranque falla si no lo hace.
+    cycle-timeout: ${OUTBOX_CYCLE_TIMEOUT:PT60S}
+    retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
+  events:
+    # Consumidor de catalog.site.changed v2 (ms-04): refresca sitio_nombre y manager_id de cada
+    # evento. Apagado por defecto; sin el, la gestora se revalida en caliente al responder reseñas.
+    site-consumer:
+      enabled: ${SITE_EVENTS_ENABLED:false}
+      group: ${SITE_EVENTS_GROUP:ms-03-site-snapshot}
+      timeout: ${SITE_EVENTS_TIMEOUT:PT10S}
+      # Un evento que no se puede aplicar se reintenta y termina en catalog.site.changed.DLT.
+      dlt-suffix: ${SITE_EVENTS_DLT_SUFFIX:.DLT}
+      retry-interval-ms: ${SITE_EVENTS_RETRY_INTERVAL_MS:1000}
+      retry-max-elapsed-ms: ${SITE_EVENTS_RETRY_MAX_ELAPSED_MS:60000}
+  ms04:
+    base-url: ${MS04_BASE_URL:http://localhost:8084}
+    timeout: ${MS04_TIMEOUT:3s}
+  reviews:
+    # El evento de la resena se escribe en el outbox de Postgres desde una request cuya transaccion
+    # es la de Mongo: puede perderse. Este job re-despacha las resenas sin eventPublishedAt confirmado.
+    event-reconciliation:
+      enabled: ${REVIEW_EVENT_RECONCILIATION_ENABLED:true}
+      interval-ms: ${REVIEW_EVENT_RECONCILIATION_INTERVAL_MS:60000}
+      initial-delay-ms: ${REVIEW_EVENT_RECONCILIATION_INITIAL_DELAY_MS:30000}
+      batch-size: ${REVIEW_EVENT_RECONCILIATION_BATCH_SIZE:100}
+      # Margen para no competir con el insert del outbox que la request aun esta intentando.
+      grace-seconds: ${REVIEW_EVENT_RECONCILIATION_GRACE_SECONDS:60}
+    # Mismo contrato y variables que el filtro de ms-04. Apagado por defecto; al encenderlo exige
+    # LITTLELLM_URL. Con fail-open=true una caida del modelo deja la resena publicada; con false
+    # la creacion responde 503.
+    ai-filter:
+      enabled: ${REVIEW_AI_ENABLED:false}
+      base-url: ${LITTLELLM_URL:}
+      api-key: ${LITTLELLM_API_KEY:}
+      api-key-header: ${LITTLELLM_API_KEY_HEADER:Authorization}
+      api-key-prefix: ${LITTLELLM_API_KEY_PREFIX:Bearer}
+      model: ${LITTLELLM_MODEL:littlellm}
+      chat-path: ${LITTLELLM_CHAT_PATH:/v1/chat/completions}
+      timeout: ${REVIEW_AI_TIMEOUT:PT5S}
+      threshold: ${REVIEW_AI_THRESHOLD:0.7}
+      temperature: ${REVIEW_AI_TEMPERATURE:0.0}
+      action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
+  reservations:
+    auto-close:
+      cron: "${RESERVATION_AUTO_CLOSE_CRON:0 15 3 * * *}"
+      grace: "${RESERVATION_AUTO_CLOSE_GRACE:P1D}"
+  demand:
+    zone-id: ${DEMAND_ZONE_ID:America/Bogota}
+  security:
+    jwt:
+      jwk-set-uri: ${JWK_SET_URI:}
+      # Solo desarrollo: acepta HTTP cuando el JWKS no es loopback (stack de Compose).
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:false}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      issuer: ${JWT_ISSUER}
+      audience: ${JWT_AUDIENCE}
+      role-claim: ${JWT_ROLE_CLAIM:role}
+      name-claim: ${JWT_NAME_CLAIM:name}
+    auth-version:
+      enabled: ${AUTH_VERSION_ENABLED:false}
+      base-url: ${MS01_BASE_URL:}
+      timeout: ${AUTH_VERSION_TIMEOUT:2s}
+      cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
+      # Cota de entradas y de TTL (max 5 min): el TTL es la ventana real de revocacion.
+      cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
+    mfa:
+      require-admin: ${MFA_REQUIRE_ADMIN:false}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}

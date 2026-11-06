@@ -1,0 +1,119 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-activities_events}
+      POSTGRES_USER: ${POSTGRES_ROOT_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:?required}
+      MS03_FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:?required}
+      MS03_APP_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/01-app-users.sh:/docker-entrypoint-initdb.d/01-app-users.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_ROOT_USER:-postgres} -d ${POSTGRES_DB:-activities_events}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?required}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-reviews}
+      MONGO_APP_USER: ${MONGO_APP_USER:-reviews_app}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo/01-app-user.js:/docker-entrypoint-initdb.d/01-app-user.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT:-8082}:8082"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: 8082
+      R2DBC_URL: "r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-activities_events}"
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      MONGODB_URI: "mongodb://${MONGO_APP_USER:-reviews_app}:${MONGO_APP_PASSWORD:?required}@mongo:27017/${MONGO_DATABASE:-reviews}?authSource=reviews&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000&uuidRepresentation=standard"
+      JWK_SET_URI: ${JWK_SET_URI:-}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      # Perfil local: el flag de JWKS inseguro solo se acepta con este perfil.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      JWT_ISSUER: ${JWT_ISSUER:?required}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?required}
+      JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
+      JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
+      AUTH_VERSION_ENABLED: ${AUTH_VERSION_ENABLED:-false}
+      MS01_BASE_URL: ${MS01_BASE_URL:-}
+      AUTH_VERSION_TIMEOUT: ${AUTH_VERSION_TIMEOUT:-2s}
+      AUTH_VERSION_CACHE_TTL: ${AUTH_VERSION_CACHE_TTL:-60s}
+      MFA_REQUIRE_ADMIN: ${MFA_REQUIRE_ADMIN:-false}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
+      MONGO_AUTO_INDEX_CREATION: ${MONGO_AUTO_INDEX_CREATION:-true}
+      MS04_BASE_URL: ${MS04_BASE_URL:-http://host.docker.internal:8084}
+      MS04_TIMEOUT: ${MS04_TIMEOUT:-3s}
+      DEMAND_ZONE_ID: ${DEMAND_ZONE_ID:-America/Bogota}
+      REVIEW_AI_ENABLED: ${REVIEW_AI_ENABLED:-false}
+      LITTLELLM_URL: ${LITTLELLM_URL:-}
+      LITTLELLM_API_KEY: ${LITTLELLM_API_KEY:-}
+      LITTLELLM_API_KEY_HEADER: ${LITTLELLM_API_KEY_HEADER:-Authorization}
+      LITTLELLM_API_KEY_PREFIX: ${LITTLELLM_API_KEY_PREFIX:-Bearer}
+      LITTLELLM_MODEL: ${LITTLELLM_MODEL:-littlellm}
+      LITTLELLM_CHAT_PATH: ${LITTLELLM_CHAT_PATH:-/v1/chat/completions}
+      REVIEW_AI_TIMEOUT: ${REVIEW_AI_TIMEOUT:-PT5S}
+      REVIEW_AI_THRESHOLD: ${REVIEW_AI_THRESHOLD:-0.7}
+      REVIEW_AI_TEMPERATURE: ${REVIEW_AI_TEMPERATURE:-0.0}
+      REVIEW_AI_ACTION: ${REVIEW_AI_ACTION:-PENDING_REVIEW}
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-true}
+      REVIEW_AI_JSON_RESPONSE_FORMAT: ${REVIEW_AI_JSON_RESPONSE_FORMAT:-false}
+      FLYWAY_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:-activities_events}"
+      FLYWAY_USER: ${FLYWAY_USER:?required}
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:?required}
+      FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
+      RESERVATION_AUTO_CLOSE_CRON: "${RESERVATION_AUTO_CLOSE_CRON:-0 15 3 * * *}"
+      RESERVATION_AUTO_CLOSE_GRACE: ${RESERVATION_AUTO_CLOSE_GRACE:-P1D}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-true}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-true}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-false}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-5000}
+      # Consumidor de catalog.site.changed v2: refresca sitio_nombre y manager_id de los eventos.
+      SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-false}
+      SITE_EVENTS_GROUP: ${SITE_EVENTS_GROUP:-ms-03-site-snapshot}
+      SITE_EVENTS_TIMEOUT: ${SITE_EVENTS_TIMEOUT:-PT10S}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  postgres_data:
+  mongo_data:

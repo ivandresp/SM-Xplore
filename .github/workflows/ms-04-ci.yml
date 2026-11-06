@@ -1,0 +1,240 @@
+## Integración continua de ms-04: compilación, pruebas con Testcontainers (PostgreSQL, MongoDB y
+## Kafka), build de la imagen Docker, escaneo con Trivy y smoke test del contenedor contra el stack
+## completo (incluido Kafka desde infrastructure/compose.yaml).
+##
+## Docker es obligatorio: si Testcontainers no puede arrancar, el job falla en vez de omitir
+## pruebas en silencio (scripts/assert-no-skipped-tests.py).
+
+name: ms-04 CI
+
+on:
+  push:
+    branches: [main, microservicios, ms-sites-services]
+    paths:
+      - "microservices/ms-04-sites-and-services/**"
+      - "contracts/**"
+      - "infrastructure/compose.yaml"
+      - ".github/workflows/ms-04-ci.yml"
+      # Si cambian los finales de línea, el build de la imagen puede romperse (./gradlew: not found).
+      - ".gitattributes"
+      - ".github/scripts/assert-no-skipped-tests.py"
+  pull_request:
+    paths:
+      - "microservices/ms-04-sites-and-services/**"
+      - "contracts/**"
+      - "infrastructure/compose.yaml"
+      - ".github/workflows/ms-04-ci.yml"
+      - ".gitattributes"
+      - ".github/scripts/assert-no-skipped-tests.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ms-04-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SERVICE_DIR: microservices/ms-04-sites-and-services
+  IMAGE_NAME: smxplore/ms-04:local
+
+jobs:
+  verify:
+    name: Compilar y verificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Comprobar que Docker está disponible
+        # Sin Docker, Testcontainers marca las pruebas como omitidas y el job quedaría en verde.
+        run: |
+          docker info > /dev/null
+          docker version --format 'Docker cliente {{.Client.Version}} / servidor {{.Server.Version}}'
+
+      - name: Ejecutar pruebas y empaquetar
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          chmod +x gradlew
+          mkdir -p build
+          set -o pipefail
+          ./gradlew test bootJar --no-daemon --console=plain 2>&1 | tee build/test.log
+
+      - name: Fallar si alguna prueba se omitió
+        # P2-11: ninguna prueba que necesite Docker puede omitirse en silencio.
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: python3 "$GITHUB_WORKSPACE/.github/scripts/assert-no-skipped-tests.py" --root .
+
+      - name: Anotar los fallos de las pruebas
+        if: failure()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          python3 - <<'PY' || true
+          import glob
+          import xml.etree.ElementTree as ElementTree
+
+          for path in sorted(glob.glob("build/test-results/test/TEST-*.xml")):
+              try:
+                  suite = ElementTree.parse(path).getroot()
+              except ElementTree.ParseError:
+                  continue
+              for case in suite.iter("testcase"):
+                  failure = case.find("failure")
+                  if failure is None:
+                      failure = case.find("error")
+                  if failure is None:
+                      continue
+                  message = (failure.get("message") or "").strip().splitlines()
+                  detail = message[0][:400] if message else "sin mensaje"
+                  detail = detail.replace("%", "%25").replace("\r", " ").replace("\n", " ")
+                  detail = detail.replace("::", " ")
+                  title = f"{case.get('classname')}.{case.get('name')}"
+                  print(f"::error title={title}::{detail}")
+          PY
+          if [ -f build/test.log ]; then
+            grep -E "FAILED|error:" build/test.log | tail -n 15 | while IFS= read -r line; do
+              line="${line//%/%25}"
+              line="${line//::/ }"
+              echo "::error title=Verificación ms-04::${line}"
+            done
+            echo "## Fallos de la verificación" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 40 build/test.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publicar reportes de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ms-04-test-reports
+          path: |
+            ${{ env.SERVICE_DIR }}/build/reports/tests/test
+            ${{ env.SERVICE_DIR }}/build/test-results/test
+          if-no-files-found: ignore
+          retention-days: 7
+
+  docker:
+    name: Imagen Docker y smoke test
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          file: ${{ env.SERVICE_DIR }}/Dockerfile
+          tags: ${{ env.IMAGE_NAME }}
+          load: true
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Analizar la imagen con Trivy
+        # Se ejecuta la imagen oficial de Trivy en lugar de la accion: el resultado sale completo en
+        # el log, la version es inmutable y no se depende de un tag que se pueda reescribir.
+        env:
+          TRIVY_IMAGE: aquasec/trivy:0.68.2
+        run: |
+          set +e
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "${TRIVY_IMAGE}" image \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --timeout 15m \
+            --exit-code 1 \
+            "${IMAGE_NAME}" 2>&1 | tee trivy-report.txt
+          code=${PIPESTATUS[0]}
+          if [ "${code}" -ne 0 ]; then
+            echo "::error title=Trivy (exit ${code})::$(grep -E 'CVE-[0-9]{4}-[0-9]+|^ERROR|^FATAL' trivy-report.txt | head -n 5 | tr '\n' ' ')"
+          fi
+          exit "${code}"
+
+      - name: Publicar el reporte de Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ms-04-trivy-report
+          path: trivy-report.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Levantar Kafka y la red compartida
+        run: |
+          docker compose -f infrastructure/compose.yaml up -d --wait --wait-timeout 240 kafka
+
+      - name: Levantar PostgreSQL, MongoDB y Mailpit
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          docker compose up -d postgres mongo mailpit
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T mongo mongosh --quiet \
+              --eval 'db.adminCommand({ ping: 1 }).ok' > /dev/null 2>&1; then
+              echo "MongoDB respondió en el intento ${attempt}"
+              break
+            fi
+            sleep 2
+          done
+          docker compose run --rm mongo-init
+
+      - name: Arrancar el servicio
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          docker run -d --name ms-04 --network smxplore-net -p 8084:8080 \
+            -e MONGODB_URI="mongodb://mongo:27017/smxplore?replicaSet=rs0" \
+            -e POSTGRES_R2DBC_URL="r2dbc:postgresql://postgres:5432/smxplore" \
+            -e POSTGRES_JDBC_URL="jdbc:postgresql://postgres:5432/smxplore" \
+            -e POSTGRES_USER="smxplore" \
+            -e POSTGRES_PASSWORD="change-me" \
+            -e KAFKA_BOOTSTRAP_SERVERS="kafka:9092" \
+            -e JWT_PUBLIC_KEY_LOCATION="file:/keys/test-public.pem" \
+            -e JWT_ISSUER="https://ms-04.local" \
+            -e OUTBOX_ENABLED="true" \
+            -v "$PWD/src/test/resources/keys/test-public.pem:/keys/test-public.pem:ro" \
+            "${{ env.IMAGE_NAME }}"
+
+      - name: Verificar el estado del servicio
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8084/actuator/health | grep -q '"status":"UP"'; then
+              echo "ms-04 respondió UP en el intento ${attempt}"
+              curl -fsS http://localhost:8084/actuator/health
+              curl -fsS -o /dev/null -w "OpenAPI: %{http_code}\n" http://localhost:8084/v3/api-docs
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ms-04 no respondió UP; se muestran los logs del contenedor"
+          docker logs ms-04
+          exit 1
+
+      - name: Mostrar logs si algo falló
+        if: failure()
+        run: docker logs --no-color ms-04 || true
+
+      - name: Apagar el stack
+        if: always()
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: |
+          docker rm -f ms-04 || true
+          docker compose down -v --remove-orphans || true
+          docker compose -f infrastructure/compose.yaml down -v --remove-orphans || true

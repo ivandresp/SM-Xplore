@@ -1,0 +1,670 @@
+# Stack de producción de SM-Xplore (P1-5).
+#
+# Cómo se usa (desde la raíz del repositorio, ver deploy/prod/README.md):
+#   docker compose --env-file deploy/prod/.env.prod --env-file deploy/prod/images.env \
+#     -f deploy/prod/compose.yaml up -d
+# El segundo --env-file gana, así que los digests pineados de images.env mandan sobre los
+# placeholders del .env.prod.
+#
+# Decisiones de este stack:
+# - TLS y el gateway/proxy quedan FUERA de este compose (diferido a P3-11): el proxy externo
+#   termina TLS y publica los puertos de aplicación. Aquí solo se publican los 808x en 127.0.0.1
+#   y ninguna base de datos, broker, cache ni Prometheus queda expuesta al host.
+# - Kafka usa UN broker KRaft (no hay clúster de 3 en esta entrega): replicación 1 y
+#   `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false`; los tópicos los crea `kafka-init` con
+#   deploy/kafka/create-topics.sh (P1-6).
+# - Mongo arranca como replica set de 3 nodos con keyfile y TLS obligatorios (P1-7 genera los
+#   archivos con deploy/mongo/gen-keyfile.sh, deploy/mongo/gen-tls.sh y siembra el set y los
+#   usuarios con deploy/mongo/init-replica-auth.sh).
+# - Prometheus raspa los 5 actuator y los exporters (P1-6 mantiene prometheus.yml/alerts.yml).
+name: smxplore-prod
+
+x-logging: &prod-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-mongo-command: &mongo-command
+  - |
+    set -eu
+    install -m 400 -o mongodb -g mongodb /run/secrets/mongo_keyfile /tmp/mongo-keyfile
+    install -m 400 -o mongodb -g mongodb /run/secrets/mongo_server_cert /tmp/mongo-server.pem
+    install -m 444 -o mongodb -g mongodb /run/secrets/mongo_ca /tmp/mongo-ca.pem
+    exec docker-entrypoint.sh mongod \
+      --replSet rs0 \
+      --bind_ip_all \
+      --port 27017 \
+      --auth \
+      --keyFile /tmp/mongo-keyfile \
+      --tlsMode requireTLS \
+      --tlsAllowConnectionsWithoutCertificates \
+      --tlsCertificateKeyFile /tmp/mongo-server.pem \
+      --tlsCAFile /tmp/mongo-ca.pem
+
+x-mongo-healthcheck: &mongo-healthcheck
+  test: ["CMD-SHELL", "mongosh --quiet --tls --tlsCAFile /tmp/mongo-ca.pem --port 27017 --eval \"db.adminCommand({ ping: 1 }).ok\" | grep -q 1"]
+  interval: 15s
+  timeout: 10s
+  retries: 20
+  start_period: 60s
+
+services:
+  # ---------------------------------------------------------------------------------------------
+  # Persistencia
+  # ---------------------------------------------------------------------------------------------
+  postgres:
+    image: ${POSTGRES_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # Las usa deploy/postgres/01-databases.sh para crear la base y los roles de ms-03.
+      MS03_APP_PASSWORD: ${MS03_APP_PASSWORD:?}
+      MS03_FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:?}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-smxplore} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # Tres nodos: sin un replica set Mongo rechaza transacciones y ms-02/ms-04 las usan para su
+  # outbox. Cada nodo copia los secretos a /tmp con los permisos que exige mongod (el archivo de
+  # Docker Compose queda 0444 y mongod rechaza un keyfile legible por todo el mundo).
+  mongo1:
+    image: ${MONGO_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command: *mongo-command
+    secrets:
+      - mongo_keyfile
+      - mongo_server_cert
+      - mongo_ca
+    volumes:
+      - mongo1_data:/data/db
+    healthcheck: *mongo-healthcheck
+
+  mongo2:
+    image: ${MONGO_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command: *mongo-command
+    secrets:
+      - mongo_keyfile
+      - mongo_server_cert
+      - mongo_ca
+    volumes:
+      - mongo2_data:/data/db
+    healthcheck: *mongo-healthcheck
+
+  mongo3:
+    image: ${MONGO_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command: *mongo-command
+    secrets:
+      - mongo_keyfile
+      - mongo_server_cert
+      - mongo_ca
+    volumes:
+      - mongo3_data:/data/db
+    healthcheck: *mongo-healthcheck
+
+  # One-shot: inicia el replica set rs0 y crea el usuario root y un usuario por base.
+  # Script y contrato de variables: deploy/mongo/init-replica-auth.sh (dueño P1-7).
+  # Comparte el namespace de red de mongo1 para hablarle por 127.0.0.1: con `--auth` y sin
+  # usuarios todavía, MongoDB solo deja crear el primer usuario desde loopback (localhost
+  # exception); conectarse por el nombre de servicio `mongo1` devolvería Unauthorized.
+  mongo-init:
+    image: ${MONGO_IMAGE:?}
+    restart: "no"
+    mem_limit: 256m
+    logging: *prod-logging
+    network_mode: "service:mongo1"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - exec sh /scripts/init-replica-auth.sh
+    environment:
+      MONGO_REPLICA_SET: rs0
+      MONGO_HOSTS: mongo1:27017,mongo2:27017,mongo3:27017
+      MONGO_TLS: "true"
+      MONGO_CA_FILE: /run/secrets/mongo_ca
+      MONGO_ROOT_USER: ${MONGO_ROOT_USER:-root}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?}
+      MONGO_USER_MS01: ${MONGO_USER_MS01:-ms01_app}
+      MONGO_PASSWORD_MS01: ${MONGO_PASSWORD_MS01:?}
+      MONGO_USER_MS02: ${MONGO_USER_MS02:-ms02_app}
+      MONGO_PASSWORD_MS02: ${MONGO_PASSWORD_MS02:?}
+      MONGO_USER_MS03: ${MONGO_USER_MS03:-ms03_app}
+      MONGO_PASSWORD_MS03: ${MONGO_PASSWORD_MS03:?}
+      MONGO_USER_MS04: ${MONGO_USER_MS04:-ms04_app}
+      MONGO_PASSWORD_MS04: ${MONGO_PASSWORD_MS04:?}
+    volumes:
+      - ../mongo/init-replica-auth.sh:/scripts/init-replica-auth.sh:ro
+    secrets:
+      - mongo_ca
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+
+  redis:
+    image: ${REDIS_IMAGE:?}
+    restart: always
+    mem_limit: 512m
+    logging: *prod-logging
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  neo4j:
+    image: ${NEO4J_IMAGE:?}
+    restart: always
+    mem_limit: 2560m
+    logging: *prod-logging
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?}
+      NEO4J_server_memory_heap_initial__size: 1G
+      NEO4J_server_memory_heap_max__size: 2G
+      NEO4J_server_memory_pagecache_size: 512m
+      # Métricas para Prometheus en la red interna (nunca en el host). En Neo4j 5 el prefijo
+      # de entorno es NEO4J_server_metrics_prometheus_* (no NEO4J_dbms_metrics_*).
+      NEO4J_server_metrics_prometheus_enabled: "true"
+      NEO4J_server_metrics_prometheus_endpoint: 0.0.0.0:2004
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------------------------
+  # Kafka (un broker KRaft) + creación idempotente de tópicos
+  # ---------------------------------------------------------------------------------------------
+  kafka:
+    image: ${KAFKA_IMAGE:?}
+    restart: always
+    mem_limit: 2048m
+    logging: *prod-logging
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Producción: los tópicos se crean a mano (kafka-init), nunca al vuelo.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID:?}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
+
+  # One-shot: aplica deploy/kafka/topics.env con particiones y replicación (P1-6).
+  kafka-init:
+    image: ${KAFKA_IMAGE:?}
+    restart: "no"
+    mem_limit: 512m
+    logging: *prod-logging
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - exec bash /scripts/create-topics.sh --bootstrap-server kafka:9092
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      TOPICS_FILE: /scripts/topics.env
+    volumes:
+      - ../kafka/create-topics.sh:/scripts/create-topics.sh:ro
+      - ../kafka/topics.env:/scripts/topics.env:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  kafka-exporter:
+    image: ${KAFKA_EXPORTER_IMAGE:?}
+    restart: always
+    mem_limit: 128m
+    logging: *prod-logging
+    command: ["--kafka.server=kafka:9092"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------------------------
+  # Observabilidad: solo red interna, sin puertos publicados
+  # ---------------------------------------------------------------------------------------------
+  postgres-exporter:
+    image: ${POSTGRES_EXPORTER_IMAGE:?}
+    restart: always
+    mem_limit: 128m
+    logging: *prod-logging
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-smxplore}:${POSTGRES_PASSWORD:?}@postgres:5432/postgres?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-exporter:
+    image: ${REDIS_EXPORTER_IMAGE:?}
+    restart: always
+    mem_limit: 128m
+    logging: *prod-logging
+    environment:
+      REDIS_ADDR: redis://:${REDIS_PASSWORD:?}@redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:?}
+    restart: always
+    mem_limit: 512m
+    logging: *prod-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      ms-01:
+        condition: service_started
+      ms-02:
+        condition: service_started
+      ms-03:
+        condition: service_started
+      ms-04:
+        condition: service_started
+      ms-05:
+        condition: service_started
+      kafka-exporter:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
+      redis-exporter:
+        condition: service_started
+
+  # ---------------------------------------------------------------------------------------------
+  # Aplicaciones: perfil prod, JWT con clave pública PEM desde secreto (sin JWKS HTTP ni
+  # JWT_ALLOW_INSECURE_JWKS). Los puertos se publican en 127.0.0.1 para el proxy externo.
+  # ---------------------------------------------------------------------------------------------
+  ms-01:
+    image: ${MS01_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8081"
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
+      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
+      DB_USERNAME: ${POSTGRES_USER:-smxplore}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      MONGODB_URI: "mongodb://${MONGO_USER_MS01:-ms01_app}:${MONGO_PASSWORD_MS01:?}@mongo1:27017,mongo2:27017,mongo3:27017/smxplore_reviews?replicaSet=rs0&authSource=smxplore_reviews&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
+      JWT_ISSUER: ${JWT_ISSUER:?}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?}
+      # JwtKeyStore lee este archivo y exige que contenga la privada y la pública en PEM.
+      JWT_KEY_STORE: /run/secrets/jwt_keys
+      JWT_ALLOW_GENERATED_KEYS: "false"
+      MFA_SECRET_KEY: ${MFA_SECRET_KEY:?}
+      MFA_REQUIRED_FOR_ADMINS: "true"
+      SECURITY_HSTS_ENABLED: "true"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?}
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?}
+      MAIL_HOST: ${SMTP_HOST:-localhost}
+      MAIL_PORT: ${SMTP_PORT:-25}
+      REVIEW_INDEX_INIT: "true"
+      ANOMALY_DETECTION_ENABLED: "true"
+      RETENTION_ENABLED: "true"
+      AUTH_RATE_LIMIT_ENABLED: "true"
+      LOGIN_LOCKOUT_ENABLED: "true"
+      JDK_JAVA_OPTIONS: "-Xms128m -Xmx768m -XX:MaxDirectMemorySize=128m"
+    ports:
+      - "127.0.0.1:${MS01_PORT:?}:8081"
+    secrets:
+      - jwt_keys
+      - mongo_ca
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  ms-02:
+    image: ${MS02_IMAGE:?}
+    restart: always
+    mem_limit: 768m
+    logging: *prod-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      MONGODB_URI: "mongodb://${MONGO_USER_MS02:-ms02_app}:${MONGO_PASSWORD_MS02:?}@mongo1:27017,mongo2:27017,mongo3:27017/security_reports?replicaSet=rs0&authSource=security_reports&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_ISSUER: ${JWT_ISSUER:?}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?}
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+      MS01_BASE_URL: http://ms-01:8081
+      OUTBOX_ENABLED: "true"
+      OUTBOX_PRODUCER: ms-02
+      AUTH_VERSION_ENABLED: "true"
+      MONGO_AUTO_INDEX_CREATION: "true"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
+      JDK_JAVA_OPTIONS: "-Xms128m -Xmx512m"
+    ports:
+      - "127.0.0.1:${MS02_PORT:?}:8080"
+    secrets:
+      - jwt_public_key
+      - mongo_ca
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  ms-03:
+    image: ${MS03_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8082"
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/activities_events
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: activities_events
+      POSTGRES_USER: ${MS03_APP_USER:-ms03_app}
+      POSTGRES_PASSWORD: ${MS03_APP_PASSWORD:?}
+      FLYWAY_ENABLED: "true"
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/activities_events
+      FLYWAY_USER: ${MS03_FLYWAY_USER:-ms03_flyway}
+      FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:?}
+      MONGODB_URI: "mongodb://${MONGO_USER_MS03:-ms03_app}:${MONGO_PASSWORD_MS03:?}@mongo1:27017,mongo2:27017,mongo3:27017/reviews?replicaSet=rs0&authSource=reviews&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OUTBOX_ENABLED: "true"
+      SITE_EVENTS_ENABLED: "true"
+      SITE_EVENTS_GROUP: ms-03-site-events
+      REVIEW_EVENT_RECONCILIATION_ENABLED: "true"
+      DEMAND_ZONE_ID: ${DEMAND_ZONE_ID:-America/Bogota}
+      JWT_ISSUER: ${JWT_ISSUER:?}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?}
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+      MS01_BASE_URL: http://ms-01:8081
+      MS04_BASE_URL: http://ms-04:8080
+      AUTH_VERSION_ENABLED: "true"
+      MONGO_AUTO_INDEX_CREATION: "true"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
+      JDK_JAVA_OPTIONS: "-Xms128m -Xmx768m"
+    ports:
+      - "127.0.0.1:${MS03_PORT:?}:8082"
+    secrets:
+      - jwt_public_key
+      - mongo_ca
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  ms-04:
+    image: ${MS04_IMAGE:?}
+    restart: always
+    mem_limit: 1024m
+    logging: *prod-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/smxplore
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      MONGODB_URI: "mongodb://${MONGO_USER_MS04:-ms04_app}:${MONGO_PASSWORD_MS04:?}@mongo1:27017,mongo2:27017,mongo3:27017/smxplore?replicaSet=rs0&authSource=smxplore&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP_ID: ms-04-notifications
+      NOTIFICATIONS_ENABLED: "true"
+      # El correo saliente requiere un SMTP real; se deja apagado hasta configurarlo.
+      NOTIFICATIONS_EMAIL_ENABLED: "false"
+      CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-false}
+      BOOKINGS_AUTO_COMPLETE_ENABLED: "true"
+      OUTBOX_ENABLED: "true"
+      OUTBOX_PRODUCER: ms-04
+      AUTH_VERSION_ENABLED: "true"
+      MONGO_AUTO_INDEX_CREATION: "true"
+      JWT_ISSUER: ${JWT_ISSUER:?}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?}
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+      MS01_BASE_URL: http://ms-01:8081
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
+      JDK_JAVA_OPTIONS: "-Xms128m -Xmx768m"
+    ports:
+      - "127.0.0.1:${MS04_PORT:?}:8080"
+    secrets:
+      - jwt_public_key
+      - mongo_ca
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  ms-05:
+    image: ${MS05_IMAGE:?}
+    restart: always
+    mem_limit: 1536m
+    logging: *prod-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?}
+      NEO4J_INITIALIZE_SCHEMA: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+      RECOMMENDATIONS_CACHE_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP_ID: ms-05-recommendations
+      EVENTS_CONSUMER_ENABLED: "true"
+      EVENTS_RETENTION_ENABLED: "true"
+      # Reindexado y feed de export: ms-05 valida el payload de catálogo contra el contrato.
+      MS03_BASE_URL: http://ms-03:8082
+      CATALOG_EXPORT_BASE_URL: http://ms-04:8080
+      SEED_ENABLED: "false"
+      JWT_ISSUER: ${JWT_ISSUER:?}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?}
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+      MS01_BASE_URL: http://ms-01:8081
+      AUTH_VERSION_ENABLED: "true"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
+      JDK_JAVA_OPTIONS: "-Xms256m -Xmx1024m"
+    ports:
+      - "127.0.0.1:${MS05_PORT:?}:8080"
+    secrets:
+      - jwt_public_key
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  # ---------------------------------------------------------------------------------------------
+  # Punto de entrada HTTP(S): nginx enruta /api/v1/** y /svc/ms-0N/** a los servicios.
+  # Sustituye al "gateway externo" que dejaba abierto P3-11: TLS se termina aquí con los
+  # certificados del operador; si se quiere un balanceador delante, este contenedor sigue siendo
+  # el único destino. Configuracion y runbook: deploy/gateway/README.md.
+  # ---------------------------------------------------------------------------------------------
+  gateway:
+    image: ${GATEWAY_IMAGE:?}
+    restart: always
+    mem_limit: 128m
+    logging: *prod-logging
+    environment:
+      # false = exige certificados reales; entrypoint.sh no se ejecuta en esta imagen, pero la
+      # variable queda documentada para que nadie arranque el gateway con autofirmado en produccion.
+      TLS_SELF_SIGNED: "false"
+    ports:
+      - "${GATEWAY_HTTP_PORT:?}:80"
+      - "${GATEWAY_HTTPS_PORT:?}:443"
+    volumes:
+      - ../gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../gateway/conf.d:/etc/nginx/conf.d:ro
+      - ../gateway/snippets:/etc/nginx/snippets:ro
+    secrets:
+      # Rutas absolutas: nginx espera /etc/nginx/certs/tls.crt y tls.key.
+      - source: gateway_tls_cert
+        target: /etc/nginx/certs/tls.crt
+      - source: gateway_tls_key
+        target: /etc/nginx/certs/tls.key
+    depends_on:
+      ms-01:
+        condition: service_healthy
+      ms-02:
+        condition: service_healthy
+      ms-03:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+      ms-05:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+networks:
+  default:
+    name: smxplore-prod
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
+  kafka_data:
+  redis_data:
+  neo4j_data:
+  prometheus_data:
+
+# Secretos locales de Docker Compose: los archivos los prepara el operador (ver README) y las
+# rutas se declaran con `:?` para que el despliegue falle si faltan.
+secrets:
+  jwt_keys:
+    file: ${JWT_KEYS_FILE:?}
+  jwt_public_key:
+    file: ${JWT_PUBLIC_KEY_FILE:?}
+  mongo_keyfile:
+    file: ${MONGO_KEYFILE_FILE:?}
+  mongo_ca:
+    file: ${MONGO_CA_FILE:?}
+  mongo_server_cert:
+    file: ${MONGO_SERVER_CERT_FILE:?}
+  gateway_tls_cert:
+    file: ${GATEWAY_TLS_CERT_FILE:?}
+  gateway_tls_key:
+    file: ${GATEWAY_TLS_KEY_FILE:?}

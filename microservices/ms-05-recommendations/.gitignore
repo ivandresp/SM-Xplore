@@ -1,0 +1,6 @@
+.gradle/
+build/
+.idea/
+*.iml
+.env
+PLAN-MS-05-RECOMENDACIONES.md

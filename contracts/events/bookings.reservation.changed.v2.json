@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/bookings.reservation.changed.v2.json",
+  "title": "bookings.reservation.changed.v2",
+  "description": "Booking event v2. Adds the item name, explicit guide/manager recipients and NO_SHOW. ms-03 publishes activity/event reservations; ms-04 publishes service reservations and consumes both versions for notifications.",
+  "allOf": [
+    {
+      "$ref": "./envelope.v2.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "bookings.reservation.changed"
+        },
+        "eventVersion": {
+          "const": 2
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "reservationId",
+            "touristId",
+            "status",
+            "items",
+            "updatedAt"
+          ],
+          "properties": {
+            "reservationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "touristId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "bookedFor": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "status": {
+              "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW"]
+            },
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["itemType", "itemId", "itemName", "people", "total"],
+                "properties": {
+                  "itemType": {
+                    "enum": ["ACTIVITY", "EVENT", "SERVICE"]
+                  },
+                  "itemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "itemName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "guideId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "managerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "providerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "serviceName": {
+                    "type": "string"
+                  },
+                  "people": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "total": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

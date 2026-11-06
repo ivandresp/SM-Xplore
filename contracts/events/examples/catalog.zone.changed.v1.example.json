@@ -1,0 +1,18 @@
+{
+  "eventId": "d3e4f5a6-b7c8-4d9e-8f01-2a3b4c5d6e71",
+  "eventType": "catalog.zone.changed",
+  "eventVersion": 1,
+  "occurredAt": "2026-11-05T04:00:00Z",
+  "aggregateId": "33333333-3333-3333-3333-333333333301",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-04",
+  "payload": {
+    "zoneId": "33333333-3333-3333-3333-333333333301",
+    "managerId": "66666666-6666-6666-6666-666666666601",
+    "name": "Centro Histórico",
+    "type": "URBANA",
+    "description": "Zona de mayor afluencia turística de Santa Marta",
+    "status": "ACTIVE",
+    "updatedAt": "2026-11-05T04:00:00Z"
+  }
+}

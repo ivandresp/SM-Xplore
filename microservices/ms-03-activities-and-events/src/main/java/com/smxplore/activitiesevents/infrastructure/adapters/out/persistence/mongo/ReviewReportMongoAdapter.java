@@ -1,0 +1,68 @@
+package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo;
+
+import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
+import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
+import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.document.ReviewReportDocument;
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.ReviewReportMongoRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.util.Collection;
+import java.util.UUID;
+
+@Repository
+@RequiredArgsConstructor
+public class ReviewReportMongoAdapter implements ReviewReportRepositoryPort {
+
+    private final ReviewReportMongoRepository repository;
+
+    @Override
+    public Mono<ReviewReport> save(ReviewReport report) {
+        return repository.save(toDocument(report)).map(this::toDomain);
+    }
+
+    @Override
+    public Mono<ReviewReport> findById(UUID reportId) {
+        return repository.findById(reportId).map(this::toDomain);
+    }
+
+    @Override
+    public Flux<ReviewReport> findByStatus(ReviewReportStatus status, int limit) {
+        if (status == null || limit < 1) {
+            return Flux.empty();
+        }
+        return repository.findByStatusOrderByCreatedAtAsc(status, PageRequest.of(0, limit))
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Flux<ReviewReport> findByStatusAndReviewIds(ReviewReportStatus status, Collection<UUID> reviewIds,
+                                                       int limit) {
+        if (status == null || limit < 1 || reviewIds == null || reviewIds.isEmpty()) {
+            return Flux.empty();
+        }
+        return repository.findByStatusAndReviewIdInOrderByCreatedAtAsc(
+                        status, reviewIds, PageRequest.of(0, limit))
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Mono<Boolean> existsByReviewAndReporter(UUID reviewId, UUID reporterId) {
+        return repository.existsByReviewAndReporter(reviewId, reporterId);
+    }
+
+    private ReviewReportDocument toDocument(ReviewReport report) {
+        return new ReviewReportDocument(report.id(), report.reviewId(), report.reporterId(), report.reason(),
+                report.status(), report.resolvedBy(), report.resolvedAt(), report.createdAt());
+    }
+
+    private ReviewReport toDomain(ReviewReportDocument document) {
+        return new ReviewReport(document.id(), document.reviewId(), document.reporterId(), document.reason(),
+                document.status() == null ? ReviewReportStatus.PENDING : document.status(),
+                document.resolvedBy(), document.resolvedAt(), document.createdAt());
+    }
+}

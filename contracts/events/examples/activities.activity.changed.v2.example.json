@@ -1,0 +1,23 @@
+{
+  "eventId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c51",
+  "eventType": "activities.activity.changed",
+  "eventVersion": 2,
+  "occurredAt": "2026-11-05T03:00:00Z",
+  "aggregateId": "33333333-3333-3333-3333-333333333301",
+  "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
+  "producer": "ms-03",
+  "payload": {
+    "activityId": "33333333-3333-3333-3333-333333333301",
+    "siteId": "22222222-2222-2222-2222-222222222201",
+    "guideId": "44444444-4444-4444-4444-444444444401",
+    "name": "Snorkel en Playa Rosa",
+    "category": "Deportes acuáticos",
+    "price": 80000,
+    "status": "PUBLISHED",
+    "maxCapacity": 12,
+    "durationMinutes": 120,
+    "startsAt": "2026-11-12T14:00:00Z",
+    "endsAt": "2026-11-12T16:00:00Z",
+    "updatedAt": "2026-11-05T03:00:00Z"
+  }
+}

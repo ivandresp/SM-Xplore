@@ -1,0 +1,118 @@
+package com.smxplore.activitiesevents.application.reviews;
+
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.review.Review;
+import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
+import com.smxplore.activitiesevents.domain.model.review.ReviewReply;
+import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
+import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
+import com.smxplore.activitiesevents.domain.ports.usecases.review.RespondToReviewUseCasePort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * Only the entity in charge may answer: the guide of the reviewed activity, or
+ * an admin/destination manager for events (events belong to the destination).
+ */
+@Slf4j
+@RequiredArgsConstructor
+public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
+
+    private static final String ADMIN = "ADMIN";
+    private static final String DESTINATION_MANAGER = "DESTINATION_MANAGER";
+    private static final int MESSAGE_MAX_LENGTH = 1000;
+
+    private final ReviewRepositoryPort reviewRepo;
+    private final ActivityRepositoryPort activityRepo;
+    private final EventRepositoryPort eventRepo;
+    private final SiteCatalogPort siteCatalog;
+    private final ReviewEventPublisher publisher;
+
+    @Override
+    public Mono<Review> handle(UUID reviewId, UUID responderId, String role, String message,
+                               String bearerToken) {
+        if (message == null || message.isBlank()) {
+            return Mono.error(new InvalidReviewException("Response message must not be blank."));
+        }
+        if (message.length() > MESSAGE_MAX_LENGTH) {
+            return Mono.error(new InvalidReviewException(
+                    "Response message must not exceed %d characters.".formatted(MESSAGE_MAX_LENGTH)));
+        }
+        return reviewRepo.findById(reviewId)
+                .switchIfEmpty(Mono.error(new ReviewNotFoundException(reviewId)))
+                .flatMap(review -> canRespond(review, responderId, role, bearerToken)
+                        .then(Mono.defer(() -> {
+                            if (review.getStatus() == ReviewStatus.HIDDEN
+                                    || review.getStatus() == ReviewStatus.DELETED) {
+                                return Mono.error(new InvalidReviewException(
+                                        "A hidden or deleted review cannot be answered."));
+                            }
+                            if (review.getReply() != null) {
+                                return Mono.error(new ReviewAlreadyRespondedException(
+                                        "This review already has a response."));
+                            }
+                            return reviewRepo.save(review.withReply(
+                                            new ReviewReply(message, responderId, Instant.now())))
+                                    .flatMap(publisher::publish);
+                        })));
+    }
+
+    private Mono<Void> canRespond(Review review, UUID responderId, String role, String bearerToken) {
+        if (ADMIN.equals(role)) {
+            return Mono.empty();
+        }
+        if (review.getItemType() == ReviewItemType.EVENT) {
+            return eventRepo.findById(review.getItemId())
+                    .switchIfEmpty(Mono.error(new EventNotFoundException(review.getItemId())))
+                    .flatMap(event -> managerInCharge(event, bearerToken)
+                            .switchIfEmpty(Mono.error(new ReviewResponseNotAllowedException(
+                                    "The event does not have a destination manager.")))
+                            .flatMap(managerId -> DESTINATION_MANAGER.equals(role) && responderId.equals(managerId)
+                                    ? Mono.empty()
+                                    : Mono.error(new ReviewResponseNotAllowedException(
+                                            "Only the destination manager in charge of the event can respond."))));
+        }
+        return activityRepo.findById(review.getItemId())
+                .switchIfEmpty(Mono.error(new ActivityNotFoundException(review.getItemId())))
+                .flatMap(activity -> activity.getGuideId() != null && activity.getGuideId().equals(responderId)
+                        ? Mono.empty()
+                        : Mono.error(new ReviewResponseNotAllowedException(
+                                "Only the guide in charge of the activity can respond.")));
+    }
+
+    /**
+     * Resolves the manager that owns the site right now instead of trusting the snapshot taken when
+     * the event was created, so a reassigned manager loses the reply right immediately.
+     *
+     * <p>If ms-04 does not answer, or the site no longer exists, the stored snapshot is used: the
+     * alternative is rejecting every reply whenever the catalog is down. The warning is the only
+     * trace, so the fallback is visible in the logs.
+     */
+    private Mono<UUID> managerInCharge(Event event, String bearerToken) {
+        var snapshot = Mono.justOrEmpty(event.getManagerId());
+        if (event.getSiteId() == null || bearerToken == null || bearerToken.isBlank()) {
+            return snapshot;
+        }
+        return siteCatalog.findById(event.getSiteId(), bearerToken)
+                .map(SiteCatalogPort.SiteSnapshot::managerId)
+                .switchIfEmpty(snapshot)
+                .onErrorResume(error -> {
+                    log.warn("Could not revalidate the site manager of event {}: {}",
+                            event.getId(), error.toString());
+                    return snapshot;
+                });
+    }
+}

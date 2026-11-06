@@ -1,0 +1,452 @@
+# SM-Xplore — stack local completo (desarrollo)
+#
+# Levanta la plataforma entera con un solo comando:
+#
+#   docker compose up -d --build --wait --wait-timeout 600
+#
+# Incluye la infraestructura compartida (PostgreSQL, MongoDB, Kafka, Redis, Neo4j y Mailpit)
+# y los cinco microservicios. Es un stack de DESARROLLO: no usar tal cual en produccion
+# (sin TLS, sin autenticacion en MongoDB, secretos en .env).
+#
+# Los compose por servicio siguen existiendo para trabajar en uno solo; este archivo es la
+# composicion integrada. Puertos y volumenes son unicos: no hay choques entre servicios.
+
+name: smxplore
+
+x-jwt-env: &jwt-env
+  JWK_SET_URI: http://ms-01:8081/.well-known/jwks.json
+  JWT_ISSUER: sm-xplore-ms-01
+  JWT_AUDIENCE: sm-xplore-services
+  # Solo stack local: dentro de Compose el emisor se alcanza por HTTP en la red privada. El flag
+  # exige un perfil local (el guard de cada servicio falla el arranque si no lo hay) y el perfil
+  # prod lo prohíbe.
+  JWT_ALLOW_INSECURE_JWKS: "true"
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+  # En local/dev la revocacion (ver) y el MFA administrativo quedan apagados para no exigir
+  # ms-01 en cada peticion. En produccion el perfil prod los activa.
+  AUTH_VERSION_ENABLED: "false"
+  MS01_BASE_URL: http://ms-01:8081
+  MFA_REQUIRE_ADMIN: "false"
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200,http://localhost:5173}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app-healthcheck: &app-healthcheck
+  interval: 15s
+  timeout: 5s
+  retries: 20
+  start_period: 120s
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infraestructura compartida
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17-alpine}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: smxplore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smxplore}
+      # Contrasenas de los roles de ms-03 (DDL y DML separados).
+      MS03_APP_PASSWORD: ${MS03_APP_PASSWORD:-ms03_app}
+      MS03_FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:-ms03_flyway}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U smxplore -d smxplore_users"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mongo:
+    image: mongo:${MONGO_VERSION:-8.2}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 768m
+    # Replica set de un solo nodo: ms-02 y ms-04 usan transacciones (outbox).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27019}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  mongo-init:
+    image: mongo:${MONGO_VERSION:-8.2}
+    restart: "no"
+    logging: *default-logging
+    mem_limit: 128m
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/init-replica.sh"]
+    volumes:
+      - ./deploy/mongo/init-replica.sh:/init/init-replica.sh:ro
+
+  kafka:
+    image: ${KAFKA_IMAGE:-apache/kafka:4.1.0}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1024m
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-4L6g3nShT-eMCtK--X86sw}
+    ports:
+      - "127.0.0.1:${KAFKA_EXTERNAL_PORT:-29092}:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  kafka-ui:
+    image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:v0.7.2}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 192m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${KAFKA_UI_PORT:-8090}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: smxplore
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 192m
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:${NEO4J_VERSION:-5.26-community}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1536m
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-change-me}
+      NEO4J_server_memory_heap_initial__size: 384m
+      NEO4J_server_memory_heap_max__size: 768m
+      NEO4J_server_memory_pagecache_size: 192m
+    ports:
+      - "127.0.0.1:${NEO4J_HTTP_PORT:-7474}:7474"
+      - "127.0.0.1:${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  mailpit:
+    image: ${MAILPIT_IMAGE:-axllent/mailpit:v1.27}
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:${SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+
+  # ---------------------------------------------------------------------------
+  # Microservicios
+  # ---------------------------------------------------------------------------
+
+  ms-01:
+    build:
+      context: ./microservices/ms-01-users-and-anomalies
+      dockerfile: Dockerfile
+    image: smxplore/ms-01:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${MS01_PORT:-8081}:8081"
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
+      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
+      DB_USERNAME: smxplore
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-smxplore}
+      MONGODB_URI: mongodb://mongo:27017/smxplore_reviews
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      SERVER_PORT: "8081"
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      JWT_ISSUER: sm-xplore-ms-01
+      JWT_AUDIENCE: sm-xplore-services
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200,http://localhost:5173}
+      BOOTSTRAP_ADMIN_ENABLED: "true"
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@smxplore.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
+      # Clave compartida del endpoint interno de contactos (P2-9). En local es una clave de
+      # desarrollo; el gateway bloquea /internal/** desde el exterior.
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+    volumes:
+      # El perfil dev genera y persiste la pareja RSA de JWT aqui.
+      - ms01_data:/app/.local
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q UP"]
+
+  ms-02:
+    build:
+      context: ./microservices/ms-02-security-reports
+      dockerfile: Dockerfile
+    image: smxplore/ms-02:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MS02_PORT:-8080}:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/security_reports?replicaSet=rs0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OUTBOX_ENABLED: "true"
+      OUTBOX_PRODUCER: ms-02
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+      <<: *jwt-env
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+
+  ms-03:
+    build:
+      context: ./microservices/ms-03-activities-and-events
+      dockerfile: Dockerfile
+    image: smxplore/ms-03:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MS03_PORT:-8082}:8082"
+    environment:
+      SERVER_PORT: "8082"
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/activities_events
+      POSTGRES_USER: ms03_app
+      POSTGRES_PASSWORD: ${MS03_APP_PASSWORD:-ms03_app}
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/activities_events
+      FLYWAY_USER: ms03_flyway
+      FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:-ms03_flyway}
+      FLYWAY_ENABLED: "true"
+      MONGODB_URI: "mongodb://mongo:27017/reviews?replicaSet=rs0&uuidRepresentation=standard"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OUTBOX_ENABLED: "true"
+      SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-true}
+      # Solo local: ms-03 exige HTTPS para un JWKS remoto; dentro de Compose el emisor
+      # se alcanza por HTTP en la red privada.
+      JWT_ALLOW_INSECURE_JWKS: "true"
+      MS04_BASE_URL: http://ms-04:8080
+      DEMAND_ZONE_ID: ${DEMAND_ZONE_ID:-America/Bogota}
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+      <<: *jwt-env
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
+
+  ms-04:
+    build:
+      context: ./microservices/ms-04-sites-and-services
+      dockerfile: Dockerfile
+    image: smxplore/ms-04:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      ms-01:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MS04_PORT:-8084}:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/smxplore?replicaSet=rs0
+      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/smxplore
+      POSTGRES_USER: smxplore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smxplore}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NOTIFICATIONS_ENABLED: "true"
+      NOTIFICATIONS_EMAIL_ENABLED: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      OUTBOX_ENABLED: "true"
+      OUTBOX_PRODUCER: ms-04
+      CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-true}
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+      <<: *jwt-env
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+
+  ms-05:
+    build:
+      context: ./microservices/ms-05-recommendations
+      dockerfile: Dockerfile
+    image: smxplore/ms-05:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      ms-01:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MS05_PORT:-8085}:8080"
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-me}
+      NEO4J_INITIALIZE_SCHEMA: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      RECOMMENDATIONS_CACHE_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EVENTS_CONSUMER_ENABLED: "true"
+      CATALOG_EXPORT_BASE_URL: http://ms-04:8080
+      MS03_BASE_URL: http://ms-03:8082
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+      <<: *jwt-env
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+
+  # Punto de entrada unico del stack (HTTP y HTTPS). Enruta /api/v1/** al
+  # servicio dueno de cada prefijo y expone /svc/ms-0N/** como acceso 1:1.
+  # Configuracion y tabla de rutas: deploy/gateway/ (ver README.md).
+  gateway:
+    build:
+      context: ./deploy/gateway
+      dockerfile: Dockerfile
+    image: smxplore/gateway:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 128m
+    depends_on:
+      ms-01:
+        condition: service_healthy
+      ms-02:
+        condition: service_healthy
+      ms-03:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+      ms-05:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8088}:80"
+      - "127.0.0.1:${GATEWAY_HTTPS_PORT:-8443}:443"
+    environment:
+      # En desarrollo el gateway genera un certificado autofirmado en el
+      # volumen gateway_certs la primera vez (ver deploy/gateway/entrypoint.sh).
+      TLS_SELF_SIGNED: "true"
+      TLS_CN: ${GATEWAY_TLS_CN:-localhost}
+    volumes:
+      - ./deploy/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/gateway/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/gateway/snippets:/etc/nginx/snippets:ro
+      - gateway_certs:/etc/nginx/certs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+networks:
+  default:
+    name: smxplore-stack
+
+volumes:
+  postgres_data:
+  mongo_data:
+  kafka_data:
+  redis_data:
+  neo4j_data:
+  ms01_data:
+  gateway_certs:

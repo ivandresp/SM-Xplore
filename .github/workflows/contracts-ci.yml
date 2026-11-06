@@ -1,0 +1,121 @@
+name: Contracts CI
+
+# Valida la carpeta versionada de contratos sin levantar el stack: cada
+# contracts/events/<evento>.vN.json debe tener su fixture en examples/ y el
+# fixture debe validar contra el esquema (Draft 2020-12). Ademas exige que todo
+# esquema *.v2.json fije eventVersion const 2, para que las versiones no se
+# mezclen. No usa Docker, Java ni Testcontainers: tarda segundos.
+
+on:
+  push:
+    branches: [main, microservicios]
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/contracts-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validar esquemas y ejemplos de eventos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Todo esquema tiene su ejemplo
+        run: |
+          set -euo pipefail
+          status=0
+          for schema in contracts/events/*.v1.json contracts/events/*.v2.json; do
+            [ -e "$schema" ] || continue
+            name=$(basename "$schema" .json)
+            case "$name" in
+              envelope.v*) continue ;;
+            esac
+            example="contracts/events/examples/$name.example.json"
+            if [ ! -f "$example" ]; then
+              echo "::error file=$schema::falta el fixture $example"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Validar cada ejemplo contra su esquema (AJV, Draft 2020-12)
+        run: |
+          set -euo pipefail
+          total=0
+          for schema in contracts/events/*.v1.json contracts/events/*.v2.json; do
+            [ -e "$schema" ] || continue
+            name=$(basename "$schema" .json)
+            case "$name" in
+              envelope.v*) continue ;;
+            esac
+            example="contracts/events/examples/$name.example.json"
+            # El sobre que referencia cada esquema decide el -r que hay que cargar.
+            resolver=$(grep -o 'envelope\.v[0-9]*\.json' "$schema" | head -n 1)
+            if [ -z "$resolver" ]; then
+              echo "::error file=$schema::$name no referencia un envelope.vN.json"
+              exit 1
+            fi
+            echo "== $name (resolver: $resolver)"
+            npx --yes ajv-cli@5 validate \
+              -s "$schema" \
+              -d "$example" \
+              --spec=draft2020 \
+              --strict=false \
+              -r "contracts/events/$resolver"
+            total=$((total + 1))
+          done
+          echo "Contratos validados: $total"
+
+      - name: Todo esquema .v2 fija eventVersion const 2
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const dir = 'contracts/events';
+          let bad = 0;
+          let checked = 0;
+          const files = fs.readdirSync(dir)
+            .filter((name) => name.endsWith('.v2.json') && !name.startsWith('envelope.'))
+            .sort();
+          for (const file of files) {
+            const doc = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+            const pins = (doc.allOf || [])
+              .map((branch) => branch && branch.properties && branch.properties.eventVersion
+                ? branch.properties.eventVersion.const
+                : undefined)
+              .filter((value) => value !== undefined);
+            checked += 1;
+            if (!pins.includes(2)) {
+              console.error(`::error file=${dir}/${file}::${file} no fija eventVersion const 2 (encontrado: ${pins.length ? pins.join(',') : 'ninguno'})`);
+              bad += 1;
+            } else {
+              console.log(`OK   ${file} -> ${pins.join(',')}`);
+            }
+          }
+          console.log(`esquemas v2 revisados: ${checked}`);
+          if (bad > 0) process.exit(1);
+          NODE

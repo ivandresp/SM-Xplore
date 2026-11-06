@@ -1,0 +1,154 @@
+services:
+  mongo:
+    image: mongo:8.2
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - smxplore-net
+
+  mongo-init:
+    image: mongo:8.2
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - "try { rs.status() } catch (e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) }"
+    networks:
+      - smxplore-net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smxplore}
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - smxplore-net
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    networks:
+      - smxplore-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8084}:8080"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-smxplore}?replicaSet=rs0
+      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-smxplore}
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-smxplore}
+      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-ms-04-notifications}
+      KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-latest}
+      NOTIFICATIONS_ENABLED: ${NOTIFICATIONS_ENABLED:-true}
+      NOTIFICATIONS_EMAIL_ENABLED: ${NOTIFICATIONS_EMAIL_ENABLED:-false}
+      NOTIFICATIONS_EMAIL_FROM: ${NOTIFICATIONS_EMAIL_FROM:-no-reply@smxplore.local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      JWK_SET_URI: ${JWK_SET_URI:-}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      # Perfil local: el flag de JWKS inseguro solo se acepta con este perfil.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      JWT_ISSUER: ${JWT_ISSUER:-sm-xplore-ms-01}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sm-xplore-services}
+      # Solo desarrollo: el JWKS local se sirve por HTTP dentro de la red de compose.
+      JWT_ALLOW_INSECURE_JWKS: ${JWT_ALLOW_INSECURE_JWKS:-true}
+      JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
+      JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
+      JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
+      AUTH_VERSION_ENABLED: ${AUTH_VERSION_ENABLED:-false}
+      MS01_BASE_URL: ${MS01_BASE_URL:-}
+      AUTH_VERSION_TIMEOUT: ${AUTH_VERSION_TIMEOUT:-2s}
+      AUTH_VERSION_CACHE_TTL: ${AUTH_VERSION_CACHE_TTL:-60s}
+      MFA_REQUIRE_ADMIN: ${MFA_REQUIRE_ADMIN:-false}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      OUTBOX_PRODUCER: ${OUTBOX_PRODUCER:-ms-04}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
+      OUTBOX_INITIAL_BACKOFF: ${OUTBOX_INITIAL_BACKOFF:-1s}
+      OUTBOX_MAX_BACKOFF: ${OUTBOX_MAX_BACKOFF:-1m}
+      OUTBOX_LEASE_DURATION: ${OUTBOX_LEASE_DURATION:-3m}
+      OUTBOX_RETENTION_DAYS: ${OUTBOX_RETENTION_DAYS:-30}
+      OUTBOX_RETENTION_INTERVAL_MS: ${OUTBOX_RETENTION_INTERVAL_MS:-3600000}
+      REVIEW_AI_ENABLED: ${REVIEW_AI_ENABLED:-false}
+      LITTLELLM_URL: ${LITTLELLM_URL:-}
+      LITTLELLM_API_KEY: ${LITTLELLM_API_KEY:-}
+      LITTLELLM_API_KEY_HEADER: ${LITTLELLM_API_KEY_HEADER:-Authorization}
+      LITTLELLM_API_KEY_PREFIX: ${LITTLELLM_API_KEY_PREFIX:-Bearer}
+      LITTLELLM_MODEL: ${LITTLELLM_MODEL:-littlellm}
+      LITTLELLM_CHAT_PATH: ${LITTLELLM_CHAT_PATH:-/v1/chat/completions}
+      REVIEW_AI_TIMEOUT: ${REVIEW_AI_TIMEOUT:-PT5S}
+      REVIEW_AI_THRESHOLD: ${REVIEW_AI_THRESHOLD:-0.7}
+      REVIEW_AI_TEMPERATURE: ${REVIEW_AI_TEMPERATURE:-0.0}
+      REVIEW_AI_ACTION: ${REVIEW_AI_ACTION:-PENDING_REVIEW}
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-true}
+      REVIEW_AI_JSON_RESPONSE_FORMAT: ${REVIEW_AI_JSON_RESPONSE_FORMAT:-false}
+      BOOKINGS_ZONE_ID: ${BOOKINGS_ZONE_ID:-America/Bogota}
+      BOOKINGS_MAX_ACTIVE_PER_TOURIST: ${BOOKINGS_MAX_ACTIVE_PER_TOURIST:-5}
+      BOOKINGS_MAX_CREATIONS_PER_MINUTE: ${BOOKINGS_MAX_CREATIONS_PER_MINUTE:-10}
+      BOOKINGS_MAX_ADVANCE_DAYS: ${BOOKINGS_MAX_ADVANCE_DAYS:-365}
+      BOOKINGS_AUTO_COMPLETE_ENABLED: ${BOOKINGS_AUTO_COMPLETE_ENABLED:-true}
+      BOOKINGS_COMPLETION_INTERVAL_MS: ${BOOKINGS_COMPLETION_INTERVAL_MS:-60000}
+      BOOKINGS_COMPLETION_BATCH_SIZE: ${BOOKINGS_COMPLETION_BATCH_SIZE:-100}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-true}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-true}
+    networks:
+      - smxplore-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  smxplore-net:
+    external: true
+    name: smxplore-net
+
+volumes:
+  mongo_data:
+  postgres_data:

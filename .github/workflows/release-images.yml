@@ -1,0 +1,140 @@
+# Publica las cinco imágenes de los microservicios en GitHub Container Registry.
+# Los pull request NUNCA publican: solo hay release con una etiqueta `v*` o a mano.
+# Cada imagen sale con tres etiquetas: <sha>, <version> y latest.
+name: Release de imágenes
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar (por ejemplo 1.2.3). Si se omite se usa la del tag o dev-<sha>.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ivandresp
+
+jobs:
+  publish:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: ms-01-users-and-anomalies
+            image: sm-xplore-ms-01
+          - service: ms-02-security-reports
+            image: sm-xplore-ms-02
+          - service: ms-03-activities-and-events
+            image: sm-xplore-ms-03
+          - service: ms-04-sites-and-services
+            image: sm-xplore-ms-04
+          - service: ms-05-recommendations
+            image: sm-xplore-ms-05
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verificar que el Dockerfile existe
+        working-directory: microservices/${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          if [ ! -f Dockerfile ]; then
+            echo "::error::falta microservices/${{ matrix.service }}/Dockerfile"
+            exit 1
+          fi
+
+      - name: Calcular versión
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            version="$INPUT_VERSION"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            version="${REF_NAME#v}"
+          else
+            version="dev-${SHA:0:12}"
+          fi
+          case "$version" in
+            '' | *[!A-Za-z0-9._-]*)
+              echo "::error::versión inválida: '$version' (solo letras, números, punto, guion y guion bajo)"
+              exit 1
+              ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Versión de la imagen: $version (commit $SHA)"
+
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: microservices/${{ matrix.service }}
+          file: microservices/${{ matrix.service }}/Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Digest publicado
+        run: |
+          set -euo pipefail
+          ref="${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.version }}"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')"
+          if [ -z "$digest" ]; then
+            echo "::error::no se pudo resolver el digest de $ref"
+            exit 1
+          fi
+          {
+            echo "### ${{ matrix.image }}"
+            echo ""
+            echo "| Referencia | Valor |"
+            echo "| --- | --- |"
+            echo "| Etiqueta | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Digest | \`$digest\` |"
+            echo "| Referencia pineada | \`${ref%:*}:...@${digest}\` |"
+            echo ""
+            echo "Anota ese digest en \`deploy/prod/images.env\` (o corre \`deploy/prod/pin-images.sh ${{ steps.version.outputs.version }}\`)."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"

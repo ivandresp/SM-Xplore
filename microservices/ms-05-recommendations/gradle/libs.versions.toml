@@ -1,0 +1,5 @@
+[versions]
+archunit = "1.5.1"
+
+[libraries]
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }

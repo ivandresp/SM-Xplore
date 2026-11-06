@@ -1,0 +1,97 @@
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-security_reports}
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - smxplore-net
+
+  mongo-init:
+    image: mongo:7.0
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - "try { rs.status() } catch (e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) }"
+    networks:
+      - smxplore-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      MONGODB_URI: "mongodb://mongo:27017/${MONGO_DATABASE:-security_reports}?replicaSet=rs0&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000"
+      JWK_SET_URI: ${JWK_SET_URI:-}
+      JWT_PUBLIC_KEY_LOCATION: ${JWT_PUBLIC_KEY_LOCATION:-}
+      # Perfil local: el flag de JWKS inseguro solo se acepta con este perfil.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      JWT_ISSUER: ${JWT_ISSUER:-sm-xplore-ms-01}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-sm-xplore-services}
+      # Solo desarrollo: el JWKS local se sirve por HTTP dentro de la red de compose.
+      JWT_ALLOW_INSECURE_JWKS: ${JWT_ALLOW_INSECURE_JWKS:-true}
+      JWT_USER_ID_CLAIM: ${JWT_USER_ID_CLAIM:-userId}
+      JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-role}
+      JWT_NAME_CLAIM: ${JWT_NAME_CLAIM:-name}
+      AUTH_VERSION_ENABLED: ${AUTH_VERSION_ENABLED:-false}
+      MS01_BASE_URL: ${MS01_BASE_URL:-}
+      AUTH_VERSION_TIMEOUT: ${AUTH_VERSION_TIMEOUT:-2s}
+      AUTH_VERSION_CACHE_TTL: ${AUTH_VERSION_CACHE_TTL:-60s}
+      MFA_REQUIRE_ADMIN: ${MFA_REQUIRE_ADMIN:-false}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      OUTBOX_PRODUCER: ${OUTBOX_PRODUCER:-ms-02}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
+      OUTBOX_INITIAL_BACKOFF: ${OUTBOX_INITIAL_BACKOFF:-1s}
+      OUTBOX_MAX_BACKOFF: ${OUTBOX_MAX_BACKOFF:-1m}
+      OUTBOX_LEASE_DURATION: ${OUTBOX_LEASE_DURATION:-3m}
+      OUTBOX_RETENTION_DAYS: ${OUTBOX_RETENTION_DAYS:-30}
+      OUTBOX_RETENTION_INTERVAL_MS: ${OUTBOX_RETENTION_INTERVAL_MS:-3600000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
+      REPORT_RATE_LIMIT_ENABLED: ${REPORT_RATE_LIMIT_ENABLED:-true}
+      REPORT_RATE_LIMIT_PER_MINUTE: ${REPORT_RATE_LIMIT_PER_MINUTE:-30}
+      MONGO_AUTO_INDEX_CREATION: ${MONGO_AUTO_INDEX_CREATION:-true}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-true}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-true}
+    networks:
+      - smxplore-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  smxplore-net:
+    external: true
+    name: smxplore-net
+
+volumes:
+  mongo_data:

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/security.report.changed.v1.json",
+  "title": "security.report.changed.v1",
+  "allOf": [
+    {
+      "$ref": "./envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "security.report.changed"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "reportId",
+            "reporterId",
+            "title",
+            "status",
+            "latitude",
+            "longitude",
+            "createdAt",
+            "updatedAt"
+          ],
+          "properties": {
+            "reportId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "reporterId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "status": {
+              "enum": ["ONGOING", "REPORTED", "SOLVED"]
+            },
+            "latitude": {
+              "type": ["number", "null"],
+              "minimum": -90,
+              "maximum": 90
+            },
+            "longitude": {
+              "type": ["number", "null"],
+              "minimum": -180,
+              "maximum": 180
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

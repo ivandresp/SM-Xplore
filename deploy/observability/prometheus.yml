@@ -1,0 +1,109 @@
+# Prometheus del stack SM-Xplore.
+#
+# Scrapea el endpoint Micrometer de cada microservicio (/actuator/prometheus) y
+# los exporters de infraestructura. Las reglas de alerta viven en alerts.yml.
+#
+# Lo usa deploy/prod/compose.yaml: monta este archivo en
+# /etc/prometheus/prometheus.yml y alerts.yml en /etc/prometheus/alerts.yml, y
+# arranca Prometheus con --config.file=/etc/prometheus/prometheus.yml. Por eso
+# rule_files apunta a la ruta absoluta del contenedor.
+#
+# Supuestos:
+#   - Prometheus corre en la red interna de Compose y resuelve los servicios por
+#     nombre (ms-01 ... ms-05, kafka-exporter, postgres-exporter, redis-exporter,
+#     neo4j). Ninguno publica puertos al host.
+#   - Los puertos son los del contenedor: ms-01 8081, ms-02 8080, ms-03 8082,
+#     ms-04 8080, ms-05 8080 (ver compose.yaml).
+#   - kafka-exporter (9308), postgres-exporter (9187) y redis-exporter (9121) los
+#     define el compose de P1-5. Neo4j expone /metrics en 2004 cuando
+#     NEO4J_server_metrics_prometheus_enabled=true (el compose debe activarlo).
+#   - Si se ejecuta fuera del compose (por ejemplo en el host), cambia los
+#     targets y rule_files a rutas locales; esta configuracion es la de produccion.
+#
+# Alertmanager no forma parte de esta entrega: las reglas se evaluan y se ven en
+# la pestana Alerts de Prometheus.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: sm-xplore
+    environment: prod
+
+rule_files:
+  # Ruta absoluta: dentro del contenedor el directorio de config es /etc/prometheus.
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # --- Microservicios -------------------------------------------------------
+  # Un job por servicio para que las alertas puedan agrupar por "job".
+  - job_name: ms-01
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ms-01:8081"]
+        labels:
+          service: ms-01
+          domain: users-and-anomalies
+
+  - job_name: ms-02
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ms-02:8080"]
+        labels:
+          service: ms-02
+          domain: security-reports
+
+  - job_name: ms-03
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ms-03:8082"]
+        labels:
+          service: ms-03
+          domain: activities-and-events
+
+  - job_name: ms-04
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ms-04:8080"]
+        labels:
+          service: ms-04
+          domain: sites-and-services
+
+  - job_name: ms-05
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ms-05:8080"]
+        labels:
+          service: ms-05
+          domain: recommendations
+
+  # --- Infraestructura ------------------------------------------------------
+  # Offsets y lag de los consumer groups (ms-03-site-snapshot,
+  # ms-04-notifications, ms-05-recommendations).
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+        labels:
+          service: kafka-exporter
+
+  # Postgres: conexiones, transacciones y locks.
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          service: postgres-exporter
+
+  # Redis: memoria, clientes y comandos (cache de ms-05).
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          service: redis-exporter
+
+  # Metricas JVM/Neo4j del grafo de recomendaciones.
+  - job_name: neo4j
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["neo4j:2004"]
+        labels:
+          service: neo4j
