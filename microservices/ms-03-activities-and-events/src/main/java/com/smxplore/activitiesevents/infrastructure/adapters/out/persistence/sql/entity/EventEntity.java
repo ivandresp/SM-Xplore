@@ -22,6 +22,7 @@ public record EventEntity(
         @Column("starts_at") Instant startsAt,
         @Column("ends_at") Instant endsAt,
         String description,
-        @Column("expected_attendance") int expectedAttendance
+        @Column("expected_attendance") int expectedAttendance,
+        @Column("updated_at") Instant updatedAt
 ) {
 }

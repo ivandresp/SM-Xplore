@@ -41,6 +41,9 @@ public class Activity {
     private Instant endsAt;
     private String description;
 
+    /** Se reescribe en cada escritura; alimenta el feed de exportacion del catalogo (P0-1). */
+    private Instant updatedAt;
+
     public void validate() {
         validateSite();
         validateName(name);

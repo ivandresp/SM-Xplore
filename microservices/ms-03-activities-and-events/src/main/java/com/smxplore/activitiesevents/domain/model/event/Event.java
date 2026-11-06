@@ -48,6 +48,9 @@ public class Event {
     @Builder.Default
     private int expectedAttendance = 0;
 
+    /** Se reescribe en cada escritura; alimenta el feed de exportacion del catalogo (P0-1). */
+    private Instant updatedAt;
+
     public void validate() {
         validateSite();
         validateName();

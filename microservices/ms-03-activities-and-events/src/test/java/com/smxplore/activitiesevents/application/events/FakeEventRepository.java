@@ -8,6 +8,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +78,18 @@ class FakeEventRepository implements EventRepositoryPort {
     public Mono<PageResult<Event>> searchPublishedByNamePage(String name, int page, int size) {
         var matches = searchByName(name)
                 .filter(event -> event.getStatus() == com.smxplore.activitiesevents.domain.model.event.EventStatus.PUBLISHED)
+                .collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    }
+
+    @Override
+    public Mono<PageResult<Event>> findUpdatedSince(java.time.Instant updatedSince, int page, int size) {
+        var matches = findAll()
+                .filter(event -> updatedSince == null
+                        || (event.getUpdatedAt() != null && !event.getUpdatedAt().isBefore(updatedSince)))
+                // El feed se ordena por updated_at: un updatedAt nulo (registro legado) va primero.
+                .sort(Comparator.comparing(Event::getUpdatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
                 .collectList().block();
         return Mono.just(page(matches == null ? List.of() : matches, page, size));
     }

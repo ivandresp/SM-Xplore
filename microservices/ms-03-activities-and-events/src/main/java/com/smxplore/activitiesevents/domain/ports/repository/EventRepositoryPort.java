@@ -41,4 +41,13 @@ public interface EventRepositoryPort {
      * @return how many events were updated
      */
     Mono<Integer> applySiteSnapshot(UUID siteId, String siteName, UUID managerId, Instant siteUpdatedAt);
+
+    /**
+     * Página del feed de exportación ordenada por {@code updated_at} ascendente.
+     *
+     * <p>Con {@code updatedSince} nulo recorre el catálogo completo; con valor solo devuelve los
+     * agregados modificados a partir de ese instante. La usan ms-04/ms-05 para sincronizar el
+     * catálogo de forma incremental.
+     */
+    Mono<PageResult<Event>> findUpdatedSince(Instant updatedSince, int page, int size);
 }

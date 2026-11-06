@@ -12,6 +12,8 @@ public interface EventWebMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "expectedAttendance", ignore = true)
+    // La marca de actualización la pone la persistencia, no el cliente.
+    @Mapping(target = "updatedAt", ignore = true)
     Event toDomain(EventRequest request);
 
     EventResponse toResponse(Event event);

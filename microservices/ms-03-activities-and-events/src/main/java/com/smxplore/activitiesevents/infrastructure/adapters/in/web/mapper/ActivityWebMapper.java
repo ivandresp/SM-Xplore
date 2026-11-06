@@ -11,6 +11,8 @@ public interface ActivityWebMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", ignore = true)
+    // La marca de actualización la pone la persistencia, no el cliente.
+    @Mapping(target = "updatedAt", ignore = true)
     Activity toDomain(ActivityRequest request);
 
     ActivityResponse toResponse(Activity activity);

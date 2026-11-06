@@ -10,6 +10,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -18,13 +19,17 @@ import java.util.UUID;
  *
  * <p>v2 replaces the v1 {@code categoryId} with the free-text {@code category} ms-03 really stores,
  * drops the coordinates that belong to the site in ms-04 and allows the four real statuses.
+ *
+ * <p>{@link #payload(Activity, Instant)} es público porque el feed de exportación del catálogo
+ * (P0-1) debe entregar exactamente el mismo payload que el evento vivo: si el contrato cambia, se
+ * cambia en un único sitio.
  */
 @Component
 @RequiredArgsConstructor
 public class ActivityChangedEventFactory {
 
-    private static final String EVENT_TYPE = "activities.activity.changed";
-    private static final int EVENT_VERSION = 2;
+    public static final String EVENT_TYPE = "activities.activity.changed";
+    public static final int EVENT_VERSION = 2;
     private static final String PRODUCER = "ms-03-activities-and-events";
 
     private final ObjectMapper objectMapper;
@@ -33,7 +38,14 @@ public class ActivityChangedEventFactory {
         var now = Instant.now();
         var eventId = UUID.randomUUID();
         var correlationId = UUID.randomUUID();
+        return envelope(eventId, activity.getId(), correlationId, payload(activity, now), now);
+    }
 
+    /**
+     * Payload v2 del agregado. {@code updatedAt} se inyecta para que el feed de exportación use la
+     * marca persistida ({@code updated_at}) y el evento vivo use el instante de ocurrencia.
+     */
+    public Map<String, Object> payload(Activity activity, Instant updatedAt) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("activityId", activity.getId());
         payload.put("siteId", activity.getSiteId());
@@ -46,13 +58,12 @@ public class ActivityChangedEventFactory {
         payload.put("durationMinutes", activity.getDurationMinutes());
         payload.put("startsAt", text(activity.getStartsAt()));
         payload.put("endsAt", text(activity.getEndsAt()));
-        payload.put("updatedAt", now.toString());
-
-        return envelope(eventId, activity.getId(), correlationId, payload, now);
+        payload.put("updatedAt", updatedAt == null ? null : updatedAt.toString());
+        return payload;
     }
 
     private Mono<OutboxEvent> envelope(UUID eventId, UUID aggregateId, UUID correlationId,
-                                       LinkedHashMap<String, Object> payload, Instant now) {
+                                       Map<String, Object> payload, Instant now) {
         var envelope = new LinkedHashMap<String, Object>();
         envelope.put("eventId", eventId);
         envelope.put("eventType", EVENT_TYPE);

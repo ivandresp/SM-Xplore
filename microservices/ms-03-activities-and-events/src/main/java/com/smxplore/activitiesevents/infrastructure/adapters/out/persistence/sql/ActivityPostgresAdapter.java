@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -25,10 +26,13 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     /**
      * R2DBC has no upsert, so an explicit existence check decides between insert and update.
      * shortcut: no optimistic locking; add a @Version column when concurrent edits matter.
+     *
+     * <p>{@code updated_at} se reescribe en cada escritura porque es la marca del feed de
+     * exportación del catálogo: sin esto una actividad nunca aparecería en el delta incremental.
      */
     @Override
     public Mono<Activity> save(Activity activity) {
-        var entity = mapper.toEntity(activity);
+        var entity = mapper.toEntity(activity.toBuilder().updatedAt(Instant.now()).build());
         return repository.existsById(entity.id())
                 .flatMap(exists -> exists ? template.update(entity) : template.insert(entity))
                 .map(mapper::toDomain);
@@ -111,5 +115,22 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     @Override
     public Flux<UUID> findIdsBySiteIds(Collection<UUID> siteIds) {
         return repository.findIdsBySiteIds(siteIds);
+    }
+
+    /**
+     * Dos variantes en lugar de un {@code IS NULL OR} con parámetro nulo: R2DBC no puede inferir el
+     * tipo del bind nulo y PostgreSQL rechaza la consulta.
+     */
+    @Override
+    public Mono<PageResult<Activity>> findUpdatedSince(Instant updatedSince, int page, int size) {
+        var offset = (long) page * size;
+        var content = updatedSince == null
+                ? repository.findPageAllForExport(size, offset)
+                : repository.findPageUpdatedSince(updatedSince, size, offset);
+        var total = updatedSince == null
+                ? repository.countAllForExport()
+                : repository.countUpdatedSince(updatedSince);
+        return Mono.zip(content.map(mapper::toDomain).collectList(), total.defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 }

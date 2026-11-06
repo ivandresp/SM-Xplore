@@ -7,7 +7,9 @@ import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryP
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +93,18 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     public Mono<PageResult<Activity>> findPublishedBySiteIdPage(UUID siteId, int page, int size) {
         var matches = publishedList()
                 .filter(activity -> siteId.equals(activity.getSiteId()))
+                .collectList().block();
+        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    }
+
+    @Override
+    public Mono<PageResult<Activity>> findUpdatedSince(Instant updatedSince, int page, int size) {
+        var matches = findAll()
+                .filter(activity -> updatedSince == null
+                        || (activity.getUpdatedAt() != null && !activity.getUpdatedAt().isBefore(updatedSince)))
+                // El feed se ordena por updated_at: un updatedAt nulo (registro legado) va primero.
+                .sort(Comparator.comparing(Activity::getUpdatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
                 .collectList().block();
         return Mono.just(page(matches == null ? List.of() : matches, page, size));
     }

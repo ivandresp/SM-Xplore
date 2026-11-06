@@ -21,6 +21,7 @@ public record ActivityEntity(
         @Column("duration_mins") int durationMinutes,
         @Column("starts_at") Instant startsAt,
         @Column("ends_at") Instant endsAt,
-        String description
+        String description,
+        @Column("updated_at") Instant updatedAt
 ) {
 }

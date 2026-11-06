@@ -26,10 +26,13 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     /**
      * R2DBC has no upsert, so an explicit existence check decides between insert and update.
      * shortcut: no optimistic locking; add a @Version column when concurrent edits matter.
+     *
+     * <p>{@code updated_at} se reescribe en cada escritura porque es la marca del feed de
+     * exportación del catálogo: sin esto un evento nunca aparecería en el delta incremental.
      */
     @Override
     public Mono<Event> save(Event event) {
-        var entity = mapper.toEntity(event);
+        var entity = mapper.toEntity(event.toBuilder().updatedAt(Instant.now()).build());
         return repository.existsById(entity.id())
                 .flatMap(exists -> exists ? template.update(entity) : template.insert(entity))
                 .map(mapper::toDomain);
@@ -101,7 +104,9 @@ public class EventPostgresAdapter implements EventRepositoryPort {
                         UPDATE evento
                         SET sitio_nombre = COALESCE(:siteName, sitio_nombre),
                             manager_id = :managerId,
-                            sitio_actualizado_en = :siteUpdatedAt
+                            sitio_actualizado_en = :siteUpdatedAt,
+                            -- La foto del sitio cambia el evento: debe entrar en el delta del export.
+                            updated_at = now()
                         WHERE sitio_id = :siteId
                           AND (sitio_actualizado_en IS NULL OR sitio_actualizado_en < :siteUpdatedAt)
                         """)
@@ -111,5 +116,22 @@ public class EventPostgresAdapter implements EventRepositoryPort {
                 .bind("siteId", siteId)
                 .fetch().rowsUpdated()
                 .map(Long::intValue);
+    }
+
+    /**
+     * Dos variantes en lugar de un {@code IS NULL OR} con parámetro nulo: R2DBC no puede inferir el
+     * tipo del bind nulo y PostgreSQL rechaza la consulta.
+     */
+    @Override
+    public Mono<PageResult<Event>> findUpdatedSince(Instant updatedSince, int page, int size) {
+        var offset = (long) page * size;
+        var content = updatedSince == null
+                ? repository.findPageAllForExport(size, offset)
+                : repository.findPageUpdatedSince(updatedSince, size, offset);
+        var total = updatedSince == null
+                ? repository.countAllForExport()
+                : repository.countUpdatedSince(updatedSince);
+        return Mono.zip(content.map(mapper::toDomain).collectList(), total.defaultIfEmpty(0L))
+                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
     }
 }

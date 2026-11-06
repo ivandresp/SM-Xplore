@@ -7,6 +7,8 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityP
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityRequestException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.CatalogExportNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogExportException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventCapacityException;
@@ -77,7 +79,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class,
-            ReviewModerationNotAllowedException.class, DemandAccessDeniedException.class})
+            ReviewModerationNotAllowedException.class, DemandAccessDeniedException.class,
+            CatalogExportNotAllowedException.class})
     public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
@@ -115,7 +118,8 @@ public class GlobalExceptionHandler {
             InvalidReservationItemException.class,
             InvalidReservationItemPriceException.class,
             InvalidReviewException.class,
-            InvalidDemandFilterException.class
+            InvalidDemandFilterException.class,
+            InvalidCatalogExportException.class
     })
     public ResponseEntity<ProblemDetail> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
