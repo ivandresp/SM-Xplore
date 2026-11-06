@@ -4,6 +4,7 @@ import com.smxplore.recommendations.domain.exception.DomainStateException;
 import com.smxplore.recommendations.domain.exception.ForbiddenOperationException;
 import com.smxplore.recommendations.domain.exception.InvalidReindexException;
 import com.smxplore.recommendations.domain.model.catalog.CatalogEntity;
+import com.smxplore.recommendations.domain.model.event.EventTopics;
 import com.smxplore.recommendations.domain.model.event.ProjectedEvent;
 import com.smxplore.recommendations.domain.model.reindex.CatalogExportPage;
 import com.smxplore.recommendations.domain.ports.out.CatalogExportPort;
@@ -24,37 +25,56 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Reads ms-04's catalog export and turns every item into a {@link ProjectedEvent}. ms-04 publishes
- * the same payload as the Kafka events, so the export item is wrapped in the event envelope and
- * decoded by the regular decoder: the projection validates both paths identically.
+ * Reads the administrative catalog export and turns every item into a {@link ProjectedEvent}.
+ *
+ * <p>Two producers expose the same export contract: ms-04 owns categories, sites and services,
+ * ms-03 owns activities and events. The client resolves the base URL per {@link CatalogEntity},
+ * but the wire format is identical, so both paths are decoded by the regular decoder and the
+ * projection validates them exactly like a Kafka event.</p>
  */
 @RequiredArgsConstructor
 public class CatalogExportClient implements CatalogExportPort {
 
     static final String CORRELATION_ID = "ms-05-reindex";
-    static final String PRODUCER = "ms-04";
+    static final String PRODUCER_MS04 = "ms-04";
+    static final String PRODUCER_MS03 = "ms-03";
     /** Version assumed when ms-04 does not send {@code eventVersion} (older builds). */
     static final int LEGACY_EVENT_VERSION = 1;
+    /** ms-03 only publishes v2 activities/events, so its export is always v2. */
+    static final int MS03_EVENT_VERSION = 2;
+
+    private static final String EXPORT_PATH = "/api/v1/admin/catalog/export";
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
     private final ProjectionEventDecoder decoder;
     private final ReindexProperties properties;
 
-    private WebClient client;
+    private Map<CatalogEntity, WebClient> clients;
 
     @PostConstruct
     public void init() {
         Duration timeout = properties.getTimeout();
         HttpClient httpClient = HttpClient.create().responseTimeout(timeout);
-        this.client = webClientBuilder
-                .baseUrl(properties.getCatalogBaseUrl())
+        Map<CatalogEntity, WebClient> byEntity = new EnumMap<>(CatalogEntity.class);
+        byEntity.put(CatalogEntity.CATEGORIES, buildClient(httpClient, properties.getCatalogBaseUrl()));
+        byEntity.put(CatalogEntity.SITES, buildClient(httpClient, properties.getCatalogBaseUrl()));
+        byEntity.put(CatalogEntity.SERVICES, buildClient(httpClient, properties.getCatalogBaseUrl()));
+        byEntity.put(CatalogEntity.ACTIVITIES, buildClient(httpClient, properties.getActivitiesBaseUrl()));
+        byEntity.put(CatalogEntity.EVENTS, buildClient(httpClient, properties.getEventsBaseUrl()));
+        this.clients = byEntity;
+    }
+
+    private WebClient buildClient(HttpClient httpClient, String baseUrl) {
+        return webClientBuilder
+                .baseUrl(baseUrl)
                 .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
                 .build();
     }
@@ -70,9 +90,13 @@ public class CatalogExportClient implements CatalogExportPort {
         if (page < 0) {
             return Mono.error(new InvalidReindexException("page must be >= 0"));
         }
+        WebClient client = clients.get(entity);
+        if (client == null) {
+            return Mono.error(new InvalidReindexException("entity is not supported: " + entity));
+        }
         return client.get()
                 .uri(builder -> {
-                    builder.path("/api/v1/admin/catalog/export")
+                    builder.path(EXPORT_PATH)
                             .queryParam("entity", entity.name())
                             .queryParam("page", page)
                             .queryParam("size", properties.getPageSize());
@@ -88,24 +112,25 @@ public class CatalogExportClient implements CatalogExportPort {
                     if (status.isError()) {
                         return response.bodyToMono(String.class)
                                 .defaultIfEmpty("")
-                                .flatMap(body -> Mono.error(statusError(status, body)));
+                                .flatMap(body -> Mono.error(statusError(entity, status, body)));
                     }
                     return response.bodyToMono(String.class)
                             .map(body -> decodePage(entity, body));
                 });
     }
 
-    private RuntimeException statusError(HttpStatusCode status, String body) {
+    private RuntimeException statusError(CatalogEntity entity, HttpStatusCode status, String body) {
         String detail = body == null ? "" : body.strip();
         if (detail.length() > 200) {
             detail = detail.substring(0, 200);
         }
+        String producer = producer(entity);
         if (status.value() == 401 || status.value() == 403) {
             return new ForbiddenOperationException(
-                    "ms-04 rejected the catalog export request with " + status.value()
+                    producer + " rejected the catalog export request with " + status.value()
                             + "; an administrator token is required");
         }
-        return new DomainStateException("ms-04 catalog export returned " + status.value()
+        return new DomainStateException(producer + " catalog export returned " + status.value()
                 + (detail.isBlank() ? "" : ": " + detail));
     }
 
@@ -140,7 +165,7 @@ public class CatalogExportClient implements CatalogExportPort {
                     "catalog export for " + entity + " returned eventType " + eventType);
         }
 
-        int eventVersion = eventVersion(item, entity, payload);
+        int eventVersion = eventVersion(item, entity);
 
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", reindexEventId(eventType, aggregateId, updatedAt).toString());
@@ -149,7 +174,7 @@ public class CatalogExportClient implements CatalogExportPort {
         envelope.put("occurredAt", updatedAt.toString());
         envelope.put("aggregateId", aggregateId.toString());
         envelope.put("correlationId", CORRELATION_ID);
-        envelope.put("producer", PRODUCER);
+        envelope.put("producer", producer(entity));
         envelope.put("payload", payload);
 
         String json;
@@ -164,26 +189,26 @@ public class CatalogExportClient implements CatalogExportPort {
     /**
      * Version of the exported payload.
      *
-     * <p>ms-04 sends {@code eventVersion} in every item; when an older build omits it the version is
-     * inferred from the payload instead of assuming v1: a site payload that carries
-     * {@code managerId} is v2, so the projection applies the v2 validation (and does not accept a
-     * v2 payload while believing it is v1).
+     * <p>The exported {@code eventVersion} wins when it is present: the feed may publish a newer
+     * version than ms-05 assumes, and the decoder is the component that validates it. When an
+     * older build omits the field the version is inferred per producer: ms-04 has published
+     * {@code catalog.site.changed} v2 since before exposing the version (so a manager-less site is
+     * still v2), while ms-03 only publishes activities/events as v2 and its export mirrors that
+     * payload.</p>
      */
-    private int eventVersion(JsonNode item, CatalogEntity entity, JsonNode payload) {
+    private int eventVersion(JsonNode item, CatalogEntity entity) {
         JsonNode version = item.get("eventVersion");
         if (version != null && version.isIntegralNumber() && version.canConvertToInt()) {
             return version.asInt();
         }
-        JsonNode unsupported = item.get("eventVersion");
-        if (unsupported != null && !unsupported.isNull()) {
+        if (version != null && !version.isNull()) {
             throw new InvalidReindexException("catalog export eventVersion must be an integer");
         }
-        // ms-04 publica catalog.site.changed v2 desde antes de exponer la version, asi que su feed
-        // siempre es v2; inferir v2 solo cuando hay managerId validaria como v1 un sitio sin gestora.
-        if (entity == CatalogEntity.SITES) {
-            return 2;
-        }
-        return LEGACY_EVENT_VERSION;
+        return switch (entity) {
+            case SITES -> 2;
+            case ACTIVITIES, EVENTS -> MS03_EVENT_VERSION;
+            case CATEGORIES, SERVICES -> LEGACY_EVENT_VERSION;
+        };
     }
 
     /**
@@ -197,9 +222,18 @@ public class CatalogExportClient implements CatalogExportPort {
 
     static String expectedEventType(CatalogEntity entity) {
         return switch (entity) {
-            case CATEGORIES -> "catalog.category.changed";
-            case SITES -> "catalog.site.changed";
-            case SERVICES -> "catalog.service.changed";
+            case CATEGORIES -> EventTopics.CATALOG_CATEGORY_CHANGED;
+            case SITES -> EventTopics.CATALOG_SITE_CHANGED;
+            case SERVICES -> EventTopics.CATALOG_SERVICE_CHANGED;
+            case ACTIVITIES -> EventTopics.ACTIVITIES_ACTIVITY_CHANGED;
+            case EVENTS -> EventTopics.ACTIVITIES_EVENT_CHANGED;
+        };
+    }
+
+    private static String producer(CatalogEntity entity) {
+        return switch (entity) {
+            case CATEGORIES, SITES, SERVICES -> PRODUCER_MS04;
+            case ACTIVITIES, EVENTS -> PRODUCER_MS03;
         };
     }
 

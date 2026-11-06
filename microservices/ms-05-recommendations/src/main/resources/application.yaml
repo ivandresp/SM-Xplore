@@ -107,7 +107,10 @@ app:
       interval: ${EVENTS_RETENTION_INTERVAL:1h}
       initial-delay: ${EVENTS_RETENTION_INITIAL_DELAY:1m}
   reindex:
+    # CATEGORIES/SITES/SERVICES: exported by ms-04. ACTIVITIES/EVENTS: exported by ms-03.
     catalog-base-url: ${CATALOG_EXPORT_BASE_URL:http://localhost:8084}
+    activities-base-url: ${MS03_BASE_URL:http://localhost:8082}
+    events-base-url: ${MS03_BASE_URL:http://localhost:8082}
     page-size: ${REINDEX_PAGE_SIZE:200}
     max-pages: ${REINDEX_MAX_PAGES:500}
     timeout: ${REINDEX_TIMEOUT:30s}

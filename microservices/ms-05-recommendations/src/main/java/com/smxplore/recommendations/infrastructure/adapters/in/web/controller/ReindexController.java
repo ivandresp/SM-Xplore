@@ -21,13 +21,13 @@ import java.time.Instant;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/internal/admin")
-@Tag(name = "Reindex", description = "Rebuilds the catalog projection from ms-04.")
+@Tag(name = "Reindex", description = "Rebuilds the catalog projection from ms-04 (categories, sites, services) and ms-03 (activities, events).")
 public class ReindexController {
 
     private final ReindexCatalogUseCase reindexCatalogUseCase;
 
     @PostMapping("/reindex")
-    @Operation(summary = "Reindex a catalog entity from the admin catalog export of ms-04")
+    @Operation(summary = "Reindex a catalog entity from the admin catalog export of ms-04 or ms-03")
     public Mono<ReindexResponse> reindex(
             @RequestParam CatalogEntity entity,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant updatedSince,

@@ -4,6 +4,8 @@ import com.smxplore.recommendations.domain.exception.DomainStateException;
 import com.smxplore.recommendations.domain.exception.ForbiddenOperationException;
 import com.smxplore.recommendations.domain.exception.InvalidReindexException;
 import com.smxplore.recommendations.domain.model.catalog.CatalogEntity;
+import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
+import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
 import com.smxplore.recommendations.domain.model.reindex.CatalogExportPage;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
@@ -31,10 +33,14 @@ class CatalogExportClientTest {
     private static final Instant UPDATED_AT = Instant.parse("2026-11-02T15:00:00Z");
 
     private DisposableServer server;
+    private DisposableServer ms03Server;
     private final List<String> requestUris = new CopyOnWriteArrayList<>();
     private final List<String> authorizationHeaders = new CopyOnWriteArrayList<>();
+    private final List<String> ms03RequestUris = new CopyOnWriteArrayList<>();
     private volatile String responseBody;
     private volatile int responseStatus;
+    private volatile String ms03ResponseBody;
+    private volatile int ms03ResponseStatus;
     private CatalogExportClient client;
 
     @BeforeEach
@@ -53,9 +59,24 @@ class CatalogExportClientTest {
                 })
                 .bindNow();
 
+        ms03ResponseStatus = 200;
+        ms03ResponseBody = "{}";
+        ms03Server = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> {
+                    ms03RequestUris.add(request.uri());
+                    return response.status(ms03ResponseStatus)
+                            .header("Content-Type", "application/json")
+                            .sendString(Mono.just(ms03ResponseBody));
+                })
+                .bindNow();
+
         JsonMapper mapper = JsonMapper.builder().build();
         ReindexProperties properties = new ReindexProperties();
         properties.setCatalogBaseUrl("http://127.0.0.1:" + server.port());
+        properties.setActivitiesBaseUrl("http://127.0.0.1:" + ms03Server.port());
+        properties.setEventsBaseUrl("http://127.0.0.1:" + ms03Server.port());
         properties.setPageSize(50);
         client = new CatalogExportClient(
                 WebClient.builder(),
@@ -69,6 +90,9 @@ class CatalogExportClientTest {
     void tearDown() {
         if (server != null) {
             server.disposeNow();
+        }
+        if (ms03Server != null) {
+            ms03Server.disposeNow();
         }
     }
 
@@ -233,6 +257,109 @@ class CatalogExportClientTest {
         SiteChangedEvent event = (SiteChangedEvent) page.content().getFirst();
         // Un feed antiguo sin version sigue siendo v2: un sitio sin gestora es valido.
         assertThat(event.metadata().eventVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void routesActivitiesToMs03AndUsesItsV2Payload() {
+        UUID activityId = UUID.randomUUID();
+        ms03ResponseBody = activityPage(activityId, null);
+
+        CatalogExportPage page = client.fetch(TOKEN, CatalogEntity.ACTIVITIES, 0, UPDATED_AT).block();
+
+        assertThat(page).isNotNull();
+        assertThat(page.content().getFirst()).isInstanceOf(ActivityChangedEvent.class);
+        ActivityChangedEvent activity = (ActivityChangedEvent) page.content().getFirst();
+        assertThat(activity.activityId()).isEqualTo(activityId);
+        assertThat(activity.categoryName()).isEqualTo("Deportes acuáticos");
+        assertThat(activity.metadata().eventVersion()).isEqualTo(2);
+        assertThat(activity.metadata().producer()).isEqualTo("ms-03");
+        assertThat(ms03RequestUris).hasSize(1);
+        assertThat(ms03RequestUris.getFirst())
+                .contains("entity=ACTIVITIES", "page=0", "size=50", "updatedSince=");
+        assertThat(requestUris).isEmpty();
+    }
+
+    @Test
+    void routesEventsToMs03() {
+        UUID eventId = UUID.randomUUID();
+        ms03ResponseBody = eventPage(eventId);
+
+        CatalogExportPage page = client.fetch(TOKEN, CatalogEntity.EVENTS, 0, null).block();
+
+        assertThat(page).isNotNull();
+        assertThat(page.content().getFirst()).isInstanceOf(EventItemChangedEvent.class);
+        EventItemChangedEvent eventItem = (EventItemChangedEvent) page.content().getFirst();
+        assertThat(eventItem.itemId()).isEqualTo(eventId);
+        assertThat(eventItem.categoryName()).isEqualTo("Cultura");
+        assertThat(eventItem.metadata().eventType()).isEqualTo("activities.event.changed");
+        assertThat(ms03RequestUris.getFirst()).contains("entity=EVENTS").doesNotContain("updatedSince");
+        assertThat(requestUris).isEmpty();
+    }
+
+    @Test
+    void mentionsTheProducerThatRejectedTheRequest() {
+        ms03ResponseStatus = 403;
+        ms03ResponseBody = "{}";
+
+        StepVerifier.create(client.fetch(TOKEN, CatalogEntity.ACTIVITIES, 0, null))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(ForbiddenOperationException.class)
+                        .hasMessageContaining("ms-03")
+                        .hasMessageContaining("403"))
+                .verify();
+    }
+
+    private static String activityPage(UUID activityId, String eventVersion) {
+        String versionField = eventVersion == null ? "" : "\"eventVersion\": " + eventVersion + ",";
+        return """
+                {
+                  "content": [
+                    {
+                      "eventType": "activities.activity.changed",
+                      %s
+                      "aggregateId": "%s",
+                      "updatedAt": "%s",
+                      "payload": {
+                        "activityId": "%s",
+                        "name": "Snorkel en Playa Rosa",
+                        "category": "Deportes acuáticos",
+                        "siteId": "%s",
+                        "price": 80000,
+                        "status": "PUBLISHED",
+                        "updatedAt": "%s"
+                      }
+                    }
+                  ],
+                  "page": 0, "size": 50, "total": 1, "hasNext": false
+                }
+                """.formatted(versionField, activityId, UPDATED_AT, activityId, UUID.randomUUID(), UPDATED_AT);
+    }
+
+    private static String eventPage(UUID eventId) {
+        return """
+                {
+                  "content": [
+                    {
+                      "eventType": "activities.event.changed",
+                      "eventVersion": 2,
+                      "aggregateId": "%s",
+                      "updatedAt": "%s",
+                      "payload": {
+                        "eventId": "%s",
+                        "name": "Festival del Mar",
+                        "category": "Cultura",
+                        "siteId": "%s",
+                        "price": 100000,
+                        "startsAt": "2026-11-20T18:00:00Z",
+                        "endsAt": "2026-11-20T23:00:00Z",
+                        "status": "PUBLISHED",
+                        "updatedAt": "%s"
+                      }
+                    }
+                  ],
+                  "page": 0, "size": 50, "total": 1, "hasNext": false
+                }
+                """.formatted(eventId, UPDATED_AT, eventId, UUID.randomUUID(), UPDATED_AT);
     }
 
     private static String sitePage(UUID siteId, UUID managerId, String eventVersion) {
