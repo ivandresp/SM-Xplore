@@ -1,4 +1,4 @@
-# Normaliza los finales de línea en el repositorio. Sin esto, un checkout en Windows con
+# Normaliza los finales de lÃ­nea en el repositorio. Sin esto, un checkout en Windows con
 # core.autocrlf=true deja gradlew con CRLF y el build dentro de Docker falla con "./gradlew: not found".
 
 * text=auto
@@ -18,3 +18,7 @@ gradlew text eol=lf
 *.jpeg binary
 *.docx binary
 *.xlsx binary
+
+# Configuracion del gateway nginx: siempre LF. Se monta desde el checkout en Windows y nginx no
+# acepta CRLF en todos los contextos; el Dockerfile copia el entrypoint a una imagen Linux.
+deploy/gateway/** text eol=lf
