@@ -384,6 +384,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       EVENTS_CONSUMER_ENABLED: "true"
       CATALOG_EXPORT_BASE_URL: http://ms-04:8080
+      MS03_BASE_URL: http://ms-03:8082
       SEED_ENABLED: ${SEED_ENABLED:-true}
       JDK_JAVA_OPTIONS: "-Xms64m -Xmx512m -XX:MaxDirectMemorySize=128m"
       <<: *jwt-env
