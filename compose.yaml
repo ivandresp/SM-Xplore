@@ -392,6 +392,48 @@ services:
       <<: *app-healthcheck
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
 
+  # Punto de entrada unico del stack (HTTP y HTTPS). Enruta /api/v1/** al
+  # servicio dueno de cada prefijo y expone /svc/ms-0N/** como acceso 1:1.
+  # Configuracion y tabla de rutas: deploy/gateway/ (ver README.md).
+  gateway:
+    build:
+      context: ./deploy/gateway
+      dockerfile: Dockerfile
+    image: smxplore/gateway:local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 128m
+    depends_on:
+      ms-01:
+        condition: service_healthy
+      ms-02:
+        condition: service_healthy
+      ms-03:
+        condition: service_healthy
+      ms-04:
+        condition: service_healthy
+      ms-05:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8088}:80"
+      - "127.0.0.1:${GATEWAY_HTTPS_PORT:-8443}:443"
+    environment:
+      # En desarrollo el gateway genera un certificado autofirmado en el
+      # volumen gateway_certs la primera vez (ver deploy/gateway/entrypoint.sh).
+      TLS_SELF_SIGNED: "true"
+      TLS_CN: ${GATEWAY_TLS_CN:-localhost}
+    volumes:
+      - ./deploy/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/gateway/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/gateway/snippets:/etc/nginx/snippets:ro
+      - gateway_certs:/etc/nginx/certs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
 networks:
   default:
     name: smxplore-stack
@@ -403,3 +445,4 @@ volumes:
   redis_data:
   neo4j_data:
   ms01_data:
+  gateway_certs:

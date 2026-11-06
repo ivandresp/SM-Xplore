@@ -26,6 +26,9 @@ deploy/backups/
 # Salidas de las pruebas de carga (P1-8)
 loadtests/results/
 
+# Certificados TLS generados en el host para el gateway (el stack local usa el volumen gateway_certs)
+deploy/gateway/certs/
+
 # Logs and scratch folders used while diagnosing CI
 *.log
 logs*/
