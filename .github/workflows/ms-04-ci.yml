@@ -116,7 +116,7 @@ jobs:
 
       - name: Publicar reportes de pruebas
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ms-04-test-reports
           path: |
@@ -171,7 +171,7 @@ jobs:
 
       - name: Publicar el reporte de Trivy
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ms-04-trivy-report
           path: trivy-report.txt
