@@ -20,6 +20,12 @@ public class OutboxPostgresAdapter implements OutboxPort {
 
     private final DatabaseClient databaseClient;
 
+    /**
+     * Encola el evento una sola vez. El {@code ON CONFLICT} no es defensa generica: las resenas
+     * derivan su eventId de (reviewId, updatedAt), asi que el reintento del job de conciliacion
+     * reinserta el mismo id. Sin el conflicto ignorado ese reenvio fallaria y, peor, el fallo
+     * llegaria al publicador porque el marcado de la resena ocurre despues del insert.
+     */
     @Override
     public Mono<Void> enqueue(OutboxEvent event) {
         return databaseClient.sql("""
@@ -29,6 +35,7 @@ public class OutboxPostgresAdapter implements OutboxPort {
                         VALUES
                             (:id, :eventType, :eventVersion, :aggregateId, :correlationId,
                              CAST(:payload AS jsonb), :occurredAt, 'PENDING', 0, :occurredAt)
+                        ON CONFLICT (id) DO NOTHING
                         """)
                 .bind("id", event.id())
                 .bind("eventType", event.eventType())

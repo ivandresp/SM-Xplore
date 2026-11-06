@@ -6,10 +6,10 @@ spring:
     name: activities-and-events
   task:
     scheduling:
-      # El relay, la retencion y el cierre automatico comparten el scheduler: sin pool, un job
-      # bloqueado (el relay espera a Kafka) detiene a los demas.
+      # El relay, la retencion, el cierre automatico y la conciliacion de resenas comparten el
+      # scheduler: sin pool, un job bloqueado (el relay espera a Kafka) detiene a los demas.
       pool:
-        size: ${SCHEDULING_POOL_SIZE:3}
+        size: ${SCHEDULING_POOL_SIZE:4}
   r2dbc:
     url: "${R2DBC_URL:r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:activities_events}}"
     username: ${POSTGRES_USER}
@@ -78,6 +78,15 @@ app:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}
   reviews:
+    # El evento de la resena se escribe en el outbox de Postgres desde una request cuya transaccion
+    # es la de Mongo: puede perderse. Este job re-despacha las resenas sin eventPublishedAt confirmado.
+    event-reconciliation:
+      enabled: ${REVIEW_EVENT_RECONCILIATION_ENABLED:true}
+      interval-ms: ${REVIEW_EVENT_RECONCILIATION_INTERVAL_MS:60000}
+      initial-delay-ms: ${REVIEW_EVENT_RECONCILIATION_INITIAL_DELAY_MS:30000}
+      batch-size: ${REVIEW_EVENT_RECONCILIATION_BATCH_SIZE:100}
+      # Margen para no competir con el insert del outbox que la request aun esta intentando.
+      grace-seconds: ${REVIEW_EVENT_RECONCILIATION_GRACE_SECONDS:60}
     # Mismo contrato y variables que el filtro de ms-04. Apagado por defecto; al encenderlo exige
     # LITTLELLM_URL. Con fail-open=true una caida del modelo deja la resena publicada; con false
     # la creacion responde 503.

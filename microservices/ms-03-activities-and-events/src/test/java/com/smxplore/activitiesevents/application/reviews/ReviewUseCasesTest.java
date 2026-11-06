@@ -82,12 +82,15 @@ class ReviewUseCasesTest {
     void setUp() {
         aiPolicy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, true);
         publisher = new ReviewEventPublisher(outbox,
-                new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()));
+                new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()), reviewRepo,
+                new ReviewEventMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
         createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, aiPolicy,
                 publisher);
         respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo, siteCatalog,
                 publisher);
         lenient().when(outbox.enqueue(any())).thenReturn(Mono.empty());
+        // El publicador marca la reseña tras el enqueue; el Mockito puro devolveria null.
+        lenient().when(reviewRepo.markEventPublished(any(), any())).thenReturn(Mono.just(true));
     }
 
     @Test

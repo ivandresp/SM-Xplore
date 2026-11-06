@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -57,6 +58,42 @@ class ReviewEventFactoryTest {
         assertThat(event).isNotNull();
         var payload = objectMapper.readTree(event.payload()).get("payload");
         assertThat(payload.get("updatedAt").asText()).isEqualTo(updatedAt.toString());
+    }
+
+    @Test
+    void derivesADeterministicEventIdFromTheReviewAndItsUpdate() {
+        var review = review(ReviewItemType.EVENT, 5);
+
+        var first = factory.reviewChanged(review).block();
+        var second = factory.reviewChanged(review).block();
+
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(first.id()).isEqualTo(second.id());
+        assertThat(first.id()).isEqualTo(UUID.nameUUIDFromBytes(
+                ("reviews.review.changed:" + review.getId() + ":" + review.updatedAt())
+                        .getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void changesTheEventIdWhenTheReviewChangesAgain() {
+        var updatedAt = Instant.parse("2026-11-04T22:00:00Z");
+        var review = Review.builder()
+                .itemId(UUID.randomUUID())
+                .itemType(ReviewItemType.EVENT)
+                .user(new ReviewUser(UUID.randomUUID(), "Ana"))
+                .rating(5)
+                .updatedAt(updatedAt)
+                .build();
+        var laterChange = review.toBuilder().updatedAt(updatedAt.plusSeconds(1)).build();
+
+        var first = factory.reviewChanged(review).block();
+        var second = factory.reviewChanged(laterChange).block();
+
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        // Un cambio posterior es un evento distinto: el outbox no debe descartarlo como duplicado.
+        assertThat(first.id()).isNotEqualTo(second.id());
     }
 
     private static Review review(ReviewItemType itemType, int rating) {

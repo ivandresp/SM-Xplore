@@ -14,6 +14,9 @@ import java.util.UUID;
 // La cola de moderacion ordena por updatedAt filtrando por estado: sin este indice Mongo hace
 // collection scan + sort en memoria y el endpoint falla al superar el limite de 32 MB.
 @CompoundIndex(name = "activity_review_status_updated", def = "{'status': 1, 'updatedAt': -1}")
+// El job de conciliacion busca resenas con eventPublishedAt null desde la mas antigua: el indice
+// compuesto hace ese recorrido barato, ya que filtra por el nulo y ordena por updatedAt.
+@CompoundIndex(name = "activity_review_event_pending", def = "{'eventPublishedAt': 1, 'updatedAt': 1}")
 public record ActivityReviewDocument(
         @Id UUID id,
         UUID itemId,
@@ -25,6 +28,7 @@ public record ActivityReviewDocument(
         ReviewStatus status,
         Instant updatedAt,
         ReviewAiAssessmentDocument aiAssessment,
-        boolean aiRetained
+        boolean aiRetained,
+        Instant eventPublishedAt
 ) {
 }

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.UUID;
@@ -18,6 +19,10 @@ import java.util.UUID;
  *
  * <p>The payload carries no free-text comment on purpose: consumers get the rating, the status and
  * the identity of the reviewed item, never the user's text.
+ *
+ * <p>El {@code eventId} es determinista (uuid v3 sobre reseña + {@code updatedAt}) para que un
+ * re-despacho de la conciliación produzca exactamente el mismo evento: el outbox lo descarta por
+ * clave primaria y el consumidor vuelve a ver un evento idempotente en lugar de un duplicado.
  */
 @Component
 @RequiredArgsConstructor
@@ -31,7 +36,7 @@ public class ReviewEventFactory {
 
     public Mono<OutboxEvent> reviewChanged(Review review) {
         var now = Instant.now();
-        var eventId = UUID.randomUUID();
+        var eventId = eventId(review);
         var correlationId = UUID.randomUUID();
 
         var payload = new LinkedHashMap<String, Object>();
@@ -61,5 +66,15 @@ public class ReviewEventFactory {
         } catch (JsonProcessingException exception) {
             return Mono.error(exception);
         }
+    }
+
+    /**
+     * Identidad del evento: mismo par (reseña, {@code updatedAt}) produce siempre el mismo uuid, de
+     * modo que la conciliación puede re-despachar sin duplicar. {@code updatedAt} cambia con cada
+     * cambio real de la reseña, así que dos cambios distintos sí generan eventos distintos.
+     */
+    static UUID eventId(Review review) {
+        var seed = EVENT_TYPE + ":" + review.getId() + ":" + review.updatedAt();
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
     }
 }

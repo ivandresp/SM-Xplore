@@ -32,6 +32,13 @@ public class Review {
     @Builder.Default
     private final boolean aiRetained = false;
 
+    /**
+     * Instant at which the outbox confirmed {@code reviews.review.changed}; {@code null} while the
+     * event is still pending. The reconciliation job uses it to find reviews whose event was lost
+     * between the MongoDB write and the PostgreSQL outbox insert.
+     */
+    private final Instant eventPublishedAt;
+
     /** Set on every change; {@link #updatedAt()} falls back to {@code createdAt} for old documents. */
     private final Instant updatedAt;
 

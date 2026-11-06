@@ -17,6 +17,11 @@ import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mon
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.mongo.repository.EventReviewMongoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -35,6 +40,7 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
 
     private final EventReviewMongoRepository eventReviews;
     private final ActivityReviewMongoRepository activityReviews;
+    private final ReactiveMongoTemplate mongoTemplate;
 
     @Override
     public Mono<Review> save(Review review) {
@@ -107,18 +113,62 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .defaultIfEmpty(new ReviewMetrics(itemId, itemType, 0, 0.0));
     }
 
+    /**
+     * Reseñas cuyo evento no llegó a confirmarse. {@code eventPublishedAt} nulo cubre tanto las
+     * escrituras nuevas como los documentos anteriores al campo; {@code updatedAt} nulo (documentos
+     * legados sin la marca) se acepta igual para no dejarlos fuera del reintento.
+     */
+    @Override
+    public Flux<Review> findPendingEventPublication(Instant updatedBefore, int limit) {
+        if (updatedBefore == null || limit < 1) {
+            return Flux.empty();
+        }
+        var withinGrace = new Criteria().orOperator(
+                Criteria.where("updatedAt").lte(updatedBefore),
+                Criteria.where("updatedAt").is(null));
+        var query = Query.query(new Criteria().andOperator(
+                        Criteria.where("eventPublishedAt").is(null), withinGrace))
+                .with(Sort.by(Sort.Direction.ASC, "updatedAt"))
+                .limit(limit);
+        return Flux.merge(
+                        mongoTemplate.find(query, EventReviewDocument.class).map(this::toEventDomain),
+                        mongoTemplate.find(query, ActivityReviewDocument.class).map(this::toActivityDomain))
+                .sort(Comparator.comparing(Review::updatedAt).thenComparing(Review::getId))
+                .take(limit);
+    }
+
+    /**
+     * El _id es único entre las dos colecciones, así que se intenta primero en eventos y solo si no
+     * hubo modificación se busca en actividades. No toca {@code updatedAt}: el evento pertenece al
+     * cambio ya guardado y un re-despacho no debe alterar la marca de la reseña.
+     */
+    @Override
+    public Mono<Boolean> markEventPublished(UUID reviewId, Instant publishedAt) {
+        if (reviewId == null || publishedAt == null) {
+            return Mono.just(false);
+        }
+        var query = Query.query(Criteria.where("_id").is(reviewId));
+        var update = Update.update("eventPublishedAt", publishedAt);
+        return mongoTemplate.updateFirst(query, update, EventReviewDocument.class)
+                .map(result -> result.getModifiedCount() > 0)
+                .flatMap(updated -> updated
+                        ? Mono.just(true)
+                        : mongoTemplate.updateFirst(query, update, ActivityReviewDocument.class)
+                                .map(result -> result.getModifiedCount() > 0));
+    }
+
     private EventReviewDocument toEventDocument(Review review) {
         return new EventReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
                 review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
                 review.getStatus(), review.updatedAt(), toAssessmentDocument(review.getAiAssessment()),
-                review.isAiRetained());
+                review.isAiRetained(), review.getEventPublishedAt());
     }
 
     private ActivityReviewDocument toActivityDocument(Review review) {
         return new ActivityReviewDocument(review.getId(), review.getItemId(), toUserDocument(review.getUser()),
                 review.getRating(), review.getComment(), toReplyDocument(review.getReply()), review.getCreatedAt(),
                 review.getStatus(), review.updatedAt(), toAssessmentDocument(review.getAiAssessment()),
-                review.isAiRetained());
+                review.isAiRetained(), review.getEventPublishedAt());
     }
 
     private Review toEventDomain(EventReviewDocument document) {
@@ -135,6 +185,7 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
                 .aiAssessment(toAssessmentDomain(document.aiAssessment()))
                 .aiRetained(document.aiRetained())
+                .eventPublishedAt(document.eventPublishedAt())
                 .build();
     }
 
@@ -152,6 +203,7 @@ public class ReviewMongoAdapter implements ReviewRepositoryPort {
                 .updatedAt(updatedAtOf(document.updatedAt(), document.createdAt()))
                 .aiAssessment(toAssessmentDomain(document.aiAssessment()))
                 .aiRetained(document.aiRetained())
+                .eventPublishedAt(document.eventPublishedAt())
                 .build();
     }
 
