@@ -504,7 +504,7 @@ services:
       NOTIFICATIONS_ENABLED: "true"
       # El correo saliente requiere un SMTP real; se deja apagado hasta configurarlo.
       NOTIFICATIONS_EMAIL_ENABLED: "false"
-      CATALOG_SEED_ENABLED: "false"
+      CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-false}
       BOOKINGS_AUTO_COMPLETE_ENABLED: "true"
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-04

@@ -349,6 +349,7 @@ services:
       SMTP_PORT: "1025"
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-04
+      CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-true}
       JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
