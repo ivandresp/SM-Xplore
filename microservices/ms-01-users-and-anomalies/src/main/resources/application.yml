@@ -102,6 +102,9 @@ app:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}
       interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
+  internal:
+    # Clave compartida para /internal/** (P2-9). Vacía = endpoint deshabilitado (responde 503).
+    api-key: ${INTERNAL_API_KEY:}
   retention:
     enabled: ${RETENTION_ENABLED:true}
     auth-artifacts-days: ${RETENTION_AUTH_ARTIFACTS_DAYS:30}

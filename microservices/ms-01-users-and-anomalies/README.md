@@ -111,6 +111,7 @@ docker compose --profile full down
 | `MFA_REQUIRED_FOR_ADMINS` | `false` en desarrollo y pruebas; `true` en `prod` |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
 | `MFA_SECRET_KEY` | Vacía en desarrollo (llave local); obligatoria fuera de desarrollo: 32 bytes en Base64 |
+| `INTERNAL_API_KEY` | Vacía en desarrollo; el endpoint interno responde `503` mientras no se configure |
 | `RETENTION_ENABLED` | `true` |
 | `RETENTION_AUTH_ARTIFACTS_DAYS` | `30` |
 | `RETENTION_AUDIT_LOG_DAYS` | `1825` (cinco años) |
@@ -239,6 +240,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | GET | `/api/v1/admin/anomaly-thresholds` | ADMIN, umbrales de detección |
 | PUT | `/api/v1/admin/anomaly-thresholds/{type}` | ADMIN, actualiza un umbral |
 | GET | `/.well-known/jwks.json` | Público |
+| GET | `/internal/users/{userId}/contact` | Interno, encabezado `X-Internal-Api-Key` (sin JWT) |
 | GET | `/actuator/health` | Público |
 
 ### Sitio web de las prestadoras
@@ -355,6 +357,26 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 - `ver` se valida en ms-01 contra `users.auth_version`; otros servicios deben validar firma, `iss`, `aud` y `exp`.
 - El servicio de reportes de seguridad debe confiar en la llave pública publicada en `/.well-known/jwks.json`.
 
+## Endpoint interno de contacto (P2-9)
+
+`GET /internal/users/{userId}/contact` permite que otro microservicio resuelva el contacto de una cuenta sin
+depender de un token de usuario. Responde `200` con `{userId, email, fullName, role, phone, active}` (`phone`
+puede ser `null`) y `404` con `code=USER_NOT_FOUND` si el identificador no existe.
+
+No usa JWT porque el llamador es un servicio, no una persona. La autorización es el encabezado
+`X-Internal-Api-Key`, comparado en tiempo constante (SHA-256 + `MessageDigest.isEqual`, para que el tiempo no
+dependa de la longitud recibida) contra `INTERNAL_API_KEY` / `app.internal.api-key`:
+
+- clave no configurada → `503` con `code=INTERNAL_API_NOT_CONFIGURED`: un despliegue sin la variable **no**
+  deja el endpoint abierto;
+- clave ausente o distinta → `403` con `code=INVALID_INTERNAL_API_KEY`;
+- la clave se valida antes de consultar la cuenta, así que un llamador no autorizado no puede inferir qué
+  identificadores existen.
+
+`SecurityConfig` marca `permitAll` solo para esa ruta exacta; el resto de `/internal/**` sigue exigiendo un
+token de usuario y el gateway bloquea `/internal/**` hacia el exterior. Es un mecanismo **provisional**: P3-8
+lo sustituye por autenticación servicio a servicio.
+
 ## Pruebas
 
 ```bash
@@ -374,7 +396,8 @@ recuperación), la obligatoriedad para administradores, el bloqueo por intentos,
 cabeceras y el validador del perfil de producción. Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
 `PasswordResetMailpitTest` levanta un Mailpit real, recupera el correo de restablecimiento por su API y comprueba
-que el enlace cambia la contraseña y que el token no se puede reutilizar.
+que el enlace cambia la contraseña y que el token no se puede reutilizar. La suite completa son
+**40 clases y 143 pruebas** en verde.
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

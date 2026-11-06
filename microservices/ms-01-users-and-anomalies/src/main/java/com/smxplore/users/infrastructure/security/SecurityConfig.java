@@ -79,6 +79,14 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/.well-known/jwks.json")
                         .permitAll()
+                        // Endpoint interno de contactos (P2-9): lo consume otro microservicio, no una
+                        // persona, así que no se puede exigir un JWT de usuario. La autorización real se
+                        // hace en el controlador con la clave compartida `X-Internal-Api-Key`; si no está
+                        // configurada responde 503. Solo se abre esta ruta exacta: el resto de /internal/**
+                        // cae en anyExchange().authenticated(). El gateway bloquea /internal/** desde
+                        // el exterior, así que la ruta no queda expuesta a Internet.
+                        .pathMatchers(HttpMethod.GET, "/internal/users/*/contact")
+                        .permitAll()
                         .pathMatchers("/api/v1/admin/**")
                         .hasRole("ADMIN")
                         .pathMatchers(HttpMethod.OPTIONS, "/**")

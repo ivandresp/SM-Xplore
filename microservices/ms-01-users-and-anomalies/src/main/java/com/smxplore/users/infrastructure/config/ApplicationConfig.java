@@ -22,6 +22,7 @@ import com.smxplore.users.application.port.in.GetMfaStatusUseCase;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.GetSystemAvailabilityUseCase;
+import com.smxplore.users.application.port.in.GetUserContactUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
 import com.smxplore.users.application.port.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListAnomaliesUseCase;
@@ -95,6 +96,7 @@ import com.smxplore.users.application.service.GetMfaStatusService;
 import com.smxplore.users.application.service.GetPublicProfileService;
 import com.smxplore.users.application.service.GetReputationSummaryService;
 import com.smxplore.users.application.service.GetSystemAvailabilityService;
+import com.smxplore.users.application.service.GetUserContactService;
 import com.smxplore.users.application.service.GetUserDetailService;
 import com.smxplore.users.application.service.ListAiFlaggedReviewsService;
 import com.smxplore.users.application.service.ListAnomaliesService;
@@ -312,6 +314,11 @@ public class ApplicationConfig {
     @Bean
     public GetPublicProfileUseCase getPublicProfileUseCase(UserRepository users) {
         return new GetPublicProfileService(users);
+    }
+
+    @Bean
+    public GetUserContactUseCase getUserContactUseCase(UserRepository users) {
+        return new GetUserContactService(users);
     }
 
     @Bean
