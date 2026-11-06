@@ -62,10 +62,12 @@ function buildOptions() {
     // SPEC P1-8: menos del 1% de fallos HTTP.
     http_req_failed: ['rate<0.01'],
     checks: ['rate>0.98'],
-    'http_req_duration{endpoint:recommendations}': ['p(95)<600'],
   };
-  // SPEC P1-8: p95 del escenario load por debajo de 600 ms.
+  // SPEC P1-8: p95 del endpoint y del escenario load por debajo de 600 ms. En smoke
+  // no se exige latencia: la primera peticion paga el arranque en frio de Neo4j/cache
+  // y con 15 muestras un solo pico desborda el percentil.
   if (SCENARIO === 'load') {
+    thresholds['http_req_duration{endpoint:recommendations}'] = ['p(95)<600'];
     thresholds['http_req_duration{scenario:load}'] = ['p(95)<600'];
   }
   return { discardResponseBodies: false, scenarios, thresholds };
@@ -115,7 +117,8 @@ function registerTourist(email) {
     JSON.stringify({
       fullName: `Perf Turista ${stamp}`,
       email: email,
-      phone: '3001234567',
+      // Identidad unica por corrida: ms-01 rechaza email, telefono o DNI repetidos.
+      phone: `3${String(stamp).slice(-9)}`,
       password: PASSWORD_TOURIST,
       dniType: 'CC',
       dniNumber: String(stamp).slice(-9),

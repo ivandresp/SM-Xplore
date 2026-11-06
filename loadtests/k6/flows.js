@@ -106,7 +106,8 @@ function registerTourist(email, stamp) {
     JSON.stringify({
       fullName: `Perf Turista ${stamp}`,
       email: email,
-      phone: '3001234567',
+      // Identidad unica por turista: ms-01 rechaza email, telefono o DNI repetidos.
+      phone: `3${String(stamp).slice(-9)}`,
       password: PASSWORD_TOURIST,
       dniType: 'CC',
       dniNumber: String(stamp).slice(-9),

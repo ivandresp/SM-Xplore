@@ -103,6 +103,13 @@ if [ -z "$DURATION" ]; then DURATION="60s"; fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOADTESTS_DIR="${REPO_ROOT}/loadtests"
 
+# Git Bash (MSYS/Cygwin) reescribe rutas internas del contenedor (/scripts, /results)
+# a rutas de Windows antes de invocar docker. El host ya se pasa con cygpath, asi que
+# desactivamos esa conversion para que k6 reciba las rutas correctas dentro del contenedor.
+case "${OSTYPE:-}" in
+  msys*|cygwin*) export MSYS_NO_PATHCONV=1 ;;
+esac
+
 # Docker en Windows necesita rutas estilo C:/... aunque el shell use /c/...
 if command -v cygpath >/dev/null 2>&1; then
   HOST_REPO_ROOT="$(cygpath -w "$REPO_ROOT" | tr '\\' '/')"
