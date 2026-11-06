@@ -14,6 +14,7 @@ package com.smxplore.sitesandservices.domain.model.event;
 public final class EventVersions {
 
     public static final int CATALOG_CATEGORY_CHANGED = 1;
+    public static final int CATALOG_ZONE_CHANGED = 1;
     /** v2 adds {@code managerId}. */
     public static final int CATALOG_SITE_CHANGED = 2;
     public static final int CATALOG_SERVICE_CHANGED = 1;
@@ -27,6 +28,7 @@ public final class EventVersions {
     public static int of(String eventType) {
         return switch (eventType) {
             case EventTypes.CATALOG_CATEGORY_CHANGED -> CATALOG_CATEGORY_CHANGED;
+            case EventTypes.CATALOG_ZONE_CHANGED -> CATALOG_ZONE_CHANGED;
             case EventTypes.CATALOG_SITE_CHANGED -> CATALOG_SITE_CHANGED;
             case EventTypes.CATALOG_SERVICE_CHANGED -> CATALOG_SERVICE_CHANGED;
             case EventTypes.REVIEWS_REVIEW_CHANGED -> REVIEWS_REVIEW_CHANGED;

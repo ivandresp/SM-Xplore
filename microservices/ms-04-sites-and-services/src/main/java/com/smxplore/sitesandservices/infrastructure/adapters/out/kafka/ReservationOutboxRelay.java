@@ -20,6 +20,13 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
+/**
+ * Relay del outbox PostgreSQL del servicio.
+ *
+ * <p>Aunque el nombre viene del flujo de reservas, {@code reservation_outbox} es el outbox PG de
+ * todo ms-04: el relay reclama cualquier fila pendiente y la publica al topic igual a su
+ * {@code event_type}, que hoy incluye reservas y zonas ({@code catalog.zone.changed}).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

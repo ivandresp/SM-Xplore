@@ -15,6 +15,7 @@ import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.zone.Upd
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.dto.zone.ZoneResponse;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper.CatalogRequestMapper;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.mapper.CatalogWebMapper;
+import com.smxplore.sitesandservices.infrastructure.adapters.in.web.security.CorrelationIdResolver;
 import com.smxplore.sitesandservices.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -51,16 +53,21 @@ public class ZoneController {
     private final CatalogRequestMapper requestMapper;
     private final CatalogWebMapper webMapper;
     private final JwtUserResolver jwtUserResolver;
+    private final CorrelationIdResolver correlationIdResolver;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a tourist zone")
     public Mono<ZoneResponse> create(
             @Valid @RequestBody CreateZoneRequest request,
+            @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId,
             @AuthenticationPrincipal Jwt jwt
     ) {
         Actor actor = jwtUserResolver.resolve(jwt);
-        return createUseCase.handle(requestMapper.toDomain(request), actor)
+        return createUseCase.handle(
+                        requestMapper.toDomain(request),
+                        actor,
+                        correlationIdResolver.resolve(correlationId))
                 .map(webMapper::toResponse);
     }
 
@@ -69,10 +76,14 @@ public class ZoneController {
     public Mono<ZoneResponse> update(
             @PathVariable UUID zoneId,
             @Valid @RequestBody UpdateZoneRequest request,
+            @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId,
             @AuthenticationPrincipal Jwt jwt
     ) {
         Actor actor = jwtUserResolver.resolve(jwt);
-        return updateUseCase.handle(requestMapper.toDomain(zoneId, request), actor)
+        return updateUseCase.handle(
+                        requestMapper.toDomain(zoneId, request),
+                        actor,
+                        correlationIdResolver.resolve(correlationId))
                 .map(webMapper::toResponse);
     }
 
@@ -81,10 +92,14 @@ public class ZoneController {
     public Mono<ZoneResponse> changeStatus(
             @PathVariable UUID zoneId,
             @Valid @RequestBody ChangeZoneStatusRequest request,
+            @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId,
             @AuthenticationPrincipal Jwt jwt
     ) {
         Actor actor = jwtUserResolver.resolve(jwt);
-        return changeStatusUseCase.handle(requestMapper.toZoneStatus(zoneId, request.status()), actor)
+        return changeStatusUseCase.handle(
+                        requestMapper.toZoneStatus(zoneId, request.status()),
+                        actor,
+                        correlationIdResolver.resolve(correlationId))
                 .map(webMapper::toResponse);
     }
 

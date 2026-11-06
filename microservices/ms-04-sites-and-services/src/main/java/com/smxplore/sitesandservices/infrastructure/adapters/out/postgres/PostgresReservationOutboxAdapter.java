@@ -14,6 +14,14 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
+/**
+ * Outbox transaccional PostgreSQL del servicio.
+ *
+ * <p>La tabla se llama {@code reservation_outbox} por herencia del primer flujo que la uso (las
+ * reservas), pero es el outbox PG de todo ms-04: aqui se encolan tambien los eventos de zonas
+ * ({@code catalog.zone.changed}). {@link com.smxplore.sitesandservices.infrastructure.adapters.out.kafka.ReservationOutboxRelay}
+ * publica cada fila al topic igual a su {@code event_type}, sin asumir el agregado.
+ */
 @Component
 @RequiredArgsConstructor
 public class PostgresReservationOutboxAdapter implements ReservationOutboxPort {

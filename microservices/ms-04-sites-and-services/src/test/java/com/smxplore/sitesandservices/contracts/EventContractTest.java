@@ -21,6 +21,7 @@ import com.smxplore.sitesandservices.domain.model.review.ReviewStatus;
 import com.smxplore.sitesandservices.domain.model.common.ItemType;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
+import com.smxplore.sitesandservices.domain.model.zone.Zone;
 import com.smxplore.sitesandservices.domain.model.zone.ZoneStatus;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.event.DomainEventJsonSerializer;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,7 @@ class EventContractTest {
     /** catalog.site.changed moved to v2 to carry managerId; the rest still publish v1. */
     private static final Map<String, Integer> EVENT_VERSIONS = Map.of(
             "catalog.category.changed", 1,
+            "catalog.zone.changed", 1,
             "catalog.site.changed", 2,
             "catalog.service.changed", 1,
             "reviews.review.changed", 1,
@@ -69,6 +71,7 @@ class EventContractTest {
         Map<String, JsonSchema> schemas = schemas();
         Map<String, DomainEvent> events = Map.of(
                 "catalog.category.changed", factory.categoryChanged(category(), "corr-1"),
+                "catalog.zone.changed", factory.zoneChanged(zone(), "corr-6"),
                 "catalog.site.changed", factory.siteChanged(site(), "corr-2"),
                 "catalog.service.changed", factory.serviceChanged(service(), "corr-3"),
                 "reviews.review.changed", factory.reviewChanged(review(), "corr-4"),
@@ -89,6 +92,24 @@ class EventContractTest {
     }
 
     @Test
+    void reviewResponsePayloadMatchesItsJsonSchema() throws Exception {
+        Review review = review().toBuilder()
+                .response("Gracias por visitarnos")
+                .respondedAt(NOW.plusSeconds(600))
+                .build();
+        review.validate();
+
+        DomainEvent event = factory.reviewChanged(review, "corr-7");
+        JsonNode json = readJson(serializer.serialize(event));
+        Set<ValidationMessage> errors = schemas().get("reviews.review.changed").validate(json);
+
+        assertThat(errors).as("Contract violations for reviews.review.changed with response").isEmpty();
+        assertThat(json.at("/payload/response/text").asText()).isEqualTo("Gracias por visitarnos");
+        assertThat(json.at("/payload/response/respondedAt").asText())
+                .isEqualTo(NOW.plusSeconds(600).toString());
+    }
+
+    @Test
     void contractCatalogContainsTheEventsPublishedByMs04() throws Exception {
         Set<String> eventTypes;
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
@@ -102,6 +123,7 @@ class EventContractTest {
 
         assertThat(eventTypes).contains(
                 "catalog.category.changed",
+                "catalog.zone.changed",
                 "catalog.site.changed",
                 "catalog.service.changed",
                 "reviews.review.changed",
@@ -156,6 +178,21 @@ class EventContractTest {
                 .build();
         category.validate();
         return category;
+    }
+
+    private Zone zone() {
+        Zone zone = Zone.builder()
+                .zoneId(UUID.fromString("33333333-3333-3333-3333-333333333301"))
+                .managerId(UUID.fromString("66666666-6666-6666-6666-666666666601"))
+                .name("Centro")
+                .type("HISTORIC")
+                .description("Centro historico de Santa Marta")
+                .status(ZoneStatus.ACTIVE)
+                .createdAt(NOW)
+                .updatedAt(NOW)
+                .build();
+        zone.validate();
+        return zone;
     }
 
     private Site site() {

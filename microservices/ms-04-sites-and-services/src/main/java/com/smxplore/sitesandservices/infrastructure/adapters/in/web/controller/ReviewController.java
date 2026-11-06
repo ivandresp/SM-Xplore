@@ -83,12 +83,14 @@ public class ReviewController {
     public Mono<ReviewResponse> respond(
             @PathVariable UUID reviewId,
             @Valid @RequestBody RespondReviewRequest request,
+            @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId,
             @AuthenticationPrincipal Jwt jwt
     ) {
         Actor actor = jwtUserResolver.resolve(jwt);
         return respondUseCase.handle(
                         requestMapper.toReviewResponse(reviewId, request),
-                        actor)
+                        actor,
+                        correlationIdResolver.resolve(correlationId))
                 .map(webMapper::toResponse);
     }
 

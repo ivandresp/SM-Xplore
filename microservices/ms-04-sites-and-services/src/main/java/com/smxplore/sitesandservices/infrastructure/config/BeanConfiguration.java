@@ -47,6 +47,7 @@ import com.smxplore.sitesandservices.application.support.ReservationAccess;
 import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
 import com.smxplore.sitesandservices.application.support.ReservationPolicy;
 import com.smxplore.sitesandservices.application.support.TransactionalOutboxWriter;
+import com.smxplore.sitesandservices.application.support.TransactionalPgOutboxWriter;
 import com.smxplore.sitesandservices.application.zone.ZoneChangeStatusService;
 import com.smxplore.sitesandservices.application.zone.ZoneCreateService;
 import com.smxplore.sitesandservices.application.zone.ZoneGetService;
@@ -159,6 +160,18 @@ public class BeanConfiguration {
         return new TransactionalOutboxWriter(transaction, outbox);
     }
 
+    /**
+     * Outbox transaccional para los agregados de PostgreSQL (zonas). Comparte la tabla
+     * {@code reservation_outbox} y el relay existentes: la tabla es el outbox PG del servicio.
+     */
+    @Bean
+    public TransactionalPgOutboxWriter transactionalPgOutboxWriter(
+            ReservationTransactionPort transaction,
+            ReservationOutboxPort outbox
+    ) {
+        return new TransactionalPgOutboxWriter(transaction, outbox);
+    }
+
     @Bean
     public CreateCategoryUseCase createCategoryUseCase(
             CategoryRepositoryPort categoryRepository,
@@ -215,9 +228,11 @@ public class BeanConfiguration {
     public CreateZoneUseCase createZoneUseCase(
             ZoneRepositoryPort zoneRepository,
             CatalogAccess access,
+            TransactionalPgOutboxWriter outboxWriter,
+            DomainEventFactory eventFactory,
             Clock clock
     ) {
-        return new ZoneCreateService(zoneRepository, access, clock);
+        return new ZoneCreateService(zoneRepository, access, outboxWriter, eventFactory, clock);
     }
 
     @Bean
@@ -227,6 +242,8 @@ public class BeanConfiguration {
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
             CatalogAccess access,
+            TransactionalPgOutboxWriter outboxWriter,
+            DomainEventFactory eventFactory,
             Clock clock
     ) {
         return new ZoneUpdateService(
@@ -235,6 +252,8 @@ public class BeanConfiguration {
                 serviceRepository,
                 lookup,
                 access,
+                outboxWriter,
+                eventFactory,
                 clock
         );
     }
@@ -246,6 +265,8 @@ public class BeanConfiguration {
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
             CatalogAccess access,
+            TransactionalPgOutboxWriter outboxWriter,
+            DomainEventFactory eventFactory,
             Clock clock
     ) {
         return new ZoneChangeStatusService(
@@ -254,6 +275,8 @@ public class BeanConfiguration {
                 serviceRepository,
                 lookup,
                 access,
+                outboxWriter,
+                eventFactory,
                 clock
         );
     }
@@ -456,9 +479,18 @@ public class BeanConfiguration {
             ReviewRepositoryPort reviewRepository,
             CatalogLookup lookup,
             CatalogAccess access,
+            TransactionalOutboxWriter outboxWriter,
+            DomainEventFactory eventFactory,
             Clock clock
     ) {
-        return new ReviewRespondService(reviewRepository, lookup, access, clock);
+        return new ReviewRespondService(
+                reviewRepository,
+                lookup,
+                access,
+                outboxWriter,
+                eventFactory,
+                clock
+        );
     }
 
     @Bean

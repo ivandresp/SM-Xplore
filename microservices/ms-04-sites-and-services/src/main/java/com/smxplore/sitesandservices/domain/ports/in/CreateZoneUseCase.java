@@ -6,5 +6,5 @@ import reactor.core.publisher.Mono;
 
 public interface CreateZoneUseCase {
 
-    Mono<Zone> handle(Zone zone, Actor actor);
+    Mono<Zone> handle(Zone zone, Actor actor, String correlationId);
 }

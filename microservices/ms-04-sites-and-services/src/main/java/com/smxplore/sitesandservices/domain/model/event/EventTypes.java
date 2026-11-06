@@ -2,6 +2,7 @@ package com.smxplore.sitesandservices.domain.model.event;
 
 public final class EventTypes {
 
+    public static final String CATALOG_ZONE_CHANGED = "catalog.zone.changed";
     public static final String CATALOG_SITE_CHANGED = "catalog.site.changed";
     public static final String CATALOG_SERVICE_CHANGED = "catalog.service.changed";
     public static final String CATALOG_CATEGORY_CHANGED = "catalog.category.changed";

@@ -8,6 +8,7 @@ import com.smxplore.sitesandservices.domain.model.reservation.Reservation;
 import com.smxplore.sitesandservices.domain.model.review.Review;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.site.Site;
+import com.smxplore.sitesandservices.domain.model.zone.Zone;
 import lombok.RequiredArgsConstructor;
 
 import java.time.Clock;
@@ -43,6 +44,36 @@ public class DomainEventFactory {
     }
 
     /**
+     * Zona creada o modificada. ms-05 la consume para construir el nodo {@code :Zona} del grafo y
+     * enlazar los sitios que pertenecen a ella.
+     */
+    public DomainEvent zoneChanged(Zone zone, String correlationId) {
+        return event(
+                EventTypes.CATALOG_ZONE_CHANGED,
+                zone.zoneId(),
+                correlationId,
+                zonePayload(zone)
+        );
+    }
+
+    public Map<String, Object> zonePayload(Zone zone) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("zoneId", zone.zoneId().toString());
+        payload.put("managerId", zone.managerId().toString());
+        payload.put("name", zone.name());
+        // type y description son opcionales en el contrato: si no vienen, el campo no se publica.
+        if (zone.type() != null) {
+            payload.put("type", zone.type());
+        }
+        if (zone.description() != null) {
+            payload.put("description", zone.description());
+        }
+        payload.put("status", zone.status().name());
+        payload.put("updatedAt", zone.updatedAt().toString());
+        return payload;
+    }
+
+    /**
      * v2: adds {@code managerId}. ms-03 needs it to know which manager owns the site and refresh
      * the snapshot it keeps on its events, so the field is required from this version on.
      */
@@ -62,6 +93,9 @@ public class DomainEventFactory {
         payload.put("name", site.name());
         payload.put("categoryId", site.categoryId().toString());
         payload.put("managerId", site.managerId() == null ? null : site.managerId().toString());
+        // zoneId es obligatorio en el dominio; el contrato v2 lo declara opcional para no romper
+        // consumidores que todavia no lo leen.
+        payload.put("zoneId", site.zoneId() == null ? null : site.zoneId().toString());
         payload.put("latitude", site.latitude());
         payload.put("longitude", site.longitude());
         payload.put("status", site.status().name());
@@ -128,6 +162,12 @@ public class DomainEventFactory {
         payload.put("itemId", review.itemId().toString());
         payload.put("rating", review.rating());
         payload.put("status", review.status().name());
+        if (review.response() != null && !review.response().isBlank() && review.respondedAt() != null) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("text", review.response());
+            response.put("respondedAt", review.respondedAt().toString());
+            payload.put("response", response);
+        }
         payload.put("updatedAt", review.updatedAt().toString());
         return event(EventTypes.REVIEWS_REVIEW_CHANGED, review.reviewId(), correlationId, payload);
     }

@@ -6,5 +6,5 @@ import reactor.core.publisher.Mono;
 
 public interface RespondToReviewUseCase {
 
-    Mono<Review> handle(Review review, Actor actor);
+    Mono<Review> handle(Review review, Actor actor, String correlationId);
 }
