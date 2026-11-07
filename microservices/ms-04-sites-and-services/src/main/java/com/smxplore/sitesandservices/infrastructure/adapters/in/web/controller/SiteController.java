@@ -143,7 +143,8 @@ public class SiteController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         SiteFilter filter = new SiteFilter(categoryId, zoneId, status, search, managerId, page, size);
-        Actor actor = jwtUserResolver.resolve(jwt);
+        // El listado es publico: sin JWT no hay actor y el filtro por gestora no aplica.
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
         return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));
     }

@@ -24,6 +24,15 @@ import java.util.List;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
 
+    /** Rutas de solo lectura del catalogo: publicas, igual que los GET de ms-03. */
+    private static final String[] PUBLIC_CATALOG_PATHS = {
+            "/api/v1/categories/**",
+            "/api/v1/zones/**",
+            "/api/v1/sites/**",
+            "/api/v1/services/**",
+            "/api/v1/reviews/**"
+    };
+
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(
             ServerHttpSecurity http,
@@ -53,7 +62,9 @@ public class SecurityConfiguration {
                         .hasRole("ADMIN")
                         .pathMatchers(HttpMethod.GET, "/api/v1/demand-indicators", "/api/v1/demand-indicators/**")
                         .hasAnyRole("SERVICE_PROVIDER", "DESTINATION_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/api/v1/**").authenticated()
+                        // El catalogo es lectura publica: el turista lo consulta antes de registrarse.
+                        .pathMatchers(HttpMethod.GET, PUBLIC_CATALOG_PATHS).permitAll()
+                        .pathMatchers(HttpMethod.HEAD, PUBLIC_CATALOG_PATHS).permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/categories", "/api/v1/zones", "/api/v1/sites")
                         .hasAnyRole("DESTINATION_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.PUT, "/api/v1/categories/**", "/api/v1/zones/**", "/api/v1/sites/**")
