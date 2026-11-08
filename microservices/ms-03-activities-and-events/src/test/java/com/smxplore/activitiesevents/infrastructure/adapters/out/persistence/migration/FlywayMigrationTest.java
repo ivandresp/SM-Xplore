@@ -341,8 +341,41 @@ class FlywayMigrationTest {
         }
     }
 
+    @Test
+    void catalogSearchMigrationSkipsTrigramSetupWithoutExtensionPrivilege() throws Exception {
+        var limitedUser = "ms03_flyway_limited";
+        var limitedPassword = "ms03-flyway-limited";
+
+        try (var connection = connection(); var statement = connection.createStatement()) {
+            statement.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ms03_flyway_limited') THEN
+                            CREATE ROLE ms03_flyway_limited LOGIN PASSWORD 'ms03-flyway-limited';
+                        ELSE
+                            ALTER ROLE ms03_flyway_limited WITH LOGIN PASSWORD 'ms03-flyway-limited';
+                        END IF;
+                    END $$;
+                    """);
+            statement.execute("GRANT CONNECT ON DATABASE " + POSTGRES.getDatabaseName() + " TO ms03_flyway_limited");
+            statement.execute("GRANT USAGE, CREATE ON SCHEMA public TO ms03_flyway_limited");
+        }
+
+        flyway(limitedUser, limitedPassword).migrate();
+
+        try (var connection = connection(limitedUser, limitedPassword)) {
+            assertThat(extensionExists(connection, "pg_trgm")).isFalse();
+            assertThat(indexExists(connection, "actividad_name_trgm_idx")).isFalse();
+            assertThat(indexExists(connection, "evento_name_trgm_idx")).isFalse();
+        }
+    }
+
     private static Flyway flyway() {
         return baseFlyway().load();
+    }
+
+    private static Flyway flyway(String username, String password) {
+        return baseFlyway(username, password).load();
     }
 
     private static Flyway flywayAtV1() {
@@ -354,15 +387,24 @@ class FlywayMigrationTest {
     }
 
     private static org.flywaydb.core.api.configuration.FluentConfiguration baseFlyway() {
+        return baseFlyway(POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private static org.flywaydb.core.api.configuration.FluentConfiguration baseFlyway(
+            String username, String password) {
         return Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .dataSource(POSTGRES.getJdbcUrl(), username, password)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion("0");
     }
 
     private static Connection connection() throws SQLException {
-        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        return connection(POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private static Connection connection(String username, String password) throws SQLException {
+        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), username, password);
     }
 
     private static void insertActivity(Connection connection, UUID activityId) throws SQLException {
