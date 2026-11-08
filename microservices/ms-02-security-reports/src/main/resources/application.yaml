@@ -14,18 +14,20 @@ spring:
     properties:
       spring.json.add.type.headers: false
 
+# MS02-04: apagado por defecto; solo el perfil local/dev lo enciende.
 springdoc:
   api-docs:
-    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
   swagger-ui:
-    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
 management:
   endpoints:
     web:
       exposure:
-        # El stack local scrapea /actuator/prometheus; en produccion se aisla por red.
-        include: health,info,metrics,prometheus
+        # MS02-04: solo health e info sin JWT. Las metricas se habilitan en local/dev y, si se exponen fuera,
+        # el filtro de seguridad las protege con token (nunca son publicas).
+        include: ${MANAGEMENT_EXPOSED_ENDPOINTS:health,info}
 
 app:
   security:
@@ -40,19 +42,30 @@ app:
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
     auth-version:
-      enabled: ${AUTH_VERSION_ENABLED:false}
-      base-url: ${MS01_BASE_URL:}
+      # MS02-05: activada por defecto; local/dev/test la apagan explicitamente.
+      enabled: ${AUTH_VERSION_ENABLED:true}
+      base-url: ${MS01_BASE_URL:http://ms-01:8081}
       timeout: ${AUTH_VERSION_TIMEOUT:2s}
       cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
       # Cota de entradas y de TTL (max 5 min): el TTL es la ventana real de revocacion.
       cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
     mfa:
-      require-admin: ${MFA_REQUIRE_ADMIN:false}
+      # MS02-05: exigido por defecto fuera de local/dev/test.
+      require-admin: ${MFA_REQUIRE_ADMIN:true}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
     rate-limit:
       enabled: ${REPORT_RATE_LIMIT_ENABLED:true}
+      # MS02-03: cupos por cuenta (sub del JWT), con la IP solo como respaldo sin principal.
       requests-per-minute: ${REPORT_RATE_LIMIT_PER_MINUTE:30}
+      comments-per-minute: ${COMMENT_RATE_LIMIT_PER_MINUTE:30}
+      writes-per-minute: ${WRITE_RATE_LIMIT_PER_MINUTE:60}
+      trusted-proxies: "${TRUSTED_PROXIES:127.0.0.1/32,::1/128,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}"
+    photos:
+      # MS02-07: allowlist de hosts; vacia = no se aceptan fotos fuera de local/dev/test.
+      allowed-hosts: "${PHOTO_ALLOWED_HOSTS:}"
+      allow-http: ${PHOTO_ALLOW_HTTP:false}
+      allow-any-host: ${PHOTO_ALLOW_ANY_HOST:false}
   outbox:
     enabled: ${OUTBOX_ENABLED:true}
     producer: ${OUTBOX_PRODUCER:ms-02}

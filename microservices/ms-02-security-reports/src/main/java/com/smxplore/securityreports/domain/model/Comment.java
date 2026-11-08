@@ -3,6 +3,7 @@ package com.smxplore.securityreports.domain.model;
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
 import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterException;
 import com.smxplore.securityreports.domain.exceptions.ReportWithoutContentException;
+import com.smxplore.securityreports.domain.model.types.PlainText;
 import com.smxplore.securityreports.domain.model.types.UserRef;
 import lombok.Builder;
 import lombok.Getter;
@@ -39,5 +40,6 @@ public class Comment {
             throw new ReportWithoutContentException("Comment content is empty");
         if (content.length() > MAX_CONTENT_LENGTH)
             throw new ReportWithoutContentException("Comment content is too long");
+        PlainText.ensurePlainText(content, "Comment content");
     }
 }

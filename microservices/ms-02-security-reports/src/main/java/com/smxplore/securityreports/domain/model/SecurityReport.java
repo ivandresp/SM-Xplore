@@ -5,6 +5,7 @@ import com.smxplore.securityreports.domain.exceptions.InvalidStatusTransitionExc
 import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterException;
 import com.smxplore.securityreports.domain.exceptions.ReportWithoutContentException;
 import com.smxplore.securityreports.domain.model.types.Location;
+import com.smxplore.securityreports.domain.model.types.PlainText;
 import com.smxplore.securityreports.domain.model.types.UserRef;
 import lombok.Builder;
 import lombok.Getter;
@@ -50,6 +51,7 @@ public class SecurityReport {
     public void validate() {
         validateTitle(title);
         validateDescription(description);
+        if (photosUrls != null) photosUrls.forEach(this::validateUrl);
         if (createdAt == null) throw new InvalidReportRequestException("Creation date is mandatory.");
         if (updatedAt == null) updatedAt = createdAt;
         if (updatedAt.isBefore(createdAt)) {
@@ -142,10 +144,12 @@ public class SecurityReport {
             throw new ReportWithoutContentException("Title is empty");
         if (title.length() > MAX_TITLE_LENGTH)
             throw new ReportWithoutContentException("Title is too long");
+        PlainText.ensurePlainText(title, "Title");
     }
 
     private void validateDescription(String description) {
         if (description != null && description.length() > MAX_DESCRIPTION_LENGTH)
             throw new ReportWithoutContentException("Description is too long");
+        PlainText.ensurePlainText(description, "Description");
     }
 }

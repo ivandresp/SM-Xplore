@@ -36,13 +36,13 @@ public class CommentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Comment a security report (the author is taken from the token)")
+    @Operation(summary = "Comment a security report (its author or staff; the author is taken from the token)")
     public Mono<CommentResponse> comment(@PathVariable UUID reportId,
                                          @Valid @RequestBody CommentRequest request,
                                          @AuthenticationPrincipal Jwt jwt) {
         var user = jwtUserResolver.resolve(jwt);
         var comment = mapper.toDomain(request).toBuilder().reportId(reportId).user(user).build();
-        return commentReportUseCase.handle(comment).map(mapper::toResponse);
+        return commentReportUseCase.handle(comment, reportAccessGuard.isStaff(jwt)).map(mapper::toResponse);
     }
 
     @GetMapping

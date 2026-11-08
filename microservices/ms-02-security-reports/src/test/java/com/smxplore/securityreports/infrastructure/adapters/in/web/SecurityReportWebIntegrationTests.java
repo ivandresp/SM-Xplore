@@ -75,6 +75,103 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
+    void rejectsCommentsOnAnotherUsersReport() {
+        var author = UUID.randomUUID();
+        var intruder = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario ajeno"}
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void allowsTheAuthorToCommentTheirOwnReport() {
+        var author = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(author, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario del autor"}
+                        """)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.content").isEqualTo("Comentario del autor");
+    }
+
+    @Test
+    void rejectsCommentsOnASolvedReport() {
+        var author = UUID.randomUUID();
+        var staff = UUID.randomUUID();
+        var reportId = createReport(author);
+        closeReport(staff, reportId);
+        solveReport(staff, reportId);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(author, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario tardio"}
+                        """)
+                .exchange()
+                .expectStatus().isEqualTo(409);
+    }
+
+    @Test
+    void rejectsHtmlTagsInReportContent() {
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "<script>alert(1)</script>",
+                          "description": "Reporte con etiquetas"
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail").value(detail -> assertThat(String.valueOf(detail)).contains("HTML"));
+    }
+
+    @Test
+    void rejectsPhotoUrlsOutsideTheAllowlist() {
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "Robo en la playa",
+                          "description": "Reporte con foto externa",
+                          "photosUrls": ["https://attacker.example/photo.jpg"]
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void protectsActuatorMetricsFromAnonymousUsers() {
+        webTestClient.get()
+                .uri("/actuator/metrics")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
     void rejectsListingAnotherUsersReports() {
         var requester = UUID.randomUUID();
         var otherUser = UUID.randomUUID();

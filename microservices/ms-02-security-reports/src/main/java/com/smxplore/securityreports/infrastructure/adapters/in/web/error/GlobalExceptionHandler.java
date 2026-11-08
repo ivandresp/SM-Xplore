@@ -1,5 +1,6 @@
 package com.smxplore.securityreports.infrastructure.adapters.in.web.error;
 
+import com.smxplore.securityreports.domain.exceptions.CommentForbiddenException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCursorException;
 import com.smxplore.securityreports.domain.exceptions.InvalidJwtException;
@@ -58,6 +59,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleInvalidJwt(InvalidJwtException exception,
                                                              ServerWebExchange exchange) {
         return error(HttpStatus.UNAUTHORIZED, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(CommentForbiddenException.class)
+    public ResponseEntity<ProblemDetail> handleCommentForbidden(CommentForbiddenException exception,
+                                                                  ServerWebExchange exchange) {
+        return error(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(InvalidStatusTransitionException.class)

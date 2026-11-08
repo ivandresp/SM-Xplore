@@ -11,6 +11,7 @@ import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityR
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.CorrelationIdResolver;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import com.smxplore.securityreports.infrastructure.config.JwtProperties;
@@ -159,8 +160,9 @@ public class SecurityReportController {
 
     }
 
+    /** Acepta solo identificadores acotados; si el cliente envia basura se genera uno nuevo (MS02-08). */
     private static String correlationId(String header) {
-        return header == null || header.isBlank() ? UUID.randomUUID().toString() : header.trim();
+        return CorrelationIdResolver.resolve(header);
     }
 
     private boolean isAdminOrManager(Jwt jwt) {

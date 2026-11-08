@@ -6,6 +6,7 @@ import com.smxplore.securityreports.domain.exceptions.InvalidReportRequestExcept
 import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterException;
 import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.types.UserRef;
+import com.smxplore.securityreports.domain.ports.out.PhotoUrlPolicyPort;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
 import com.smxplore.securityreports.domain.ports.usecases.ReportIncidentUseCasePort;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class ReportIncidentUseCase implements ReportIncidentUseCasePort {
     private final SecurityReportRepositoryPort securityReportRepo;
     private final TransactionalOutboxWriter outboxWriter;
     private final SecurityReportEventFactory eventFactory;
+    private final PhotoUrlPolicyPort photoUrlPolicy;
 
     @Override
     public Mono<SecurityReport> handle(UserRef user, SecurityReport report, String correlationId) {
@@ -32,6 +34,7 @@ public class ReportIncidentUseCase implements ReportIncidentUseCasePort {
     private SecurityReport validateAndBuild(SecurityReport report, UserRef user) {
         if (user == null) throw new InvalidUserReporterException("User cannot be null");
         var reportWithUser = report.toBuilder().user(user).build();
+        reportWithUser.getPhotosUrls().forEach(photoUrlPolicy::validate);
         reportWithUser.validate();
         return reportWithUser;
     }

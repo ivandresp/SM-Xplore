@@ -59,8 +59,18 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `JWT_ROLE_CLAIM` | `role` | Claim que contiene el rol. |
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre del usuario. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos, separados por coma. |
-| `REPORT_RATE_LIMIT_ENABLED` | `true` | Activa el límite por IP para crear reportes. |
-| `REPORT_RATE_LIMIT_PER_MINUTE` | `30` | Máximo de reportes por IP por minuto. |
+| `REPORT_RATE_LIMIT_ENABLED` | `true` | Activa el límite por cuenta de escrituras (MS02-03). |
+| `REPORT_RATE_LIMIT_PER_MINUTE` | `30` | Reportes creados por cuenta por minuto. |
+| `COMMENT_RATE_LIMIT_PER_MINUTE` | `30` | Comentarios creados por cuenta por minuto. |
+| `WRITE_RATE_LIMIT_PER_MINUTE` | `60` | Resto de escrituras (fotos, contenido, cierre, resolución) por cuenta por minuto. |
+| `TRUSTED_PROXIES` | `127.0.0.1/32,::1/128,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16` | Proxies que pueden informar `X-Real-IP`; fuera de ellos se usa la IP de la conexión. |
+| `AUTH_VERSION_ENABLED` | `true` | Valida el claim `ver` contra ms-01 (MS02-05). En local/test se apaga explícitamente. |
+| `MS01_BASE_URL` | `http://ms-01:8081` | Base para consultar la versión de autenticación del usuario. |
+| `MFA_REQUIRE_ADMIN` | `true` | Exige `mfa=true` a los administradores (fuera de local/test). |
+| `JWT_ALLOW_INSECURE_JWKS` | `false` | Solo local/dev: acepta JWKS por HTTP no loopback. |
+| `PHOTO_ALLOWED_HOSTS` | vacío | Allowlist de hosts para `photosUrls` (admite `*.dominio`). Obligatoria fuera de local/test. |
+| `PHOTO_ALLOW_HTTP` / `PHOTO_ALLOW_ANY_HOST` | `false` / `false` | Relajaciones solo para local/test. |
+| `MANAGEMENT_EXPOSED_ENDPOINTS` | `health,info` | Endpoints de actuator expuestos; fuera de local/test no puede incluir métricas. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker Compose se activa; en producción se recomienda gestionarlos con migraciones. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka compartido. |
 | `OUTBOX_ENABLED` | `true` | Activa el relay del outbox de reportes. |
@@ -69,8 +79,8 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `OUTBOX_MAX_ATTEMPTS` / `OUTBOX_*_BACKOFF` | `20` / `1s`–`1m` | Reintentos y backoff. |
 | `OUTBOX_LEASE_DURATION` | `3m` | Lease del worker que publica. |
 | `OUTBOX_RETENTION_DAYS` | `30` | Retención de eventos publicados/fallidos. |
-| `SPRINGDOC_API_DOCS_ENABLED` | `true` | Habilita `/v3/api-docs`. |
-| `SPRINGDOC_SWAGGER_UI_ENABLED` | `true` | Habilita Swagger UI. |
+| `SPRINGDOC_API_DOCS_ENABLED` | `false` | Habilita `/v3/api-docs` (solo local/dev). |
+| `SPRINGDOC_SWAGGER_UI_ENABLED` | `false` | Habilita Swagger UI (solo local/dev). |
 
 ## Contrato de reportes
 
@@ -155,23 +165,75 @@ Reportes: orden `createdAt DESC`, `_id DESC`. Comentarios: orden `createdAt ASC`
 
 ## Seguridad
 
-En `prod`, este servicio valida el claim `ver` contra ms-01 (`MS01_BASE_URL`) y exige
-`mfa=true` a los administradores. La validación es fail-closed: si ms-01 no responde, las
-peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABLED=false`.
+### Defaults y perfiles (MS02-05)
+
+Por defecto el servicio es **estricto**: valida `ver` contra ms-01, exige `mfa=true` a los administradores, no
+publica métricas ni springdoc, exige HTTPS para el JWKS y una allowlist de fotos. Solo los perfiles `local`, `dev`
+y `test` relajan esos controles, de forma explícita y avisando en el log; el arranque fuera de esos perfiles falla
+si falta cualquiera de las condiciones. `application-local.yaml` contiene el conjunto relajado para Docker Compose.
 
 - Solo se acepta RS256; el token lo emite ms-01. Los códigos de rol en inglés son los únicos que se emiten; los alias en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`) se siguen leyendo mientras expiran los tokens anteriores a `V10`.
-- `/actuator/metrics` y `/actuator/prometheus` están expuestos sin JWT para el scraping; en producción deben aislarse por red (puerto de management separado o token de scrape).
 - El `issuer` (`iss`) debe ser `sm-xplore-ms-01` y la audiencia `sm-xplore-services`.
 - Los roles usados son los códigos en inglés: `ADMIN`, `DESTINATION_MANAGER`, `GUIDE`, `SERVICE_PROVIDER`, `TOURIST`.
-- `GET /security-reports` (listado global por estado) requiere `ADMIN` o `DESTINATION_MANAGER`.
+- `GET /security-reports` (listado global por estado) y `/counts` requieren `ADMIN` o `DESTINATION_MANAGER`; cerrar y resolver también.
 - Los usuarios solo pueden modificar sus propios reportes, salvo staff.
 - El detalle de un reporte (`GET /security-reports/{reportId}`) y sus comentarios solo los ve su autor o el staff (`ADMIN`/`DESTINATION_MANAGER`): sin ese control cualquier usuario autenticado leía el título, la descripción, las fotos y el denunciante de un incidente.
 - `GET /security-reports/nearby` solo devuelve la proyección anonimizada (`id`, `title`, `status`, coordenadas con 3 decimales, fechas): ni el denunciante, ni la descripción, ni las fotos, ni siquiera al autor o al staff; y acota `size` ≤ 50 y `radiusKm` ≤ 20 km (MS02-01).
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - La llave pública se obtiene del JWKS de ms-01 o de un PEM local; nunca se comparte una llave privada.
 - Los errores usan RFC 9457 (`application/problem+json`) con `type`, `title`, `status`, `detail` e `instance`.
-- Se agregan cabeceras `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`.
-- La creación de reportes tiene un límite fijo por IP (`REPORT_RATE_LIMIT_PER_MINUTE`, 30 por defecto); al superarlo responde `429` con `Retry-After`.
+
+### Comentarios (MS02-02)
+
+Solo el autor del reporte o el staff (`ADMIN`/`DESTINATION_MANAGER`) puede comentarlo, y no se admiten comentarios
+en reportes `SOLVED`. La regla se aplica en el caso de uso, después de cargar el reporte, y responde `403` (o `409`
+si el reporte ya está resuelto).
+
+### Límite de escrituras (MS02-03)
+
+El cupo es **por cuenta** (claim `sub`), no por IP: detrás del gateway todas las peticiones comparten la IP del
+proxy y el límite anterior era global. Hay cupos separados para crear reportes (30/min), comentar (30/min) y el
+resto de escrituras (60/min); cada uno responde `429` con `Retry-After: 60` y `application/problem+json`. La IP
+solo se usa como respaldo cuando no hay principal, y solo se acepta `X-Real-IP` si la conexión viene de un proxy de
+la lista `TRUSTED_PROXIES`; `X-Forwarded-For` nunca se lee.
+
+### Actuator y documentación (MS02-04)
+
+Públicos sin JWT: solo `/actuator/health` (y `/actuator/health/**`) e `/actuator/info`. Métricas, Prometheus,
+`env`, springdoc y Swagger UI no se exponen fuera de `local`/`dev`; si se habilitan en local, siguen exigiendo JWT
+salvo Swagger UI (deshabilitado por defecto). El puerto de la API se publica solo en `127.0.0.1` en Compose.
+
+### Contenido y cabeceras (MS02-06)
+
+El contenido (título, descripción, comentarios) debe ser texto plano: el servicio rechaza etiquetas HTML
+(`<script>`, `<img …>`, comentarios, etc.) y caracteres de control con `400`. La API añade
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'` y `Cache-Control: no-store`
+en las rutas `/api/`, además de `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+`Permissions-Policy`, `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`.
+
+### Fotos (MS02-07)
+
+`photosUrls` solo admite URLs `https` cuyo host esté en `PHOTO_ALLOWED_HOSTS` (los subdominios se declaran con
+`*.dominio`). Un host desconocido, `http://` o un esquema distinto se rechazan con `400`. El servicio no sube
+archivos: guarda URLs que luego carga el navegador, por eso la allowlist evita el seguimiento de la IP del staff y
+el contenido mixto.
+
+### Correlation id (MS02-08)
+
+`X-Correlation-Id` se acepta solo si cumple `[A-Za-z0-9._:-]{1,128}`; en cualquier otro caso se genera un UUID
+nuevo en lugar de rechazar la petición. El valor viaja al outbox y a Kafka, así que no puede usarse para inflar el
+documento ni inyectar caracteres de control en los logs.
+
+### Riesgos aceptados
+
+- **XSS residual en el cliente**: el servicio devuelve JSON y rechaza HTML, pero si un cliente renderizara el
+  contenido como HTML sin escapar, el navegador ejecutaría el contenido malicioso. La mitigación definitiva es del
+  frontend (escape al renderizar) más la CSP; no se puede resolver solo en el backend sin corromper el texto.
+- **Límite en memoria por instancia**: los cupos viven en el proceso; con varias réplicas el límite efectivo se
+  multiplica por réplica. Aceptado para esta entrega; un limitador compartido (Redis) queda fuera de alcance.
+- **`/actuator/health` público**: expone el estado del servicio, no datos de negocio; es el patrón de plataforma.
+- **Sin subida de archivos**: no hay validación de tipo/tamaño de imagen porque el servicio solo almacena URLs; esa
+  responsabilidad (y el escaneo de contenido) corresponde al almacenamiento de imágenes de la plataforma.
 
 ## Migraciones y datos legados
 
@@ -187,4 +249,4 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **53 pruebas** y valida el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`) y los errores RFC 9457.
+Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **103 pruebas**: unitarias para las reglas de dominio y de seguridad (contenido, allowlist de fotos, límites por cuenta, guard de arranque, correlation id) e integración para el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`), la autorización de comentarios y los errores RFC 9457.
