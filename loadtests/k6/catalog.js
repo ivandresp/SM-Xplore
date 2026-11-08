@@ -24,7 +24,9 @@ const BASE_URL = __ENV.BASE_URL || 'http://ms-03:8082';
 const SITES_BASE_URL = __ENV.SITES_BASE_URL || 'http://ms-04:8080';
 const AUTH_BASE_URL = __ENV.AUTH_BASE_URL || 'http://ms-01:8081';
 const ADMIN_USER = __ENV.ADMIN_USER || __ENV.USER || 'admin@smxplore.local';
-const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || __ENV.PASSWORD || 'ChangeMe123!';
+// PLAT-23: sin password por defecto. El lanzador exige ADMIN_PASSWORD y se valida antes de
+// hacer ninguna peticion; asi estas pruebas no se reutilizan contra un entorno con datos reales.
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || __ENV.PASSWORD || '';
 const PAGE_SIZE = Number(__ENV.PAGE_SIZE || 20);
 
 // Numero de elementos devueltos por cada endpoint y proporcion de paginas vacias.
@@ -117,7 +119,17 @@ function recordPage(label, res) {
   emptyPages.add(size === 0 ? 1 : 0, { endpoint: label });
 }
 
+function requireAdminPassword() {
+  if (!ADMIN_PASSWORD) {
+    throw new Error(
+      'Falta ADMIN_PASSWORD: exporta la contrasena del administrador del stack local. ' +
+      'No hay valor por defecto (PLAT-23) ni se debe reutilizar una contrasena real.'
+    );
+  }
+}
+
 export function setup() {
+  requireAdminPassword();
   // ms-04 protege /api/v1/sites con JWT (cualquier rol autenticado); el resto es publico.
   return { adminToken: login(ADMIN_USER, ADMIN_PASSWORD) };
 }

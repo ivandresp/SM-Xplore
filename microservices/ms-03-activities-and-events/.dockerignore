@@ -1,3 +1,6 @@
+# PLAT-22: contexto de build minimo. La imagen final solo copia app.jar, pero el
+# contexto se envia al daemon y las capas quedan en la cache de GitHub Actions
+# (type=gha), asi que no se suben documentacion, metadatos ni claves de test.
 .gradle
 build
 out
@@ -7,3 +10,7 @@ out
 *.iml
 .env
 README.md
+docs
+# Claves de prueba (solo para Testcontainers/tests locales; nunca en la imagen).
+src/test/**/keys
+src/test/**/*.pem

@@ -492,6 +492,9 @@ networks:
     name: smxplore-stack
 
 volumes:
+  # PLAT-23: ms01_data guarda la pareja RSA que el perfil dev de ms-01 genera en /app/.local.
+  # Es un secreto DE DESARROLLO: no copiar a backups ni reutilizar en produccion (alli llega
+  # por secreto: JWT_KEY_STORE). Borrar el volumen invalida los tokens ya emitidos.
   postgres_data:
   mongo_data:
   kafka_data:

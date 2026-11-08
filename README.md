@@ -100,8 +100,17 @@ se acepta con un perfil local, y el perfil `prod` lo prohibe y exige emisor y au
 | Kafka UI (8090) | `admin` / `kafka-ui-dev` (`KAFKA_UI_USER` / `KAFKA_UI_PASSWORD`) |
 | Mailpit UI (8025) | `mailpit` / `mailpit-dev` (`MAILPIT_UI_AUTH` en formato `usuario:password`) |
 
-El perfil por defecto de ms-01 es `dev`: genera y persiste las llaves JWT en el volumen
-`ms01_data`. Si borras el volumen, los tokens emitidos dejan de valer.
+Todas son **credenciales de desarrollo, no secretos**: viven en `.env` (`.env.example` son los
+valores por defecto) y se rotan cambiando la variable y recreando el contenedor. Aplican también a
+`scripts/smoke.sh` / `scripts/smoke.ps1` (leen `BOOTSTRAP_ADMIN_PASSWORD`) y a `loadtests/`, que
+exige `ADMIN_PASSWORD` sin valor por defecto (PLAT-23). No reutilices ninguna contra un entorno con
+datos reales.
+
+El perfil por defecto de ms-01 es `dev`: genera y persiste la pareja RSA de JWT en el volumen
+`ms01_data` (ruta `/app/.local`). Ese volumen es un **secreto de desarrollo**: cualquiera con acceso
+a él puede firmar tokens válidos para el stack local; no lo copies a backups ni lo compartas, y
+recuerda que borrarlo invalida todos los tokens emitidos. En producción la clave llega por secreto
+(`JWT_KEY_STORE`, ver `deploy/prod/README.md`).
 
 ## Notas de seguridad (solo local)
 

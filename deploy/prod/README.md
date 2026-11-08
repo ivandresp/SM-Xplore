@@ -643,3 +643,60 @@ Consecuencia practica: el `prometheus.yml` de `deploy/observability/` seguira re
 
 Las metricas de infraestructura (kafka-exporter, postgres-exporter, redis-exporter,
 Neo4j) no cambian y siguen disponibles.
+## 14. Correcciones INFORMATIVAS de plataforma (fase 4 de seguridad)
+
+Estos cuatro hallazgos no eran explotables por si mismos, pero ampliaban superficie (dependencias sin
+vigilar, logs con datos sensibles en artefactos, contexto de build de mas y credenciales de desarrollo
+implicitas). Se corrigen para no dejar controles "a medias".
+
+### PLAT-20 - Dependabot cubre los cinco servicios (.github/dependabot.yml)
+
+- Antes solo se vigilaba ms-01 (Gradle y Docker) mas github-actions.
+- Ahora hay cinco entradas gradle (una por servicio, con grupos spring y 	estcontainers),
+  cinco entradas docker para los Dockerfile de servicio, docker para deploy/gateway,
+  /, /infrastructure y /deploy/prod (tags de los compose) y github-actions en /.
+- Las dependencias de produccion (imagenes pineadas por digest) siguen fuera del alcance de
+  Dependabot a proposito: se actualizan con pin-images.sh y revision manual.
+
+### PLAT-21 - Los artefactos de CI no suben logs completos del stack (.github/workflows/stack-ci.yml)
+
+- El paso "Estado del stack si algo fallo" sigue volcando docker compose ps, pero el log se
+  reduce a --tail 5000 lineas y se filtra con
+  grep -viE 'password|passwd|token|authorization|cookie|set-cookie|secret|bearer|api[_-]?key|reset'
+  antes de escribirlo en stack-logs/compose.log.
+- El upload-artifact del stack pasa a etention-days: 3 y el paso emite un ::warning en el
+  resumen del job avisando de que el log esta filtrado (puede faltar contexto).
+- Riesgo aceptado: un log filtrado puede ocultar la causa de un fallo. Para depurar en local se usa
+  docker compose logs sin filtro; en CI se prefiere no publicar credenciales de prueba.
+
+### PLAT-22 - .dockerignore completo en ms-02 y ms-03
+
+- Ambos servicios no excluian docs/ ni las claves de test, mientras que las capas del build si se
+  cachean en GitHub Actions (	ype=gha).
+- Ahora .dockerignore excluye .gradle, uild, out, .git, .gitignore, .idea, *.iml,
+  .env, README.md, docs, src/test/**/keys y src/test/**/*.pem.
+- Verificado contra el Dockerfile: el build solo necesita gradlew, settings.gradle.kts,
+  uild.gradle.kts, gradle/ y src/main (ootJar), asi que la imagen no cambia.
+
+### PLAT-23 - Credenciales de desarrollo explicitas y rotables
+
+- loadtests/run.sh ya no tiene valor por defecto para ADMIN_PASSWORD: falla con exit 2 y un
+  mensaje accionable si falta. Los k6 (catalog.js, lows.js, ecommendations.js) validan
+  ADMIN_PASSWORD en setup() y abortan con error claro.
+- loadtests/README.md documenta que las pruebas son solo para el stack local, que la credencial
+  viaja con -e (visible en docker inspect) y que el turista efimero usa PerfTest12345
+  (sobreescribible con TOURIST_PASSWORD).
+- README.md (raiz) deja claro que las credenciales de desarrollo no son secretos, se rotan por
+  .env y no se reutilizan; y que el volumen ms01_data contiene la pareja RSA del perfil dev
+  (secreto de desarrollo: no copiar a backups, borrarlo invalida los tokens).
+- Riesgo aceptado: el password se pasa al contenedor de k6 con -e; para el stack local es
+  aceptable y queda documentado.
+
+### Pruebas de regresion de la fase 4
+
+| Control | Como comprobarlo |
+|---|---|
+| PLAT-20 | Revisar el PR semanal de Dependabot: aparecen 5 grupos Gradle y 5 de Docker de servicio. |
+| PLAT-21 | Forzar un fallo del smoke en CI y descargar el artefacto: solo 3 dias de retencion y sin lineas con `token`/`password`. |
+| PLAT-22 | `docker build microservices/ms-02-security-reports` y `.../ms-03-activities-and-events` compilan; `tar -cf - --exclude-from=.dockerignore <ctx>` no incluye `docs` ni `src/test/**/keys`. |
+| PLAT-23 | ./loadtests/run.sh recommendations sin ADMIN_PASSWORD termina en exit 2; con la variable definida arranca k6. |

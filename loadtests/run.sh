@@ -35,7 +35,10 @@ DURATION=""
 K6_IMAGE="${K6_IMAGE:-grafana/k6:0.54.0}"
 
 ADMIN_USER="${ADMIN_USER:-admin@smxplore.local}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-ChangeMe123!}"
+# PLAT-23: la contrasena NO tiene valor por defecto. Estos scripts son solo para el stack
+# local documentado en README.md; exigirla evita reutilizar una credencial de desarrollo
+# contra un entorno con datos reales o con el bootstrap admin de produccion.
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 usage() {
   cat <<'EOF'
@@ -84,6 +87,19 @@ case "$TARGET" in
   docker|local) ;;
   *) echo "--target debe ser docker o local (recibido: $TARGET)" >&2; exit 2 ;;
 esac
+
+# PLAT-23: validacion temprana con mensaje accionable (y sin eco de la contrasena).
+if [ -z "${ADMIN_PASSWORD}" ]; then
+  cat >&2 <<'EOF'
+ERROR: falta ADMIN_PASSWORD (password del administrador del stack local).
+
+  export ADMIN_PASSWORD='<password>'      # bash / Git Bash
+  ADMIN_PASSWORD='<password>' ./loadtests/run.sh recommendations
+
+No hay valor por defecto por diseno (PLAT-23); ver loadtests/README.md.
+EOF
+  exit 2
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker no esta en el PATH. Enciende Docker Desktop y reintenta." >&2

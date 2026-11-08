@@ -28,6 +28,9 @@ Requisitos:
 3. Bash (Git Bash en Windows, `C:\Program Files\Git\bin\bash.exe`) para `run.sh`.
 
 ```bash
+# Credencial del administrador del stack local: obligatoria, sin valor por defecto (PLAT-23).
+export ADMIN_PASSWORD='<password>'   # Git Bash: export ... ; PowerShell: $env:ADMIN_PASSWORD='<password>'
+
 # Humo de recomendaciones (1 VU, 10 s) contra la red smxplore-stack
 ./loadtests/run.sh recommendations
 
@@ -47,10 +50,25 @@ Cada ejecución deja un resumen JSON en `loadtests/results/<script>-<escenario>-
 
 Parámetros de `run.sh`: `--target docker|local`, `--scenario smoke|load`, `--vus N`,
 `--duration 60s`, `--image IMAGEN`. Credenciales por entorno: `ADMIN_USER` / `ADMIN_PASSWORD`
-(default `admin@smxplore.local` / `ChangeMe123!`, el bootstrap de `compose.yaml`); `USER` y
-`PASSWORD` se aceptan como alias. En `recommendations.js` también se pueden pasar
-`TOURIST_USER` / `TOURIST_PASSWORD` para reutilizar un turista existente en vez de registrar uno
-efímero.
+(`ADMIN_USER` tiene default `admin@smxplore.local`; **`ADMIN_PASSWORD` no tiene default y el
+lanzador falla con `exit 2` si falta** — PLAT-23); `USER` y `PASSWORD` se aceptan como alias. En
+`recommendations.js` también se pueden pasar `TOURIST_USER` / `TOURIST_PASSWORD` para reutilizar un
+turista existente en vez de registrar uno efímero.
+
+### Credenciales y alcance (PLAT-23)
+
+- Estos scripts son **solo para el stack local** de `compose.yaml` (datos de prueba, sin TLS).
+  No los apuntes a un entorno con datos reales: el turista efímero se registra con
+  `PASSWORD_TOURIST` (`PerfTest12345`, sobreescribible con `TOURIST_PASSWORD`) y el admin se
+  autentica contra ms-01.
+- `run.sh` pasa las credenciales al contenedor con `-e ADMIN_PASSWORD=...`, así que aparecen en
+  `docker inspect` del contenedor efímero mientras dura la ejecución. Para el stack local es
+  aceptable; si algún día se ejecutan contra un entorno compartido, hay que pasar el secreto por
+  archivo (`--env-file` con permisos `0600`) y no por `-e`.
+- Rota la credencial del admin en el stack local cambiando `BOOTSTRAP_ADMIN_PASSWORD` en `.env`
+  (solo aplica al primer arranque; si el admin ya existe, cambia la contraseña por la API) y
+  define el mismo valor en `ADMIN_PASSWORD`. Las credenciales de `scripts/smoke.sh` /
+  `scripts/smoke.ps1` se leen de `BOOTSTRAP_ADMIN_PASSWORD` y también son rotables por `.env`.
 
 ### Destinos
 

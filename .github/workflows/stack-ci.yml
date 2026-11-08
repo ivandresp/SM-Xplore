@@ -183,12 +183,20 @@ jobs:
           WAIT_SECONDS: 60
         run: bash scripts/smoke.sh
 
+      # PLAT-21: los logs se publican solo si el job falla y se filtran antes de subirlos.
+      # El smoke crea un admin, un turista y una reserva; los logs de ms-01 pueden
+      # contener cabeceras `Authorization`, correos de Mailpit y URLs de reset, así
+      # que se descartan las líneas con secretos y se recorta a las últimas 3000.
       - name: Estado del stack si algo falló
         if: failure()
         run: |
-          docker compose ps
           mkdir -p stack-logs
-          docker compose logs --no-color > stack-logs/compose.log || true
+          docker compose ps --format 'table {{.Name}}\t{{.Service}}\t{{.State}}\t{{.Health}}' \
+            > stack-logs/compose-ps.txt || true
+          docker compose logs --no-color --tail 5000 2>&1 \
+            | grep -viE 'password|passwd|token|authorization|cookie|set-cookie|secret|bearer|api[_-]?key|reset' \
+            > stack-logs/compose.log || true
+          echo "::warning title=Logs del stack::Los logs publicados estan filtrados (PLAT-21); si necesitas una traza concreta, reproduce el fallo en local con el stack completo."
 
       - name: Publicar los logs del stack si algo falló
         if: failure()
@@ -197,7 +205,8 @@ jobs:
           name: stack-logs
           path: stack-logs/
           if-no-files-found: ignore
-          retention-days: 7
+          # PLAT-21: retención corta; el artefacto contiene trazas del stack de pruebas.
+          retention-days: 3
 
       - name: Apagar el stack
         if: always()

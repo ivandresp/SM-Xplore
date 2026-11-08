@@ -227,6 +227,17 @@ Garantia de negocio: un turista solo puede resenar una vez cada `targetType` +
 En dev `auto-index-creation=false`, asi que tras arrancar en limpio hay que
 verificar que existan; en produccion el compose lo pone en `true`.
 
+Desde la fase INFORMATIVA (MS02-17) el servicio arranca ademas un
+`MongoIndexGuard` que comprueba al iniciar que existan los cuatro indices de la
+tabla (`idx_security_reports_status_created_at_v2`,
+`idx_security_reports_user_created_at_v2`, `idx_security_reports_position` y
+`idx_security_report_comments_report_created_at_v2`). Si faltan, el arranque
+falla fuera de `local/dev/test` indicando el nombre ausente; con
+`auto-index-creation=false` el guard no los crea: se aprovisionan con los
+comandos de la seccion 4.2 o volviendo a `MONGO_AUTO_INDEX_CREATION=true` un
+arranque. Decision vigente: produccion mantiene `MONGO_AUTO_INDEX_CREATION=true`
+y el guard actua como red de seguridad.
+
 ### 2.4 ms-03 - base `reviews`
 
 | Coleccion | Indice | Keys |
