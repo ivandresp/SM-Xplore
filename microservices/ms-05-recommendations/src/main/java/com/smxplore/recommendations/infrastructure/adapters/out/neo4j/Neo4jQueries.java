@@ -82,6 +82,16 @@ public record Neo4jQueries() {
             DELETE g
             """;
 
+    static final String FIND_PREFERENCES = """
+            MATCH (t:TuristaProfile {touristId: $touristId})-[p:LE_GUSTA]->(c:Categoria)
+            RETURN t.touristId AS touristId,
+                   c.categoriaId AS categoryId,
+                   coalesce(p.weight, 1.0) AS weight,
+                   coalesce(p.source, 'EXPLICIT') AS source,
+                   coalesce(p.updatedAt, t.updatedAt) AS updatedAt
+            ORDER BY p.updatedAt DESC, c.categoriaId ASC
+            """;
+
     static final String RECORD_VIEW = """
             MERGE (t:TuristaProfile {touristId: $touristId})
             ON CREATE SET t.language = $language, t.updatedAt = datetime($now)

@@ -3,10 +3,12 @@ package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.geo.GeoLocation;
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.preference.Preference;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import org.neo4j.driver.Driver;
+import org.neo4j.driver.Record;
 import org.neo4j.driver.reactivestreams.ReactiveSession;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -16,6 +18,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Component
 public class Neo4jRecommendationAdapter implements RecommendationGraphPort {
@@ -73,6 +76,13 @@ public class Neo4jRecommendationAdapter implements RecommendationGraphPort {
     }
 
     @Override
+    public Flux<Preference> findPreferences(UUID touristId) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("touristId", touristId.toString());
+        return read(Neo4jQueries.FIND_PREFERENCES, params, Neo4jRecordMapper::mapPreference);
+    }
+
+    @Override
     public Mono<Boolean> recordView(UUID touristId, ItemType itemType, UUID itemId, String language, Instant now) {
         Map<String, Object> params = new HashMap<>();
         params.put("touristId", touristId.toString());
@@ -88,12 +98,16 @@ public class Neo4jRecommendationAdapter implements RecommendationGraphPort {
             Map<String, Object> params,
             CandidateOrigin origin
     ) {
+        return read(query, params, record -> Neo4jRecordMapper.mapCandidate(record, origin));
+    }
+
+    private <T> Flux<T> read(String query, Map<String, Object> params, Function<Record, T> mapper) {
         return Flux.usingWhen(
                 Mono.fromSupplier(() -> driver.session(ReactiveSession.class)),
                 session -> Flux.from(session.executeRead(tx ->
                         Flux.from(tx.run(query, params))
                                 .flatMap(result -> Flux.from(result.records()))
-                                .map(record -> Neo4jRecordMapper.mapCandidate(record, origin))
+                                .map(mapper)
                 )),
                 session -> Flux.from(session.close())
         );

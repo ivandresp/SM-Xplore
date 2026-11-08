@@ -1,6 +1,7 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.in.ConsultPreferencesUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceRequest;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -35,9 +38,17 @@ public class PreferenceController {
 
     private final AddPreferenceUseCase addPreferenceUseCase;
     private final RemovePreferenceUseCase removePreferenceUseCase;
+    private final ConsultPreferencesUseCase consultPreferencesUseCase;
     private final RecommendationWebMapper mapper;
     private final JwtUserResolver jwtUserResolver;
     private final RequestLanguageResolver languageResolver;
+
+    @GetMapping
+    @Operation(summary = "List the preferences of the authenticated tourist")
+    public Flux<PreferenceResponse> listPreferences(@AuthenticationPrincipal Jwt jwt) {
+        AuthenticatedUser user = jwtUserResolver.resolve(jwt);
+        return consultPreferencesUseCase.handle(user.touristId()).map(mapper::toPreferenceResponse);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

@@ -1,6 +1,7 @@
 package com.smxplore.recommendations.application.recommendation;
 
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.preference.Preference;
 import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.recommendation.Recommendation;
@@ -156,6 +157,11 @@ class RecommendationCacheTest {
         @Override
         public Mono<Void> deletePreference(UUID touristId, UUID categoryId) {
             return Mono.empty();
+        }
+
+        @Override
+        public Flux<Preference> findPreferences(UUID touristId) {
+            return Flux.empty();
         }
 
         @Override
