@@ -240,6 +240,33 @@ El administrador inicial solo se crea si la tabla `users` está vacía, es decir
   mayúsculas, dígitos, símbolos) y se rechaza una lista local de contraseñas comunes o previsibles. Los mensajes de
   error son genéricos para no filtrar la causa.
 
+## Fase informativa MS01-20 a MS01-24
+
+- **MS01-20 (perfil público y datos profesionales):** `GET /api/v1/public/users/{id}` solo devuelve perfiles
+  disponibles (guías activos y prestadoras aprobadas) y nunca expone correo, teléfono ni documentos de identidad. Sí
+  publica la licencia del guía y el NIT de la prestadora porque la app ciudadana los usa para verificar que el
+  prestador es real; es una **decisión de producto aceptada** que esos identificadores profesionales sean consultables
+  y por tanto raspables. Si el negocio cambia de criterio, basta con recortar `PublicProfileDetails`.
+- **MS01-21 (tokens de desafío MFA):** ms-01 ya rechaza un token con `scope=mfa` en su decodificador de acceso y lo
+  prueba `MfaChallengeTokenContractTest`. **Obligación para ms-02..ms-05:** sus decodificadores deben rechazar tokens
+  con `scope=mfa` (o usar un `aud` distinto para el desafío); ms-01 no puede imponerlo desde su código. Pendiente del
+  dueño de cada servicio, anotado en el contrato JWT.
+- **MS01-22 (cuota de reportes de reseñas):** además del duplicado por reseña, cada turista puede reportar como máximo
+  `REVIEW_REPORT_MAX_PER_WINDOW` (20) reseñas por ventana `REVIEW_REPORT_WINDOW` (`PT24H`). Al agotarse responde `429`
+  con `code=REPORT_LIMIT_EXCEEDED` y `Retry-After`. La cuota es en memoria y por instancia, así que con varias réplicas
+  el límite efectivo se multiplica; riesgo aceptado y documentado. Los reportes no se auditan en `audit_logs` (deuda
+  anotada); el buzón de moderación sigue ordenando por `updatedAt`.
+- **MS01-23 (ventana de revocación y TTL):** el TTL por defecto baja de 60 a 30 minutos (`JWT_TTL=PT30M`). No hay
+  refresh token. `logout`, cambio/restablecimiento de contraseña, cambio de rol o estado y baja incrementan `ver` y en
+  ms-01 la sesión se invalida en el acto (caché de 15 s); en los demás servicios el token sigue siendo aceptado hasta
+  `exp` salvo que validen `ver` contra `GET /api/v1/users/me/auth-version`, como recomienda el contrato. No se añade
+  lista de revocación por `jti` en esta fase: riesgo residual aceptado y recomendación firmada en el contrato.
+- **MS01-24 (limitación de anomalías):** las anomalías del mismo tipo ya no se duplicaban mientras hubiera una
+  pendiente; ahora además hay un enfriamiento `ANOMALY_MIN_INTERVAL` (`PT10M`) entre creaciones del mismo tipo. Las
+  señales siguen siendo contadores globales por instancia, así que un atacante todavía puede provocar como máximo una
+  anomalía por tipo y ventana de enfriamiento (fatiga de alertas acotada, no eliminada); riesgo aceptado y documentado.
+  La detección no bloquea tráfico; recomendación futura: correlacionar por IP/cuenta y separar tráfico autenticado.
+
 ## Retención de datos y ARCO (Ley 1581)
 
 La política completa (finalidades, plazos, procedimiento ARCO y canal de atención) se entrega con la documentación del proyecto, fuera de este repositorio.
@@ -421,6 +448,13 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 - Los tokens de desafío (`scope=mfa`) no son tokens de acceso y el servicio los rechaza fuera de `/api/v1/auth/mfa/verify`.
 - `role` usa los códigos en inglés (`TOURIST`, `GUIDE`, `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN`). Los códigos históricos en español se aceptan solo al leer datos antiguos durante la migración.
 - `ver` se valida en ms-01 contra `users.auth_version`; otros servicios deben validar firma, `iss`, `aud` y `exp`.
+- El TTL de acceso por defecto es **30 minutos** (`JWT_TTL=PT30M`) y no hay refresh token. La revocación por `ver` se
+  aplica de inmediato solo dentro de ms-01; para acotar la ventana, cada servicio debe consultar
+  `GET /api/v1/users/me/auth-version` (o replicar `ver`) al validar tokens de acciones sensibles. Es un riesgo residual
+  aceptado hasta que exista una lista de revocación distribuida.
+- **Los servicios que acepten tokens deben rechazar los que traigan `scope=mfa`** (son desafíos de segundo factor, no
+  credenciales de acceso). ms-01 lo hace en su `jwtDecoder` y lo cubre `MfaChallengeTokenContractTest`; ms-02..ms-05
+  deben replicar esa comprobación (o usar un `aud` diferente para el desafío).
 - El servicio de reportes de seguridad debe confiar en la llave pública publicada en `/.well-known/jwks.json`.
 
 ## Endpoint interno de contacto (P2-9)
@@ -494,8 +528,9 @@ que el enlace cambia la contraseña y que el token no se puede reutilizar. Las p
 fase BAJA cubren la neutralización de fórmulas en el CSV, la exposición de Actuator sin autenticación, la
 invalidación inmediata de la caché de `authVersion` al cambiar la contraseña, el validador de arranque endurecido,
 los permisos POSIX de la llave JWT, la verificación de correo (token de un solo uso, propósito y puerta de reseñas)
-y la política de contraseñas. La suite son **57 clases y 212 pruebas**; las pruebas de integración se omiten
-automáticamente cuando no hay Docker.
+y la política de contraseñas. La fase informativa añade pruebas del contrato de tokens de desafío MFA (MS01-21), de
+la cuota de reportes de reseñas (MS01-22) y del enfriamiento en la detección de anomalías (MS01-24). La suite son
+**60 clases y 218 pruebas**; las pruebas de integración se omiten automáticamente cuando no hay Docker.
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

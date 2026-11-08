@@ -48,7 +48,9 @@ app:
     jwt:
       issuer: ${JWT_ISSUER:sm-xplore-ms-01}
       audience: ${JWT_AUDIENCE:sm-xplore-services}
-      ttl: ${JWT_TTL:PT60M}
+      # MS01-23: TTL corto por defecto (30 min). No hay refresh token; la revocación por `ver` es inmediata solo en
+      # ms-01 y los demás servicios deben validar `ver` contra /api/v1/users/me/auth-version para acortar la ventana.
+      ttl: ${JWT_TTL:PT30M}
       private-key: ${JWT_PRIVATE_KEY:}
       public-key: ${JWT_PUBLIC_KEY:}
       key-store-path: ${JWT_KEY_STORE:.local/jwt/keys.pem}
@@ -115,10 +117,16 @@ app:
       action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
       fail-open: ${REVIEW_AI_FAIL_OPEN:false}
       json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
+    # MS01-22: cuota por turista para reportar reseñas (además del límite por IP de /api/v1/auth/**).
+    report-quota:
+      max-per-window: ${REVIEW_REPORT_MAX_PER_WINDOW:20}
+      window: ${REVIEW_REPORT_WINDOW:PT24H}
   anomalies:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}
       interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
+      # MS01-24: enfriamiento mínimo entre anomalías del mismo tipo (mitiga fatiga de alertas).
+      min-interval: ${ANOMALY_MIN_INTERVAL:PT10M}
   internal:
     # Secreto maestro para firmar llamadas servicio-a-servicio (MS01-11). Vacío = endpoint deshabilitado (503).
     api-key: ${INTERNAL_API_KEY:}

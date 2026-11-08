@@ -16,6 +16,7 @@ import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
+import com.smxplore.users.domain.exception.ReportQuotaExceededException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.ReviewNotFoundException;
@@ -28,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -82,6 +84,22 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleInvalidEmailVerificationToken(
             InvalidEmailVerificationTokenException exception) {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_EMAIL_VERIFICATION_TOKEN", exception.getMessage());
+    }
+
+    /**
+     * MS01-22: la cuota de reportes de reseñas responde 429 con {@code Retry-After} para que el cliente sepa cuándo
+     * puede volver a reportar.
+     */
+    @ExceptionHandler(ReportQuotaExceededException.class)
+    public ResponseEntity<ProblemDetail> handleReportQuota(ReportQuotaExceededException exception) {
+        long retryAfterSeconds = Math.max(1, exception.retryAfter().toSeconds());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle(HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
+        problem.setProperty("code", "REPORT_LIMIT_EXCEEDED");
+        problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
+                .body(problem);
     }
 
     @ExceptionHandler(InvalidCurrentPasswordException.class)

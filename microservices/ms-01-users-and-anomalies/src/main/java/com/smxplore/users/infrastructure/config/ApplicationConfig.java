@@ -73,6 +73,7 @@ import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
 import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewAiFilter;
+import com.smxplore.users.application.port.out.ReviewReportQuota;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
 import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
@@ -143,6 +144,7 @@ import com.smxplore.users.infrastructure.adapter.out.security.InMemoryAccountAtt
 import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -676,8 +678,8 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public ReportReviewUseCase reportReviewUseCase(ReviewRepository reviews, Clock clock) {
-        return new ReportReviewService(reviews, clock);
+    public ReportReviewUseCase reportReviewUseCase(ReviewRepository reviews, ReviewReportQuota quota, Clock clock) {
+        return new ReportReviewService(reviews, quota, clock);
     }
 
     @Bean
@@ -746,7 +748,9 @@ public class ApplicationConfig {
             FailedLoginSignal failedLogins,
             RequestRateSignal requestRate,
             ServiceHealthSignal health,
-            Clock clock) {
-        return new AnomalyDetectionService(anomalies, thresholds, failedLogins, requestRate, health, clock);
+            Clock clock,
+            @Value("${app.anomalies.detection.min-interval:PT10M}") Duration minInterval) {
+        return new AnomalyDetectionService(
+                anomalies, thresholds, failedLogins, requestRate, health, clock, minInterval);
     }
 }
