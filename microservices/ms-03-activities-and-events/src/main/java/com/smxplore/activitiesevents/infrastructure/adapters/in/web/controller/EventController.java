@@ -135,9 +135,9 @@ public class EventController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
-        var filter = new EventFilter(search, resolveStatus(status, managerId, jwt), category, siteId, managerId,
+        PaginationLimits.validatePageSize(page, size);
+        var normalizedSearch = PaginationLimits.validateSearch(search);
+        var filter = new EventFilter(normalizedSearch, resolveStatus(status, managerId, jwt), category, siteId, managerId,
                 priceMin, priceMax, startsAfter, startsBefore, sort, page, size);
         return consultEventsUseCase.handle(filter)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
@@ -168,9 +168,9 @@ public class EventController {
     public Mono<PageResponse<EventResponse>> search(@RequestParam String name,
                                                     @RequestParam(defaultValue = "0") int page,
                                                     @RequestParam(defaultValue = "20") int size) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
-        return searchEventsUseCase.handle(name, page, size)
+        PaginationLimits.validatePageSize(page, size);
+        var normalizedName = PaginationLimits.validateSearch(name, "name");
+        return searchEventsUseCase.handle(normalizedName, page, size)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
     }
 

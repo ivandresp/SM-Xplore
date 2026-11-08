@@ -200,6 +200,33 @@ class EventControllerTest {
     }
 
     @Test
+    void shortSearchIsRejected() {
+        webTestClient.get().uri("/api/v1/events?search=ab")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
+    }
+
+    @Test
+    void shortNameSearchIsRejected() {
+        webTestClient.get().uri("/api/v1/events/search?name=ab")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
+    }
+
+    @Test
+    void pageBeyondTheOffsetCapIsRejected() {
+        webTestClient.get().uri("/api/v1/events?page=101&size=100")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
+    }
+
+    @Test
     void changeStatusMapsInvalidTransitionToConflict() {
         var id = UUID.randomUUID();
         given(changeEventStatusUseCase.handle(id, EventStatus.PUBLISHED))

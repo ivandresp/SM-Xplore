@@ -110,8 +110,7 @@ public class ReservationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
+        PaginationLimits.validatePageSize(page, size);
 
         if (isAdmin(jwt)) {
             return consultReservationsByStatusUseCase.handle(status, page, size)

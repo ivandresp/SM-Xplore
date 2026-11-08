@@ -128,7 +128,7 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 
 Las reseñas viven en MongoDB; el resto en PostgreSQL. Neo4j para preferencias queda diferido.
 
-Los listados (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}` y `GET /reservations?status=`) aceptan `page` (>= 0) y `size` (1..100) y devuelven `PageResponse`: `content`, `page`, `size`, `total`, `totalPages`. Los errores usan RFC 9457 (`application/problem+json`).
+Los listados (`/events`, `/events/search`, `/activities`, `/activities/search`, `/activities/site/{id}` y `GET /reservations?status=`) aceptan `page` (>= 0) y `size` (1..100), con `page * size <= 10000`, y devuelven `PageResponse`: `content`, `page`, `size`, `total`, `totalPages`. Los errores usan RFC 9457 (`application/problem+json`).
 
 Todos esos listados paginan **en la base de datos**: aplican `LIMIT`/`OFFSET` y piden el `COUNT` del filtro, así que la página 2 y el `total` son reales y no dependen de cuántas filas quepan en memoria. El adaptador arma el `PageResult` del dominio con las dos consultas en paralelo.
 
@@ -162,6 +162,12 @@ Al crear un evento, ms-03 valida el sitio con `GET /api/v1/sites/{siteId}` de ms
 
 Los errores usan RFC 9457 (`application/problem+json`): `type`, `title`, `status`, `detail` e
 `instance`.
+
+## Seguridad
+
+La escritura de actividades es multi-tenant: `ADMIN` puede con cualquiera; una `GESTORA_DESTINOS` solo con las actividades de los sitios que gestiona (se comprueban con `GET /api/v1/sites?managerId=` de ms-04 usando el token del usuario) y un `GUIA` solo con las suyas. El mismo criterio se aplica al crear: la gestora solo crea en sus sitios y no puede asignar un `guideId` (no hay forma de verificar que el guía esté autorizado en ese sitio); el guía siempre se atribuye a sí mismo. Un fallo de ms-04 al comprobar la propiedad devuelve `503`, nunca concede el permiso.
+
+Los listados públicos acotan la ventana de consulta: `page >= 0`, `size` entre 1 y 100 y `page * size <= 10000`. Los filtros de texto (`search`, `name`) exigen entre 3 y 80 caracteres y rechazan los comodines `%`, `_` y `\` con `400` y código `INVALID_FILTER`; en SQL el patrón se enlaza como parámetro y se escapa con `ESCAPE '\'`.
 
 ## Limitaciones conocidas
 

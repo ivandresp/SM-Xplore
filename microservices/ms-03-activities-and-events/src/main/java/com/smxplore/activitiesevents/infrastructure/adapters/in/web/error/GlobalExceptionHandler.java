@@ -9,6 +9,7 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityS
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.CatalogExportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogExportException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogFilterException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventCapacityException;
@@ -124,6 +125,13 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ProblemDetail> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(InvalidCatalogFilterException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCatalogFilter(InvalidCatalogFilterException exception,
+                                                                    ServerWebExchange exchange) {
+        // Mismo código estable que un query param que no convierte: el cliente sabe que debe corregir el filtro.
+        return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange, "INVALID_FILTER");
     }
 
     @ExceptionHandler(EventSiteAccessDeniedException.class)

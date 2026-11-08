@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityS
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ChangeActivityStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ConsultActivitiesUseCasePort;
@@ -36,7 +37,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 @WebFluxTest(controllers = ActivityController.class)
@@ -76,6 +80,9 @@ class ActivityControllerTest {
     @MockitoBean
     private ChangeActivityStatusUseCasePort changeActivityStatusUseCase;
 
+    @MockitoBean
+    private SiteCatalogPort siteCatalog;
+
     @Autowired
     void configureClient(WebTestClient webTestClient) {
         this.baseClient = webTestClient;
@@ -97,9 +104,13 @@ class ActivityControllerTest {
     }
 
     private WebTestClient managerClient() {
+        return managerClient(UUID.randomUUID());
+    }
+
+    private WebTestClient managerClient(UUID subject) {
         return baseClient
                 .mutateWith(SecurityMockServerConfigurers.mockJwt()
-                        .jwt(jwt -> jwt.subject(UUID.randomUUID().toString()).claim("role", "DESTINATION_MANAGER")))
+                        .jwt(jwt -> jwt.subject(subject.toString()).claim("role", "DESTINATION_MANAGER")))
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 
@@ -488,5 +499,162 @@ class ActivityControllerTest {
                         """)
                 .exchange()
                 .expectStatus().isForbidden();
+    }
+
+    @Test
+    void managerCanManageAnActivityOfASiteItManages() {
+        var id = UUID.randomUUID();
+        var siteId = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var activity = activityWith(id, ActivityStatus.PUBLISHED).toBuilder().siteId(siteId).build();
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activity));
+        given(siteCatalog.findByManagerId(eq(managerId), anyString()))
+                .willReturn(Flux.just(new SiteCatalogPort.SiteSnapshot(siteId, managerId, "Bahia")));
+        given(updateActivityUseCase.handle(id, "Renamed", "Tour", "Own site.", new BigDecimal("1000")))
+                .willReturn(Mono.just(activity.toBuilder().name("Renamed").build()));
+
+        managerClient(managerId).patch().uri("/api/v1/activities/{activityId}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "name": "Renamed",
+                          "category": "Tour",
+                          "price": 1000,
+                          "description": "Own site."
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.name").isEqualTo("Renamed");
+    }
+
+    @Test
+    void managerCannotManageAnActivityOfAnotherSite() {
+        var id = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activityWith(id, ActivityStatus.PUBLISHED)));
+        given(siteCatalog.findByManagerId(eq(managerId), anyString())).willReturn(Flux.empty());
+
+        managerClient(managerId).patch().uri("/api/v1/activities/{activityId}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "name": "Hijacked",
+                          "category": "Tour",
+                          "price": 1,
+                          "description": "Should not be applied."
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void managerCanCreateAnActivityOnASiteItManages() {
+        var siteId = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var registered = activityWith(UUID.randomUUID(), ActivityStatus.DRAFT).toBuilder()
+                .siteId(siteId)
+                .guideId(null)
+                .build();
+        given(siteCatalog.findByManagerId(eq(managerId), anyString()))
+                .willReturn(Flux.just(new SiteCatalogPort.SiteSnapshot(siteId, managerId, "Bahia")));
+        given(registerActivityUseCase.handle(argThat(activity -> siteId.equals(activity.getSiteId()))))
+                .willReturn(Mono.just(registered));
+
+        managerClient(managerId).post().uri("/api/v1/activities")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "name": "Sunset Sail",
+                          "category": "Nautical",
+                          "price": 90000,
+                          "maxCapacity": 12,
+                          "durationMinutes": 120,
+                          "startsAt": "2026-11-01T15:00:00Z",
+                          "endsAt": "2026-11-01T17:00:00Z"
+                        }
+                        """.formatted(siteId))
+                .exchange()
+                .expectStatus().isCreated();
+    }
+
+    @Test
+    void managerCannotCreateAnActivityOnAnotherSite() {
+        var siteId = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        given(siteCatalog.findByManagerId(eq(managerId), anyString())).willReturn(Flux.empty());
+
+        managerClient(managerId).post().uri("/api/v1/activities")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "name": "Sunset Sail",
+                          "category": "Nautical",
+                          "price": 90000,
+                          "maxCapacity": 12,
+                          "durationMinutes": 120,
+                          "startsAt": "2026-11-01T15:00:00Z",
+                          "endsAt": "2026-11-01T17:00:00Z"
+                        }
+                        """.formatted(siteId))
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void managerCannotAssignAGuideOnCreation() {
+        var siteId = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        given(siteCatalog.findByManagerId(eq(managerId), anyString()))
+                .willReturn(Flux.just(new SiteCatalogPort.SiteSnapshot(siteId, managerId, "Bahia")));
+
+        managerClient(managerId).post().uri("/api/v1/activities")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "guideId": "%s",
+                          "name": "Sunset Sail",
+                          "category": "Nautical",
+                          "price": 90000,
+                          "maxCapacity": 12,
+                          "durationMinutes": 120,
+                          "startsAt": "2026-11-01T15:00:00Z",
+                          "endsAt": "2026-11-01T17:00:00Z"
+                        }
+                        """.formatted(siteId, UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void shortSearchIsRejectedBeforeQuerying() {
+        webTestClient.get().uri("/api/v1/activities?search=ab")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
+    }
+
+    @Test
+    void wildcardSearchIsRejected() {
+        webTestClient.get().uri("/api/v1/activities?search=%25")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
+    }
+
+    @Test
+    void pageBeyondTheOffsetCapIsRejected() {
+        webTestClient.get().uri("/api/v1/activities?page=101&size=100")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER");
     }
 }
