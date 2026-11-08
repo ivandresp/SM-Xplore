@@ -201,7 +201,12 @@ public class ActivityController {
     public Mono<ActivityResponse> changeStatus(@PathVariable UUID activityId,
                                                @Valid @RequestBody ChangeActivityStatusRequest request,
                                                @AuthenticationPrincipal Jwt jwt) {
-        return accessGuard.requireCanManage(activityId, jwt)
+        // Publicar exige ademas que el sitio siga existiendo en ms-04: una actividad huerfana no
+        // puede salir al catalogo publico ni entrar en los indicadores del destino.
+        var guard = request.status() == ActivityStatus.PUBLISHED
+                ? accessGuard.requirePublishableSite(activityId, jwt)
+                : accessGuard.requireCanManage(activityId, jwt);
+        return guard
                 .then(Mono.defer(() -> changeActivityStatusUseCase.handle(activityId, request.status())))
                 .map(mapper::toResponse);
     }

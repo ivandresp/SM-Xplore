@@ -59,11 +59,32 @@ class SiteChangedEventDecoderTest {
     @Test
     void rejectsAV2WithoutManager() {
         assertThatThrownBy(() -> decoder.decode("""
-                {"eventType": "catalog.site.changed", "eventVersion": 2,
+                {"eventType": "catalog.site.changed", "eventVersion": 2, "producer": "ms-04",
                  "payload": {"siteId": "%s", "updatedAt": "2026-11-05T03:00:00Z"}}
                 """.formatted(UUID.randomUUID())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("managerId");
+    }
+
+    @Test
+    void ignoresMessagesFromAnotherProducer() {
+        // El mensaje reasigna manager_id: solo el productor del contrato puede tocar el snapshot.
+        assertThat(decoder.decode("""
+                {"eventType": "catalog.site.changed", "eventVersion": 2, "producer": "ms-03",
+                 "payload": {"siteId": "%s", "managerId": "%s", "updatedAt": "2026-11-05T03:00:00Z"}}
+                """.formatted(UUID.randomUUID(), UUID.randomUUID()))).isEmpty();
+        assertThat(decoder.decode("""
+                {"eventType": "catalog.site.changed", "eventVersion": 2,
+                 "payload": {"siteId": "%s", "managerId": "%s", "updatedAt": "2026-11-05T03:00:00Z"}}
+                """.formatted(UUID.randomUUID(), UUID.randomUUID()))).isEmpty();
+    }
+
+    @Test
+    void ignoresAnUpdatedAtInTheFuture() {
+        var future = Instant.now().plusSeconds(3_600);
+
+        assertThat(decoder.decode(message(2, UUID.randomUUID(), UUID.randomUUID(), "Playa Rosa",
+                future.toString()))).isEmpty();
     }
 
     @Test

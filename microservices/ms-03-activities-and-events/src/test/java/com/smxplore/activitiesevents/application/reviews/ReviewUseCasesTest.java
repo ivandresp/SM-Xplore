@@ -7,6 +7,8 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRepor
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewModerationNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportLimitExceededException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
@@ -355,6 +357,7 @@ class ReviewUseCasesTest {
         var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
         var reporterId = UUID.randomUUID();
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reportRepo.countByReporterSince(any(), any())).willReturn(Mono.just(0L));
         given(reportRepo.existsByReviewAndReporter(review.getId(), reporterId)).willReturn(Mono.just(false));
         given(reportRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
@@ -370,12 +373,43 @@ class ReviewUseCasesTest {
         var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
         var reporterId = UUID.randomUUID();
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reportRepo.countByReporterSince(any(), any())).willReturn(Mono.just(0L));
         given(reportRepo.existsByReviewAndReporter(review.getId(), reporterId)).willReturn(Mono.just(true));
 
         var reporter = new ReportReviewUseCase(reviewRepo, reportRepo);
 
         StepVerifier.create(reporter.handle(review.getId(), reporterId, "Spam"))
                 .expectError(ReviewAlreadyReportedException.class)
+                .verify();
+    }
+
+    @Test
+    void rejectsReportsOfReviewsThatAreNotPublished() {
+        var hidden = review(ReviewItemType.ACTIVITY, UUID.randomUUID()).toBuilder()
+                .status(ReviewStatus.HIDDEN)
+                .build();
+        var reporterId = UUID.randomUUID();
+        given(reviewRepo.findById(hidden.getId())).willReturn(Mono.just(hidden));
+
+        var reporter = new ReportReviewUseCase(reviewRepo, reportRepo);
+
+        StepVerifier.create(reporter.handle(hidden.getId(), reporterId, "Spam"))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(ReviewNotFoundException.class))
+                .verify();
+    }
+
+    @Test
+    void rejectsReportsAfterTheDailyQuota() {
+        var review = review(ReviewItemType.ACTIVITY, UUID.randomUUID());
+        var reporterId = UUID.randomUUID();
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(reportRepo.countByReporterSince(any(), any())).willReturn(Mono.just((long) 10));
+
+        var reporter = new ReportReviewUseCase(reviewRepo, reportRepo);
+
+        StepVerifier.create(reporter.handle(review.getId(), reporterId, "Spam"))
+                .expectError(ReviewReportLimitExceededException.class)
                 .verify();
     }
 

@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.event.EventFilter;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
@@ -59,6 +60,7 @@ public class EventController {
     private final ChangeEventStatusUseCasePort changeEventStatusUseCase;
     private final EstimateEventAttendanceUseCasePort estimateEventAttendanceUseCase;
     private final ValidateEventExistsUseCasePort validateEventExistsUseCase;
+    private final SiteCatalogPort siteCatalog;
     private final EventWebMapper mapper;
 
     @Value("${app.security.jwt.role-claim:role}")
@@ -212,10 +214,26 @@ public class EventController {
         }
         return viewEventDetailsUseCase.handle(eventId)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found.")))
-                .flatMap(event -> event.getManagerId() != null
-                        && event.getManagerId().toString().equals(jwt.getSubject())
-                        ? Mono.empty()
+                .flatMap(event -> requireCurrentSiteManager(event, jwt));
+    }
+
+    /**
+     * El {@code managerId} del evento es un snapshot que solo se refresca con {@code
+     * catalog.site.changed}; mientras eso no pasa, una gestora cesada conservaria el permiso. Se
+     * revalida contra ms-04 en cada escritura con el token del usuario (si ms-04 no responde se
+     * falla cerrado con 503 en lugar de aceptar el snapshot viejo).
+     */
+    private Mono<Void> requireCurrentSiteManager(Event event, Jwt jwt) {
+        return siteCatalog.findById(event.getSiteId(), jwt.getTokenValue())
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Only the manager of the event or an admin can modify it.")))
+                .flatMap(site -> site.managerId() != null
+                        && site.managerId().toString().equals(jwt.getSubject())
+                        ? Mono.<Void>empty()
                         : Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "Only the manager of the event or an admin can modify it.")));
+                        "Only the manager of the event or an admin can modify it.")))
+                .onErrorMap(error -> error instanceof ResponseStatusException ? error
+                        : new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Cannot verify the event site right now.", error));
     }
 }

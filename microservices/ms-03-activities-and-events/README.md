@@ -78,12 +78,18 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `JWT_ROLE_CLAIM` | `role` | Claim que contiene el rol. |
 | `JWT_NAME_CLAIM` | `name` | Claim que contiene el nombre. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes permitidos. |
+| `AUTH_VERSION_ENABLED` | `true` | Exige el claim `ver` y lo contrasta con ms-01 para revocar tokens. Fuera de los perfiles `local`, `dev` y `test` el arranque falla si está apagado. |
+| `MFA_REQUIRE_ADMIN` | `true` | Exige `mfa=true` en los tokens de `ADMIN`. Fuera de los perfiles `local`, `dev` y `test` el arranque falla si está apagado. |
 | `MONGO_AUTO_INDEX_CREATION` | `true` | Crea índices al arrancar. |
 | `FLYWAY_URL` | `jdbc:postgresql://localhost:5432/activities_events` | URL JDBC que usa Flyway para migrar el esquema. |
 | `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
 | `MS04_BASE_URL` | `http://localhost:8084` | Base de ms-04 para validar el sitio al crear eventos. En Compose: `http://host.docker.internal:8084`. |
 | `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
-| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox. |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox y el consumidor de sitios. |
+| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Protocolo del cliente Kafka. En producción se exige `SASL_SSL` (o `SSL`) con ACL por topic: `catalog.site.changed` reasigna el `manager_id` de los eventos. |
+| `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | Mecanismo SASL cuando el protocolo es `SASL_*`. |
+| `KAFKA_SASL_JAAS_CONFIG` | vacío | Configuración JAAS (usuario y contraseña) cuando el protocolo es `SASL_*`. |
+| `SITE_EVENTS_ENABLED` | `false` | Activa el consumidor de `catalog.site.changed` que refresca el snapshot de sitio de los eventos. |
 | `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. |
 | `OUTBOX_POLL_INTERVAL_MS` | `2000` | Frecuencia del relay. |
 | `OUTBOX_BATCH_SIZE` | `10` | Filas que reclama cada ciclo. El arranque falla si `batch-size × send-timeout > cycle-timeout`. |
@@ -168,6 +174,16 @@ Los errores usan RFC 9457 (`application/problem+json`): `type`, `title`, `status
 La escritura de actividades es multi-tenant: `ADMIN` puede con cualquiera; una `GESTORA_DESTINOS` solo con las actividades de los sitios que gestiona (se comprueban con `GET /api/v1/sites?managerId=` de ms-04 usando el token del usuario) y un `GUIA` solo con las suyas. El mismo criterio se aplica al crear: la gestora solo crea en sus sitios y no puede asignar un `guideId` (no hay forma de verificar que el guía esté autorizado en ese sitio); el guía siempre se atribuye a sí mismo. Un fallo de ms-04 al comprobar la propiedad devuelve `503`, nunca concede el permiso.
 
 Los listados públicos acotan la ventana de consulta: `page >= 0`, `size` entre 1 y 100 y `page * size <= 10000`. Los filtros de texto (`search`, `name`) exigen entre 3 y 80 caracteres y rechazan los comodines `%`, `_` y `\` con `400` y código `INVALID_FILTER`; en SQL el patrón se enlaza como parámetro y se escapa con `ESCAPE '\'`.
+
+Las actividades solo se publican si su sitio sigue existiendo en ms-04 (`404` si desapareció); una actividad huérfana no entra al catálogo ni a los indicadores.
+
+El snapshot de sitio de los eventos se refresca con `catalog.site.changed`, pero la autorización no depende de él: cada escritura de evento y el listado de reservas por evento revalidan el `managerId` actual contra ms-04 con el token del usuario (`503` si ms-04 no responde, nunca se acepta el snapshot viejo). El consumidor, además, descarta eventos de otro productor (`producer != ms-04`) y cualquier `updatedAt` con más de 5 minutos de futuro, y en producción el topic exige SASL/SSL y ACL.
+
+Los reportes de reseñas solo aceptan reseñas `PUBLISHED` (`404` en el resto, sin revelar su estado), una denuncia por usuario y reseña, y un máximo de 10 por usuario en 24 h (`429` con código `REVIEW_REPORT_LIMIT_REACHED`).
+
+Los informes de demanda en CSV neutralizan las celdas que empiezan por `=`, `+`, `-`, `@`, tabulador o retorno (se prefijan con `'`) para que un nombre del catálogo no se ejecute como fórmula al abrir el archivo en Excel o LibreOffice.
+
+`AUTH_VERSION_ENABLED` y `MFA_REQUIRE_ADMIN` son seguros por defecto (`true`); solo los perfiles `local`, `dev` y `test` los relajan mediante `application-local.yaml`, `application-dev.yaml` y `application-test.yaml`, y `JwtProductionGuard` impide arrancar fuera de esos perfiles con cualquiera de los dos apagado.
 
 ## Limitaciones conocidas
 

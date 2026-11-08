@@ -20,6 +20,7 @@ import com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller.A
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.error.GlobalExceptionHandler;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.mapper.ActivityWebMapperImpl;
 import com.smxplore.activitiesevents.infrastructure.adapters.in.web.security.ActivityAccessGuard;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -42,6 +43,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 
 @WebFluxTest(controllers = ActivityController.class)
 @Import({ActivityWebMapperImpl.class, GlobalExceptionHandler.class, ActivityAccessGuard.class})
@@ -130,6 +132,14 @@ class ActivityControllerTest {
                 .endsAt(startsAt.plusSeconds(5400))
                 .description("Historic downtown walk.")
                 .build();
+    }
+
+    @BeforeEach
+    void stubExistingSites() {
+        // Publicar y crear ya exigen que el sitio exista en ms-04; el happy path del slice lo simula.
+        lenient().when(siteCatalog.findById(any(), anyString()))
+                .thenAnswer(invocation -> Mono.just(new SiteCatalogPort.SiteSnapshot(
+                        invocation.getArgument(0), UUID.randomUUID(), "Centro Historico")));
     }
 
     @Test
@@ -418,6 +428,7 @@ class ActivityControllerTest {
     @Test
     void changeStatusReturnsUpdatedActivity() {
         var id = UUID.randomUUID();
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activityWith(id, ActivityStatus.DRAFT)));
         given(changeActivityStatusUseCase.handle(id, ActivityStatus.PUBLISHED)).willReturn(Mono.just(
                 activityWith(id, ActivityStatus.PUBLISHED)));
 
@@ -435,6 +446,7 @@ class ActivityControllerTest {
     @Test
     void changeStatusMapsInvalidTransitionToConflict() {
         var id = UUID.randomUUID();
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activityWith(id, ActivityStatus.DRAFT)));
         given(changeActivityStatusUseCase.handle(id, ActivityStatus.PUBLISHED)).willReturn(Mono.error(
                 new InvalidActivityStatusTransitionException(
                         "Cannot change activity from CANCELLED to PUBLISHED")));
@@ -446,6 +458,45 @@ class ActivityControllerTest {
                         """)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void publishingAnActivityOfAMissingSiteIsRejected() {
+        var id = UUID.randomUUID();
+        var activity = activityWith(id, ActivityStatus.DRAFT);
+        given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activity));
+        given(siteCatalog.findById(eq(activity.getSiteId()), anyString())).willReturn(Mono.empty());
+
+        webTestClient.patch().uri("/api/v1/activities/{activityId}/status", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"status": "PUBLISHED"}
+                        """)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void guideCannotRegisterAnActivityInAMissingSite() {
+        var siteId = UUID.randomUUID();
+        given(siteCatalog.findById(eq(siteId), anyString())).willReturn(Mono.empty());
+
+        guideClient().post().uri("/api/v1/activities")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "siteId": "%s",
+                          "name": "Ruta fantasma",
+                          "category": "Tour",
+                          "price": 10000,
+                          "maxCapacity": 5,
+                          "durationMinutes": 60,
+                          "startsAt": "2026-11-01T10:00:00Z",
+                          "endsAt": "2026-11-01T11:00:00Z"
+                        }
+                        """.formatted(siteId))
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test

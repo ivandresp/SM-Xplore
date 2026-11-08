@@ -1,0 +1,8 @@
+# Perfil test: los tests de contexto firman tokens sin `ver` ni `mfa`, asi que relajan los dos
+# controles igual que local/dev. JwtProductionGuard solo exime a estos tres perfiles.
+app:
+  security:
+    auth-version:
+      enabled: false
+    mfa:
+      require-admin: false

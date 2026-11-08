@@ -142,6 +142,19 @@ class ActivityAccessGuardTest {
     }
 
     @Test
+    void guideCannotCreateOnAMissingSite() {
+        StepVerifier.create(guard.requireCanCreate(UUID.randomUUID(), null, jwt(GUIDE_ID, "GUIDE")))
+                .expectErrorSatisfies(error -> assertStatus(error, HttpStatus.NOT_FOUND))
+                .verify();
+    }
+
+    @Test
+    void guideCanCreateOnAnExistingSite() {
+        StepVerifier.create(guard.requireCanCreate(SITE_ID, null, jwt(GUIDE_ID, "GUIDE")))
+                .verifyComplete();
+    }
+
+    @Test
     void touristCannotCreate() {
         StepVerifier.create(guard.requireCanCreate(SITE_ID, null, jwt(UUID.randomUUID(), "TOURIST")))
                 .expectErrorSatisfies(error -> assertStatus(error, HttpStatus.FORBIDDEN))

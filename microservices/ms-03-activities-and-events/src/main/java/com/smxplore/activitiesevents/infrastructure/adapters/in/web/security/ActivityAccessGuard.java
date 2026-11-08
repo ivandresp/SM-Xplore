@@ -92,6 +92,9 @@ public class ActivityAccessGuard {
      * suyos y, al no existir un directorio de usuarios en este servicio con el que verificar que un
      * guía esté autorizado en el sitio, se rechaza cualquier {@code guideId} que venga en el body
      * (fallar cerrado). El guía siempre se atribuye a sí mismo desde el token.
+     *
+     * <p>En los tres casos el sitio tiene que existir en ms-04: sin esa comprobación el catálogo del
+     * destino se podía llenar con actividades de un sitio inexistente o ajeno.
      */
     public Mono<Void> requireCanCreate(UUID siteId, UUID requestedGuideId, Jwt jwt) {
         if (jwt == null) {
@@ -99,7 +102,7 @@ public class ActivityAccessGuard {
         }
         var role = role(jwt);
         if (role == UserRole.ADMIN || role == UserRole.GUIDE) {
-            return Mono.empty();
+            return requireSiteExists(siteId, jwt);
         }
         if (role != UserRole.DESTINATION_MANAGER) {
             return forbid("Only an admin, a destination manager or a guide can create an activity.");
@@ -109,6 +112,32 @@ public class ActivityAccessGuard {
                         ? Mono.<Void>empty()
                         : Mono.error(forbidden("A destination manager cannot assign a guide while creating an"
                                 + " activity: guide authorization on the site cannot be verified.")));
+    }
+
+    /**
+     * Autoriza publicar una actividad: además del permiso de gestión, el sitio tiene que seguir
+     * existiendo en ms-04. Consultar el sitio también para la gestora es deliberado: su lista de
+     * sitios puede venir de una respuesta en caché y publicar en un destino borrado no tiene sentido.
+     */
+    public Mono<Void> requirePublishableSite(UUID activityId, Jwt jwt) {
+        return requireCanManage(activityId, jwt)
+                .then(Mono.defer(() -> viewActivityDetailsUseCase.handle(activityId)))
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity not found")))
+                .flatMap(activity -> requireSiteExists(activity.getSiteId(), jwt));
+    }
+
+    /** El sitio debe existir en ms-04 (cualquier rol que publique). */
+    private Mono<Void> requireSiteExists(UUID siteId, Jwt jwt) {
+        if (siteId == null) {
+            return forbid("A site is required for the activity.");
+        }
+        return siteCatalog.findById(siteId, jwt.getTokenValue())
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Site " + siteId + " does not exist.")))
+                .then()
+                .onErrorMap(error -> error instanceof ResponseStatusException ? error
+                        : new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Cannot verify the site right now.", error));
     }
 
     private Mono<Void> requireIsGuideOfRecord(Activity activity, Jwt jwt) {

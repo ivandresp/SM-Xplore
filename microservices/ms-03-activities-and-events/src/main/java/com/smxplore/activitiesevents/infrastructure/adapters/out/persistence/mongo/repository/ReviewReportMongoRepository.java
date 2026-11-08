@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -23,4 +24,7 @@ public interface ReviewReportMongoRepository extends ReactiveMongoRepository<Rev
 
     @Query(value = "{ 'reviewId': ?0, 'reporterId': ?1 }", exists = true)
     Mono<Boolean> existsByReviewAndReporter(UUID reviewId, UUID reporterId);
+
+    /** Cuota por cuenta: cuenta solo los documentos del denunciante en la ventana pedida. */
+    Mono<Long> countByReporterIdAndCreatedAtGreaterThanEqual(UUID reporterId, Instant since);
 }

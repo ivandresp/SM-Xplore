@@ -39,6 +39,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespo
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewModerationNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportLimitExceededException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +93,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(
             ReviewFilterUnavailableException exception, ServerWebExchange exchange) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewReportLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleReviewReportLimit(
+            ReviewReportLimitExceededException exception, ServerWebExchange exchange) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), exchange,
+                "REVIEW_REPORT_LIMIT_REACHED");
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

@@ -7,6 +7,7 @@ import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventStatusT
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ConsultEventsUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.EstimateEventAttendanceUseCasePort;
@@ -37,7 +38,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doReturn;
 
@@ -71,6 +74,9 @@ class EventControllerTest {
 
     @MockitoBean
     private ValidateEventExistsUseCasePort validateEventExistsUseCase;
+
+    @MockitoBean
+    private SiteCatalogPort siteCatalog;
 
     @BeforeEach
     void stubSiteResolution() {
@@ -275,6 +281,64 @@ class EventControllerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.expectedAttendance").isEqualTo(10);
+    }
+
+    @Test
+    void managerCeasedByMs04CannotModifyTheEventItUsedToManage() {
+        var id = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var event = eventWith(id, EventStatus.DRAFT).toBuilder().managerId(managerId).build();
+        given(viewEventDetailsUseCase.handle(id)).willReturn(Mono.just(event));
+        given(siteCatalog.findById(eq(event.getSiteId()), anyString()))
+                .willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                        event.getSiteId(), UUID.randomUUID(), "Centro Historico")));
+
+        managerClient(managerId).patch().uri("/api/v1/events/{eventId}/status", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"status": "PUBLISHED"}
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void currentSiteManagerCanModifyTheEvent() {
+        var id = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var event = eventWith(id, EventStatus.DRAFT).toBuilder().managerId(managerId).build();
+        given(viewEventDetailsUseCase.handle(id)).willReturn(Mono.just(event));
+        given(siteCatalog.findById(eq(event.getSiteId()), anyString()))
+                .willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                        event.getSiteId(), managerId, "Centro Historico")));
+        given(changeEventStatusUseCase.handle(id, EventStatus.PUBLISHED))
+                .willReturn(Mono.just(eventWith(id, EventStatus.PUBLISHED)));
+
+        managerClient(managerId).patch().uri("/api/v1/events/{eventId}/status", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"status": "PUBLISHED"}
+                        """)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void failsClosedWhenTheSiteCatalogIsUnavailable() {
+        var id = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var event = eventWith(id, EventStatus.DRAFT).toBuilder().managerId(managerId).build();
+        given(viewEventDetailsUseCase.handle(id)).willReturn(Mono.just(event));
+        given(siteCatalog.findById(eq(event.getSiteId()), anyString()))
+                .willReturn(Mono.error(new IllegalStateException("ms-04 down")));
+
+        managerClient(managerId).patch().uri("/api/v1/events/{eventId}/status", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"status": "PUBLISHED"}
+                        """)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @Test

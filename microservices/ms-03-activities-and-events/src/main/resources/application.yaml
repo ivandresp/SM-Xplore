@@ -21,6 +21,12 @@ spring:
     uri: ${MONGODB_URI:mongodb://localhost:27017/reviews?uuidRepresentation=standard}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # El topic catalog.site.changed reasigna manager_id de los eventos. En produccion se exige
+    # SASL_SSL con SCRAM y ACLs por topic/productor; PLAINTEXT es solo para el stack local.
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-512}
+      sasl.jaas.config: ${KAFKA_SASL_JAAS_CONFIG:}
   data:
     mongodb:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:true}
@@ -121,13 +127,18 @@ app:
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
     auth-version:
-      enabled: ${AUTH_VERSION_ENABLED:false}
+      # Default seguro: un token revocado en ms-01 deja de valer aqui en cuanto caduca la cache.
+      # Los perfiles local/dev/test lo apagan en su application-<perfil>.yaml y JwtProductionGuard
+      # impide arrancar con el control apagado fuera de esos perfiles.
+      enabled: ${AUTH_VERSION_ENABLED:true}
       base-url: ${MS01_BASE_URL:}
       timeout: ${AUTH_VERSION_TIMEOUT:2s}
       cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
       # Cota de entradas y de TTL (max 5 min): el TTL es la ventana real de revocacion.
       cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
     mfa:
-      require-admin: ${MFA_REQUIRE_ADMIN:false}
+      # Default seguro: los ADMIN solo entran con un token que acredite segundo factor.
+      # Los perfiles local/dev/test lo apagan y JwtProductionGuard exige que siga encendido fuera.
+      require-admin: ${MFA_REQUIRE_ADMIN:true}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}

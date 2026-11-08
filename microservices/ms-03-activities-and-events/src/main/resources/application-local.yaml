@@ -1,0 +1,9 @@
+# Perfil local (stack de Compose): relaja explicitamente los controles que necesitan ms-01 y un
+# emisor que firme el claim mfa. Fuera de local/dev/test aplican los defaults seguros de
+# application.yaml y JwtProductionGuard impide arrancar con MFA o la version de sesion apagadas.
+app:
+  security:
+    auth-version:
+      enabled: false
+    mfa:
+      require-admin: false

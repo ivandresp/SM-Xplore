@@ -1,0 +1,8 @@
+# Perfil dev: igual que local, relaja MFA y version de sesion porque el entorno de desarrollo no
+# levanta el flujo completo de ms-01. En cualquier otro perfil los defaults son seguros.
+app:
+  security:
+    auth-version:
+      enabled: false
+    mfa:
+      require-admin: false
