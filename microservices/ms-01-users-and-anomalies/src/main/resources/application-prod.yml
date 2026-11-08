@@ -33,7 +33,8 @@ management:
 
 server:
   shutdown: graceful
-  forward-headers-strategy: framework
+  # No reescribir la IP del cliente a partir de cabeceras reenviadas: nginx es el único borde de confianza.
+  forward-headers-strategy: none
 
 spring:
   lifecycle:

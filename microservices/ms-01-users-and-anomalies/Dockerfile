@@ -36,6 +36,8 @@ RUN mkdir -p /app/.local/jwt && chown -R app:app /app
 
 USER app
 EXPOSE 8081
+# Perfil explícito: la imagen sin SPRING_PROFILES_ACTIVE no debe caer en valores de desarrollo.
+ENV SPRING_PROFILES_ACTIVE=prod
 
 # 75 % de la memoria del contenedor, acceso nativo para Netty y salida limpia ante OutOfMemoryError.
 ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:MaxRAMPercentage=75", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]

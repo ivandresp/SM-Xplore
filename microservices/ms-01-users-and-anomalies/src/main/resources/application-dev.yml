@@ -1,0 +1,34 @@
+## Perfil de desarrollo local (SPRING_PROFILES_ACTIVE=dev): comodidad sobre seguridad.
+## Nunca debe usarse en producción ni en un entorno expuesto a Internet.
+app:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@smxplore.local}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:ChangeMe123!}
+  security:
+    jwt:
+      allow-generated-keys: ${JWT_ALLOW_GENERATED_KEYS:true}
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:true}
+    mfa:
+      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
+    headers:
+      hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  reviews:
+    index-initialization:
+      enabled: ${REVIEW_INDEX_INIT:true}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # metrics/prometheus para el scraping local; en producción se aíslan por red.
+        include: health,info,metrics,prometheus

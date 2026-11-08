@@ -47,8 +47,13 @@ El build y el `docker-compose.yml` viven en este directorio:
 
 ```bash
 docker compose up -d
-./gradlew bootRun
+SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
 ```
+
+La configuración base (`application.yml`) es fail-closed: no hay perfil por defecto ni valores de desarrollo, así que
+el arranque local exige `SPRING_PROFILES_ACTIVE=dev`. `application-dev.yml` aporta el administrador inicial, las llaves
+JWT autogeneradas, Swagger y las métricas. Fuera de `dev`, `local` y `test` el validador de seguridad impide arrancar
+con esa configuración.
 
 La API queda en `http://localhost:8081`. Swagger: `http://localhost:8081/swagger-ui.html`.
 Mailpit: `http://localhost:8025`.
@@ -68,9 +73,11 @@ docker compose --profile full down
 - La imagen se etiqueta como `smxplore/ms-01:local`, corre como el usuario `app` (sin privilegios), escucha en `8081`
   y publica un `HEALTHCHECK` contra `/actuator/health`. El contenedor usa el sistema de archivos de sólo lectura, sin
   capacidades (`cap_drop: ALL`) y con `no-new-privileges`; sólo `/app/.local` (llaves JWT y MFA) y `/tmp` son escribibles.
-- El contenedor arranca con el perfil `dev`, así que genera sus llaves JWT en `/app/.local/jwt/keys.pem`. Para
-  producción usa `SPRING_PROFILES_ACTIVE=prod` con las variables de `application-prod.yml`
-  (`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`, `BOOTSTRAP_ADMIN_*`, CORS) o monta el almacén de llaves en `/app/.local/jwt`.
+- La imagen fija `SPRING_PROFILES_ACTIVE=prod` en el `Dockerfile` y valida la configuración al arrancar: si faltan
+  las llaves JWT, MFA no es obligatoria para administradores o HSTS está apagado, el contenedor no arranca. Para el
+  perfil `full` de Compose usa `SPRING_PROFILES_ACTIVE=dev` en desarrollo o entrega las variables de producción
+  (`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`, `BOOTSTRAP_ADMIN_*`, `MFA_SECRET_KEY`, CORS) o monta el almacén de llaves en
+  `/app/.local/jwt`.
 - `docker compose up -d` sin perfil sigue levantando sólo la infraestructura para `./gradlew bootRun`.
 
 ### Integración continua
@@ -89,6 +96,7 @@ docker compose --profile full down
 
 | Variable | Default local |
 | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | Sin valor por defecto: `dev` en local, `prod` en la imagen |
 | `DB_URL` | `jdbc:postgresql://localhost:5432/smxplore_users` (solo Flyway) |
 | `R2DBC_URL` | `r2dbc:postgresql://localhost:5432/smxplore_users` |
 | `DB_USERNAME` | `smxplore` |
@@ -102,20 +110,23 @@ docker compose --profile full down
 | `JWT_TTL` | `PT60M` |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | Vacías en desarrollo; ver abajo |
 | `JWT_KEY_STORE` | `.local/jwt/keys.pem` |
+| `JWT_ALLOW_INSECURE_JWKS` | `false`; `true` solo en el perfil `dev` |
 | `ACCOUNT_INVITATION_TTL` | `PT48H` |
 | `AUTH_RATE_LIMIT_ENABLED` | `true` |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | `30` por IP |
+| `AUTH_ACCOUNT_MAX_ATTEMPTS` | `10` fallos por cuenta y ventana (`AUTH_ACCOUNT_WINDOW`, `PT15M`) |
+| `AUTH_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16` |
 | `LOGIN_LOCKOUT_ENABLED` | `true` |
 | `LOGIN_LOCKOUT_MAX_ATTEMPTS` | `5` |
 | `LOGIN_LOCKOUT_WINDOW` / `LOGIN_LOCKOUT_DURATION` | `PT15M` |
-| `MFA_REQUIRED_FOR_ADMINS` | `false` en desarrollo y pruebas; `true` en `prod` |
+| `MFA_REQUIRED_FOR_ADMINS` | `true` en la base y en `prod`; `false` en `dev` y pruebas |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
 | `MFA_SECRET_KEY` | Vacía en desarrollo (llave local); obligatoria fuera de desarrollo: 32 bytes en Base64 |
 | `INTERNAL_API_KEY` | Vacía en desarrollo; el endpoint interno responde `503` mientras no se configure |
 | `RETENTION_ENABLED` | `true` |
 | `RETENTION_AUTH_ARTIFACTS_DAYS` | `30` |
 | `RETENTION_AUDIT_LOG_DAYS` | `1825` (cinco años) |
-| `SECURITY_HSTS_ENABLED` | `false` en desarrollo; `true` en `prod` |
+| `SECURITY_HSTS_ENABLED` | `true` en la base y en `prod`; `false` en `dev` y pruebas |
 | `REVIEW_AI_ENABLED` | `false`; activa el filtro de reseñas con IA |
 | `LITTLELLM_URL` / `LITTLELLM_API_KEY` | URL y llave del servidor LLM local |
 | `LITTLELLM_MODEL` | `littlellm` |
@@ -124,9 +135,9 @@ docker compose --profile full down
 | `REVIEW_AI_TEMPERATURE` | `0.0` (muestreo voraz: veredictos estables y reproducibles) |
 | `REVIEW_AI_ACTION` | `PENDING_REVIEW` (`HIDE` para ocultar de inmediato) |
 | `REVIEW_AI_FAIL_OPEN` | `true` |
-| `BOOTSTRAP_ADMIN_ENABLED` | `true` |
-| `BOOTSTRAP_ADMIN_EMAIL` | `admin@smxplore.local` |
-| `BOOTSTRAP_ADMIN_PASSWORD` | `ChangeMe123!` |
+| `BOOTSTRAP_ADMIN_ENABLED` | `false` en la base; `true` en el perfil `dev` con credenciales de ejemplo |
+| `BOOTSTRAP_ADMIN_EMAIL` | `admin@smxplore.local` solo en `dev` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | `ChangeMe123!` solo en `dev`; fuera de desarrollo debe ser distinta |
 | `FRONTEND_BASE_URL` | `http://localhost:5173` |
 
 Cambiar las credenciales de bootstrap fuera de desarrollo.
@@ -138,14 +149,15 @@ PKCS#8/X.509), desde `JWT_KEY_STORE` o, solo en el perfil `dev`, se generan una 
 `.local/jwt/keys.pem` (ignorado por git). El `kid` del JWKS se deriva del thumbprint de la llave
 pública, así que se mantiene estable entre reinicios.
 
-`spring.profiles.default` es `dev` para el arranque local y, en ese perfil, el servicio puede generar la
-pareja de llaves si no existe. En otros entornos hay que definir `SPRING_PROFILES_ACTIVE` y entregar
-las llaves explícitamente: si faltan, el servicio falla al arrancar en lugar de emitir tokens con una
-llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación fuera de `dev`.
+`spring.profiles.default` ya no existe: el perfil se elige explícitamente con `SPRING_PROFILES_ACTIVE`. Solo en el
+perfil `dev` el servicio puede generar la pareja de llaves si no existe y publicar un JWKS con llave de ejemplo
+(`JWT_ALLOW_INSECURE_JWKS=true`). En cualquier otro entorno las llaves deben entregarse por variables o almacén; si
+faltan, el servicio falla al arrancar en lugar de emitir tokens con una llave efímera.
 
 ## Protección de acceso
 
-- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password` y `/mfa/verify`. Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. Se usa la dirección remota de la conexión: detrás de un proxy inverso, todas las solicitudes comparten su IP salvo que el proxy preserve la del cliente.
+- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password` y `/mfa/verify`. Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
+- **Límite por cuenta**: además del límite por IP, `InMemoryAccountAttemptLimiter` cuenta los fallos por correo en `/auth/login` y por usuario en `/auth/mfa/verify` (`AUTH_ACCOUNT_MAX_ATTEMPTS`, 10 en `AUTH_ACCOUNT_WINDOW`, `PT15M`). Rotar direcciones no evita el cupo de la cuenta; responde `429` con `code=TOO_MANY_ATTEMPTS`.
 - **Bloqueo por cuenta**: tras `LOGIN_LOCKOUT_MAX_ATTEMPTS` fallos consecutivos dentro de la ventana, la cuenta queda bloqueada durante `LOGIN_LOCKOUT_DURATION` y responde `429` con `code=TOO_MANY_ATTEMPTS`. Un inicio de sesión exitoso limpia el contador y la recuperación de contraseña sigue disponible. El estado se guarda en `login_attempts`, no en memoria, para sobrevivir reinicios y compartirse entre instancias.
 - La detección de anomalías sigue registrando los fallos por separado: el bloqueo es preventivo, la anomalía es diagnóstica.
 - El bloqueo se aplica por cuenta existente y responde `429`, así que un atacante que conozca un correo puede provocar un bloqueo temporal o inferir que la cuenta existe. El límite por IP reduce ese abuso; si se necesita evitar por completo, conviene añadir un captcha o un desafío progresivo.
@@ -157,11 +169,15 @@ llave efímera. `JWT_ALLOW_GENERATED_KEYS=true` permite habilitar la generación
 
 TOTP (RFC 6238, HMAC-SHA1, ventana de ±1 paso) implementado sin dependencias externas. Está disponible para cualquier cuenta y es obligatoria para administradores con `MFA_REQUIRED_FOR_ADMINS=true`.
 
-1. `POST /api/v1/users/me/mfa/enroll` devuelve `secret`, `otpauthUri` y 10 códigos de recuperación; estos se muestran una sola vez y se guardan hasheados.
-2. `POST /api/v1/users/me/mfa/confirm` recibe un código TOTP y activa el segundo factor.
+1. `POST /api/v1/users/me/mfa/enroll` recibe `{password}` y devuelve `secret`, `otpauthUri` y 10 códigos de recuperación; estos se muestran una sola vez y se guardan hasheados.
+2. `POST /api/v1/users/me/mfa/confirm` recibe `{code, password}` y activa el segundo factor; confirmar incrementa `authVersion` (los tokens emitidos antes dejan de valer), deja auditoría `MFA_ACTIVADO` y envía un correo de aviso.
 3. Desde ese momento `POST /api/v1/auth/login` responde `mfaRequired=true` y `mfaChallengeToken` en lugar de `accessToken`.
 4. `POST /api/v1/auth/mfa/verify` con `{challengeToken, code}` devuelve el token de acceso; acepta TOTP o un código de recuperación de un solo uso.
 5. `POST /api/v1/users/me/mfa/disable` exige contraseña y código.
+
+Exigir la contraseña actual en la inscripción y la confirmación evita que un token robado sirva para inscribir un
+autenticador controlado por el atacante; es un cambio incompatible para clientes que llamaban `enroll` sin cuerpo.
+La inscripción y la confirmación responden `400` si falta la contraseña y `400 INVALID_CURRENT_PASSWORD` si no coincide.
 
 El desafío es un JWT con `scope=mfa` y `MFA_CHALLENGE_TTL` de vigencia; el decodificador de acceso lo rechaza, así que no sirve como credencial. Cada paso TOTP se registra en `last_used_step` y no puede reutilizarse.
 
@@ -177,7 +193,7 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 ## Perfil `prod`
 
-`application-prod.yml` desactiva el administrador inicial, exige llaves JWT explícitas, activa MFA para administradores y HSTS, apaga Swagger, oculta los detalles de salud y habilita el apagado ordenado. `ProductionSecurityValidator` impide arrancar con llaves generadas o con la contraseña de bootstrap por defecto.
+`application-prod.yml` desactiva el administrador inicial, exige llaves JWT explícitas, activa MFA para administradores y HSTS, apaga Swagger, oculta los detalles de salud y habilita el apagado ordenado. `ProductionSecurityValidatorRunner` se ejecuta en todos los perfiles: en `dev`, `local` y `test` solo advierte, y en cualquier otro perfil detiene el arranque si hay llaves JWT ausentes o autogeneradas, `JWT_ALLOW_INSECURE_JWKS=true`, contraseña de bootstrap por defecto o vacía, MFA opcional para administradores o HSTS deshabilitado. `server.forward-headers-strategy` es `none` en `prod`: la IP del cliente se resuelve solo con proxies de confianza.
 
 ## Retención de datos y ARCO (Ley 1581)
 
@@ -202,8 +218,8 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | POST | `/api/v1/auth/reset-password` | Público |
 | POST | `/api/v1/auth/mfa/verify` | Público, canjea el desafío MFA por un token |
 | GET | `/api/v1/users/me/mfa` | Autenticado, estado de la inscripción |
-| POST | `/api/v1/users/me/mfa/enroll` | Autenticado, genera secreto TOTP y códigos de recuperación |
-| POST | `/api/v1/users/me/mfa/confirm` | Autenticado, activa el segundo factor |
+| POST | `/api/v1/users/me/mfa/enroll` | Autenticado, exige contraseña; genera secreto TOTP y códigos de recuperación |
+| POST | `/api/v1/users/me/mfa/confirm` | Autenticado, exige contraseña y código; activa el segundo factor y revoca sesiones |
 | POST | `/api/v1/users/me/mfa/disable` | Autenticado, exige contraseña y código |
 | POST | `/api/v1/users/me/mfa/recovery-codes` | Autenticado, rota los códigos de recuperación |
 | GET | `/api/v1/users/me` | Autenticado |
@@ -391,13 +407,14 @@ porque Spring Boot desactiva el `DataSource` JDBC cuando hay un `ConnectionFacto
 reseñas levantan además un contenedor MongoDB y usan `spring.mongodb.uri`. Las pruebas de anomalías usan
 PostgreSQL y desactivan la detección programada con `app.anomalies.detection.enabled=false`. Las pruebas de
 monitoreo levantan PostgreSQL y MongoDB para validar el overview, la disponibilidad y las exportaciones CSV y PDF.
-Las pruebas de seguridad cubren los vectores RFC 6238, el flujo MFA completo (inscripción, desafío, replay y
-recuperación), la obligatoriedad para administradores, el bloqueo por intentos, el límite por IP, las
-cabeceras y el validador del perfil de producción. Las pruebas del filtro de IA usan un servidor HTTP falso
+Las pruebas de seguridad cubren los vectores RFC 6238, el flujo MFA completo (inscripción con contraseña, desafío,
+replay y recuperación), la obligatoriedad para administradores, el bloqueo por intentos, el límite por IP y por
+cuenta, la resolución de la IP del cliente tras un proxy de confianza, las cabeceras y el validador de arranque.
+Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
 `PasswordResetMailpitTest` levanta un Mailpit real, recupera el correo de restablecimiento por su API y comprueba
-que el enlace cambia la contraseña y que el token no se puede reutilizar. La suite completa son
-**40 clases y 143 pruebas** en verde.
+que el enlace cambia la contraseña y que el token no se puede reutilizar. La suite son **46 clases**; las pruebas
+de integración se omiten automáticamente cuando no hay Docker.
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

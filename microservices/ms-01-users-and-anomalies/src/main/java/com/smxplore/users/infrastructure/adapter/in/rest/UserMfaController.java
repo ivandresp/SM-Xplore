@@ -10,6 +10,7 @@ import com.smxplore.users.application.port.in.GetMfaStatusUseCase;
 import com.smxplore.users.application.port.in.RegenerateRecoveryCodesUseCase;
 import com.smxplore.users.infrastructure.adapter.in.dto.ConfirmMfaRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.DisableMfaRequest;
+import com.smxplore.users.infrastructure.adapter.in.dto.EnrollMfaRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegenerateRecoveryCodesRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -53,14 +54,15 @@ public class UserMfaController {
     }
 
     @PostMapping("/enroll")
-    public Mono<MfaEnrollmentView> enroll(@AuthenticationPrincipal Jwt jwt) {
-        return enroll.enroll(userId(jwt));
+    public Mono<MfaEnrollmentView> enroll(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EnrollMfaRequest request) {
+        return enroll.enroll(userId(jwt), request.password());
     }
 
     @PostMapping("/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> confirm(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ConfirmMfaRequest request) {
-        return confirm.confirm(userId(jwt), request.code());
+        return confirm.confirm(userId(jwt), request.code(), request.password());
     }
 
     @PostMapping("/disable")

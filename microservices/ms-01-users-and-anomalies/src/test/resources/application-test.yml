@@ -24,6 +24,8 @@ app:
       required-for-admins: false
       challenge-ttl: PT5M
       issuer: SM-Xplore
+    headers:
+      hsts-enabled: false
   cors:
     allowed-origins:
       - http://localhost:5173

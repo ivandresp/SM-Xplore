@@ -6,5 +6,9 @@ import reactor.core.publisher.Mono;
 
 public interface EnrollMfaUseCase {
 
-    Mono<MfaEnrollmentView> enroll(UUID userId);
+    /**
+     * Inicia la inscripción TOTP. Exige la contraseña actual para que un token robado no permita inscribir un segundo
+     * factor controlado por el atacante.
+     */
+    Mono<MfaEnrollmentView> enroll(UUID userId, String password);
 }

@@ -45,6 +45,7 @@ import com.smxplore.users.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.application.port.in.UpdateAnomalyThresholdUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
+import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
@@ -55,6 +56,7 @@ import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
 import com.smxplore.users.application.port.out.MfaChallengeVerifier;
+import com.smxplore.users.application.port.out.MfaEnabledNotifier;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
@@ -125,6 +127,8 @@ import com.smxplore.users.domain.policy.AccountInvitationPolicy;
 import com.smxplore.users.domain.policy.LoginLockoutPolicy;
 import com.smxplore.users.domain.policy.PasswordResetPolicy;
 import com.smxplore.users.domain.policy.ReviewAiPolicy;
+import com.smxplore.users.infrastructure.adapter.in.web.ClientAddressResolver;
+import com.smxplore.users.infrastructure.adapter.out.security.InMemoryAccountAttemptLimiter;
 import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
 import java.time.Duration;
@@ -167,17 +171,36 @@ public class ApplicationConfig {
     }
 
     @Bean
+    public ClientAddressResolver clientAddressResolver(ClientAddressProperties properties) {
+        return new ClientAddressResolver(properties);
+    }
+
+    @Bean
+    public AccountAttemptLimiter accountAttemptLimiter(RateLimitProperties properties, Clock clock) {
+        return new InMemoryAccountAttemptLimiter(properties, clock);
+    }
+
+    @Bean
     public LoginUseCase loginUseCase(
             UserRepository users,
             PasswordHasher passwordHasher,
             TokenIssuer tokenIssuer,
             FailedLoginSignal failedLogins,
             LoginProtection protection,
+            AccountAttemptLimiter accountAttemptLimiter,
             MfaRepository mfa,
             MfaChallengeIssuer challengeIssuer,
             Clock clock) {
         return new LoginService(
-                users, passwordHasher, tokenIssuer, failedLogins, protection, mfa, challengeIssuer, clock);
+                users,
+                passwordHasher,
+                tokenIssuer,
+                failedLogins,
+                protection,
+                accountAttemptLimiter,
+                mfa,
+                challengeIssuer,
+                clock);
     }
 
     @Bean
@@ -188,6 +211,7 @@ public class ApplicationConfig {
     @Bean
     public EnrollMfaUseCase enrollMfaUseCase(
             UserRepository users,
+            PasswordHasher passwordHasher,
             MfaRepository mfa,
             TotpAuthenticator totp,
             RecoveryCodeGenerator recoveryCodeGenerator,
@@ -196,17 +220,29 @@ public class ApplicationConfig {
             Clock clock,
             MfaProperties properties) {
         return new EnrollMfaService(
-                users, mfa, totp, recoveryCodeGenerator, tokenHasher, transactions, clock, properties.issuer());
+                users,
+                passwordHasher,
+                mfa,
+                totp,
+                recoveryCodeGenerator,
+                tokenHasher,
+                transactions,
+                clock,
+                properties.issuer());
     }
 
     @Bean
     public ConfirmMfaUseCase confirmMfaUseCase(
+            UserRepository users,
+            PasswordHasher passwordHasher,
             MfaRepository mfa,
             TotpAuthenticator totp,
             TransactionPort transactions,
             AuditTrailRecorder audit,
+            MfaEnabledNotifier notifier,
+            AuthVersionEvictor evictor,
             Clock clock) {
-        return new ConfirmMfaService(mfa, totp, transactions, audit, clock);
+        return new ConfirmMfaService(users, passwordHasher, mfa, totp, transactions, audit, notifier, evictor, clock);
     }
 
     @Bean
@@ -227,9 +263,11 @@ public class ApplicationConfig {
             MfaRepository mfa,
             MfaChallengeVerifier challengeVerifier,
             MfaCodeVerifier codeVerifier,
+            AccountAttemptLimiter accountAttemptLimiter,
             TokenIssuer tokenIssuer,
             Clock clock) {
-        return new VerifyMfaLoginService(users, mfa, challengeVerifier, codeVerifier, tokenIssuer, clock);
+        return new VerifyMfaLoginService(
+                users, mfa, challengeVerifier, codeVerifier, accountAttemptLimiter, tokenIssuer, clock);
     }
 
     @Bean
@@ -262,8 +300,12 @@ public class ApplicationConfig {
 
     @Bean
     public ProductionSecurityValidator productionSecurityValidator(
-            JwtProperties jwt, BootstrapAdminProperties bootstrapAdmin, CorsProperties cors, MfaProperties mfa) {
-        return new ProductionSecurityValidator(jwt, bootstrapAdmin, cors, mfa);
+            JwtProperties jwt,
+            BootstrapAdminProperties bootstrapAdmin,
+            CorsProperties cors,
+            MfaProperties mfa,
+            SecurityHeadersProperties headers) {
+        return new ProductionSecurityValidator(jwt, bootstrapAdmin, cors, mfa, headers);
     }
 
     @Bean

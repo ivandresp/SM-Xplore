@@ -85,6 +85,6 @@ class JwtKeyStoreTest {
     private static JwtProperties properties(
             String privateKey, String publicKey, Path keyStore, boolean allowGenerated) {
         return new JwtProperties(
-                ISSUER, AUDIENCE, Duration.ofMinutes(60), privateKey, publicKey, keyStore, allowGenerated);
+                ISSUER, AUDIENCE, Duration.ofMinutes(60), privateKey, publicKey, keyStore, allowGenerated, false);
     }
 }

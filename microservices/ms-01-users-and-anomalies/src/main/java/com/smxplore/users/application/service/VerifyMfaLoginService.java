@@ -3,6 +3,7 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.LoginResult;
 import com.smxplore.users.application.dto.VerifyMfaCommand;
 import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
+import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.MfaChallengeVerifier;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.TokenIssuer;
@@ -23,6 +24,7 @@ public final class VerifyMfaLoginService implements VerifyMfaLoginUseCase {
     private final MfaRepository mfa;
     private final MfaChallengeVerifier challengeVerifier;
     private final MfaCodeVerifier codeVerifier;
+    private final AccountAttemptLimiter accountAttemptLimiter;
     private final TokenIssuer tokenIssuer;
     private final Clock clock;
 
@@ -31,12 +33,14 @@ public final class VerifyMfaLoginService implements VerifyMfaLoginUseCase {
             MfaRepository mfa,
             MfaChallengeVerifier challengeVerifier,
             MfaCodeVerifier codeVerifier,
+            AccountAttemptLimiter accountAttemptLimiter,
             TokenIssuer tokenIssuer,
             Clock clock) {
         this.users = users;
         this.mfa = mfa;
         this.challengeVerifier = challengeVerifier;
         this.codeVerifier = codeVerifier;
+        this.accountAttemptLimiter = accountAttemptLimiter;
         this.tokenIssuer = tokenIssuer;
         this.clock = clock;
     }
@@ -65,13 +69,22 @@ public final class VerifyMfaLoginService implements VerifyMfaLoginUseCase {
     }
 
     private Mono<Usuario> verifyCode(Usuario user, String code, Instant now) {
-        return mfa.findByUserId(user.id())
+        String accountKey = accountKey(user);
+        return accountAttemptLimiter
+                .ensureAllowed(accountKey)
+                .then(mfa.findByUserId(user.id()))
                 .filter(MfaEnrollment::enabled)
                 .switchIfEmpty(Mono.error(new InvalidMfaCodeException()))
                 .flatMap(enrollment -> codeVerifier.verify(user.id(), enrollment, code, now))
                 .filter(Boolean::booleanValue)
-                .switchIfEmpty(Mono.error(new InvalidMfaCodeException()))
+                .switchIfEmpty(
+                        accountAttemptLimiter.recordFailure(accountKey).then(Mono.error(new InvalidMfaCodeException())))
+                .then(accountAttemptLimiter.clear(accountKey))
                 .thenReturn(user);
+    }
+
+    private static String accountKey(Usuario user) {
+        return "mfa:" + user.id();
     }
 
     static long secondsUntil(Instant expiresAt, Instant now) {

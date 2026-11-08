@@ -29,7 +29,7 @@ class JwtContractTest {
     @Test
     void issuedTokenContainsTheClaimsExpectedByOtherServices() throws Exception {
         JwtProperties properties = new JwtProperties(
-                "sm-xplore-ms-01", "sm-xplore-services", Duration.ofMinutes(60), null, null, null, true);
+                "sm-xplore-ms-01", "sm-xplore-services", Duration.ofMinutes(60), null, null, null, true, false);
         RSAKey rsaKey = rsaKey();
 
         JwtConfig config = new JwtConfig();
