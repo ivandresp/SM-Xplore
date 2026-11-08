@@ -198,8 +198,8 @@ una red o puerto privado.
 
 | Método | Ruta | Roles | Descripción |
 |---|---|---|---|
-| POST | `/api/v1/categories` | `DESTINATION_MANAGER`, `ADMIN` | Crear categoría |
-| PUT | `/api/v1/categories/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar categoría |
+| POST | `/api/v1/categories` | `ADMIN` | Crear categoría de la taxonomía global |
+| PUT | `/api/v1/categories/{id}` | `ADMIN` | Actualizar categoría de la taxonomía global |
 | GET | `/api/v1/categories` | autenticado | Listar/filtrar categorías |
 | POST | `/api/v1/zones` | `DESTINATION_MANAGER`, `ADMIN` | Crear zona |
 | PUT | `/api/v1/zones/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar zona |
@@ -351,6 +351,9 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - Las reglas de propiedad se validan en la capa de aplicación: una prestadora solo modifica sus
   servicios; una gestora solo modifica sus zonas/sitios; el `ADMIN` puede moderar.
+- La taxonomía de categorías es global: solo `ADMIN` crea y actualiza categorías (regla HTTP y
+  comprobación `requireTaxonomyAdmin` en la capa de aplicación). Antes de guardar se valida el
+  árbol completo: el padre debe existir, no puede haber ciclos y la profundidad máxima es 50.
 - Los indicadores de demanda se limitan por rol: prestadora a sus servicios y gestora a sus
   zonas/sitios.
 - En reservas, un turista solo crea, consulta y cancela las suyas. Como todos los ítems de una
@@ -612,8 +615,9 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   `RECREACION`, todas `GENERAL`. Es idempotente (compara por nombre sin distinguir mayúsculas), no
   borra ni renombra nada y si Mongo no responde el servicio arranca igual (`CatalogSeedRunner`
   registra el aviso). En el stack local viene encendido.
-- Las categorías hijas (`parentId`, un nivel) y las de alcance específico las crea el
-  administrador por la API. La taxonomía es de ms-04 porque es el dueño del catálogo.
+- Solo el `ADMIN` puede crear o actualizar categorías. La semilla inicial la siembra el servicio
+  al arrancar (`CATALOG_SEED_ENABLED`) y el resto de la taxonomía, incluidas las hijas (`parentId`),
+  se gestiona por la API con rol `ADMIN`. La taxonomía es de ms-04 porque es el dueño del catálogo.
 - Las zonas llevan `type` libre y estado `ACTIVE|CONGESTED|INACTIVE`; la congestión se marca
   **manualmente**, no hay fuente automática en esta entrega.
 

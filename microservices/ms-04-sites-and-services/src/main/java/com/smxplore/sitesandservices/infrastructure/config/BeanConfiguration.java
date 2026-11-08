@@ -181,6 +181,7 @@ public class BeanConfiguration {
             SiteRepositoryPort siteRepository,
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
+            CatalogAccess access,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
             Clock clock
@@ -190,6 +191,7 @@ public class BeanConfiguration {
                 siteRepository,
                 serviceRepository,
                 lookup,
+                access,
                 outboxWriter,
                 eventFactory,
                 clock
@@ -202,6 +204,7 @@ public class BeanConfiguration {
             SiteRepositoryPort siteRepository,
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
+            CatalogAccess access,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
             Clock clock
@@ -211,6 +214,7 @@ public class BeanConfiguration {
                 siteRepository,
                 serviceRepository,
                 lookup,
+                access,
                 outboxWriter,
                 eventFactory,
                 clock

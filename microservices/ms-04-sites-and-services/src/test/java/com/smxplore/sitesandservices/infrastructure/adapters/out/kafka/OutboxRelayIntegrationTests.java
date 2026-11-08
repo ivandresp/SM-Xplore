@@ -3,6 +3,8 @@ package com.smxplore.sitesandservices.infrastructure.adapters.out.kafka;
 import com.smxplore.sitesandservices.AbstractKafkaMongoPostgresIntegrationTest;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
+import com.smxplore.sitesandservices.domain.model.common.Actor;
+import com.smxplore.sitesandservices.domain.model.common.UserRole;
 import com.smxplore.sitesandservices.domain.ports.in.CreateCategoryUseCase;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.OutboxEventDocument;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -39,6 +41,7 @@ class OutboxRelayIntegrationTests extends AbstractKafkaMongoPostgresIntegrationT
                                 .name("Categoría Kafka")
                                 .scope(CategoryScope.GENERAL)
                                 .build(),
+                        new Actor(UUID.randomUUID(), UserRole.ADMIN, "Admin"),
                         "outbox-test")
                 .block();
 

@@ -56,6 +56,17 @@ public class CatalogAccess {
                 : Mono.error(new ForbiddenOperationException("Only an administrator can moderate reviews"));
     }
 
+    /**
+     * La taxonomia de categorias es global: modificarla afecta a los snapshots de los sitios y
+     * servicios de todas las gestoras, asi que solo el ADMIN puede gestionarla (MS04-01).
+     */
+    public Mono<Actor> requireTaxonomyAdmin(Actor actor) {
+        return actor.isAdmin()
+                ? Mono.just(actor)
+                : Mono.error(new ForbiddenOperationException(
+                        "Only an administrator can manage the global category taxonomy"));
+    }
+
     public Mono<Review> requireAdmin(Review review, Actor actor) {
         return actor.isAdmin()
                 ? Mono.just(review)

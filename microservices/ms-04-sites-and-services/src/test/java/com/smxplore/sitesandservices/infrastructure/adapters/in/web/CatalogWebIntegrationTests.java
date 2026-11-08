@@ -264,7 +264,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {        return clientFor(managerId, "DESTINATION_MANAGER")
+    private CategoryResponse createCategory(UUID adminId) {        return clientFor(adminId, "ADMIN")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
@@ -505,7 +505,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
 
     private PageResponse<CategoryResponse> listCategories(UUID touristId) {
         return clientFor(touristId, "TOURIST")
-                .get().uri("/api/v1/categories")
+                .get().uri("/api/v1/categories?page=0&size=100")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<CategoryResponse>>() {
@@ -556,6 +556,79 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 })
                 .returnResult()
                 .getResponseBody();
+    }
+
+    /**
+     * MS04-01: la taxonomia global es solo de ADMIN (regla HTTP + defensa en profundidad)
+     * y el arbol de categorias no admite ciclos ni padres inexistentes.
+     */
+    @Test
+    void categoryTaxonomyIsAdminOnlyAndRejectsCycles() {
+        UUID adminId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+
+        clientFor(managerId, "DESTINATION_MANAGER")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Taxonomía gestora","scope":"GENERAL","parentId":null}
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        UUID parentId = createCategory(adminId).categoryId();
+        UUID childId = createChildCategory(adminId, parentId);
+
+        clientFor(adminId, "ADMIN")
+                .put().uri("/api/v1/categories/" + childId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Naturaleza actualizada","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isOk();
+
+        clientFor(managerId, "DESTINATION_MANAGER")
+                .put().uri("/api/v1/categories/" + childId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Intento de gestora","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        clientFor(adminId, "ADMIN")
+                .put().uri("/api/v1/categories/" + parentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Naturaleza","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(childId))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        clientFor(adminId, "ADMIN")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Huérfana","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    private UUID createChildCategory(UUID adminId, UUID parentId) {
+        return clientFor(adminId, "ADMIN")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Playas","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(CategoryResponse.class)
+                .returnResult()
+                .getResponseBody()
+                .categoryId();
     }
 
     private WebTestClient clientFor(UUID userId, String role) {

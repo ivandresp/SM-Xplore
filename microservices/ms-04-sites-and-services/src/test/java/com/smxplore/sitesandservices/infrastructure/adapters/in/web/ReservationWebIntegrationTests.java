@@ -747,8 +747,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {
-        return clientFor(managerId, "DESTINATION_MANAGER")
+    private CategoryResponse createCategory(UUID adminId) {
+        return clientFor(adminId, "ADMIN")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
