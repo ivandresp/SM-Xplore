@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -36,6 +37,7 @@ public class SecurityReportController {
     private final ReportIncidentUseCasePort reportIncidentUseCase;
     private final ConsultOneReportUseCasePort consultOneReportUseCase;
     private final ConsultReportsUseCasePort consultReportsUseCase;
+    private final ConsultReportCountsUseCasePort consultReportCountsUseCase;
     private final ConsultReportsByUserUseCasePort consultReportsByUserUseCase;
     private final ConsultNearbyReportsUseCasePort consultNearbyReportsUseCase;
     private final ChangeReportContentUseCasePort changeReportTextUseCase;
@@ -91,6 +93,12 @@ public class SecurityReportController {
         var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
         return consultReportsUseCase.handle(status, pageRequest)
                 .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
+    }
+
+    @GetMapping("/counts")
+    @Operation(summary = "Count security reports by status across the whole collection")
+    public Mono<Map<SecurityReportStatus, Long>> countByStatus() {
+        return consultReportCountsUseCase.handle();
     }
 
     @GetMapping("/by-user/{userId}")

@@ -8,6 +8,7 @@ import com.smxplore.securityreports.domain.model.types.PageRequest;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
 import java.util.UUID;
 
 public interface SecurityReportRepositoryPort {
@@ -18,6 +19,9 @@ public interface SecurityReportRepositoryPort {
     Mono<Page<SecurityReport>> findAllByStatus(SecurityReportStatus status, PageRequest pageRequest);
 
     Mono<Page<SecurityReport>> findAllByUserId(UUID userId, PageRequest pageRequest);
+
+    /** Totales por estado de toda la coleccion, no de una pagina. */
+    Mono<Map<SecurityReportStatus, Long>> countByStatus();
 
     Flux<SecurityReport> findNearby(NearbyReportsQuery query);
 }

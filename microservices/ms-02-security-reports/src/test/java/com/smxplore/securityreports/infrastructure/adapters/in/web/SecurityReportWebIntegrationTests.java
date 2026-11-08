@@ -22,7 +22,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -162,6 +165,82 @@ class SecurityReportWebIntegrationTests {
                 .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
                 .exchange()
                 .expectStatus().isForbidden();
+    }
+
+    @Test
+    void countsEveryReportByStatusForStaff() {
+        var reporter = UUID.randomUUID();
+        var staff = UUID.randomUUID();
+
+        createReport(reporter);
+        var reported = createReport(reporter);
+        var solved = createReport(reporter);
+
+        closeReport(staff, reported);
+        closeReport(staff, solved);
+        solveReport(staff, solved);
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/counts")
+                .header(HttpHeaders.AUTHORIZATION, bearer(staff, "DESTINATION_MANAGER", "Gestora"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.ONGOING").isEqualTo(1)
+                .jsonPath("$.REPORTED").isEqualTo(1)
+                .jsonPath("$.SOLVED").isEqualTo(1);
+    }
+
+    @Test
+    void protectsTheCountsFromTouristsAndAnonymousUsers() {
+        webTestClient.get()
+                .uri("/api/v1/security-reports/counts")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/counts")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    private String createReport(UUID reporterId) {
+        Map<String, Object> created = webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(reporterId, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "Robo en la playa",
+                          "description": "Reporte de prueba"
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(created).isNotNull();
+        return String.valueOf(created.get("id"));
+    }
+
+    private void closeReport(UUID staffId, String reportId) {
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/close", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(staffId, "DESTINATION_MANAGER", "Gestora"))
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    private void solveReport(UUID staffId, String reportId) {
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/solve", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(staffId, "DESTINATION_MANAGER", "Gestora"))
+                .exchange()
+                .expectStatus().isOk();
     }
 
     private String bearer(UUID userId, String role, String name) {
