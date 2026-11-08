@@ -9,11 +9,11 @@ import reactor.core.publisher.Mono;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * MS02-04 / MS02-06: cabeceras de endurecimiento y {@code no-store} en las respuestas de la API.
+ * MS02-04 / MS02-06 / MS02-12: cabeceras de endurecimiento, {@code no-store} y HSTS opcional.
  */
 class SecurityHeadersWebFilterTests {
 
-    private final SecurityHeadersWebFilter filter = new SecurityHeadersWebFilter();
+    private final SecurityHeadersWebFilter filter = new SecurityHeadersWebFilter(false);
 
     @Test
     void addsTheHardeningHeadersToApiResponses() {
@@ -29,6 +29,7 @@ class SecurityHeadersWebFilterTests {
         assertThat(headers.getFirst("Content-Security-Policy"))
                 .isEqualTo("default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
         assertThat(headers.getFirst("Cache-Control")).isEqualTo("no-store");
+        assertThat(headers.getFirst("Pragma")).isEqualTo("no-cache");
     }
 
     @Test
@@ -38,13 +39,33 @@ class SecurityHeadersWebFilterTests {
 
         assertThat(headers.getFirst("Content-Security-Policy")).isNull();
         assertThat(headers.getFirst("Cache-Control")).isNull();
+        assertThat(headers.getFirst("Pragma")).isNull();
         assertThat(headers.getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
     }
 
+    @Test
+    void addsHstsOnlyWhenEnabled() {
+        var exchangeWithHsts = exchange(new SecurityHeadersWebFilter(true),
+                MockServerHttpRequest.get("/api/v1/security-reports").build());
+
+        assertThat(exchangeWithHsts.getResponse().getHeaders().getFirst("Strict-Transport-Security"))
+                .isEqualTo("max-age=31536000; includeSubDomains");
+        assertThat(filter(MockServerHttpRequest.get("/api/v1/security-reports").build())
+                .getResponse().getHeaders().getFirst("Strict-Transport-Security")).isNull();
+    }
+
     private MockServerWebExchange filter(MockServerHttpRequest request) {
+        return exchange(filter, request);
+    }
+
+    private MockServerWebExchange exchange(MockServerHttpRequest request) {
+        return exchange(filter, request);
+    }
+
+    private MockServerWebExchange exchange(SecurityHeadersWebFilter target, MockServerHttpRequest request) {
         var exchange = MockServerWebExchange.from(request);
         WebFilterChain chain = current -> Mono.empty();
-        filter.filter(exchange, chain).block();
+        target.filter(exchange, chain).block();
         return exchange;
     }
 }

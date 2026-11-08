@@ -50,7 +50,7 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `MONGODB_URI` | `mongodb://localhost:27017/security_reports` | URI de MongoDB. |
+| `MONGODB_URI` | `mongodb://localhost:27017/security_reports` | URI de MongoDB. Fuera de `local`/`test` debe incluir credenciales (`mongodb://usuario:clave@host/db`), salvo que la plataforma use autenticación externa (MS02-13). |
 | `JWK_SET_URI` | vacío | JWKS de ms-01. Obligatorio si no se define `JWT_PUBLIC_KEY_LOCATION`. |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Llave pública PEM para local/tests. |
 | `JWT_ISSUER` | `sm-xplore-ms-01` | Issuer esperado en el token. |
@@ -73,12 +73,16 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `MANAGEMENT_EXPOSED_ENDPOINTS` | `health,info` | Endpoints de actuator expuestos; fuera de local/test no puede incluir métricas. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker Compose se activa; en producción se recomienda gestionarlos con migraciones. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka compartido. |
+| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Fuera de `local`/`dev`/`test` debe ser `SSL` o `SASL_SSL` (MS02-09). |
+| `KAFKA_SASL_MECHANISM` / `KAFKA_SASL_JAAS_CONFIG` | vacío | Credenciales SASL; obligatorias si el protocolo es `SASL_SSL`. |
+| `KAFKA_SSL_TRUSTSTORE_LOCATION` / `KAFKA_SSL_TRUSTSTORE_PASSWORD` | vacío | Truststore para el TLS del broker. |
 | `OUTBOX_ENABLED` | `true` | Activa el relay del outbox de reportes. |
 | `OUTBOX_PRODUCER` | `ms-02` | Valor de `producer` en los eventos. |
 | `OUTBOX_POLL_INTERVAL_MS` / `OUTBOX_BATCH_SIZE` | `1000` / `50` | Frecuencia y lote del relay. |
 | `OUTBOX_MAX_ATTEMPTS` / `OUTBOX_*_BACKOFF` | `20` / `1s`–`1m` | Reintentos y backoff. |
 | `OUTBOX_LEASE_DURATION` | `3m` | Lease del worker que publica. |
-| `OUTBOX_RETENTION_DAYS` | `30` | Retención de eventos publicados/fallidos. |
+| `OUTBOX_RETENTION_DAYS` | `7` | Retención de eventos publicados/fallidos (antes 30; el payload lleva datos del reporte, MS02-09). |
+| `HSTS_ENABLED` | `false` | Añade `Strict-Transport-Security`; en el perfil `prod` está activo (MS02-12). |
 | `SPRINGDOC_API_DOCS_ENABLED` | `false` | Habilita `/v3/api-docs` (solo local/dev). |
 | `SPRINGDOC_SWAGGER_UI_ENABLED` | `false` | Habilita Swagger UI (solo local/dev). |
 
@@ -119,6 +123,9 @@ de seguridad y no una vía de lectura del detalle. Acepta como máximo `size=50`
 - Topic y `eventType`: `security.report.changed`.
 - Productor: `ms-02`; `aggregateId` = `reportId`; key de Kafka = `aggregateId`.
 - Payload: `reportId`, `reporterId`, `title`, `status`, `latitude`, `longitude`, `createdAt`, `updatedAt`.
+- `latitude`/`longitude` se publican redondeadas a 3 decimales (~110 m): es la minimización posible sin romper el
+  contrato v1, que exige `reporterId` y `title` (MS02-09). Ver «Riesgos aceptados».
+- Fuera de `local`/`dev`/`test` el arranque exige TLS o SASL para Kafka (`KAFKA_SECURITY_PROTOCOL`, MS02-09).
 - Contrato: `contracts/events/security.report.changed.v1.json`.
 - Se publica al crear, cambiar contenido/fotos, cerrar y resolver un reporte.
 - ms-05 no lo consume; está pensado para alertas, notificaciones y analítica.
@@ -134,8 +141,9 @@ de seguridad y no una vía de lectura del detalle. Acepta como máximo `size=50`
 - **Decisión pendiente P3-9**: (a) dejar `security.report.changed` solo documentado como señal de dominio sin
   consumidor, o (b) que ms-05 lo consuma como señal (por ejemplo, penalizar la proximidad de una zona reportada) con
   su proyección y su contract test de consumidor. Hasta que P3-9 se firme, **no se agrega consumidor**.
-- **Consecuencia operativa**: el outbox publica igualmente y la retención purga `PUBLISHED`/`FAILED` a los 30 días.
-  No hay alertas push ni correo de reportes (RF80 queda diferido; ver la trazabilidad P2-13).
+- **Consecuencia operativa**: el outbox publica igualmente y la retención purga `PUBLISHED`/`FAILED` a los 7 días
+  (`OUTBOX_RETENTION_DAYS`, MS02-09). No hay alertas push ni correo de reportes (RF80 queda diferido; ver la
+  trazabilidad P2-13).
 
 ## Paginación por cursor
 
@@ -186,8 +194,8 @@ si falta cualquiera de las condiciones. `application-local.yaml` contiene el con
 ### Comentarios (MS02-02)
 
 Solo el autor del reporte o el staff (`ADMIN`/`DESTINATION_MANAGER`) puede comentarlo, y no se admiten comentarios
-en reportes `SOLVED`. La regla se aplica en el caso de uso, después de cargar el reporte, y responde `403` (o `409`
-si el reporte ya está resuelto).
+en reportes `SOLVED`. La regla se aplica en el caso de uso, después de cargar el reporte; un reporte ajeno responde
+`404` igual que uno inexistente (MS02-10) y un reporte resuelto `409`.
 
 ### Límite de escrituras (MS02-03)
 
@@ -224,6 +232,42 @@ el contenido mixto.
 nuevo en lugar de rechazar la petición. El valor viaja al outbox y a Kafka, así que no puede usarse para inflar el
 documento ni inyectar caracteres de control en los logs.
 
+### Evento y Kafka (MS02-09)
+
+El evento conserva los campos del contrato v1, pero las coordenadas se publican redondeadas a 3 decimales y el
+payload ya no aporta precisión de domicilio. `KafkaSecurityGuard` falla el arranque fuera de `local`/`dev`/`test` si
+`KAFKA_SECURITY_PROTOCOL` es `PLAINTEXT` o si `SASL_SSL` no trae `KAFKA_SASL_JAAS_CONFIG`. La retención del outbox
+baja a 7 días porque el payload contiene datos del reporte.
+
+### Sin oráculo de existencia (MS02-10)
+
+Un reporte ajeno responde igual que uno inexistente: `404` en detalle, `PATCH /content`, `/photos` y comentarios;
+el staff sigue viendo cualquier reporte. Así no se puede enumerar qué IDs existen probando respuestas `403` vs
+`404` con tokens autenticados.
+
+### Coordenadas finitas (MS02-11)
+
+`Location` y la consulta `nearby` rechazan `NaN` e `Infinity` (`Double.isFinite`) con `400`; antes esas
+comparaciones dejaban pasar los valores no finitos y terminaban en un error del driver de MongoDB.
+
+### HSTS y caché (MS02-12)
+
+Además de CSP y `Cache-Control: no-store`, la API añade `Pragma: no-cache` en `/api/` y, con `HSTS_ENABLED=true`
+(activo en `prod`), `Strict-Transport-Security: max-age=31536000; includeSubDomains`. HSTS solo debe activarse
+detrás de un terminador TLS; en local queda apagado.
+
+### MongoDB con autenticación (MS02-13)
+
+Fuera de `local`/`test`, `MONGODB_URI` debe llevar credenciales (o la plataforma debe autenticar por otro mecanismo:
+X.509, IAM). El `docker-compose.yml` de la raíz arranca mongo sin `--auth`; es deuda de plataforma (no se edita desde
+este servicio) y está reportada al Lead.
+
+### Errores sin detalle interno (MS02-14)
+
+`IllegalArgumentException` y `ServerWebInputException` responden `400` con mensajes genéricos («Invalid request
+parameter.» / «Malformed request.») y el detalle queda en el log; los errores de validación de campos públicos y de
+dominio siguen siendo descriptivos para el cliente.
+
 ### Riesgos aceptados
 
 - **XSS residual en el cliente**: el servicio devuelve JSON y rechaza HTML, pero si un cliente renderizara el
@@ -234,6 +278,14 @@ documento ni inyectar caracteres de control en los logs.
 - **`/actuator/health` público**: expone el estado del servicio, no datos de negocio; es el patrón de plataforma.
 - **Sin subida de archivos**: no hay validación de tipo/tamaño de imagen porque el servicio solo almacena URLs; esa
   responsabilidad (y el escaneo de contenido) corresponde al almacenamiento de imágenes de la plataforma.
+- **PII en el evento `security.report.changed` (MS02-09)**: el contrato v1 exige `reporterId` y `title`; se
+  minimizó lo posible (coordenadas a 3 decimales, retención de outbox a 7 días) y el transporte exige TLS/SASL fuera
+  de dev. Eliminar más campos requiere una versión v2 del contrato y la decisión P3-9 sobre el consumidor.
+- **MongoDB sin autenticación en el compose raíz (MS02-13)**: es responsabilidad de plataforma; el servicio exige
+  credenciales en la URI fuera de `local`/`test` (documentado, no impuesto en código para no romper autenticación
+  externa tipo X.509/IAM).
+- **Mensajes de error genéricos (MS02-14)**: se pierde detalle en la respuesta, pero el log del servidor conserva la
+  causa; es el intercambio aceptado para no filtrar internals.
 
 ## Migraciones y datos legados
 
@@ -249,4 +301,4 @@ documento ni inyectar caracteres de control en los logs.
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **103 pruebas**: unitarias para las reglas de dominio y de seguridad (contenido, allowlist de fotos, límites por cuenta, guard de arranque, correlation id) e integración para el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`), la autorización de comentarios y los errores RFC 9457.
+Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **128 pruebas** (96 unitarias + 32 de integración): unitarias para las reglas de dominio y de seguridad (contenido, allowlist de fotos, límites por cuenta, guard de arranque, HSTS, Kafka, correlation id, coordenadas finitas) e integración para el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`), la autorización de comentarios, el 404 sin oráculo y los errores RFC 9457.

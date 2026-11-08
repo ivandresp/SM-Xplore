@@ -1,6 +1,5 @@
 package com.smxplore.securityreports.application;
 
-import com.smxplore.securityreports.domain.exceptions.CommentForbiddenException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
 import com.smxplore.securityreports.domain.exceptions.InvalidStatusTransitionException;
 import com.smxplore.securityreports.domain.exceptions.ReportNotFoundException;
@@ -35,7 +34,8 @@ public class CommentReportUseCase implements CommentReportUseCasePort {
                             var commenterId = validComment.getUser().id();
                             var authorId = report.getUser() == null ? null : report.getUser().id();
                             if (!requesterIsStaff && !Objects.equals(commenterId, authorId)) {
-                                throw new CommentForbiddenException();
+                                // MS02-10: reporte ajeno = 404, igual que inexistente (sin oraculo).
+                                throw new ReportNotFoundException(validComment.getReportId());
                             }
                             if (report.isSolved()) {
                                 throw new InvalidStatusTransitionException(

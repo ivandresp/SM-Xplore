@@ -10,6 +10,9 @@ app:
     photos:
       allow-http: false
       allow-any-host: false
+    headers:
+      # MS02-12: produccion va detras de TLS, asi que el servicio refuerza HSTS.
+      hsts: true
 
 springdoc:
   api-docs:

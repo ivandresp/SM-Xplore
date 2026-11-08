@@ -1,6 +1,5 @@
 package com.smxplore.securityreports.infrastructure.adapters.in.web.error;
 
-import com.smxplore.securityreports.domain.exceptions.CommentForbiddenException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCursorException;
 import com.smxplore.securityreports.domain.exceptions.InvalidJwtException;
@@ -61,12 +60,6 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.UNAUTHORIZED, exception.getMessage(), exchange);
     }
 
-    @ExceptionHandler(CommentForbiddenException.class)
-    public ResponseEntity<ProblemDetail> handleCommentForbidden(CommentForbiddenException exception,
-                                                                  ServerWebExchange exchange) {
-        return error(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
-    }
-
     @ExceptionHandler(InvalidStatusTransitionException.class)
     public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidStatusTransitionException exception,
                                                                           ServerWebExchange exchange) {
@@ -95,11 +88,15 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, message.isBlank() ? "Request validation failed." : message, exchange);
     }
 
+    /**
+     * MS02-14: los errores de parseo no publican el detalle interno de Spring (clase, offset, causa);
+     * se responde un mensaje estable y el detalle queda en el log para diagnostico.
+     */
     @ExceptionHandler(ServerWebInputException.class)
     public ResponseEntity<ProblemDetail> handleServerWebInput(ServerWebInputException exception,
                                                                  ServerWebExchange exchange) {
-        var message = exception.getReason() == null ? "Malformed request." : exception.getReason();
-        return error(HttpStatus.BAD_REQUEST, message, exchange);
+        log.debug("Malformed request while processing {}", exchange.getRequest().getPath().value(), exception);
+        return error(HttpStatus.BAD_REQUEST, "Malformed request.", exchange);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
@@ -111,11 +108,12 @@ public class GlobalExceptionHandler {
         return error(status, message, exchange);
     }
 
+    /** MS02-14: un {@code IllegalArgumentException} puede venir de una capa interna; no se publica su mensaje. */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException exception,
                                                                   ServerWebExchange exchange) {
-        var message = exception.getMessage() == null ? "Invalid request parameter." : exception.getMessage();
-        return error(HttpStatus.BAD_REQUEST, message, exchange);
+        log.warn("Invalid argument while processing {}", exchange.getRequest().getPath().value(), exception);
+        return error(HttpStatus.BAD_REQUEST, "Invalid request parameter.", exchange);
     }
 
     @ExceptionHandler(DataAccessException.class)

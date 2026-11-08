@@ -187,8 +187,9 @@ public class SecurityReportController {
                 .doOnNext(report -> {
                     var authorId = report.getUser() == null ? null : report.getUser().id();
                     if (!requesterId.equals(authorId)) {
-                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                                "Only the author of the report (or staff) can change it.");
+                        // MS02-10: mismo 404 que un reporte inexistente para no revelar su existencia.
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Security report not found.");
                     }
                 })
                 .then();

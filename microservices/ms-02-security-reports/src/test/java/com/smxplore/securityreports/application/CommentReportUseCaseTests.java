@@ -1,6 +1,5 @@
 package com.smxplore.securityreports.application;
 
-import com.smxplore.securityreports.domain.exceptions.CommentForbiddenException;
 import com.smxplore.securityreports.domain.exceptions.InvalidCommentException;
 import com.smxplore.securityreports.domain.exceptions.InvalidStatusTransitionException;
 import com.smxplore.securityreports.domain.exceptions.ReportNotFoundException;
@@ -54,15 +53,18 @@ class CommentReportUseCaseTests {
         verify(commentRepository).save(comment);
     }
 
+    /**
+     * MS02-10: un reporte ajeno se responde igual que uno inexistente para no filtrar su existencia.
+     */
     @Test
-    void rejectsCommentFromAnotherNonStaffUser() {
+    void rejectsCommentFromAnotherNonStaffUserAsIfTheReportDidNotExist() {
         var comment = validComment();
         var anotherAuthor = new UserRef(UUID.randomUUID(), "Otra persona");
         when(securityReportRepository.findById(comment.getReportId()))
                 .thenReturn(Mono.just(reportOf(comment.getReportId(), anotherAuthor)));
 
         assertThatThrownBy(() -> useCase.handle(comment, false).block())
-                .isInstanceOf(CommentForbiddenException.class);
+                .isInstanceOf(ReportNotFoundException.class);
 
         verifyNoInteractions(commentRepository);
     }

@@ -74,8 +74,11 @@ class SecurityReportWebIntegrationTests {
                 .jsonPath("$.photosUrls[0]").isEqualTo("https://example.com/photo.jpg");
     }
 
+    /**
+     * MS02-10: un reporte ajeno responde 404, igual que uno inexistente (sin oraculo de existencia).
+     */
     @Test
-    void rejectsCommentsOnAnotherUsersReport() {
+    void hidesAnotherUsersReportWhenCommenting() {
         var author = UUID.randomUUID();
         var intruder = UUID.randomUUID();
         var reportId = createReport(author);
@@ -88,7 +91,26 @@ class SecurityReportWebIntegrationTests {
                         {"content": "Comentario ajeno"}
                         """)
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void hidesAnotherUsersReportWhenReadingIt() {
+        var author = UUID.randomUUID();
+        var intruder = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/{reportId}", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .exchange()
+                .expectStatus().isNotFound();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/{reportId}", UUID.randomUUID())
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
@@ -227,6 +249,8 @@ class SecurityReportWebIntegrationTests {
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectHeader().valueEquals("Cache-Control", "no-store")
+                .expectHeader().valueEquals("Pragma", "no-cache")
                 .expectBody()
                 .jsonPath("$.length()").isEqualTo(1)
                 .jsonPath("$[0].title").isEqualTo("Incidente cerca del parque")
@@ -273,6 +297,22 @@ class SecurityReportWebIntegrationTests {
     void rejectsNearbyQueriesAboveTheSizeLimit() {
         webTestClient.get()
                 .uri("/api/v1/security-reports/nearby?latitude=10.0&longitude=-75.0&size=51")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    /** MS02-11: NaN/Infinity en los parametros de /nearby se rechazan con 400 antes de llegar a geoNear. */
+    @Test
+    void rejectsNonFiniteNearbyCoordinates() {
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=NaN&longitude=-75.0&radiusKm=2")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.0&longitude=-75.0&radiusKm=Infinity")
                 .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
                 .exchange()
                 .expectStatus().isBadRequest();

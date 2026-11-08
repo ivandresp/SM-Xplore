@@ -19,6 +19,9 @@ import java.util.UUID;
  * <p>Without it a report was readable by any authenticated user: the UUIDs are not guessable, but
  * {@code /nearby} lists them by radius, so a tourist could read the title, the description, the
  * photos and the reporter of any incident.
+ *
+ * <p>MS02-10: un reporte ajeno responde {@code 404} igual que uno inexistente. Asi el recurso no
+ * visible no se distingue de uno inexistente y se elimina el oraculo de existencia.
  */
 @Component
 @RequiredArgsConstructor
@@ -40,8 +43,8 @@ public class ReportAccessGuard {
                 .doOnNext(report -> {
                     var authorId = report.getUser() == null ? null : report.getUser().id();
                     if (!requesterId.equals(authorId)) {
-                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                                "Only the author of the report (or staff) can read it.");
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Security report not found.");
                     }
                 })
                 .then();

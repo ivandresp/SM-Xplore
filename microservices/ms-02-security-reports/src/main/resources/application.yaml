@@ -8,11 +8,18 @@ spring:
       auto-index-creation: ${MONGO_AUTO_INDEX_CREATION:false}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    # MS02-09: fuera de local/dev/test el trafico va cifrado (SSL o SASL_SSL); lo exige KafkaSecurityGuard.
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     properties:
       spring.json.add.type.headers: false
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:}
+      sasl.jaas.config: ${KAFKA_SASL_JAAS_CONFIG:}
+      ssl.truststore.location: ${KAFKA_SSL_TRUSTSTORE_LOCATION:}
+      ssl.truststore.password: ${KAFKA_SSL_TRUSTSTORE_PASSWORD:}
 
 # MS02-04: apagado por defecto; solo el perfil local/dev lo enciende.
 springdoc:
@@ -52,6 +59,9 @@ app:
     mfa:
       # MS02-05: exigido por defecto fuera de local/dev/test.
       require-admin: ${MFA_REQUIRE_ADMIN:true}
+    # MS02-12: HSTS solo cuando el servicio esta detras de un terminador TLS; el borde puede enviarlo.
+    headers:
+      hsts: ${HSTS_ENABLED:false}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
     rate-limit:
@@ -75,5 +85,6 @@ app:
     initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
     max-backoff: ${OUTBOX_MAX_BACKOFF:1m}
     lease-duration: ${OUTBOX_LEASE_DURATION:3m}
-    retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    # MS02-09: el outbox guarda el evento con PII; 7 dias bastan para reintentos y diagnostico.
+    retention-days: ${OUTBOX_RETENTION_DAYS:7}
     retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}

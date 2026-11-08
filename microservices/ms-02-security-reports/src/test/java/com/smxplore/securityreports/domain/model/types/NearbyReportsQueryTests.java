@@ -28,4 +28,18 @@ class NearbyReportsQueryTests {
                 .isInstanceOf(InvalidPageSizeException.class)
                 .hasMessageContaining("between 1 and 50");
     }
+
+    /** MS02-11: los parametros de /nearby llegan como {@code double}; NaN no puede llegar a geoNear. */
+    @Test
+    void rejectsNonFiniteQueryParameters() {
+        assertThatThrownBy(() -> new NearbyReportsQuery(Double.NaN, -75.0, 5.0, null, 20))
+                .isInstanceOf(InvalidLocationParamsException.class)
+                .hasMessageContaining("finite");
+        assertThatThrownBy(() -> new NearbyReportsQuery(10.0, Double.POSITIVE_INFINITY, 5.0, null, 20))
+                .isInstanceOf(InvalidLocationParamsException.class)
+                .hasMessageContaining("finite");
+        assertThatThrownBy(() -> new NearbyReportsQuery(10.0, -75.0, Double.NaN, null, 20))
+                .isInstanceOf(InvalidLocationParamsException.class)
+                .hasMessageContaining("finite");
+    }
 }
