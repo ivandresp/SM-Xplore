@@ -14,6 +14,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelRes
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByItemUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByProviderUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByTouristUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
@@ -44,9 +45,12 @@ class ReservationControllerTest {
 
     private static final UUID TOURIST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID RESERVATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID PROVIDER_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private WebTestClient webTestClient;
+
+    private WebTestClient baseClient;
 
     @MockitoBean
     private CreateReservationUseCasePort createReservationUseCase;
@@ -65,6 +69,9 @@ class ReservationControllerTest {
 
     @MockitoBean
     private ConsultReservationsByItemUseCasePort consultReservationsByItemUseCase;
+
+    @MockitoBean
+    private ConsultReservationsByProviderUseCasePort consultReservationsByProviderUseCase;
 
     @MockitoBean
     private CancelReservationUseCasePort cancelReservationUseCase;
@@ -86,9 +93,17 @@ class ReservationControllerTest {
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {
+        this.baseClient = webTestClient;
         this.webTestClient = webTestClient
                 .mutateWith(SecurityMockServerConfigurers.mockJwt()
                         .jwt(jwt -> jwt.subject(TOURIST_ID.toString()).claim("role", "ADMIN")))
+                .mutateWith(SecurityMockServerConfigurers.csrf());
+    }
+
+    private WebTestClient clientFor(UUID subject, String role) {
+        return baseClient
+                .mutateWith(SecurityMockServerConfigurers.mockJwt()
+                        .jwt(jwt -> jwt.subject(subject.toString()).claim("role", role)))
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 
@@ -143,6 +158,44 @@ class ReservationControllerTest {
     }
 
     @Test
+    void providerListingOmitsTheNotes() {
+        given(consultReservationsByProviderUseCase.handle(PROVIDER_ID, null, 50))
+                .willReturn(Flux.just(reservation()));
+
+        clientFor(PROVIDER_ID, "SERVICE_PROVIDER")
+                .get().uri("/api/v1/reservations/providers/{id}", PROVIDER_ID)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].providerId").isEqualTo(PROVIDER_ID.toString())
+                .jsonPath("$[0].notes").doesNotExist();
+    }
+
+    @Test
+    void anotherProviderCannotListSomeoneElsesReservations() {
+        clientFor(PROVIDER_ID, "SERVICE_PROVIDER")
+                .get().uri("/api/v1/reservations/providers/{id}", UUID.randomUUID())
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void adminCanListTheReservationsOfAnyProvider() {
+        given(consultReservationsByProviderUseCase.handle(PROVIDER_ID, ReservationStatus.CONFIRMED, 10))
+                .willReturn(Flux.just(reservation()));
+
+        clientFor(UUID.randomUUID(), "ADMIN")
+                .get().uri(uriBuilder -> uriBuilder.path("/api/v1/reservations/providers/{id}")
+                        .queryParam("status", "CONFIRMED")
+                        .queryParam("limit", 10)
+                        .build(PROVIDER_ID))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].id").isEqualTo(RESERVATION_ID.toString());
+    }
+
+    @Test
     void itemListingOmitsTheNotes() {
         var itemId = UUID.randomUUID();
         var startsAt = Instant.now().plusSeconds(3600);
@@ -179,6 +232,7 @@ class ReservationControllerTest {
                 .touristId(TOURIST_ID)
                 .itemType(ReservationItemType.ACTIVITY)
                 .itemId(UUID.randomUUID())
+                .providerId(PROVIDER_ID)
                 .itemStartsAt(startsAt)
                 .unitPrice(new BigDecimal("50000.00"))
                 .numberOfPeople(2)

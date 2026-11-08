@@ -13,6 +13,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelRes
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByItemUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByProviderUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByTouristUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
@@ -60,6 +61,7 @@ public class ReservationController {
     private final ConsultManagerReservationsUseCase consultManagerReservationsUseCase;
     private final ConsultReservationsByTouristUseCasePort consultReservationsByTouristUseCase;
     private final ConsultReservationsByGuideUseCasePort consultReservationsByGuideUseCase;
+    private final ConsultReservationsByProviderUseCasePort consultReservationsByProviderUseCase;
     private final ConsultReservationsByItemUseCasePort consultReservationsByItemUseCase;
     private final CancelReservationUseCasePort cancelReservationUseCase;
     private final RegisterReservationAttendanceUseCasePort registerReservationAttendanceUseCase;
@@ -142,6 +144,17 @@ public class ReservationController {
                                                         @AuthenticationPrincipal Jwt jwt) {
         requireSelfOrStaff(jwt, guideId, "You can only list your own received reservations.");
         return consultReservationsByGuideUseCase.handle(guideId, status, PaginationLimits.clamp(limit))
+                .map(mapper::toSummary);
+    }
+
+    @GetMapping("/providers/{providerId}")
+    @Operation(summary = "List the reservations received by a provider (self or staff)")
+    public Flux<ReservationSummaryResponse> findByProvider(@PathVariable UUID providerId,
+                                                           @RequestParam(required = false) ReservationStatus status,
+                                                           @RequestParam(defaultValue = "50") int limit,
+                                                           @AuthenticationPrincipal Jwt jwt) {
+        requireSelfOrStaff(jwt, providerId, "You can only list your own received reservations.");
+        return consultReservationsByProviderUseCase.handle(providerId, status, PaginationLimits.clamp(limit))
                 .map(mapper::toSummary);
     }
 
