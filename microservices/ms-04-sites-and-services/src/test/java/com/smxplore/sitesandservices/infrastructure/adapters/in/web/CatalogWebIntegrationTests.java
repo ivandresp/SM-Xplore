@@ -64,7 +64,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         assertThat(summary.reviewCount()).isEqualTo(1);
         assertThat(summary.averageRating()).isEqualTo(5.0);
 
-        PageResponse<CategoryResponse> categories = listCategories(touristId);
+        PageResponse<CategoryResponse> categories = listCategories(touristId, category.name());
         assertThat(categories.content())
                 .extracting(CategoryResponse::categoryId)
                 .contains(category.categoryId());
@@ -264,12 +264,14 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID adminId) {        return clientFor(adminId, "ADMIN")
+    private CategoryResponse createCategory(UUID adminId) {
+        String categoryName = "Naturaleza " + UUID.randomUUID();
+        return clientFor(adminId, "ADMIN")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"name":"Naturaleza","scope":"GENERAL","parentId":null}
-                        """)
+                        {"name":"%s","scope":"GENERAL","parentId":null}
+                        """.formatted(categoryName))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(CategoryResponse.class)
@@ -503,9 +505,14 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .expectStatus().isOk();
     }
 
-    private PageResponse<CategoryResponse> listCategories(UUID touristId) {
+    private PageResponse<CategoryResponse> listCategories(UUID touristId, String search) {
         return clientFor(touristId, "TOURIST")
-                .get().uri("/api/v1/categories?page=0&size=100")
+                .get().uri(uriBuilder -> uriBuilder
+                        .path("/api/v1/categories")
+                        .queryParam("search", search)
+                        .queryParam("page", 0)
+                        .queryParam("size", 100)
+                        .build())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<CategoryResponse>>() {

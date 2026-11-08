@@ -37,4 +37,10 @@ public interface ServiceRepositoryPort {
     Mono<Void> updateCategorySnapshot(UUID categoryId, String categoryName);
 
     Mono<Boolean> existsById(UUID serviceId);
+
+    /**
+     * MS04-12: identificadores de los servicios publicables de un sitio, para comprobar si el
+     * turista tiene una reserva completada que permita reseñar el sitio.
+     */
+    Flux<UUID> findIdsBySiteId(UUID siteId);
 }

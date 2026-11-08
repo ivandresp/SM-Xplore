@@ -134,7 +134,7 @@ public class ReviewController {
             @PathVariable UUID reviewId,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        Actor actor = jwtUserResolver.resolve(jwt);
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
         return getUseCase.handle(reviewId, actor).map(webMapper::toResponse);
     }
 
@@ -149,7 +149,7 @@ public class ReviewController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        Actor actor = jwtUserResolver.resolve(jwt);
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
         ReviewFilter filter = new ReviewFilter(itemType, itemId, touristId, status, page, size);
         return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));

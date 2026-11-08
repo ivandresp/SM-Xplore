@@ -372,7 +372,29 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
   `ADMIN` puede gestionar cualquiera. Las reservas se confirman automáticamente; no existe una
   acción de aceptación manual.
 - Cada usuario solo ve y marca sus propias notificaciones; el `ADMIN` puede marcar cualquiera.
-- El reproceso de outbox está restringido a `ADMIN`.
+- El reproceso de outbox está restringido a `ADMIN`, exige `limit` entre 1 y 500, admite
+  `dryRun` para contar sin reencolar, limita a 5 peticiones cada 10 minutos por administrador y
+  deja auditoría con quién, cuándo, límite, modo y cuántos eventos se reencolaron.
+- Las lecturas públicas de reseñas no requieren token: un anónimo solo ve `PUBLISHED` y el
+  listado de reportes es solo de `ADMIN`. Responder una reseña exige que esté `PUBLISHED` y sin
+  respuesta previa; si no, responde `409` y no la sobrescribe.
+- La consulta de disponibilidad de reservas exige autenticación y solo la pueden hacer turistas
+  y personal operativo. El cupo detallado (capacidad, plazas reservadas y proveedor) se muestra
+  solo a `ADMIN`, gestoras y a la prestadora dueña; el turista recibe disponibilidad booleana.
+  Además hay un límite de 120 consultas por minuto por cuenta (`429`).
+- Cambiar el correo de contacto de notificaciones exige `confirm=true` en el cuerpo, es solo de
+  `ADMIN` y deja un registro en la colección Mongo `security_audit` con el correo anterior y el
+  nuevo. Sin verificación por correo del titular (mitigación proporcionada; riesgo residual).
+- El consumidor de `bookings.reservation.changed` solo acepta `producer` en
+  `{ms-03, ms-03-activities-and-events, ms-04}`, `eventVersion` 1 o 2 y como máximo 50 ítems; los
+  mensajes inválidos se publican en `NOTIFICATIONS_DLQ_TOPIC` sin efectos laterales.
+- Crear una reseña exige una reserva `COMPLETED` previa del servicio (o de algún servicio del
+  sitio reseñado), con `REVIEW_REQUIRE_COMPLETED_BOOKING=true` por defecto, y está limitado a 10
+  reseñas por hora y 20 reportes por hora por usuario (`429`). El filtro de IA es fail-closed:
+  `REVIEW_AI_FAIL_OPEN=false` por defecto, de modo que una caída del LLM rechaza la reseña.
+- El filtro de precio de servicios valida importes no negativos, `priceMin <= priceMax`, tope de
+  100 000 000 y un offset máximo de 10 000 (`400` con mensaje). Hay índices `status+price` y
+  `site.id+price` en `ServiceDocument`.
 - Swagger declara el esquema `bearerAuth` para enviar el JWT desde la UI.
 
 ## Kafka y contrato
@@ -417,6 +439,10 @@ Topics consumidos:
 - El consumidor acepta v1 y v2, procesa `SERVICE`, `ACTIVITY` y `EVENT`, usa `eventId` para IDs
   determinísticos de notificación (incluye rol e id del destinatario) y evita duplicados. Un grupo
   nuevo arranca en `latest`; los tests usan `earliest` para no depender del orden de arranque.
+- Antes de procesar se valida la procedencia: `producer` permitido, `eventVersion` soportada y
+  máximo 50 ítems. Un mensaje que no cumple se envía a `NOTIFICATIONS_DLQ_TOPIC`
+  (`kafka.dlq.bookings.reservation.changed` por defecto) sin crear notificaciones, y un fallo al
+  publicar en la DLQ se registra en el log sin reprocesar el mensaje.
 - El evento incluye `bookedFor`, `itemName`, `providerId`/`guideId`/`managerId` y `serviceName`
   como campos opcionales para permitir notificaciones sin consultar otros servicios. La v2 añade
   `NO_SHOW`.
@@ -428,7 +454,9 @@ Topics consumidos:
 - `OutboxRetentionJob` elimina eventos `PUBLISHED`/`FAILED` más antiguos que
   `app.outbox.retention-days` en PostgreSQL y MongoDB.
 - `POST /api/v1/admin/outbox/reprocess` resetea eventos `FAILED` a `PENDING`, con `attempts=0`,
-  en ambos outboxes. El relay los vuelve a intentar.
+  en ambos outboxes. Acepta `limit` (1..500, por defecto 100) y `dryRun=true` para contar sin
+  modificar. Está limitado por cuenta, deja auditoría en `security_audit` y emite la métrica
+  `outbox.reprocess.events{kind}`. El relay los vuelve a intentar.
 
 ### Métricas
 
@@ -438,6 +466,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 - `catalog_outbox_failed_total{event_type}`.
 - `booking_outbox_published_total{event_type}`.
 - `booking_outbox_failed_total{event_type}`.
+- `outbox.reprocess.events{kind=reservation|catalog}`.
 - Métricas estándar de Actuator, JVM, HTTP y Kafka.
 
 ## Configuración
@@ -480,7 +509,9 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `REVIEW_AI_THRESHOLD` | `0.7` | Score mínimo para retener una reseña |
 | `REVIEW_AI_TEMPERATURE` | `0.0` | Temperatura del modelo |
 | `REVIEW_AI_ACTION` | `PENDING_REVIEW` | Acción al marcar: `PENDING_REVIEW` o `HIDE` |
-| `REVIEW_AI_FAIL_OPEN` | `true` | Si el LLM falla, guarda la reseña visible |
+| `REVIEW_AI_FAIL_OPEN` | `false` | Si el LLM falla, rechaza la reseña (fail-closed). |
+| `REVIEW_REQUIRE_COMPLETED_BOOKING` | `true` | Exige una reserva `COMPLETED` del servicio para reseñar |
+| `NOTIFICATIONS_DLQ_TOPIC` | `kafka.dlq.bookings.reservation.changed` | Topic DLQ para eventos de reserva inválidos |
 | `REVIEW_AI_JSON_RESPONSE_FORMAT` | `false` | Envía `response_format=json_object` |
 | `OUTBOX_ENABLED` | `true` | Activa el relay |
 | `OUTBOX_PRODUCER` | `ms-04` | Campo `producer` del sobre |
@@ -537,11 +568,18 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **130 pruebas en 34 clases, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual de la selección sin Docker (aplicación, dominio, contrato y arquitectura):
+**125 pruebas en 28 clases, 0 fallos**. La suite completa con Testcontainers requiere Docker.
 
 La suite incluye `ArchitectureTest` (reglas del hexágono y nombres de puertos),
 `ReservationChangedEventDecoderContractTest` (destinatarios de notificación para reservas v1 y v2) y
 las pruebas de la alerta de cupo bajo (umbral, deduplicación y no repetición) y del canal push.
+
+Las regresiones de la fase BAJA viven en `application/security/`:
+`ReviewVisibilityServiceTest` (MS04-05), `ServiceFilterValidationTest` (MS04-06),
+`ReviewResponseConflictServiceTest` (MS04-07), `AvailabilityPrivacyServiceTest` (MS04-08),
+`NotificationContactAuditServiceTest` (MS04-09), `OutboxReprocessGuardServiceTest` (MS04-10),
+`ReservationEventProvenanceTest` (MS04-11) y `ReviewConsumptionProofServiceTest` (MS04-12).
 
 La suite usa Testcontainers con:
 

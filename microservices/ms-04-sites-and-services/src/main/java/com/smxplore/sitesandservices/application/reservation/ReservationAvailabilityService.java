@@ -1,8 +1,11 @@
 package com.smxplore.sitesandservices.application.reservation;
 
+import com.smxplore.sitesandservices.application.support.InMemoryRateLimiter;
 import com.smxplore.sitesandservices.application.support.ReservationAvailabilityPolicy;
+import com.smxplore.sitesandservices.domain.exception.ForbiddenOperationException;
 import com.smxplore.sitesandservices.domain.exception.InvalidCatalogException;
 import com.smxplore.sitesandservices.domain.exception.ResourceNotFoundException;
+import com.smxplore.sitesandservices.domain.model.common.Actor;
 import com.smxplore.sitesandservices.domain.model.common.AvailabilitySlot;
 import com.smxplore.sitesandservices.domain.model.reservation.ReservationAvailability;
 import com.smxplore.sitesandservices.domain.model.service.Service;
@@ -16,16 +19,32 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * MS04-08: la consulta de disponibilidad solo la pueden hacer turistas y personal operativo.
+ * El detalle de cupo (capacidad, plazas reservadas y restantes, proveedor) solo se muestra al
+ * ADMIN, a una gestora o a la prestadora dueña del servicio; el turista recibe disponibilidad
+ * booleana. Ademas hay un limite de peticiones por cuenta.
+ */
 @RequiredArgsConstructor
 public class ReservationAvailabilityService implements CheckReservationAvailabilityUseCase {
 
     private final ServiceRepositoryPort serviceRepository;
     private final ReservationRepositoryPort reservationRepository;
     private final ReservationAvailabilityPolicy availabilityPolicy;
+    private final InMemoryRateLimiter rateLimiter;
     private final Clock clock;
 
     @Override
-    public Mono<ReservationAvailability> handle(UUID serviceId, Instant bookedFor, int people) {
+    public Mono<ReservationAvailability> handle(
+            UUID serviceId,
+            Instant bookedFor,
+            int people,
+            Actor actor
+    ) {
+        if (actor == null) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Authentication is required to check availability"));
+        }
         if (serviceId == null) {
             return Mono.error(new InvalidCatalogException("serviceId is required"));
         }
@@ -36,16 +55,24 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
             return Mono.error(new InvalidCatalogException("people must be >= 1"));
         }
 
-        return serviceRepository.findById(serviceId)
+        return rateLimiter.acquire("availability:" + actor.userId())
+                .then(serviceRepository.findById(serviceId))
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Service", serviceId)))
-                .flatMap(service -> availability(service, bookedFor, people));
+                .flatMap(service -> availability(service, bookedFor, people, actor));
     }
 
     private Mono<ReservationAvailability> availability(
             Service service,
             Instant bookedFor,
-            int people
+            int people,
+            Actor actor
     ) {
+        boolean detailed = seesCapacityDetail(service, actor);
+        if (!detailed && !actor.isTourist()) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Only tourists, destination managers and the owning service provider"
+                            + " can check availability"));
+        }
         if (!bookedFor.isAfter(Instant.now(clock))) {
             return Mono.just(result(
                     service,
@@ -54,12 +81,14 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
                     0,
                     false,
                     ReservationAvailabilityPolicy.BOOKED_FOR_IN_PAST,
-                    service.maxCapacity()
+                    service.maxCapacity(),
+                    detailed
             ));
         }
         String problem = availabilityPolicy.availabilityProblem(service, bookedFor);
         if (problem != null) {
-            return Mono.just(result(service, bookedFor, people, 0, false, problem, service.maxCapacity()));
+            return Mono.just(result(
+                    service, bookedFor, people, 0, false, problem, service.maxCapacity(), detailed));
         }
         AvailabilitySlot slot = availabilityPolicy.slotFor(service, bookedFor);
         Integer slotCapacity = slot == null ? null : slot.capacity();
@@ -86,8 +115,16 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
                     String reason = available
                             ? null
                             : ReservationAvailabilityPolicy.INSUFFICIENT_CAPACITY;
-                    return result(service, bookedFor, people, reserved, available, reason, capacity);
+                    return result(
+                            service, bookedFor, people, reserved, available, reason, capacity, detailed);
                 });
+    }
+
+    private static boolean seesCapacityDetail(Service service, Actor actor) {
+        if (actor.isAdmin() || actor.isGestora()) {
+            return true;
+        }
+        return actor.isPrestadora() && actor.owns(service.providerId());
     }
 
     private ReservationAvailability result(
@@ -97,16 +134,17 @@ public class ReservationAvailabilityService implements CheckReservationAvailabil
             int reservedPeople,
             boolean available,
             String reason,
-            int capacity
+            int capacity,
+            boolean detailed
     ) {
         return new ReservationAvailability(
                 service.serviceId(),
                 service.name(),
-                service.providerId(),
+                detailed ? service.providerId() : null,
                 bookedFor,
                 availabilityPolicy.serviceDate(bookedFor),
-                capacity,
-                reservedPeople,
+                detailed ? capacity : null,
+                detailed ? reservedPeople : null,
                 people,
                 available,
                 reason

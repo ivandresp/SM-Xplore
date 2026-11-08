@@ -398,15 +398,10 @@ public class ReservationCreateService implements CreateReservationUseCase {
                                 int perSlot = remaining.getT2();
                                 int available = Math.min(daily, perSlot);
                                 if (item.reservation().people() > available) {
-                                    String scope = perSlot < daily
-                                            ? " in the selected time slot"
-                                            : "";
+                                    // MS04-08: no filtrar el cupo exacto ni el nombre del
+                                    // servicio en el conflicto.
                                     return Mono.error(new ReservationConflictException(
-                                            "Service " + service.name()
-                                                    + " has only " + available
-                                                    + " places left on "
-                                                    + availabilityPolicy.serviceDate(bookedFor)
-                                                    + scope));
+                                            "Not enough places left for the requested booking"));
                                 }
                                 Site site = sites.get(service.siteId());
                                 return Mono.just(new LowCapacitySnapshot(

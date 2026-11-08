@@ -55,7 +55,7 @@ public class CatalogAccess {
     }
 
     public Mono<Actor> requireAdmin(Actor actor) {
-        return actor.isAdmin()
+        return actor != null && actor.isAdmin()
                 ? Mono.just(actor)
                 : Mono.error(new ForbiddenOperationException("Only an administrator can moderate reviews"));
     }
@@ -72,7 +72,7 @@ public class CatalogAccess {
     }
 
     public Mono<Review> requireAdmin(Review review, Actor actor) {
-        return actor.isAdmin()
+        return actor != null && actor.isAdmin()
                 ? Mono.just(review)
                 : Mono.error(new ForbiddenOperationException("Only an administrator can moderate reviews"));
     }

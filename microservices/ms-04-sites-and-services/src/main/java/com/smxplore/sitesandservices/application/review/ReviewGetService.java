@@ -30,8 +30,9 @@ public class ReviewGetService implements GetReviewUseCase {
     }
 
     private static boolean canRead(Review review, Actor actor) {
-        return review.status() == ReviewStatus.PUBLISHED
-                || actor.isAdmin()
-                || actor.owns(review.touristId());
+        if (review.status() == ReviewStatus.PUBLISHED) {
+            return true;
+        }
+        return actor != null && (actor.isAdmin() || actor.owns(review.touristId()));
     }
 }

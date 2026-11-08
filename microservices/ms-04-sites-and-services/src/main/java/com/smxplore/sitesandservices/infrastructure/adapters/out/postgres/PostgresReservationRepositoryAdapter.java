@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -267,6 +268,29 @@ public class PostgresReservationRepositoryAdapter implements ReservationReposito
                 .map(row -> Objects.requireNonNull(row.get("total", Long.class)))
                 .one()
                 .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Mono<Boolean> existsCompletedBooking(UUID touristId, Collection<UUID> serviceIds) {
+        if (serviceIds == null || serviceIds.isEmpty()) {
+            return Mono.just(false);
+        }
+        String sql = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM reservations r
+                    JOIN reservation_items ri ON ri.reservation_id = r.reservation_id
+                    WHERE r.tourist_id = :touristId
+                      AND r.status = 'COMPLETED'
+                      AND ri.service_id IN (:serviceIds)
+                ) AS exists
+                """;
+        return databaseClient.sql(sql)
+                .bind("touristId", touristId)
+                .bind("serviceIds", serviceIds.stream().distinct().toList())
+                .map(row -> Boolean.TRUE.equals(row.get("exists", Boolean.class)))
+                .one()
+                .defaultIfEmpty(false);
     }
 
     @Override

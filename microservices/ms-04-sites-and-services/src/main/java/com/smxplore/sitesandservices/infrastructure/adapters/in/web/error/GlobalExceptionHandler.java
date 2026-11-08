@@ -8,8 +8,10 @@ import com.smxplore.sitesandservices.domain.exception.DuplicateReviewReportExcep
 import com.smxplore.sitesandservices.domain.exception.InvalidJwtException;
 import com.smxplore.sitesandservices.domain.exception.ReservationConflictException;
 import com.smxplore.sitesandservices.domain.exception.ReservationLimitException;
+import com.smxplore.sitesandservices.domain.exception.RateLimitExceededException;
 import com.smxplore.sitesandservices.domain.exception.ResourceNotFoundException;
 import com.smxplore.sitesandservices.domain.exception.ReviewFilterUnavailableException;
+import com.smxplore.sitesandservices.domain.exception.ReviewResponseConflictException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -61,6 +63,23 @@ public class GlobalExceptionHandler {
             ServerWebExchange exchange
     ) {
         return error(HttpStatus.FORBIDDEN, "Forbidden", exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleRateLimit(
+            RateLimitExceededException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, "Too many requests",
+                exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewResponseConflictException.class)
+    public ResponseEntity<ProblemDetail> handleReviewResponseConflict(
+            ReviewResponseConflictException exception,
+            ServerWebExchange exchange
+    ) {
+        return error(HttpStatus.CONFLICT, "Review response conflict", exception.getMessage(), exchange);
     }
 
     @ExceptionHandler(DuplicateReviewException.class)

@@ -93,6 +93,8 @@ app:
     seed-enabled: ${CATALOG_SEED_ENABLED:false}
 
   reviews:
+    # MS04-12: fail-closed por defecto; activar solo como mitigacion temporal conocida.
+    require-completed-booking: ${REVIEW_REQUIRE_COMPLETED_BOOKING:true}
     ai-filter:
       enabled: ${REVIEW_AI_ENABLED:false}
       base-url: ${LITTLELLM_URL:}
@@ -105,11 +107,14 @@ app:
       threshold: ${REVIEW_AI_THRESHOLD:0.7}
       temperature: ${REVIEW_AI_TEMPERATURE:0.0}
       action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
-      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      # MS04-12: si el filtro de IA falla, la reseña se rechaza (503) en vez de publicarse.
+      fail-open: ${REVIEW_AI_FAIL_OPEN:false}
       json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
 
   notifications:
     enabled: ${NOTIFICATIONS_ENABLED:true}
+    # MS04-11: eventos invalidos (productor/version/forma) se envian aqui.
+    dlq-topic: ${NOTIFICATIONS_DLQ_TOPIC:kafka.dlq.bookings.reservation.changed}
     email:
       enabled: ${NOTIFICATIONS_EMAIL_ENABLED:false}
       from: ${NOTIFICATIONS_EMAIL_FROM:no-reply@smxplore.local}

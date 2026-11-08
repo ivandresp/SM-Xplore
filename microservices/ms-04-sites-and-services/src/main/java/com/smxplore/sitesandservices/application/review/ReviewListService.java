@@ -25,6 +25,9 @@ public class ReviewListService implements ListReviewsUseCase {
 
     @Override
     public Mono<PageResult<Review>> handle(ReviewFilter filter, Actor actor) {
+        if (actor == null) {
+            return listAnonymously(filter);
+        }
         boolean ownsHistory = filter.touristId() != null && actor.owns(filter.touristId());
         if (!actor.isAdmin()) {
             boolean staff = actor.isGestora() || actor.isPrestadora();
@@ -43,6 +46,27 @@ public class ReviewListService implements ListReviewsUseCase {
                 filter.itemId(),
                 filter.touristId(),
                 status,
+                filter.page(),
+                filter.size()));
+    }
+
+    /**
+     * MS04-05: un anonimo solo puede listar resenas publicadas y no puede filtrar por turista.
+     */
+    private Mono<PageResult<Review>> listAnonymously(ReviewFilter filter) {
+        if (filter.status() != null && filter.status() != ReviewStatus.PUBLISHED) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Only administrators can list reviews with status " + filter.status()));
+        }
+        if (filter.touristId() != null) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Only administrators can list another tourist's reviews"));
+        }
+        return reviewRepository.findAll(new ReviewFilter(
+                filter.itemType(),
+                filter.itemId(),
+                null,
+                ReviewStatus.PUBLISHED,
                 filter.page(),
                 filter.size()));
     }

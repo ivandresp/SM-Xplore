@@ -79,9 +79,11 @@ public class ReservationController {
     public Mono<ReservationAvailabilityResponse> availability(
             @RequestParam UUID serviceId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant bookedFor,
-            @RequestParam(defaultValue = "1") int people
+            @RequestParam(defaultValue = "1") int people,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return availabilityUseCase.handle(serviceId, bookedFor, people)
+        Actor actor = jwtUserResolver.resolve(jwt);
+        return availabilityUseCase.handle(serviceId, bookedFor, people, actor)
                 .map(webMapper::toResponse);
     }
 

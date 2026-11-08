@@ -45,7 +45,7 @@ public class NotificationContactController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         Actor actor = jwtUserResolver.resolve(jwt);
-        return contactService.upsert(userId, request.email(), actor)
+        return contactService.upsert(userId, request.email(), request.confirm(), actor)
                 .map(webMapper::toResponse);
     }
 
