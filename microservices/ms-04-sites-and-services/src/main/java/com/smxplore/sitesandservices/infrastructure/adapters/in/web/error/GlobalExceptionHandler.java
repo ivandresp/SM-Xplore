@@ -222,8 +222,13 @@ public class GlobalExceptionHandler {
             IllegalArgumentException exception,
             ServerWebExchange exchange
     ) {
-        String detail = exception.getMessage() == null ? "Invalid argument." : exception.getMessage();
-        return error(HttpStatus.BAD_REQUEST, "Invalid request", detail, exchange);
+        // MS04-13: el mensaje de una IllegalArgumentException puede describir detalles internos
+        // (conversiones de BigDecimal/Decimal128, paginación, UUID...). Solo se registra en el log;
+        // el cliente recibe un detalle genérico.
+        log.warn("Invalid argument while processing {}: {}",
+                exchange.getRequest().getPath().value(), exception.getMessage());
+        return error(HttpStatus.BAD_REQUEST, "Invalid request",
+                "The request contains an invalid value.", exchange);
     }
 
     @ExceptionHandler(DataAccessException.class)

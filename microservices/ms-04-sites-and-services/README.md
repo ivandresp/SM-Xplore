@@ -395,7 +395,34 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - El filtro de precio de servicios valida importes no negativos, `priceMin <= priceMax`, tope de
   100 000 000 y un offset máximo de 10 000 (`400` con mensaje). Hay índices `status+price` y
   `site.id+price` en `ServiceDocument`.
+- Los `IllegalArgumentException` no controlados responden `400` con un detalle genérico
+  ("The request contains an invalid value.") y el mensaje interno solo se registra en el log, para
+  no exponer detalles de conversiones o de implementación (MS04-13).
 - Swagger declara el esquema `bearerAuth` para enviar el JWT desde la UI.
+
+### Consistencia de snapshots de catálogo y servicios (MS04-14)
+
+Los servicios guardan snapshots de catálogo (`site.name`, `zone.name`, `zone.status`,
+`categoryName`) para no depender de ms-04 en cada lectura. Esos snapshots se refrescan al renombrar
+un sitio, al cambiar el nombre o el estado de una zona y al renombrar una categoría, mediante los
+flujos de actualización ya existentes.
+
+Riesgo aceptado (fase informativa): el cambio de estado de un sitio (`SiteChangeStatusService`) no
+propaga el estado a los snapshots de sus servicios y el listado público de servicios solo filtra por
+el estado del propio servicio (más la visibilidad por rol descrita arriba). Por tanto, un servicio
+`PUBLISHED` puede seguir apareciendo en `GET /api/v1/services` aunque su sitio pase a
+`DRAFT`/`INACTIVE` o su zona quede `INACTIVE`. El flujo de reservas sí vuelve a validar el sitio y la
+zona en el momento de reservar (`SITE_NOT_PUBLISHED`) y ms-05 debe validar la visibilidad del sitio
+antes de mostrar un servicio.
+
+Impacto bajo (inconsistencia de visibilidad y de snapshots; sin explotación directa). Se documenta en
+lugar de corregirse en esta fase porque la corrección requiere una decisión de producto (si los
+servicios deben desaparecer cuando su sitio se despublica y qué hacer con los ya existentes) y un
+backfill de MongoDB. Corrección recomendada para una fase posterior:
+
+1. Añadir `site.status` al snapshot del servicio y refrescarlo al cambiar el estado del sitio.
+2. Filtrar los listados públicos por `site.status = PUBLISHED` y `zone.status != INACTIVE`.
+3. Tratar los documentos antiguos sin `site.status` como visibles durante la transición.
 
 ## Kafka y contrato
 
