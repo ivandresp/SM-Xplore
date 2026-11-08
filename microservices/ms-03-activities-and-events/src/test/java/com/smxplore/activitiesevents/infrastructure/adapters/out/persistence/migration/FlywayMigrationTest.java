@@ -30,6 +30,8 @@ class FlywayMigrationTest {
         try (var connection = connection(); var statement = connection.createStatement()) {
             statement.execute("DROP SCHEMA public CASCADE");
             statement.execute("CREATE SCHEMA public");
+            // V9 crea pg_trgm en public: al borrar el esquema quedaria registrada pero vacia.
+            statement.execute("DROP EXTENSION IF EXISTS pg_trgm");
         }
     }
 
@@ -322,8 +324,58 @@ class FlywayMigrationTest {
         }
     }
 
+    @Test
+    void catalogSearchHasTrigramIndexes() throws Exception {
+        flyway().migrate();
+
+        try (var connection = connection()) {
+            assertThat(extensionExists(connection, "pg_trgm")).isTrue();
+            assertThat(indexDefinition(connection, "actividad_name_trgm_idx"))
+                    .containsIgnoringCase("using gin")
+                    .containsIgnoringCase("translate")
+                    .contains("gin_trgm_ops");
+            assertThat(indexDefinition(connection, "evento_name_trgm_idx"))
+                    .containsIgnoringCase("using gin")
+                    .containsIgnoringCase("translate")
+                    .contains("gin_trgm_ops");
+        }
+    }
+
+    @Test
+    void catalogSearchMigrationSkipsTrigramSetupWithoutExtensionPrivilege() throws Exception {
+        var limitedUser = "ms03_flyway_limited";
+        var limitedPassword = "ms03-flyway-limited";
+
+        try (var connection = connection(); var statement = connection.createStatement()) {
+            statement.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ms03_flyway_limited') THEN
+                            CREATE ROLE ms03_flyway_limited LOGIN PASSWORD 'ms03-flyway-limited';
+                        ELSE
+                            ALTER ROLE ms03_flyway_limited WITH LOGIN PASSWORD 'ms03-flyway-limited';
+                        END IF;
+                    END $$;
+                    """);
+            statement.execute("GRANT CONNECT ON DATABASE " + POSTGRES.getDatabaseName() + " TO ms03_flyway_limited");
+            statement.execute("GRANT USAGE, CREATE ON SCHEMA public TO ms03_flyway_limited");
+        }
+
+        flyway(limitedUser, limitedPassword).migrate();
+
+        try (var connection = connection(limitedUser, limitedPassword)) {
+            assertThat(extensionExists(connection, "pg_trgm")).isFalse();
+            assertThat(indexExists(connection, "actividad_name_trgm_idx")).isFalse();
+            assertThat(indexExists(connection, "evento_name_trgm_idx")).isFalse();
+        }
+    }
+
     private static Flyway flyway() {
         return baseFlyway().load();
+    }
+
+    private static Flyway flyway(String username, String password) {
+        return baseFlyway(username, password).load();
     }
 
     private static Flyway flywayAtV1() {
@@ -335,15 +387,24 @@ class FlywayMigrationTest {
     }
 
     private static org.flywaydb.core.api.configuration.FluentConfiguration baseFlyway() {
+        return baseFlyway(POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private static org.flywaydb.core.api.configuration.FluentConfiguration baseFlyway(
+            String username, String password) {
         return Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .dataSource(POSTGRES.getJdbcUrl(), username, password)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion("0");
     }
 
     private static Connection connection() throws SQLException {
-        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        return connection(POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private static Connection connection(String username, String password) throws SQLException {
+        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), username, password);
     }
 
     private static void insertActivity(Connection connection, UUID activityId) throws SQLException {
@@ -423,6 +484,26 @@ class FlywayMigrationTest {
             statement.setString(1, table);
             try (var result = statement.executeQuery()) {
                 return result.next() && result.getObject(1) != null;
+            }
+        }
+    }
+
+    private static boolean extensionExists(Connection connection, String extension) throws SQLException {
+        try (var statement = connection.prepareStatement(
+                "SELECT 1 FROM pg_extension WHERE extname = ?")) {
+            statement.setString(1, extension);
+            try (var result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    private static String indexDefinition(Connection connection, String index) throws SQLException {
+        try (var statement = connection.prepareStatement(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?")) {
+            statement.setString(1, index);
+            try (var result = statement.executeQuery()) {
+                return result.next() ? result.getString(1) : "";
             }
         }
     }

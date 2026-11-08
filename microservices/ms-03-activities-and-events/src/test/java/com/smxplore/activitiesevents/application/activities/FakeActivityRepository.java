@@ -56,9 +56,42 @@ class FakeActivityRepository implements ActivityRepositoryPort {
     }
 
     @Override
-    public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
-        var matches = publishedList().collectList().block();
-        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    public Mono<PageResult<Activity>> findPage(com.smxplore.activitiesevents.domain.model.activity.ActivityFilter filter) {
+        var found = findAll()
+                .filter(activity -> filter.status() == null || activity.getStatus() == filter.status())
+                .filter(activity -> !hasText(filter.search())
+                        || activity.getName().toLowerCase().contains(filter.search().trim().toLowerCase()))
+                .filter(activity -> !hasText(filter.category())
+                        || filter.category().equalsIgnoreCase(activity.getCategory()))
+                .filter(activity -> filter.siteId() == null || filter.siteId().equals(activity.getSiteId()))
+                .filter(activity -> filter.guideId() == null || filter.guideId().equals(activity.getGuideId()))
+                .filter(activity -> filter.priceMin() == null
+                        || activity.getPrice().compareTo(filter.priceMin()) >= 0)
+                .filter(activity -> filter.priceMax() == null
+                        || activity.getPrice().compareTo(filter.priceMax()) <= 0)
+                .filter(activity -> filter.startsAfter() == null
+                        || !activity.getStartsAt().isBefore(filter.startsAfter()))
+                .filter(activity -> filter.startsBefore() == null
+                        || !activity.getStartsAt().isAfter(filter.startsBefore()))
+                .collectList().block();
+        var matches = new java.util.ArrayList<>(found == null ? List.<Activity>of() : found);
+        matches.sort(sortComparator(filter.sort()));
+        return Mono.just(page(matches, filter.page(), filter.size()));
+    }
+
+    private static Comparator<Activity> sortComparator(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> Comparator.comparing(Activity::getPrice);
+            case "priceDesc" -> Comparator.comparing(Activity::getPrice).reversed();
+            case "dateAsc" -> Comparator.comparing(Activity::getStartsAt);
+            case "dateDesc" -> Comparator.comparing(Activity::getStartsAt).reversed();
+            case "durationAsc" -> Comparator.comparing(Activity::getDurationMinutes);
+            default -> Comparator.comparing(Activity::getName);
+        };
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Flux<Activity> publishedList() {

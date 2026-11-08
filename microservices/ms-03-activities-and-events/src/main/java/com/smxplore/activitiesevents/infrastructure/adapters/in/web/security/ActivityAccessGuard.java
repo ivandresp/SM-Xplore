@@ -33,6 +33,16 @@ public class ActivityAccessGuard {
         return role(jwt) == UserRole.GUIDE;
     }
 
+    /** Admins and destination managers see the whole catalogue, published or not. */
+    public boolean isStaff(Jwt jwt) {
+        return isStaffRole(role(jwt));
+    }
+
+    /** Solo el admin puede enumerar borradores de cualquier guía. */
+    public boolean isAdmin(Jwt jwt) {
+        return role(jwt) == UserRole.ADMIN;
+    }
+
     /** Staff and the guide of record may read an activity in any state. */
     public boolean canViewUnpublished(Activity activity, Jwt jwt) {
         var role = role(jwt);
@@ -73,8 +83,7 @@ public class ActivityAccessGuard {
         }
     }
 
-    private boolean isStaff(Jwt jwt) {
-        var role = role(jwt);
+    private static boolean isStaffRole(UserRole role) {
         return role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER;
     }
 

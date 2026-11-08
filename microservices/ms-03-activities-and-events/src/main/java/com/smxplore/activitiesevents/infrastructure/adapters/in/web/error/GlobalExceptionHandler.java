@@ -41,6 +41,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundExce
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -141,8 +142,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ServerWebInputException.class)
-    public ResponseEntity<ProblemDetail> handleUnreadableBody(ServerWebInputException exception,
-                                                              ServerWebExchange exchange) {
+    public ResponseEntity<ProblemDetail> handleWebInput(ServerWebInputException exception,
+                                                        ServerWebExchange exchange) {
+        // Un query param que no convierte (por ejemplo status=BASURA) llega envuelto aqui.
+        if (exception.getCause() instanceof TypeMismatchException) {
+            return build(HttpStatus.BAD_REQUEST, "Some filter is not valid.", exchange, "INVALID_FILTER");
+        }
         return build(HttpStatus.BAD_REQUEST, exception.getReason(), exchange);
     }
 
@@ -159,10 +164,18 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ProblemDetail> build(HttpStatus status, String message, ServerWebExchange exchange) {
+        return build(status, message, exchange, null);
+    }
+
+    private ResponseEntity<ProblemDetail> build(HttpStatus status, String message, ServerWebExchange exchange,
+                                                String code) {
         var detail = message == null || message.isBlank() ? status.getReasonPhrase() : message;
         var problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(status.getReasonPhrase());
         problem.setInstance(URI.create(exchange.getRequest().getPath().value()));
+        if (code != null) {
+            problem.setProperty("code", code);
+        }
         return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(problem);

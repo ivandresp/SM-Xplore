@@ -2,11 +2,14 @@ package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sq
 
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventFilter;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.entity.EventEntity;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.mapper.EventPersistenceMapper;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.repository.EventR2dbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -67,12 +70,103 @@ public class EventPostgresAdapter implements EventRepositoryPort {
     }
 
     @Override
-    public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
-        var offset = (long) page * size;
-        return Mono.zip(
-                        repository.findPagePublished(size, offset).map(mapper::toDomain).collectList(),
-                        repository.countPublished().defaultIfEmpty(0L))
-                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
+    public Mono<PageResult<Event>> findPage(EventFilter filter) {
+        var conditions = new StringBuilder(" FROM evento WHERE 1 = 1");
+        if (filter.status() != null) {
+            conditions.append(" AND status = :status");
+        }
+        if (hasText(filter.search())) {
+            conditions.append(" AND translate(lower(name), 'áéíóúüñ', 'aeiouun')"
+                    + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%'");
+        }
+        if (hasText(filter.category())) {
+            conditions.append(" AND translate(lower(category), 'áéíóúüñ', 'aeiouun')"
+                    + " LIKE '%' || translate(lower(:category), 'áéíóúüñ', 'aeiouun') || '%'");
+        }
+        if (filter.siteId() != null) {
+            conditions.append(" AND sitio_id = :siteId");
+        }
+        if (filter.managerId() != null) {
+            conditions.append(" AND manager_id = :managerId");
+        }
+        if (filter.priceMin() != null) {
+            conditions.append(" AND price >= :priceMin");
+        }
+        if (filter.priceMax() != null) {
+            conditions.append(" AND price <= :priceMax");
+        }
+        if (filter.startsAfter() != null) {
+            conditions.append(" AND starts_at >= :startsAfter");
+        }
+        if (filter.startsBefore() != null) {
+            conditions.append(" AND starts_at <= :startsBefore");
+        }
+
+        var client = template.getDatabaseClient();
+        var offset = (long) filter.page() * filter.size();
+        var rows = bind(client.sql("SELECT *" + conditions + " ORDER BY " + orderBy(filter.sort())
+                + " LIMIT :limit OFFSET :offset"), filter)
+                .bind("limit", filter.size())
+                .bind("offset", offset)
+                .map((row, metadata) -> template.getConverter().read(EventEntity.class, row))
+                .all()
+                .map(mapper::toDomain)
+                .collectList();
+        var total = bind(client.sql("SELECT COUNT(*)" + conditions), filter)
+                .map((row, metadata) -> row.get(0, Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+
+        return Mono.zip(rows, total)
+                .map(result -> new PageResult<>(result.getT1(), filter.page(), filter.size(), result.getT2()));
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    /** Orden por lista blanca: solo columnas conocidas, nunca texto del cliente. */
+    private static String orderBy(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> "price, id";
+            case "priceDesc" -> "price DESC, id";
+            case "name" -> "name, id";
+            case "dateDesc" -> "starts_at DESC, id";
+            default -> "starts_at, id";
+        };
+    }
+
+    /** Bindea solo los filtros presentes: R2DBC no puede inferir el tipo de un parámetro nulo. */
+    private static DatabaseClient.GenericExecuteSpec bind(DatabaseClient.GenericExecuteSpec spec,
+                                                         EventFilter filter) {
+        if (filter.status() != null) {
+            spec = spec.bind("status", filter.status().name());
+        }
+        if (hasText(filter.search())) {
+            spec = spec.bind("search", filter.search().trim());
+        }
+        if (hasText(filter.category())) {
+            spec = spec.bind("category", filter.category().trim());
+        }
+        if (filter.siteId() != null) {
+            spec = spec.bind("siteId", filter.siteId());
+        }
+        if (filter.managerId() != null) {
+            spec = spec.bind("managerId", filter.managerId());
+        }
+        if (filter.priceMin() != null) {
+            spec = spec.bind("priceMin", filter.priceMin());
+        }
+        if (filter.priceMax() != null) {
+            spec = spec.bind("priceMax", filter.priceMax());
+        }
+        if (filter.startsAfter() != null) {
+            spec = spec.bind("startsAfter", filter.startsAfter());
+        }
+        if (filter.startsBefore() != null) {
+            spec = spec.bind("startsBefore", filter.startsBefore());
+        }
+        return spec;
     }
 
     @Override

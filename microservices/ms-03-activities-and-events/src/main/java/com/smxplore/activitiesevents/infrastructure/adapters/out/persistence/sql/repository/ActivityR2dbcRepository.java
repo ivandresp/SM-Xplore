@@ -15,13 +15,6 @@ public interface ActivityR2dbcRepository extends ReactiveCrudRepository<Activity
     Flux<ActivityEntity> findAllByCategoryIgnoreCase(String category);
 
     @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' "
-            + "ORDER BY name, id LIMIT :limit OFFSET :offset")
-    Flux<ActivityEntity> findPagePublished(int limit, long offset);
-
-    @Query("SELECT COUNT(*) FROM actividad WHERE status = 'PUBLISHED'")
-    Mono<Long> countPublished();
-
-    @Query("SELECT * FROM actividad WHERE status = 'PUBLISHED' "
             + "AND lower(category) = lower(:category) ORDER BY name, id LIMIT :limit OFFSET :offset")
     Flux<ActivityEntity> findPagePublishedByCategory(String category, int limit, long offset);
 

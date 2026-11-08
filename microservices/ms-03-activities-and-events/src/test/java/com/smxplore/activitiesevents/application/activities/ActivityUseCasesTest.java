@@ -233,10 +233,40 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
         activityRepo.save(validActivity(UUID.randomUUID()).toBuilder().status(ActivityStatus.PUBLISHED).build()).block();
 
-        var page = Objects.requireNonNull(consultActivities.handle(0, 20).block());
+        var page = Objects.requireNonNull(consultActivities
+                .handle(com.smxplore.activitiesevents.domain.model.activity.ActivityFilter.published(0, 20)).block());
 
         assertEquals(2, page.content().size());
         assertEquals(2, page.total());
+    }
+
+    @Test
+    void shouldFilterActivitiesByNamePriceAndDate() {
+        var start = Instant.parse("2026-11-01T10:00:00Z");
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder()
+                .status(ActivityStatus.PUBLISHED)
+                .name("Bahia al atardecer")
+                .price(new BigDecimal("50000.00"))
+                .startsAt(start)
+                .endsAt(start.plusSeconds(3600))
+                .build()).block();
+        activityRepo.save(validActivity(UUID.randomUUID()).toBuilder()
+                .status(ActivityStatus.PUBLISHED)
+                .name("Senderismo")
+                .price(new BigDecimal("200000.00"))
+                .startsAt(start.plusSeconds(86_400))
+                .endsAt(start.plusSeconds(90_000))
+                .build()).block();
+
+        var filter = new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
+                "bahia", ActivityStatus.PUBLISHED, null, null, null,
+                new BigDecimal("10000.00"), new BigDecimal("100000.00"),
+                start, start.plusSeconds(7200), null, 0, 20);
+
+        var page = Objects.requireNonNull(consultActivities.handle(filter).block());
+
+        assertEquals(1, page.content().size());
+        assertEquals("Bahia al atardecer", page.content().getFirst().getName());
     }
 
     @Test

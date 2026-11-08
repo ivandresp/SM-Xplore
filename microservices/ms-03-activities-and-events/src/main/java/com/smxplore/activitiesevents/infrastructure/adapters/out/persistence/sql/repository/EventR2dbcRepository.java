@@ -15,13 +15,6 @@ public interface EventR2dbcRepository extends ReactiveCrudRepository<EventEntity
     Flux<EventEntity> findByNameContainingIgnoreCase(String name);
 
     @Query("SELECT * FROM evento WHERE status = 'PUBLISHED' "
-            + "ORDER BY starts_at, id LIMIT :limit OFFSET :offset")
-    Flux<EventEntity> findPagePublished(int limit, long offset);
-
-    @Query("SELECT COUNT(*) FROM evento WHERE status = 'PUBLISHED'")
-    Mono<Long> countPublished();
-
-    @Query("SELECT * FROM evento WHERE status = 'PUBLISHED' "
             + "AND name ILIKE '%' || :name || '%' ORDER BY starts_at, id LIMIT :limit OFFSET :offset")
     Flux<EventEntity> searchPagePublishedByName(String name, int limit, long offset);
 

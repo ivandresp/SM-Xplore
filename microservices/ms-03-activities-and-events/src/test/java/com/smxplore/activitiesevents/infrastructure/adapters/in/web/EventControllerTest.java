@@ -80,9 +80,19 @@ class EventControllerTest {
 
     @Autowired
     void configureClient(WebTestClient webTestClient) {
+        this.baseClient = webTestClient;
         this.webTestClient = webTestClient
                 .mutateWith(SecurityMockServerConfigurers.mockJwt()
                         .jwt(jwt -> jwt.subject(UUID.randomUUID().toString()).claim("role", "ADMIN")))
+                .mutateWith(SecurityMockServerConfigurers.csrf());
+    }
+
+    private WebTestClient baseClient;
+
+    private WebTestClient managerClient(UUID managerId) {
+        return baseClient
+                .mutateWith(SecurityMockServerConfigurers.mockJwt()
+                        .jwt(jwt -> jwt.subject(managerId.toString()).claim("role", "DESTINATION_MANAGER")))
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 
@@ -242,14 +252,63 @@ class EventControllerTest {
 
     @Test
     void findAllReturnsEvents() {
-        given(consultEventsUseCase.handle(0, 20)).willReturn(Mono.just(
-                new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.DRAFT)), 0, 20, 1L)));
+        given(consultEventsUseCase.handle(argThat(filter ->
+                filter.status() == EventStatus.PUBLISHED && filter.page() == 0 && filter.size() == 20)))
+                .willReturn(Mono.just(
+                        new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/events")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.content.length()").isEqualTo(1);
+    }
+
+    @Test
+    void findAllPassesTheFiltersToTheUseCase() {
+        var siteId = UUID.randomUUID();
+        given(consultEventsUseCase.handle(argThat(filter ->
+                "kayak".equals(filter.search())
+                        && "Nautical".equals(filter.category())
+                        && siteId.equals(filter.siteId())
+                        && new BigDecimal("50000").compareTo(filter.priceMin()) == 0
+                        && filter.startsBefore() != null
+                        && "dateDesc".equals(filter.sort()))))
+                .willReturn(Mono.just(
+                        new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.PUBLISHED)), 0, 20, 1L)));
+
+        webTestClient.get().uri(builder -> builder.path("/api/v1/events")
+                        .queryParam("search", "kayak")
+                        .queryParam("category", "Nautical")
+                        .queryParam("siteId", siteId)
+                        .queryParam("priceMin", "50000")
+                        .queryParam("startsBefore", "2026-12-31T23:59:59Z")
+                        .queryParam("sort", "dateDesc")
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.content.length()").isEqualTo(1);
+    }
+
+    @Test
+    void managerListsEveryOwnEventWhenFilteringByOwnManagerId() {
+        var managerId = UUID.randomUUID();
+        given(consultEventsUseCase.handle(argThat(filter ->
+                filter.status() == null && managerId.equals(filter.managerId()))))
+                .willReturn(Mono.just(new PageResult<>(List.of(), 0, 20, 0L)));
+
+        managerClient(managerId).get().uri("/api/v1/events?managerId={managerId}", managerId)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void managerCannotListAnotherManagersUnpublishedEvents() {
+        managerClient(UUID.randomUUID()).get()
+                .uri("/api/v1/events?status=DRAFT&managerId={managerId}", UUID.randomUUID())
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

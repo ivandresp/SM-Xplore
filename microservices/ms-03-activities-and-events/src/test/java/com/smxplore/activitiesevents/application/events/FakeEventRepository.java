@@ -50,9 +50,41 @@ class FakeEventRepository implements EventRepositoryPort {
     }
 
     @Override
-    public Mono<PageResult<Event>> findPublishedPage(int page, int size) {
-        var matches = publishedList().collectList().block();
-        return Mono.just(page(matches == null ? List.of() : matches, page, size));
+    public Mono<PageResult<Event>> findPage(com.smxplore.activitiesevents.domain.model.event.EventFilter filter) {
+        var found = findAll()
+                .filter(event -> filter.status() == null || event.getStatus() == filter.status())
+                .filter(event -> !hasText(filter.search())
+                        || event.getName().toLowerCase().contains(filter.search().trim().toLowerCase()))
+                .filter(event -> !hasText(filter.category())
+                        || filter.category().equalsIgnoreCase(event.getCategory()))
+                .filter(event -> filter.siteId() == null || filter.siteId().equals(event.getSiteId()))
+                .filter(event -> filter.managerId() == null || filter.managerId().equals(event.getManagerId()))
+                .filter(event -> filter.priceMin() == null
+                        || event.getPrice().compareTo(filter.priceMin()) >= 0)
+                .filter(event -> filter.priceMax() == null
+                        || event.getPrice().compareTo(filter.priceMax()) <= 0)
+                .filter(event -> filter.startsAfter() == null
+                        || !event.getStartsAt().isBefore(filter.startsAfter()))
+                .filter(event -> filter.startsBefore() == null
+                        || !event.getStartsAt().isAfter(filter.startsBefore()))
+                .collectList().block();
+        var matches = new java.util.ArrayList<>(found == null ? List.<Event>of() : found);
+        matches.sort(sortComparator(filter.sort()));
+        return Mono.just(page(matches, filter.page(), filter.size()));
+    }
+
+    private static Comparator<Event> sortComparator(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> Comparator.comparing(Event::getPrice);
+            case "priceDesc" -> Comparator.comparing(Event::getPrice).reversed();
+            case "name" -> Comparator.comparing(Event::getName);
+            case "dateDesc" -> Comparator.comparing(Event::getStartsAt).reversed();
+            default -> Comparator.comparing(Event::getStartsAt);
+        };
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Flux<Event> publishedList() {

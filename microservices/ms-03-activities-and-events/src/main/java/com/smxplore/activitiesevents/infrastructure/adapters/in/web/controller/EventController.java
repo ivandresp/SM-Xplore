@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.activitiesevents.application.events.ResolveEventSiteUseCase;
 import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventFilter;
 import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.usecases.event.ChangeEventStatusUseCasePort;
@@ -40,6 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @RestController
@@ -117,13 +120,47 @@ public class EventController {
     }
 
     @GetMapping
-    @Operation(summary = "List all events")
-    public Mono<PageResponse<EventResponse>> findAll(@RequestParam(defaultValue = "0") int page,
-                                                     @RequestParam(defaultValue = "20") int size) {
+    @Operation(summary = "List and filter events")
+    public Mono<PageResponse<EventResponse>> findAll(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) EventStatus status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) UUID managerId,
+            @RequestParam(required = false) BigDecimal priceMin,
+            @RequestParam(required = false) BigDecimal priceMax,
+            @RequestParam(required = false) Instant startsAfter,
+            @RequestParam(required = false) Instant startsBefore,
+            @RequestParam(required = false) String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return consultEventsUseCase.handle(page, size)
+        var filter = new EventFilter(search, resolveStatus(status, managerId, jwt), category, siteId, managerId,
+                priceMin, priceMax, startsAfter, startsBefore, sort, page, size);
+        return consultEventsUseCase.handle(filter)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
+    }
+
+    /**
+     * El catálogo público solo ve lo publicado; la gestora de un evento puede
+     * listar todo lo suyo y el admin, cualquier estado.
+     */
+    private EventStatus resolveStatus(EventStatus requested, UUID managerId, Jwt jwt) {
+        var role = role(jwt);
+        var owns = managerId != null && jwt != null && jwt.getSubject() != null
+                && managerId.toString().equals(jwt.getSubject());
+        if (requested == null) {
+            return role == UserRole.DESTINATION_MANAGER && owns ? null : EventStatus.PUBLISHED;
+        }
+        if (requested == EventStatus.PUBLISHED
+                || role == UserRole.ADMIN
+                || (role == UserRole.DESTINATION_MANAGER && owns)) {
+            return requested;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Only the manager of record or an admin can list unpublished events.");
     }
 
     @GetMapping("/search")
