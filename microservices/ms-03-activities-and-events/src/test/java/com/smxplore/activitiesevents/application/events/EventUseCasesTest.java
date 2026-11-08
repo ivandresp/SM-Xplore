@@ -141,10 +141,27 @@ class EventUseCasesTest {
         eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
         eventRepo.save(eventWith(UUID.randomUUID(), "City Walking Tour").toBuilder().status(EventStatus.PUBLISHED).build()).block();
 
-        var page = Objects.requireNonNull(consultEvents.handle(0, 20).block());
+        var page = Objects.requireNonNull(consultEvents
+                .handle(com.smxplore.activitiesevents.domain.model.event.EventFilter.published(0, 20)).block());
 
         assertEquals(2, page.content().size());
         assertEquals(2, page.total());
+    }
+
+    @Test
+    void shouldFilterEventsByStatusAndCategory() {
+        eventRepo.save(eventWith(UUID.randomUUID(), "Sunset Kayak Tour")
+                .toBuilder().status(EventStatus.PUBLISHED).build()).block();
+        eventRepo.save(eventWith(UUID.randomUUID(), "Draft Concert")
+                .toBuilder().status(EventStatus.DRAFT).category("Musica").build()).block();
+
+        var filter = new com.smxplore.activitiesevents.domain.model.event.EventFilter(
+                null, EventStatus.DRAFT, "Musica", null, null, null, null, null, null, 0, 20);
+
+        var page = Objects.requireNonNull(consultEvents.handle(filter).block());
+
+        assertEquals(1, page.content().size());
+        assertEquals("Draft Concert", page.content().getFirst().getName());
     }
 
     @Test

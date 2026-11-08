@@ -1,12 +1,15 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
+import com.smxplore.activitiesevents.domain.model.activity.ActivityFilter;
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
+import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.entity.ActivityEntity;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.mapper.ActivityPersistenceMapper;
 import com.smxplore.activitiesevents.infrastructure.adapters.out.persistence.sql.repository.ActivityR2dbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -72,12 +75,90 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
     }
 
     @Override
-    public Mono<PageResult<Activity>> findPublishedPage(int page, int size) {
-        var offset = (long) page * size;
-        return Mono.zip(
-                        repository.findPagePublished(size, offset).map(mapper::toDomain).collectList(),
-                        repository.countPublished().defaultIfEmpty(0L))
-                .map(result -> new PageResult<>(result.getT1(), page, size, result.getT2()));
+    public Mono<PageResult<Activity>> findPage(ActivityFilter filter) {
+        var conditions = new StringBuilder(" FROM actividad WHERE 1 = 1");
+        if (filter.status() != null) {
+            conditions.append(" AND status = :status");
+        }
+        if (hasText(filter.search())) {
+            conditions.append(" AND translate(lower(name), 'áéíóúüñ', 'aeiouun')"
+                    + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%'");
+        }
+        if (hasText(filter.category())) {
+            conditions.append(" AND lower(category) = lower(:category)");
+        }
+        if (filter.siteId() != null) {
+            conditions.append(" AND sitio_id = :siteId");
+        }
+        if (filter.guideId() != null) {
+            conditions.append(" AND guia_id = :guideId");
+        }
+        if (filter.priceMin() != null) {
+            conditions.append(" AND price >= :priceMin");
+        }
+        if (filter.priceMax() != null) {
+            conditions.append(" AND price <= :priceMax");
+        }
+        if (filter.startsAfter() != null) {
+            conditions.append(" AND starts_at >= :startsAfter");
+        }
+        if (filter.startsBefore() != null) {
+            conditions.append(" AND starts_at <= :startsBefore");
+        }
+
+        var client = template.getDatabaseClient();
+        var offset = (long) filter.page() * filter.size();
+        var rows = bind(client.sql("SELECT *" + conditions + " ORDER BY name, id LIMIT :limit OFFSET :offset"), filter)
+                .bind("limit", filter.size())
+                .bind("offset", offset)
+                .map((row, metadata) -> template.getConverter().read(ActivityEntity.class, row))
+                .all()
+                .map(mapper::toDomain)
+                .collectList();
+        var total = bind(client.sql("SELECT COUNT(*)" + conditions), filter)
+                .map((row, metadata) -> row.get(0, Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+
+        return Mono.zip(rows, total)
+                .map(result -> new PageResult<>(result.getT1(), filter.page(), filter.size(), result.getT2()));
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    /** Bindea solo los filtros presentes: R2DBC no puede inferir el tipo de un parámetro nulo. */
+    private static DatabaseClient.GenericExecuteSpec bind(DatabaseClient.GenericExecuteSpec spec,
+                                                         ActivityFilter filter) {
+        if (filter.status() != null) {
+            spec = spec.bind("status", filter.status().name());
+        }
+        if (hasText(filter.search())) {
+            spec = spec.bind("search", filter.search().trim());
+        }
+        if (hasText(filter.category())) {
+            spec = spec.bind("category", filter.category().trim());
+        }
+        if (filter.siteId() != null) {
+            spec = spec.bind("siteId", filter.siteId());
+        }
+        if (filter.guideId() != null) {
+            spec = spec.bind("guideId", filter.guideId());
+        }
+        if (filter.priceMin() != null) {
+            spec = spec.bind("priceMin", filter.priceMin());
+        }
+        if (filter.priceMax() != null) {
+            spec = spec.bind("priceMax", filter.priceMax());
+        }
+        if (filter.startsAfter() != null) {
+            spec = spec.bind("startsAfter", filter.startsAfter());
+        }
+        if (filter.startsBefore() != null) {
+            spec = spec.bind("startsBefore", filter.startsBefore());
+        }
+        return spec;
     }
 
     @Override

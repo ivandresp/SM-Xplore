@@ -310,14 +310,62 @@ class ActivityControllerTest {
 
     @Test
     void findAllReturnsActivities() {
-        given(consultActivitiesUseCase.handle(0, 20)).willReturn(Mono.just(
-                new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)), 0, 20, 1L)));
+        given(consultActivitiesUseCase.handle(argThat(filter ->
+                filter.status() == ActivityStatus.PUBLISHED && filter.page() == 0 && filter.size() == 20)))
+                .willReturn(Mono.just(
+                        new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.DRAFT)), 0, 20, 1L)));
 
         webTestClient.get().uri("/api/v1/activities")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.content.length()").isEqualTo(1);
+    }
+
+    @Test
+    void findAllPassesTheFiltersToTheUseCase() {
+        var siteId = UUID.randomUUID();
+        given(consultActivitiesUseCase.handle(argThat(filter ->
+                "tour".equals(filter.search())
+                        && "Tour".equals(filter.category())
+                        && siteId.equals(filter.siteId())
+                        && new BigDecimal("1000").compareTo(filter.priceMin()) == 0
+                        && new BigDecimal("90000").compareTo(filter.priceMax()) == 0
+                        && Instant.parse("2026-11-01T00:00:00Z").equals(filter.startsAfter())
+                        && filter.startsBefore() == null)))
+                .willReturn(Mono.just(
+                        new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.PUBLISHED)), 0, 20, 1L)));
+
+        webTestClient.get().uri(builder -> builder.path("/api/v1/activities")
+                        .queryParam("search", "tour")
+                        .queryParam("category", "Tour")
+                        .queryParam("siteId", siteId)
+                        .queryParam("priceMin", "1000")
+                        .queryParam("priceMax", "90000")
+                        .queryParam("startsAfter", "2026-11-01T00:00:00Z")
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.content.length()").isEqualTo(1);
+    }
+
+    @Test
+    void guideListsEveryOwnActivityWhenFilteringByOwnGuideId() {
+        given(consultActivitiesUseCase.handle(argThat(filter ->
+                filter.status() == null && GUIDE_ID.equals(filter.guideId()))))
+                .willReturn(Mono.just(new PageResult<>(List.of(), 0, 20, 0L)));
+
+        guideClient().get().uri("/api/v1/activities?guideId={guideId}", GUIDE_ID)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void guideCannotListAnotherGuidesUnpublishedActivities() {
+        guideClient().get().uri("/api/v1/activities?status=DRAFT&guideId={guideId}", UUID.randomUUID())
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

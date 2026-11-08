@@ -363,8 +363,95 @@ class ApplicationContextTest {
     }
 
     @Test
-    void publishedEventPagesAreLimitedInTheDatabase() {
+    void eventFiltersAreAppliedInTheDatabase() {
         var now = Instant.now();
+        var sharedSite = UUID.randomUUID();
+        eventRepository.save(Event.builder()
+                .siteId(sharedSite)
+                .name("Filtro Bahía Kayak")
+                .category("Nautico")
+                .status(EventStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("50000.00"))
+                .maxCapacity(10)
+                .startsAt(now.plusSeconds(86_400))
+                .endsAt(now.plusSeconds(90_000))
+                .build()).block();
+        eventRepository.save(Event.builder()
+                .siteId(sharedSite)
+                .name("Filtro Bahía Concierto")
+                .category("Musica")
+                .status(EventStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("200000.00"))
+                .maxCapacity(10)
+                .startsAt(now.plusSeconds(86_400))
+                .endsAt(now.plusSeconds(90_000))
+                .build()).block();
+        eventRepository.save(Event.builder()
+                .siteId(sharedSite)
+                .name("Filtro Bahía Borrador")
+                .category("Nautico")
+                .status(EventStatus.DRAFT)
+                .price(new java.math.BigDecimal("50000.00"))
+                .maxCapacity(10)
+                .startsAt(now.plusSeconds(86_400))
+                .endsAt(now.plusSeconds(90_000))
+                .build()).block();
+
+        var filter = new com.smxplore.activitiesevents.domain.model.event.EventFilter(
+                "Filtro Bahia", EventStatus.PUBLISHED, "Nautico", sharedSite, null,
+                new java.math.BigDecimal("10000.00"), new java.math.BigDecimal("100000.00"), null, null, 0, 20);
+        var page = eventRepository.findPage(filter).block();
+
+        assertThat(page).isNotNull();
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().getFirst().getName()).isEqualTo("Filtro Bahía Kayak");
+        assertThat(page.total()).isEqualTo(1);
+    }
+
+    @Test
+    void activityFiltersAreAppliedInTheDatabase() {
+        var now = Instant.now();
+        var start = now.plusSeconds(86_400);
+        var sharedSite = UUID.randomUUID();
+        activityRepository.save(Activity.builder()
+                .siteId(sharedSite)
+                .guideId(UUID.randomUUID())
+                .name("Filtro Bahia Buceo")
+                .category("Aventura")
+                .status(ActivityStatus.PUBLISHED)
+                .price(new java.math.BigDecimal("50000.00"))
+                .maxCapacity(10)
+                .durationMinutes(90)
+                .startsAt(start)
+                .endsAt(start.plusSeconds(5_400))
+                .build()).block();
+        activityRepository.save(Activity.builder()
+                .siteId(sharedSite)
+                .guideId(UUID.randomUUID())
+                .name("Filtro Bahia Buceo")
+                .category("Aventura")
+                .status(ActivityStatus.DRAFT)
+                .price(new java.math.BigDecimal("50000.00"))
+                .maxCapacity(10)
+                .durationMinutes(90)
+                .startsAt(start)
+                .endsAt(start.plusSeconds(5_400))
+                .build()).block();
+
+        var filter = new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
+                "Filtro Bahia", ActivityStatus.PUBLISHED, "Aventura", sharedSite, null,
+                new java.math.BigDecimal("10000.00"), new java.math.BigDecimal("100000.00"),
+                start.minusSeconds(3_600), start.plusSeconds(3_600), 0, 20);
+        var page = activityRepository.findPage(filter).block();
+
+        assertThat(page).isNotNull();
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().getFirst().getStatus()).isEqualTo(ActivityStatus.PUBLISHED);
+        assertThat(page.total()).isEqualTo(1);
+    }
+
+    @Test
+    void publishedEventPagesAreLimitedInTheDatabase() {        var now = Instant.now();
         for (int index = 0; index < 3; index++) {
             eventRepository.save(Event.builder()
                     .siteId(UUID.randomUUID())
@@ -379,8 +466,8 @@ class ApplicationContextTest {
                     .build()).block();
         }
 
-        var first = eventRepository.findPublishedPage(0, 2).block();
-        var second = eventRepository.findPublishedPage(1, 2).block();
+        var first = eventRepository.findPage(com.smxplore.activitiesevents.domain.model.event.EventFilter.published(0, 2)).block();
+        var second = eventRepository.findPage(com.smxplore.activitiesevents.domain.model.event.EventFilter.published(1, 2)).block();
 
         assertThat(first).isNotNull();
         assertThat(first.content()).hasSize(2);

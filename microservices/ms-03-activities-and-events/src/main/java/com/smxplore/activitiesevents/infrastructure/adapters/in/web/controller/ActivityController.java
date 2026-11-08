@@ -1,5 +1,6 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.activitiesevents.domain.model.activity.ActivityFilter;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.CancelActivityUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ChangeActivityStatusUseCasePort;
@@ -41,6 +42,8 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @RestController
@@ -85,13 +88,48 @@ public class ActivityController {
     }
 
     @GetMapping
-    @Operation(summary = "List all activities")
-    public Mono<PageResponse<ActivityResponse>> findAll(@RequestParam(defaultValue = "0") int page,
-                                                        @RequestParam(defaultValue = "20") int size) {
+    @Operation(summary = "List and filter activities")
+    public Mono<PageResponse<ActivityResponse>> findAll(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) ActivityStatus status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) UUID guideId,
+            @RequestParam(required = false) BigDecimal priceMin,
+            @RequestParam(required = false) BigDecimal priceMax,
+            @RequestParam(required = false) Instant startsAfter,
+            @RequestParam(required = false) Instant startsBefore,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
         PaginationLimits.validatePage(page);
         PaginationLimits.validateSize(size);
-        return consultActivitiesUseCase.handle(page, size)
+        var filter = new ActivityFilter(search, resolveStatus(status, guideId, jwt), category, siteId, guideId,
+                priceMin, priceMax, startsAfter, startsBefore, page, size);
+        return consultActivitiesUseCase.handle(filter)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
+    }
+
+    /**
+     * El catálogo público solo ve lo publicado; el guía de una actividad puede
+     * listar todo lo suyo y el staff, cualquier estado.
+     */
+    private ActivityStatus resolveStatus(ActivityStatus requested, UUID guideId, Jwt jwt) {
+        if (requested == null) {
+            return accessGuard.isGuide(jwt) && ownsGuide(guideId, jwt) ? null : ActivityStatus.PUBLISHED;
+        }
+        if (requested == ActivityStatus.PUBLISHED
+                || accessGuard.isStaff(jwt)
+                || (accessGuard.isGuide(jwt) && ownsGuide(guideId, jwt))) {
+            return requested;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Only staff or the guide of record can list unpublished activities.");
+    }
+
+    private static boolean ownsGuide(UUID guideId, Jwt jwt) {
+        return guideId != null && jwt != null && jwt.getSubject() != null
+                && guideId.toString().equals(jwt.getSubject());
     }
 
     @GetMapping("/search")

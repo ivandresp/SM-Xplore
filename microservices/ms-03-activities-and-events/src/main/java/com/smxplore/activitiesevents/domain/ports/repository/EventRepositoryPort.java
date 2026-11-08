@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.domain.ports.repository;
 
 import com.smxplore.activitiesevents.domain.model.common.PageResult;
 import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventFilter;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -23,8 +24,8 @@ public interface EventRepositoryPort {
 
     Flux<Event> findByIds(Collection<UUID> ids);
 
-    /** One page of the published catalogue, limited by the database. */
-    Mono<PageResult<Event>> findPublishedPage(int page, int size);
+    /** One page of the catalogue with the filters applied by the database. */
+    Mono<PageResult<Event>> findPage(EventFilter filter);
 
     Flux<Event> searchByName(String name);
 
