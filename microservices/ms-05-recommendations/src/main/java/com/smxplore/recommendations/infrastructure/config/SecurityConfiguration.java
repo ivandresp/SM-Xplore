@@ -41,6 +41,7 @@ public class SecurityConfiguration {
                         .permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/recommendations").hasAnyRole("TOURIST", "ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/preferences").hasRole("TOURIST")
                         .pathMatchers(HttpMethod.POST, "/api/v1/preferences").hasRole("TOURIST")
                         .pathMatchers(HttpMethod.DELETE, "/api/v1/preferences/**").hasRole("TOURIST")
                         .pathMatchers(HttpMethod.POST, "/api/v1/interactions/view/**").hasRole("TOURIST")

@@ -2,6 +2,7 @@ package com.smxplore.recommendations.infrastructure.config;
 
 import com.smxplore.recommendations.application.interaction.RegisterViewService;
 import com.smxplore.recommendations.application.preference.AddPreferenceService;
+import com.smxplore.recommendations.application.preference.ConsultPreferencesService;
 import com.smxplore.recommendations.application.preference.RemovePreferenceService;
 import com.smxplore.recommendations.application.projection.ProjectionService;
 import com.smxplore.recommendations.application.recommendation.DiversitySelector;
@@ -11,6 +12,7 @@ import com.smxplore.recommendations.application.reindex.ReindexService;
 import com.smxplore.recommendations.application.retention.ProcessedEventRetentionService;
 import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.in.ConsultPreferencesUseCase;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
 import com.smxplore.recommendations.domain.ports.in.HandleProjectionEventUseCase;
 import com.smxplore.recommendations.domain.ports.in.PurgeProcessedEventsUseCase;
@@ -125,6 +127,11 @@ public class BeanConfiguration {
     @Bean
     public RemovePreferenceUseCase removePreferenceUseCase(RecommendationGraphPort graphPort) {
         return new RemovePreferenceService(graphPort);
+    }
+
+    @Bean
+    public ConsultPreferencesUseCase consultPreferencesUseCase(RecommendationGraphPort graphPort) {
+        return new ConsultPreferencesService(graphPort);
     }
 
     @Bean

@@ -24,6 +24,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -201,6 +202,48 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
                 .delete().uri("/api/v1/preferences/" + TestSeedData.CULTURA)
                 .exchange()
                 .expectStatus().isNoContent();
+    }
+
+    @Test
+    void listsPreferences() {
+        UUID tourist = UUID.randomUUID();
+
+        for (UUID category : new UUID[]{TestSeedData.CULTURA, TestSeedData.MUSICA}) {
+            clientFor(tourist, "TOURIST")
+                    .post().uri("/api/v1/preferences")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("""
+                            {"categoryId":"%s"}
+                            """.formatted(category))
+                    .exchange()
+                    .expectStatus().isCreated();
+        }
+
+        List<PreferenceResponse> preferences = clientFor(tourist, "TOURIST")
+                .get().uri("/api/v1/preferences")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(preferences)
+                .extracting(PreferenceResponse::categoryId)
+                .containsExactlyInAnyOrder(TestSeedData.CULTURA, TestSeedData.MUSICA);
+
+        for (UUID category : new UUID[]{TestSeedData.CULTURA, TestSeedData.MUSICA}) {
+            clientFor(tourist, "TOURIST")
+                    .delete().uri("/api/v1/preferences/" + category)
+                    .exchange()
+                    .expectStatus().isNoContent();
+        }
+    }
+
+    @Test
+    void preferencesRequireAuthentication() {
+        webTestClient.get().uri("/api/v1/preferences")
+                .exchange()
+                .expectStatus().isUnauthorized();
     }
 
     @Test

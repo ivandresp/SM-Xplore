@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.application.reservations.ConsultManagerRese
 import com.smxplore.activitiesevents.application.reservations.ConsultOneReservationUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByGuideUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByItemUseCase;
+import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByProviderUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByStatusUseCase;
 import com.smxplore.activitiesevents.application.reservations.ConsultReservationsByTouristUseCase;
 import com.smxplore.activitiesevents.application.reservations.CreateReservationUseCase;
@@ -20,6 +21,7 @@ import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelRes
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByItemUseCasePort;
+import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByProviderUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByStatusUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByTouristUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CreateReservationUseCasePort;
@@ -87,6 +89,12 @@ public class ReservationUseCaseConfiguration {
     public ConsultReservationsByItemUseCasePort consultReservationsByItemUseCase(
             ReservationRepositoryPort reservationRepository) {
         return new ConsultReservationsByItemUseCase(reservationRepository);
+    }
+
+    @Bean
+    public ConsultReservationsByProviderUseCasePort consultReservationsByProviderUseCase(
+            ReservationRepositoryPort reservationRepository) {
+        return new ConsultReservationsByProviderUseCase(reservationRepository);
     }
 
     @Bean

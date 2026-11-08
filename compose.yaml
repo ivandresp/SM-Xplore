@@ -389,7 +389,7 @@ services:
       EVENTS_CONSUMER_ENABLED: "true"
       CATALOG_EXPORT_BASE_URL: http://ms-04:8080
       MS03_BASE_URL: http://ms-03:8082
-      SEED_ENABLED: ${SEED_ENABLED:-true}
+      SEED_ENABLED: ${SEED_ENABLED:-false}
       JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:

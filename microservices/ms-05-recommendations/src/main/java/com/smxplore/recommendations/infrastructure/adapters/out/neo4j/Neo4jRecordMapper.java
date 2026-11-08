@@ -1,6 +1,8 @@
 package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
+import com.smxplore.recommendations.domain.model.preference.Preference;
+import com.smxplore.recommendations.domain.model.preference.PreferenceSource;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
 import org.neo4j.driver.Record;
@@ -34,6 +36,18 @@ final class Neo4jRecordMapper {
                 .build();
         candidate.validate();
         return candidate;
+    }
+
+    static Preference mapPreference(Record record) {
+        Preference preference = Preference.builder()
+                .touristId(uuid(record, "touristId"))
+                .categoryId(uuid(record, "categoryId"))
+                .weight(doubleValue(record, "weight"))
+                .source(PreferenceSource.valueOf(string(record, "source")))
+                .updatedAt(nullableInstant(record, "updatedAt"))
+                .build();
+        preference.validate();
+        return preference;
     }
 
     private static String string(Record record, String key) {
