@@ -31,29 +31,30 @@ public class SiteUpdateService implements UpdateSiteUseCase {
         return lookup.site(site.siteId())
                 .flatMap(existing -> access.requireSiteOwner(existing, actor))
                 .flatMap(existing -> lookup.siteContext(site.categoryId(), site.zoneId())
-                        .flatMap(context -> {
-                            Site updated = existing.toBuilder()
-                                    .name(site.name())
-                                    .description(site.description())
-                                    .categoryId(context.category().categoryId())
-                                    .categoryName(context.category().name())
-                                    .zoneId(context.zone().zoneId())
-                                    .zoneName(context.zone().name())
-                                    .zoneStatus(context.zone().status())
-                                    .latitude(site.latitude())
-                                    .longitude(site.longitude())
-                                    .photosUrls(site.photosUrls())
-                                    .maxCapacity(site.maxCapacity())
-                                    .availability(site.availability())
-                                    .updatedAt(Instant.now(clock))
-                                    .build();
-                            updated.validate();
-                            return outboxWriter.save(
-                                    siteRepository.save(updated),
-                                    eventFactory::siteChanged,
-                                    correlationId
-                            ).flatMap(saved -> refreshServiceSnapshots(existing, saved));
-                        }));
+                        .flatMap(context -> access.requireZoneAssignment(context.zone(), actor)
+                                .flatMap(zone -> {
+                                    Site updated = existing.toBuilder()
+                                            .name(site.name())
+                                            .description(site.description())
+                                            .categoryId(context.category().categoryId())
+                                            .categoryName(context.category().name())
+                                            .zoneId(zone.zoneId())
+                                            .zoneName(zone.name())
+                                            .zoneStatus(zone.status())
+                                            .latitude(site.latitude())
+                                            .longitude(site.longitude())
+                                            .photosUrls(site.photosUrls())
+                                            .maxCapacity(site.maxCapacity())
+                                            .availability(site.availability())
+                                            .updatedAt(Instant.now(clock))
+                                            .build();
+                                    updated.validate();
+                                    return outboxWriter.save(
+                                            siteRepository.save(updated),
+                                            eventFactory::siteChanged,
+                                            correlationId
+                                    ).flatMap(saved -> refreshServiceSnapshots(existing, saved));
+                                })));
     }
 
     /**

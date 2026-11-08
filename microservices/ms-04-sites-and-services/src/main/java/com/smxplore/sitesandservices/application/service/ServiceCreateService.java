@@ -32,6 +32,7 @@ public class ServiceCreateService implements CreateServiceUseCase {
         return access.requireProvider(actor)
                 .flatMap(provider -> lookup.serviceContext(
                                 service.siteId(), service.categoryId(), service.zoneId())
+                        .flatMap(context -> access.requireServiceCatalogScope(context, actor))
                         .flatMap(context -> {
                             Instant now = Instant.now(clock);
                             Service created = service.toBuilder()

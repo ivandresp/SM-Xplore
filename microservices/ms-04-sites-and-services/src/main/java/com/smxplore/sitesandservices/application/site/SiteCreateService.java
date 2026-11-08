@@ -29,23 +29,24 @@ public class SiteCreateService implements CreateSiteUseCase {
     public Mono<Site> handle(Site site, Actor actor, String correlationId) {
         return access.requireManager(actor)
                 .flatMap(manager -> lookup.siteContext(site.categoryId(), site.zoneId())
-                        .flatMap(context -> {
-                            Instant now = Instant.now(clock);
-                            Site created = site.toBuilder()
-                                    .siteId(UUID.randomUUID())
-                                    .managerId(manager.userId())
-                                    .categoryName(context.category().name())
-                                    .zoneName(context.zone().name())
-                                    .zoneStatus(context.zone().status())
-                                    .createdAt(now)
-                                    .updatedAt(now)
-                                    .build();
-                            created.validate();
-                            return outboxWriter.save(
-                                    siteRepository.save(created),
-                                    eventFactory::siteChanged,
-                                    correlationId
-                            );
-                        }));
+                        .flatMap(context -> access.requireZoneAssignment(context.zone(), actor)
+                                .flatMap(zone -> {
+                                    Instant now = Instant.now(clock);
+                                    Site created = site.toBuilder()
+                                            .siteId(UUID.randomUUID())
+                                            .managerId(manager.userId())
+                                            .categoryName(context.category().name())
+                                            .zoneName(zone.name())
+                                            .zoneStatus(zone.status())
+                                            .createdAt(now)
+                                            .updatedAt(now)
+                                            .build();
+                                    created.validate();
+                                    return outboxWriter.save(
+                                            siteRepository.save(created),
+                                            eventFactory::siteChanged,
+                                            correlationId
+                                    );
+                                })));
     }
 }

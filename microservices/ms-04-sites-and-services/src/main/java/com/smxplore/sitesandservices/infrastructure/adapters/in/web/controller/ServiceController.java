@@ -106,8 +106,13 @@ public class ServiceController {
 
     @GetMapping("/{serviceId}")
     @Operation(summary = "Get a tourist service")
-    public Mono<ServiceResponse> get(@PathVariable UUID serviceId) {
-        return getUseCase.handle(serviceId).map(webMapper::toResponse);
+    public Mono<ServiceResponse> get(
+            @PathVariable UUID serviceId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        // MS04-02: sin JWT solo se exponen servicios publicados; su proveedor y el ADMIN ven borradores.
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
+        return getUseCase.handle(serviceId, actor).map(webMapper::toResponse);
     }
 
     @GetMapping
@@ -123,12 +128,15 @@ public class ServiceController {
             @RequestParam(required = false) BigDecimal priceMin,
             @RequestParam(required = false) BigDecimal priceMax,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt
     ) {
         ServiceFilter filter = new ServiceFilter(
                 categoryId, zoneId, siteId, providerId, status, type, search,
                 priceMin, priceMax, page, size);
-        return listUseCase.handle(filter)
+        // El listado es publico: sin JWT solo se devuelven servicios PUBLISHED (MS04-02).
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
+        return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));
     }
 }

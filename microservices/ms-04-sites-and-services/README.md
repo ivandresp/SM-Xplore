@@ -209,11 +209,11 @@ una red o puerto privado.
 | PUT | `/api/v1/sites/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar sitio |
 | PATCH | `/api/v1/sites/{id}/status` | `DESTINATION_MANAGER`, `ADMIN` | Cambiar estado |
 | PATCH | `/api/v1/sites/{id}/zone` | `DESTINATION_MANAGER`, `ADMIN` | Asignar zona |
-| GET | `/api/v1/sites` | autenticado | Listar/filtrar sitios |
+| GET | `/api/v1/sites` | público / autenticado | Listar sitios; el anónimo solo ve `PUBLISHED` |
 | POST | `/api/v1/services` | `SERVICE_PROVIDER`, `ADMIN` | Crear servicio |
 | PUT | `/api/v1/services/{id}` | `SERVICE_PROVIDER`, `ADMIN` | Actualizar servicio |
 | PATCH | `/api/v1/services/{id}/status` | `SERVICE_PROVIDER`, `ADMIN` | Cambiar estado |
-| GET | `/api/v1/services` | autenticado | Listar/filtrar servicios |
+| GET | `/api/v1/services` | público / autenticado | Listar servicios; el anónimo solo ve `PUBLISHED` |
 | POST | `/api/v1/reviews` | `TOURIST` | Crear reseña de sitio o servicio |
 | POST | `/api/v1/reviews/{id}/response` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Responder reseña |
 | PATCH | `/api/v1/reviews/{id}/status` | `ADMIN` | Moderar reseña |
@@ -242,7 +242,11 @@ Filtros disponibles:
 
 - Sitios: `categoryId`, `zoneId`, `status`, `search`, `managerId`, `page`, `size`.
   `managerId` exige `ADMIN` o la propia `DESTINATION_MANAGER`; cualquier otro valor devuelve `403`.
+  Las peticiones anónimas solo ven sitios `PUBLISHED`; la gestora dueña o el `ADMIN` pueden filtrar
+  por otros estados.
 - Servicios: `categoryId`, `zoneId`, `siteId`, `providerId`, `status`, `type`, `search`, `page`, `size`.
+  Las peticiones anónimas solo ven servicios `PUBLISHED`; la prestadora dueña o el `ADMIN` pueden
+  filtrar por otros estados.
 - Zonas: `status`, `type`, `search`, `page`, `size`.
 - Reseñas: `itemType`, `itemId`, `touristId`, `status`, `page`, `size`.
 - Reportes: `status`, `reviewId`, `page`, `size`.
@@ -354,6 +358,13 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - La taxonomía de categorías es global: solo `ADMIN` crea y actualiza categorías (regla HTTP y
   comprobación `requireTaxonomyAdmin` en la capa de aplicación). Antes de guardar se valida el
   árbol completo: el padre debe existir, no puede haber ciclos y la profundidad máxima es 50.
+- El catálogo público (`GET`/`HEAD` de sitios y servicios) solo expone contenido `PUBLISHED`.
+  El detalle de un borrador o inactivo responde `404` salvo para su gestora/proveedor dueño o un
+  `ADMIN`, y los listados anónimos no pueden pedir otro estado.
+- Una prestadora solo puede vincular servicios a sitios `PUBLISHED`, de la zona indicada en el
+  servicio y administrados por el gestor de esa zona; si no, la operación responde `400`.
+- Una gestora solo puede crear o mover sus sitios a zonas que ella misma administra; el `ADMIN`
+  puede asignar cualquier zona y el resto recibe `403`.
 - Los indicadores de demanda se limitan por rol: prestadora a sus servicios y gestora a sus
   zonas/sitios.
 - En reservas, un turista solo crea, consulta y cancela las suyas. Como todos los ítems de una
@@ -594,7 +605,9 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   (RF66) al proveedor y a la gestora del sitio: umbral `ceil(capacidad * threshold-percent / 100)`
   configurable con `app.notifications.low-capacity.*`, id determinista (replay idempotente) y
   entrega best-effort que nunca tumba la reserva.
-- La clave compartida del endpoint interno de contactos de ms-01 se pasa con `INTERNAL_API_KEY`.
+- El endpoint interno de contactos de ms-01 exige firma HMAC por servicio (MS01-11). La clave
+  maestra con la que se derivan las claves por servicio se pasa en ms-01 con `INTERNAL_API_KEY`;
+  hoy no hay ningún llamador dentro del repo, así que ms-04 no firma esas peticiones.
 - ms-04 es el **hub de notificaciones** del sistema (P3-4 firmada): ningún otro servicio envía
   correo ni push. El hub decide el destinatario con los ids que trae el evento
   (`bookings.reservation.changed` v1/v2) y entrega por los canales configurados:

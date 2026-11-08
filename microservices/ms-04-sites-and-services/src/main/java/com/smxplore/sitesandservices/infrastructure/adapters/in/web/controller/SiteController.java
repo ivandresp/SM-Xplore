@@ -125,8 +125,13 @@ public class SiteController {
 
     @GetMapping("/{siteId}")
     @Operation(summary = "Get a tourist site")
-    public Mono<SiteResponse> get(@PathVariable UUID siteId) {
-        return getUseCase.handle(siteId).map(webMapper::toResponse);
+    public Mono<SiteResponse> get(
+            @PathVariable UUID siteId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        // MS04-02: sin JWT solo se exponen sitios publicados; su gestora y el ADMIN ven borradores.
+        Actor actor = jwtUserResolver.resolveOptional(jwt);
+        return getUseCase.handle(siteId, actor).map(webMapper::toResponse);
     }
 
     @GetMapping
@@ -143,7 +148,7 @@ public class SiteController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         SiteFilter filter = new SiteFilter(categoryId, zoneId, status, search, managerId, page, size);
-        // El listado es publico: sin JWT no hay actor y el filtro por gestora no aplica.
+        // El listado es publico: sin JWT no hay actor y solo se devuelven sitios PUBLISHED (MS04-02).
         Actor actor = jwtUserResolver.resolveOptional(jwt);
         return listUseCase.handle(filter, actor)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));

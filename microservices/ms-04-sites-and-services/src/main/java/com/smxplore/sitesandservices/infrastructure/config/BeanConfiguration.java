@@ -377,8 +377,8 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public GetSiteUseCase getSiteUseCase(CatalogLookup lookup) {
-        return new SiteGetService(lookup);
+    public GetSiteUseCase getSiteUseCase(CatalogLookup lookup, CatalogAccess access) {
+        return new SiteGetService(lookup, access);
     }
 
     @Bean
@@ -444,13 +444,16 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public GetServiceUseCase getServiceUseCase(CatalogLookup lookup) {
-        return new ServiceGetService(lookup);
+    public GetServiceUseCase getServiceUseCase(CatalogLookup lookup, CatalogAccess access) {
+        return new ServiceGetService(lookup, access);
     }
 
     @Bean
-    public ListServicesUseCase listServicesUseCase(ServiceRepositoryPort serviceRepository) {
-        return new ServiceListService(serviceRepository);
+    public ListServicesUseCase listServicesUseCase(
+            ServiceRepositoryPort serviceRepository,
+            CatalogAccess access
+    ) {
+        return new ServiceListService(serviceRepository, access);
     }
 
     @Bean
