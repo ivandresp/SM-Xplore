@@ -212,6 +212,63 @@ services:
   # ---------------------------------------------------------------------------------------------
   # Kafka (un broker KRaft) + creación idempotente de tópicos
   # ---------------------------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------------------------
+  # Kafka (un broker KRaft) con SASL_SSL + SCRAM-SHA-512 y autorización por ACLs (PLAT-01)
+  #
+  # Cadena de arranque: kafka-format (formatea kafka_data y siembra el usuario
+  # admin SCRAM) -> kafka (broker con autenticación) -> kafka-init (usuarios por
+  # servicio + ACLs + tópicos) -> servicios.
+  # ---------------------------------------------------------------------------------------------
+  kafka-format:
+    image: ${KAFKA_IMAGE:?}
+    restart: "no"
+    mem_limit: 512m
+    logging: *prod-logging
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        cat > /tmp/kafka-format.properties <<EOF
+        process.roles=broker,controller
+        node.id=1
+        controller.quorum.voters=1@kafka:9093
+        listeners=INTERNAL://:9092,CONTROLLER://:9093
+        advertised.listeners=INTERNAL://kafka:9092
+        listener.security.protocol.map=INTERNAL:SASL_SSL,CONTROLLER:SASL_SSL
+        inter.broker.listener.name=INTERNAL
+        controller.listener.names=CONTROLLER
+        sasl.enabled.mechanisms=SCRAM-SHA-512
+        ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.p12
+        ssl.keystore.password=$${KAFKA_KEYSTORE_PASSWORD}
+        ssl.keystore.type=PKCS12
+        ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12
+        ssl.truststore.password=$${KAFKA_TRUSTSTORE_PASSWORD}
+        ssl.truststore.type=PKCS12
+        log.dirs=/var/lib/kafka/data
+        EOF
+        # --add-scram siembra el usuario admin en la metadata: el broker lo usa
+        # para autenticarse como cliente inter-broker y para el listener del
+        # controller (SCRAM no necesita JAAS del lado servidor).
+        # --ignore-formatted hace el one-shot idempotente si el volumen ya existe.
+        exec /opt/kafka/bin/kafka-storage.sh format \
+          --cluster-id "$${KAFKA_CLUSTER_ID}" \
+          --config /tmp/kafka-format.properties \
+          --add-scram "SCRAM-SHA-512=[name=$${KAFKA_ADMIN_USERNAME},password=$${KAFKA_ADMIN_PASSWORD}]" \
+          --ignore-formatted
+    environment:
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID:?}
+      KAFKA_ADMIN_USERNAME: ${KAFKA_ADMIN_USERNAME:-admin}
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?}
+      KAFKA_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_PASSWORD:?}
+      KAFKA_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    secrets:
+      - source: kafka_keystore
+        target: /etc/kafka/secrets/kafka.keystore.p12
+      - source: kafka_truststore
+        target: /etc/kafka/secrets/kafka.truststore.p12
+
   kafka:
     image: ${KAFKA_IMAGE:?}
     restart: always
@@ -224,8 +281,42 @@ services:
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      # PLAT-01: los dos listeners exigen TLS + SCRAM-SHA-512.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:SASL_SSL,CONTROLLER:SASL_SSL
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Mecanismos SASL habilitados por listener. No se usan las propiedades
+      # listener.name.<listener>.<mecanismo>.sasl.jaas.config: SCRAM-SHA-512 lleva
+      # guiones y la traducción KAFKA_* de la imagen (sustituye "_" por ".") no
+      # permite escribirlas. Con SCRAM el servidor no necesita JAAS (las
+      # credenciales están en la metadata, sembradas por kafka-format); el
+      # sasl.jaas.config global es el que el broker usa como cliente
+      # inter-broker/controller.
+      KAFKA_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_INTERNAL_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_CONTROLLER_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: SCRAM-SHA-512
+      KAFKA_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_ADMIN_USERNAME:-admin}" password="${KAFKA_ADMIN_PASSWORD:?}";'
+      # Credenciales del broker (también las usa el healthcheck para generar su
+      # client.properties); el resto de usuarios los crea kafka-init.
+      KAFKA_ADMIN_USERNAME: ${KAFKA_ADMIN_USERNAME:-admin}
+      KAFKA_ADMIN_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?}
+      # TLS: keystore y truststore montados como secretos (0444, solo lectura).
+      KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.keystore.p12
+      KAFKA_SSL_KEYSTORE_PASSWORD: ${KAFKA_KEYSTORE_PASSWORD:?}
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.p12
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      KAFKA_SSL_TRUSTSTORE_TYPE: PKCS12
+      # Authentication-only: los clientes se autentican con SCRAM sobre TLS; no
+      # hay mTLS de clientes (no se emiten certificados por servicio).
+      KAFKA_SSL_CLIENT_AUTH: "none"
+      # El certificado del broker lleva SAN DNS:kafka, así que la validación de
+      # hostname funciona para las conexiones inter-broker y del controller.
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+      # Autorización: sin ACLs no hay acceso (allow.everyone.if.no.acl.found=false).
+      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+      KAFKA_SUPER_USERS: "User:${KAFKA_ADMIN_USERNAME:-admin}"
       # Producción: los tópicos se crean a mano (kafka-init), nunca al vuelo.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
@@ -236,16 +327,37 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     volumes:
       - kafka_data:/var/lib/kafka/data
+    secrets:
+      - source: kafka_keystore
+        target: /etc/kafka/secrets/kafka.keystore.p12
+      - source: kafka_truststore
+        target: /etc/kafka/secrets/kafka.truststore.p12
+    depends_on:
+      kafka-format:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD-SHELL
-        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+        - |
+          set -e
+          printf '%s\n' \
+            'security.protocol=SASL_SSL' \
+            'sasl.mechanism=SCRAM-SHA-512' \
+            "sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$${KAFKA_ADMIN_USERNAME}\" password=\"$${KAFKA_ADMIN_PASSWORD}\";" \
+            'ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12' \
+            "ssl.truststore.password=$${KAFKA_TRUSTSTORE_PASSWORD}" \
+            'ssl.truststore.type=PKCS12' \
+            > /tmp/healthcheck-client.properties
+          /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 \
+            --command-config /tmp/healthcheck-client.properties >/dev/null 2>&1
       interval: 15s
       timeout: 10s
       retries: 20
       start_period: 40s
 
-  # One-shot: aplica deploy/kafka/topics.env con particiones y replicación (P1-6).
+  # One-shot: usuarios SCRAM + ACLs mínimas (create-acls.sh) y tópicos
+  # (create-topics.sh), autenticándose como admin. Si falla, los servicios no
+  # arrancan (fail-closed).
   kafka-init:
     image: ${KAFKA_IMAGE:?}
     restart: "no"
@@ -253,26 +365,50 @@ services:
     logging: *prod-logging
     entrypoint: ["/bin/bash", "-c"]
     command:
-      - exec bash /scripts/create-topics.sh --bootstrap-server kafka:9092
+      - |
+        set -euo pipefail
+        bash /scripts/render-client-config.sh --out /tmp/admin-client.properties
+        bash /scripts/create-acls.sh --bootstrap-server kafka:9092 --command-config /tmp/admin-client.properties
+        exec bash /scripts/create-topics.sh --bootstrap-server kafka:9092 --command-config /tmp/admin-client.properties
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       TOPICS_FILE: /scripts/topics.env
+      KAFKA_CLIENT_USERNAME: ${KAFKA_ADMIN_USERNAME:-admin}
+      KAFKA_CLIENT_PASSWORD: ${KAFKA_ADMIN_PASSWORD:?}
+      KAFKA_TRUSTSTORE_LOCATION: /etc/kafka/secrets/kafka.truststore.p12
+      KAFKA_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      KAFKA_TRUSTSTORE_TYPE: PKCS12
     volumes:
-      - ../kafka/create-topics.sh:/scripts/create-topics.sh:ro
-      - ../kafka/topics.env:/scripts/topics.env:ro
+      - ../kafka:/scripts:ro
+    secrets:
+      - source: kafka_truststore
+        target: /etc/kafka/secrets/kafka.truststore.p12
     depends_on:
-      kafka:
-        condition: service_healthy
+      # Espera al broker ya autenticado; no a kafka-init (evita un ciclo).
+      kafka: {condition: service_healthy}
 
   kafka-exporter:
     image: ${KAFKA_EXPORTER_IMAGE:?}
     restart: always
     mem_limit: 128m
     logging: *prod-logging
-    command: ["--kafka.server=kafka:9092"]
+    # sarama no lee PKCS12: el exporter usa el CA en PEM y SCRAM-SHA-512.
+    command:
+      - "--kafka.server=kafka:9092"
+      - "--sasl.enabled"
+      - "--sasl.username=${KAFKA_EXPORTER_USERNAME:-kafka-exporter}"
+      - "--sasl.password=${KAFKA_EXPORTER_PASSWORD:?}"
+      - "--sasl.mechanism=scram-sha512"
+      - "--tls.enabled"
+      - "--tls.ca-file=/run/secrets/kafka_ca"
+    secrets:
+      - source: kafka_ca
+        target: /run/secrets/kafka_ca
+    # Arranca cuando kafka-init ha creado el usuario SCRAM del exporter (y sus
+    # ACLs de Describe).
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   # ---------------------------------------------------------------------------------------------
   # Observabilidad: solo red interna, sin puertos publicados
@@ -383,6 +519,8 @@ services:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 15s
@@ -406,6 +544,16 @@ services:
       MS01_BASE_URL: http://ms-01:8081
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
+      # PLAT-01: Kafka de producción exige SASL_SSL + SCRAM-SHA-512. Spring Boot
+      # aplica spring.kafka.properties.* al producer, al consumer y al admin, así
+      # que estas variables cubren la outbox, los consumidores y la declaración
+      # de DLT. El truststore se monta como secreto (solo lectura).
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: SCRAM-SHA-512
+      SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_MS02_USERNAME:-ms-02}" password="${KAFKA_MS02_PASSWORD:?}";'
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /run/secrets/kafka_truststore
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PKCS12
       AUTH_VERSION_ENABLED: "true"
       MONGO_AUTO_INDEX_CREATION: "true"
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
@@ -415,11 +563,15 @@ services:
     secrets:
       - jwt_public_key
       - mongo_ca
+      # PLAT-01: truststore PKCS12 para validar el certificado del broker.
+      - kafka_truststore
     depends_on:
       mongo-init:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       ms-01:
         condition: service_healthy
     healthcheck:
@@ -449,6 +601,14 @@ services:
       FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:?}
       MONGODB_URI: "mongodb://${MONGO_USER_MS03:-ms03_app}:${MONGO_PASSWORD_MS03:?}@mongo1:27017,mongo2:27017,mongo3:27017/reviews?replicaSet=rs0&authSource=reviews&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # PLAT-01: SASL_SSL + SCRAM-SHA-512 (producer de la outbox, consumidor de
+      # catalog.site.changed y el KafkaAdmin que declara catalog.site.changed.DLT).
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: SCRAM-SHA-512
+      SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_MS03_USERNAME:-ms-03}" password="${KAFKA_MS03_PASSWORD:?}";'
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /run/secrets/kafka_truststore
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PKCS12
       OUTBOX_ENABLED: "true"
       SITE_EVENTS_ENABLED: "true"
       SITE_EVENTS_GROUP: ms-03-site-events
@@ -468,6 +628,8 @@ services:
     secrets:
       - jwt_public_key
       - mongo_ca
+      # PLAT-01: truststore PKCS12 para validar el certificado del broker.
+      - kafka_truststore
     depends_on:
       postgres:
         condition: service_healthy
@@ -475,6 +637,8 @@ services:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       ms-01:
         condition: service_healthy
       ms-04:
@@ -501,6 +665,14 @@ services:
       MONGODB_URI: "mongodb://${MONGO_USER_MS04:-ms04_app}:${MONGO_PASSWORD_MS04:?}@mongo1:27017,mongo2:27017,mongo3:27017/smxplore?replicaSet=rs0&authSource=smxplore&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_CONSUMER_GROUP_ID: ms-04-notifications
+      # PLAT-01: SASL_SSL + SCRAM-SHA-512 (producer de catálogo/reservas/reseñas
+      # y consumidor de bookings.reservation.changed con grupo ms-04-notifications).
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: SCRAM-SHA-512
+      SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_MS04_USERNAME:-ms-04}" password="${KAFKA_MS04_PASSWORD:?}";'
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /run/secrets/kafka_truststore
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PKCS12
       NOTIFICATIONS_ENABLED: "true"
       # El correo saliente requiere un SMTP real; se deja apagado hasta configurarlo.
       NOTIFICATIONS_EMAIL_ENABLED: "false"
@@ -521,6 +693,8 @@ services:
     secrets:
       - jwt_public_key
       - mongo_ca
+      # PLAT-01: truststore PKCS12 para validar el certificado del broker.
+      - kafka_truststore
     depends_on:
       postgres:
         condition: service_healthy
@@ -528,6 +702,8 @@ services:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       ms-01:
         condition: service_healthy
     healthcheck:
@@ -555,6 +731,14 @@ services:
       RECOMMENDATIONS_CACHE_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_CONSUMER_GROUP_ID: ms-05-recommendations
+      # PLAT-01: SASL_SSL + SCRAM-SHA-512 (consume los 7 tópicos de
+      # catálogo/actividades/reseñas y escribe sus .dlq).
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: SCRAM-SHA-512
+      SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_MS05_USERNAME:-ms-05}" password="${KAFKA_MS05_PASSWORD:?}";'
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /run/secrets/kafka_truststore
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PKCS12
       EVENTS_CONSUMER_ENABLED: "true"
       EVENTS_RETENTION_ENABLED: "true"
       # Reindexado y feed de export: ms-05 valida el payload de catálogo contra el contrato.
@@ -572,6 +756,8 @@ services:
       - "127.0.0.1:${MS05_PORT:?}:8080"
     secrets:
       - jwt_public_key
+      # PLAT-01: truststore PKCS12 para validar el certificado del broker.
+      - kafka_truststore
     depends_on:
       neo4j:
         condition: service_healthy
@@ -579,6 +765,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       ms-01:
         condition: service_healthy
       ms-04:
@@ -668,3 +856,11 @@ secrets:
     file: ${GATEWAY_TLS_CERT_FILE:?}
   gateway_tls_key:
     file: ${GATEWAY_TLS_KEY_FILE:?}
+  # PLAT-01: material TLS del broker Kafka, generado con deploy/kafka/gen-tls.sh.
+  # kafka_ca va en PEM porque kafka-exporter (sarama) no lee PKCS12.
+  kafka_ca:
+    file: ${KAFKA_CA_FILE:?}
+  kafka_keystore:
+    file: ${KAFKA_KEYSTORE_FILE:?}
+  kafka_truststore:
+    file: ${KAFKA_TRUSTSTORE_FILE:?}

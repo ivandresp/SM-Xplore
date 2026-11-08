@@ -8,8 +8,10 @@ imágenes, pineado por digest, secretos, arranque, verificación y rollback.
   externo (Nginx, Traefik, ALB…) que termina TLS y reenvía a los puertos publicados en
   `127.0.0.1` de este host. Por eso `SECURITY_HSTS_ENABLED=true` y `server.forward-headers-strategy`
   (perfil prod) esperan las cabeceras `X-Forwarded-*` del proxy.
-- **Tópicos y alertas:** `deploy/kafka/create-topics.sh`, `deploy/kafka/topics.env`,
-  `deploy/observability/prometheus.yml` y `deploy/observability/alerts.yml` los mantiene P1-6.
+- **Tópicos y alertas:** `deploy/kafka/topics.env`, `deploy/observability/prometheus.yml` y
+  `deploy/observability/alerts.yml` los mantiene P1-6. El arranque de Kafka **sí** forma parte de
+  este stack: formato del volumen, material TLS, usuarios SCRAM, ACLs y creación de tópicos
+  (`kafka-format` → `kafka` → `kafka-init`; ver sección 10).
 - **Mongo con autenticación/TLS:** los scripts `deploy/mongo/gen-keyfile.sh`, `gen-tls.sh` e
   `init-replica-auth.sh` los mantiene P1-7.
 - **Backups:** P1-7 (`deploy/backup/`).
@@ -22,6 +24,10 @@ imágenes, pineado por digest, secretos, arranque, verificación y rollback.
 | `.env.prod.example` | todas las variables obligatorias; copiar a `.env.prod` |
 | `images.env` | referencias `repo@sha256:...` de las cinco imágenes; lo escribe `pin-images.sh` |
 | `pin-images.sh` | resuelve digests con `docker buildx imagetools inspect` y reescribe `images.env` |
+| `../kafka/gen-tls.sh` | CA + keystore/truststore PKCS12 del broker (una vez por instalación) |
+| `../kafka/create-acls.sh` | usuarios SCRAM y ACLs mínimas por servicio (lo ejecuta `kafka-init`) |
+| `../kafka/render-client-config.sh` | materializa un `client.properties` 0600 desde variables de entorno |
+| `../kafka/client.properties.example` | plantilla/ejemplo para scripts y verificación manual |
 
 ## Servicios y puertos
 
@@ -37,9 +43,12 @@ imágenes, pineado por digest, secretos, arranque, verificación y rollback.
 Ninguna base de datos, broker, caché, Prometheus ni exporter publica puertos: solo se exponen los
 `808x` de las aplicaciones, atados a loopback para que el proxy externo sea el único ingreso.
 
-Orden de arranque: Postgres, Mongo (3 nodos) y Kafka sanos → `mongo-init` (replica set + usuarios)
-→ `ms-01` (crea el admin inicial y firma JWT) → `ms-04` → `ms-02`/`ms-03`/`ms-05`.
-`kafka-init` corre una vez que Kafka está sano y crea los tópicos.
+Orden de arranque: Postgres y Mongo (3 nodos) sanos → `mongo-init` (replica set + usuarios) →
+`kafka-format` (formatea el volumen y siembra el usuario admin SCRAM) → `kafka` (SASL_SSL) →
+`kafka-init` (usuarios SCRAM por servicio, ACLs y tópicos) → `ms-01` (crea el admin inicial y firma
+JWT) → `ms-04` → `ms-02`/`ms-03`/`ms-05`. Los servicios que hablan con Kafka declaran
+`depends_on: kafka-init: service_completed_successfully`: si el aprovisionamiento del broker falla,
+no arrancan (fail-closed).
 
 ## 1. Publicar las imágenes
 
@@ -78,6 +87,11 @@ rm -f /tmp/jwt-private.pem /tmp/jwt-public.pem
 deploy/mongo/gen-keyfile.sh    # deja KEYFILE en deploy/mongo/secrets/
 deploy/mongo/gen-tls.sh        # deja CA + servidor en deploy/mongo/certs/
 
+# Material TLS del broker Kafka (PLAT-01: SASL_SSL). Genera CA, keystore y truststore PKCS12.
+# Guarda los dos passwords en .env.prod (KAFKA_KEYSTORE_PASSWORD / KAFKA_TRUSTSTORE_PASSWORD).
+deploy/kafka/gen-tls.sh --keystore-password "$(openssl rand -hex 16)" \
+                        --truststore-password "$(openssl rand -hex 16)"
+
 # Clave AES para cifrar los secretos TOTP.
 openssl rand -base64 32        # valor de MFA_SECRET_KEY en .env.prod
 ```
@@ -86,6 +100,16 @@ Copia el keyfile y los certificados a `deploy/prod/secrets/` o apunta `MONGO_KEY
 `MONGO_CA_FILE` y `MONGO_SERVER_CERT_FILE` a donde estén. Las rutas de `secrets.file` se resuelven
 relativas a este `compose.yaml`. Los archivos deben existir antes de `docker compose up`.
 Nada de esto se versiona.
+
+Para Kafka, copia el material a `deploy/prod/secrets/kafka/` y ajusta `KAFKA_CA_FILE`,
+`KAFKA_KEYSTORE_FILE` y `KAFKA_TRUSTSTORE_FILE` (en `.env.prod.example` ya apuntan ahí):
+
+```bash
+mkdir -p deploy/prod/secrets/kafka && chmod 700 deploy/prod/secrets/kafka
+install -m 0444 deploy/kafka/certs/kafka-ca.crt          deploy/prod/secrets/kafka/
+install -m 0400 deploy/kafka/certs/kafka.keystore.p12    deploy/prod/secrets/kafka/
+install -m 0444 deploy/kafka/certs/kafka.truststore.p12  deploy/prod/secrets/kafka/
+```
 
 > Aviso de integración: `deploy/mongo/init-replica-auth.sh` (P1-7) recibe por entorno
 > `MONGO_REPLICA_SET`, `MONGO_HOSTS`, `MONGO_TLS`, `MONGO_CA_FILE`, `MONGO_ROOT_USER`,
@@ -126,9 +150,15 @@ for p in 8081 8080 8082 8084 8085; do curl -fsS "http://127.0.0.1:$p/actuator/he
 docker compose -f deploy/prod/compose.yaml exec mongo1 mongosh --quiet \
   --tls --tlsCAFile /tmp/mongo-ca.pem --eval 'rs.status().members.map(m => m.stateStr)'
 
-# Tópicos creados por kafka-init.
-docker compose -f deploy/prod/compose.yaml exec kafka \
-  /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+# Tópicos creados por kafka-init (el broker exige SASL_SSL: usa un client.properties).
+docker compose -f deploy/prod/compose.yaml run --rm --no-deps kafka-init bash -lc \
+  'bash /scripts/render-client-config.sh --out /tmp/admin-client.properties && \
+   bash /scripts/create-acls.sh --list --command-config /tmp/admin-client.properties'
+
+# Usuarios SCRAM y ACLs mínimas (idempotente; lo mismo que ejecuta kafka-init).
+docker compose -f deploy/prod/compose.yaml run --rm --no-deps kafka-init bash -lc \
+  'bash /scripts/render-client-config.sh --out /tmp/admin-client.properties && \
+   bash /scripts/create-acls.sh --command-config /tmp/admin-client.properties'
 
 # Prometheus ve los cinco servicios y los exporters.
 docker compose -f deploy/prod/compose.yaml exec prometheus \
@@ -167,6 +197,14 @@ antes de volver.
 - **Sin HA de aplicación**: una réplica por servicio; el proxy externo debería reintentar.
 - **Secretos en archivos del host**: Docker Compose los monta en `/run/secrets` (0444). Rotarlos es
   recrear contenedores; para producción real, usar el gestor de secretos del orquestador.
+- **Passwords SCRAM de Kafka en `.env.prod`**: Compose no puede inyectar el contenido de un archivo
+  secreto dentro de `sasl.jaas.config`, así que `KAFKA_*_PASSWORD` viajan como variables de entorno
+  (visibles en `docker inspect`). El material TLS, en cambio, sí va por `secrets.file`. En un
+  despliegue real, inyéctalas desde el gestor de secretos del orquestador o un `.env.prod` generado
+  en el arranque, nunca versionado.
+- **Sin mTLS en Kafka** (`KAFKA_SSL_CLIENT_AUTH=none`): los clientes se autentican solo con
+  SCRAM-SHA-512 sobre TLS; si se requiere identidad por certificado, hay que distribuir un
+  certificado por servicio y cambiar `ssl.client.auth` a `required`.
 
 ## 9. Decisiones de despliegue (P3-8 y P3-11, firmadas el 2026-11-06)
 
@@ -186,3 +224,60 @@ antes de volver.
   `paymentMethod` es solo una preferencia declarativa.
 - **Catálogo semilla (P3-10)**: `CATALOG_SEED_ENABLED=false` por defecto en producción; se enciende
   solo en una instalación nueva y se apaga después del primer arranque.
+
+## 10. Kafka: SASL/SCRAM-SHA-512, TLS y ACLs (PLAT-01)
+
+El broker ya no acepta conexiones anónimas: los listeners `INTERNAL` y `CONTROLLER` son `SASL_SSL`
+con `SCRAM-SHA-512` obligatorio, autorizador `StandardAuthorizer`
+(`allow.everyone.if.no.acl.found=false`) y `super.users=User:<KAFKA_ADMIN_USERNAME>`. El arranque
+tiene tres one-shot antes de las aplicaciones:
+
+| Servicio | Cuándo | Qué hace |
+| --- | --- | --- |
+| `kafka-format` | antes del broker | formatea `kafka_data` (`kafka-storage.sh format`) y siembra el usuario admin SCRAM con `--add-scram` |
+| `kafka` | tras `kafka-format` con éxito | broker SASL_SSL; healthcheck autenticado con client.properties temporal |
+| `kafka-init` | tras `kafka` sano | `render-client-config.sh` → `create-acls.sh` (usuarios + ACLs) → `create-topics.sh` |
+
+Las apps declaran `depends_on: kafka-init: service_completed_successfully`: si el aprovisionamiento
+falla, no arrancan (fail-closed).
+
+### Material TLS
+
+`deploy/kafka/gen-tls.sh` crea una CA propia (RSA 4096, 10 años) y un certificado de servidor
+CN=`kafka` con SAN `DNS:kafka,DNS:localhost,IP:127.0.0.1` — `kafka` es el nombre que usan todos los
+clientes dentro de `smxplore-prod`. Genera `kafka-ca.crt` (PEM, para kafka-exporter), 
+`kafka.keystore.p12` (broker) y `kafka.truststore.p12` (clientes). Cópialos a
+`deploy/prod/secrets/kafka/` (sección 3) y guarda los dos passwords en `.env.prod`; Compose monta el
+keystore/truststore en `/etc/kafka/secrets` del broker y el truststore en
+`/run/secrets/kafka_truststore` de las apps.
+
+### Matriz de permisos (mínimo privilegio)
+
+Los usuarios los crea `create-acls.sh`, que también aplica las ACLs. Ningún servicio usa el usuario
+admin: solo `kafka-init` y el healthcheck del broker.
+
+| Usuario | Produce | Consume | Grupo |
+| --- | --- | --- | --- |
+| `ms-02` | `security.report.changed` | — | — |
+| `ms-03` | `activities.*`, `bookings.reservation.changed`, `reviews.review.changed`, `catalog.site.changed.DLT` | `catalog.site.changed` | `ms-03-site-events` |
+| `ms-04` | `catalog.*`, `bookings.reservation.changed`, `reviews.review.changed` | `bookings.reservation.changed` | `ms-04-notifications` |
+| `ms-05` | los 7 `<topic>.dlq` | los 7 tópicos de negocio | `ms-05-recommendations` |
+| `dlq-replay` | los 8 tópicos de negocio | DLQ/DLT | `kafka-dlq-replay` |
+| `kafka-exporter` | — | `Describe` en tópicos, grupos y clúster | — |
+
+Todos los productores reciben además `IdempotentWrite` sobre el clúster (ACL `--cluster`).
+`scripts/kafka-dlq-replay.sh` acepta `--command-config` y `--group`; usa siempre el usuario
+`dlq-replay`, nunca el de un servicio.
+
+### Rotación
+
+- **Password SCRAM de un servicio**: cambia `KAFKA_MS0N_PASSWORD` en `.env.prod`, ejecuta
+  `create-acls.sh` (re-aplica `--alter --add-config`) y recrea solo ese servicio.
+- **Password admin**: cámbialo, re-aplica `create-acls.sh`, recrea `kafka` y el healthcheck lo toma
+  del entorno; `kafka-format` no se re-ejecuta (es idempotente con `--ignore-formatted`).
+- **Material TLS**: regenera con `gen-tls.sh --force` (rota también la CA), copia a
+  `deploy/prod/secrets/kafka/` y recrea `kafka` y todos los clientes en la misma ventana: un cliente
+  con el truststore viejo no valida el certificado nuevo. Sin cortes, rota con una CA nueva en
+  paralelo y un truststore que contenga ambas, y retira la vieja después.
+- **`kafka_data` existente**: no se reformatea; si se pierde el usuario admin, recréalo con
+  `create-acls.sh` usando una sesión admin todavía válida.

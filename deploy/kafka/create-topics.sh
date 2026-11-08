@@ -16,14 +16,22 @@
 #                                     topics.env que vive junto a este script.
 #   --replication-factor <n>          Fuerza el factor de replicacion para todos
 #                                     los topicos (cluster multi-broker).
+#   --command-config <ruta>           client.properties con las credenciales
+#                                     (SASL_SSL + SCRAM-SHA-512 en produccion).
+#                                     Por defecto $KAFKA_CLIENT_CONFIG. Sin este
+#                                     archivo el broker con autenticacion rechaza
+#                                     la conexion (PLAT-01).
 #   --dry-run                         Muestra los comandos sin ejecutarlos.
 #   -h | --help                       Muestra esta ayuda.
 #
 # El script es idempotente: usa --if-not-exists, asi que un topico ya creado no
 # se toca ni provoca error. Sale con codigo 0 cuando todos los topicos existen.
 #
-# Lo invoca deploy/prod/compose.yaml como servicio one-shot `kafka-init`:
-#   command: ["bash", "/scripts/create-topics.sh", "--bootstrap-server", "kafka:9092"]
+# Lo invoca deploy/prod/compose.yaml como servicio one-shot `kafka-init`, que
+# primero materializa el client.properties del usuario admin con
+# deploy/kafka/render-client-config.sh y despues ejecuta este script:
+#   bash /scripts/create-topics.sh --bootstrap-server kafka:9092 \
+#     --command-config /tmp/admin-client.properties
 # con deploy/kafka montado en /scripts y TOPICS_FILE=/scripts/topics.env.
 #
 # Ejemplos:
@@ -31,6 +39,7 @@
 #   deploy/kafka/create-topics.sh --dry-run                        # revisar comandos
 #   deploy/kafka/create-topics.sh --bootstrap-server localhost:29092  # desde el host
 #   deploy/kafka/create-topics.sh --replication-factor 3           # cluster de 3 brokers
+#   deploy/kafka/create-topics.sh --command-config /tmp/admin-client.properties
 #
 set -euo pipefail
 
@@ -39,6 +48,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TOPICS_FILE="${TOPICS_FILE:-${SCRIPT_DIR}/topics.env}"
 BOOTSTRAP_SERVER="${KAFKA_BOOTSTRAP:-kafka:9092}"
 REPLICATION_OVERRIDE="${KAFKA_REPLICATION_FACTOR:-}"
+# client.properties con credenciales (SASL_SSL + SCRAM-SHA-512 en produccion).
+CLIENT_CONFIG="${KAFKA_CLIENT_CONFIG:-}"
 DRY_RUN="false"
 
 usage() {
@@ -57,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --replication-factor)
             REPLICATION_OVERRIDE="${2:?--replication-factor requiere un valor}"
+            shift 2
+            ;;
+        --command-config)
+            CLIENT_CONFIG="${2:?--command-config requiere una ruta}"
             shift 2
             ;;
         --dry-run)
@@ -116,9 +131,22 @@ else
     exit 1
 fi
 
+# Valida el client.properties antes de ejecutar nada. Con docker exec la ruta
+# se resuelve dentro del contenedor (montada), asi que solo se comprueba en el
+# host cuando el comando corre aqui.
+if [[ -n "${CLIENT_CONFIG}" ]]; then
+    if [[ "${IN_CONTAINER}" == "false" && ! -f "${CLIENT_CONFIG}" ]]; then
+        echo "ERROR: no existe el --command-config: ${CLIENT_CONFIG}" >&2
+        exit 1
+    fi
+elif [[ "${DRY_RUN}" != "true" ]]; then
+    echo "AVISO: sin --command-config; solo funciona contra un broker sin autenticacion" >&2
+fi
+
 echo "Broker:        ${BOOTSTRAP_SERVER}"
 echo "Declaracion:   ${TOPICS_FILE}"
 echo "Comando:       ${KAFKA_TOPICS_CMD[*]}"
+echo "Credenciales:  ${CLIENT_CONFIG:-<sin client.properties>}"
 [[ -n "${REPLICATION_OVERRIDE}" ]] && echo "Replicacion:   ${REPLICATION_OVERRIDE} (forzada)"
 echo "Modo:          $([[ "${DRY_RUN}" == "true" ]] && echo 'dry-run (no se crea nada)' || echo 'real')"
 echo
@@ -149,6 +177,9 @@ while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
 
     args=(--bootstrap-server "${BOOTSTRAP_SERVER}" --create --if-not-exists
           --topic "${topic}" --partitions "${partitions}" --replication-factor "${replication}")
+    if [[ -n "${CLIENT_CONFIG}" ]]; then
+        args+=(--command-config "${CLIENT_CONFIG}")
+    fi
     if [[ -n "${retention_ms:-}" ]]; then
         args+=(--config "retention.ms=${retention_ms}")
     fi

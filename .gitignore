@@ -29,6 +29,10 @@ loadtests/results/
 # Certificados TLS generados en el host para el gateway (el stack local usa el volumen gateway_certs)
 deploy/gateway/certs/
 
+# Material TLS del broker Kafka de producción (PLAT-01: deploy/kafka/gen-tls.sh genera CA,
+# keystore y truststore con claves privadas en este directorio)
+deploy/kafka/certs/
+
 # Logs and scratch folders used while diagnosing CI
 *.log
 logs*/

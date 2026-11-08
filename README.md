@@ -110,7 +110,8 @@ separadas por servicio) y los secretos viven en `.env`. En produccion:
   arranque).
 - MongoDB con autenticacion y usuarios por servicio; PostgreSQL con roles acotados.
 - TLS terminado en un gateway/reverse proxy comun.
-- Secretos en un gestor, no en `.env`; Kafka y Redis con autenticacion.
+- Secretos en un gestor, no en `.env`; Kafka con SASL/SCRAM-SHA-512 sobre TLS y ACLs por
+  servicio, y Redis con contraseña (ver `deploy/prod/`).
 
 ## Operacion diaria
 
