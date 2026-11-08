@@ -348,10 +348,15 @@ En produccion, autenticado y con TLS (la CA esta en `/tmp/mongo-ca.pem` dentro
 del nodo). En dev se puede omitir `--tls` y las credenciales:
 
 ```bash
-docker compose -p smxplore-prod -f deploy/prod/compose.yaml exec -T mongo1 \
+# PLAT-11: no teclees la password en la linea de comandos (queda en el historial
+# del shell y en `ps`). Exportala y deja que mongosh la lea del entorno.
+read -rsp 'Password de ms01_app: ' MONGO_PASSWORD; export MONGO_PASSWORD
+docker compose -p smxplore-prod -f deploy/prod/compose.yaml exec -T \
+  -e MONGO_PASSWORD -e MONGO_USER=ms01_app -e MONGO_AUTH_DB=smxplore_reviews mongo1 \
   mongosh --quiet --tls --tlsCAFile /tmp/mongo-ca.pem \
-    "mongodb://ms01_app:PASSWORD@mongo1:27017,mongo2:27017,mongo3:27017/smxplore_reviews?replicaSet=rs0&authSource=smxplore_reviews" \
-    --eval 'db.getCollectionNames().forEach(c => print(c + ": " + db.getCollection(c).getIndexes().map(i => i.name).join(", ")))'
+    "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/smxplore_reviews?replicaSet=rs0" \
+    --eval 'db.getSiblingDB(process.env.MONGO_AUTH_DB).auth(process.env.MONGO_USER, process.env.MONGO_PASSWORD);
+            db.getCollectionNames().forEach(c => print(c + ": " + db.getCollection(c).getIndexes().map(i => i.name).join(", ")))'
 ```
 
 Para una coleccion concreta:

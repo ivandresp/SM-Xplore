@@ -41,7 +41,7 @@ imágenes, pineado por digest, secretos, arranque, verificación y rollback.
 | ms-03-activities-and-events | 8082 | `127.0.0.1:${MS03_PORT}` = 8082 | `/actuator/health` |
 | ms-04-sites-and-services | 8080 | `127.0.0.1:${MS04_PORT}` = 8084 | `/actuator/health` |
 | ms-05-recommendations | 8080 | `127.0.0.1:${MS05_PORT}` = 8085 | `/actuator/health` |
-| gateway | 80 / 443 | `${GATEWAY_HTTP_PORT}` = 80 y `${GATEWAY_HTTPS_PORT}` = 443, **en todas las interfaces** | `/healthz` en `:80` |
+| gateway | 8080 / 8443 (host 80 / 443) | `${GATEWAY_HTTP_PORT}` = 80 → 8080 y `${GATEWAY_HTTPS_PORT}` = 443 → 8443, **en todas las interfaces** | `/healthz` en `:8080` |
 | postgres / mongo1-3 / kafka / redis / neo4j / prometheus / exporters | internos | **ninguno** | healthcheck interno |
 
 Ninguna base de datos, broker, caché, Prometheus ni exporter publica puertos: solo se exponen los
@@ -62,19 +62,25 @@ git tag v1.2.3 && git push origin v1.2.3
 ```
 
 `.github/workflows/release-images.yml` construye los cinco `Dockerfile` en matriz y publica en
-`ghcr.io/ivandresp/sm-xplore-<servicio>` con tres etiquetas: `<sha>`, `<versión>` y `latest`. El
-resumen del job imprime el digest de cada imagen. Los PR no publican nada. También se puede lanzar
-a mano (`workflow_dispatch`) indicando la versión.
+`ghcr.io/ivandresp/sm-xplore-<servicio>` con **dos** etiquetas: `<sha>` y `<versión>` (PLAT-14: no se
+publica `latest`, para que nada consuma una imagen flotante). El resumen del job imprime el digest
+de cada imagen. Los PR no publican nada. También se puede lanzar a mano (`workflow_dispatch`)
+indicando la versión.
 
 ## 2. Pinear los digests
 
 ```bash
 docker login ghcr.io
-deploy/prod/pin-images.sh v1.2.3
+deploy/prod/pin-images.sh v1.2.3               # servicios + infraestructura + gateway
+deploy/prod/pin-images.sh v1.2.3 --apps-only   # solo las cinco imágenes de servicios
 ```
 
-`images.env` queda con las cinco referencias `repo@sha256:...`. El script es idempotente, falla si
-alguna imagen no existe y no toca nada hasta haber resuelto los cinco digests.
+`images.env` queda con las cinco referencias `repo@sha256:...` de los servicios y, salvo
+`--apps-only`, también las de infraestructura y gateway (PLAT-13). El script es idempotente, falla si
+alguna imagen no existe y no toca nada hasta haber resuelto todos los digests. Las imágenes de
+infraestructura se pinean en el tag por defecto de `.env.prod.example`; para subir de versión exporta
+la referencia (`POSTGRES_REF=postgres:17.4-alpine deploy/prod/pin-images.sh v1.2.3`). Las imágenes
+base de los `Dockerfile` de los servicios (`eclipse-temurin`) las fija el dueño de cada servicio.
 
 ## 3. Preparar los secretos
 
@@ -130,6 +136,30 @@ $EDITOR deploy/prod/.env.prod     # reemplazar todos los `cambiar-...`
 
 Todas las variables obligatorias aparecen con `${VAR:?}` en el compose: si falta una, `docker
 compose` falla al interpolar en lugar de arrancar con un valor por defecto inseguro.
+
+### Variables de entorno relevantes (tabla completa de controles)
+
+Las que tienen default en el compose no hace falta declararlas; se listan para que la tabla de
+controles y variables quede cerrada (fase BAJA):
+
+| Variable | Defecto | Servicio | Para qué |
+|---|---|---|---|
+| `NOTIFICATIONS_DLQ_TOPIC` | `kafka.dlq.bookings.reservation.changed` | ms-04 | Topic de descarte del listener de `bookings.reservation.changed` (MS04-11). Lo crea `deploy/kafka/topics.env`. |
+| `REVIEW_REQUIRE_COMPLETED_BOOKING` | `true` | ms-04 | Solo se puede reseñar con una reserva `COMPLETED` (MS04-12). |
+| `REVIEW_AI_FAIL_OPEN` | `false` | ms-01, ms-03, ms-04 | Si el filtro IA no responde: `false` = fail-closed (503, la reseña no se publica); `true` = publicar igual. En prod se fuerza `false`. |
+| `HSTS_ENABLED` | `true` (prod) / `false` (dev) | ms-02 | Cabecera `Strict-Transport-Security` del propio servicio; solo tiene sentido detrás de TLS (el gateway ya la envía). |
+| `MAILPIT_UI_AUTH` | `mailpit:mailpit-dev` (dev) | mailpit | Basic auth de la UI de correo (`usuario:password`); no se usa en producción. |
+| `KAFKA_UI_USER` / `KAFKA_UI_PASSWORD` | `admin` / `kafka-ui-dev` (dev) | kafka-ui | Credenciales de la UI de Kafka (`AUTH_TYPE=LOGIN_FORM`); no se usa en producción. |
+| `NEO4J_INITIALIZE_SCHEMA` | `false` (prod) | ms-05 | Ejecuta el DDL de esquema de Neo4j; paso explícito de bootstrap (MS05-08). |
+| `BOOTSTRAP_ADMIN_ENABLED` | `false` (prod) | ms-01 | Alta del administrador inicial como paso explícito (PLAT-17). |
+| `POSTGRES_IMAGE` / `MONGO_IMAGE` / `NEO4J_IMAGE` | tags de `.env.prod.example` | infra | Permiten fijar un digest concreto; `pin-images.sh` los escribe en `images.env` (PLAT-13). |
+| `POSTGRES_R2DBC_QUERY` / `POSTGRES_JDBC_QUERY` / `POSTGRES_SSLMODE` | vacío / `disable` | ms-01/03/04 + exporter | Activan TLS de PostgreSQL sin editar el compose (PLAT-05). |
+
+MongoDB de desarrollo (`compose.yaml`) no pide credenciales a propósito (MS02-13): solo escucha en
+`127.0.0.1` y en la red interna, y usa una base por servicio. En este compose de producción el
+replica set es de tres nodos con `--auth`, keyfile y TLS, y cada servicio entra con su usuario
+`MONGO_USER_MS0x`. Para habilitar auth en desarrollo, el bloque comentado del servicio `mongo` en
+`compose.yaml` explica los tres pasos.
 
 ## 5. Levantar el stack
 
@@ -216,6 +246,13 @@ antes de volver.
 - **Claves de backup fuera del host**: sin `AGE_IDENTITY_FILE`/`BACKUP_HMAC_KEY_FILE` un backup
   cifrado no se puede restaurar ni verificar (PLAT-07); guárdalas en el gestor de secretos, nunca
   junto a `deploy/backups/`.
+- **Neo4j con usuario único** (MS05-08): Community no tiene RBAC multiusuario; solo existe `neo4j`,
+  con password obligatoria, sin puertos al host y con `NEO4J_INITIALIZE_SCHEMA=false` por defecto.
+- **MongoDB de desarrollo sin autenticación** (MS02-13, riesgo aceptado): solo en `compose.yaml`
+  (loopback + red interna, datos de prueba). Producción usa replica set de 3 nodos con keyfile,
+  usuarios por base y TLS.
+- **Sin `latest` ni tags flotantes** (PLAT-13/14): si `images.env` conserva `sha256:REPLACE_ME`, el
+  `pull` falla a propósito; ejecuta `pin-images.sh` tras cada release.
 
 ## 9. Decisiones de despliegue (P3-8 y P3-11, firmadas el 2026-11-06)
 
@@ -299,10 +336,11 @@ Todos los productores reciben además `IdempotentWrite` sobre el clúster (ACL `
 
 `compose.yaml` monta `deploy/gateway/prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`** en
 lugar de montar el directorio `conf.d/` de desarrollo (así también desaparece el `default.conf` de la
-imagen `nginx:1.27-alpine`, que si no sería el virtual host por defecto en `:80`):
+imagen si existiera, que si no sería el virtual host por defecto en el puerto HTTP). Desde PLAT-12 el
+contenedor escucha en **8080/8443** (usuario `nginx`); el host publica 80→8080 y 443→8443:
 
-- `:443` sirve `routes.conf` (toda la API) con TLS 1.2/1.3 y HSTS (`max-age=31536000`).
-- `:80` **no** publica la API: solo conserva `location = /healthz` (healthcheck del contenedor) y
+- `8443` sirve `routes.conf` (toda la API) con TLS 1.2/1.3 y HSTS (`max-age=31536000`).
+- `8080` **no** publica la API: solo conserva `location = /healthz` (healthcheck del contenedor) y
   responde `308 https://$host$request_uri` a cualquier otra ruta.
 
 El gateway sigue escuchando en `0.0.0.0` porque es el único borde público; las cinco aplicaciones se
@@ -442,3 +480,166 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8025/    # 401
 # PLAT-10: 429 de conexión con 21 conexiones simultáneas
 seq 1 21 | xargs -P21 -I{} curl -sk -o /dev/null -w '%{http_code}\n' https://HOST/api/v1/activities
 ```
+
+---
+
+## 12. Correcciones BAJA de plataforma (fase 3 de seguridad)
+
+Riesgos aceptados y pendientes reales, en un solo lugar (PLAT-19): §8 es la lista viva de limitaciones
+bloqueantes; esta sección describe qué cambió y cómo verificarlo.
+
+### PLAT-11 — credenciales fuera de la línea de comandos
+
+Visible en `ps`/`/proc/<pid>/cmdline` dentro del contenedor y en los logs de arranque.
+
+- `deploy/mongo/init-replica-auth.sh` ya no pasa `--username/--password` a `mongosh` ni a
+  `mongodump`: autentica con `db.getSiblingDB("admin").auth(process.env.MONGO_ROOT_USER,
+  process.env.MONGO_ROOT_PASSWORD)` desde variables de entorno del contenedor. Los `eval` del bloque
+  de validación se sustituyeron por `printenv` + `validate_chars()` (solo `[A-Za-z0-9_.-]`).
+- `deploy/backup/{backup,restore,verify-backup}.sh` escriben un `mongodump`/`mongorestore`
+  `--config` en YAML dentro del contenedor vía stdin (`umask 077`, borrado al terminar) y usan
+  `export PGPASSWORD` + `docker exec -e PGPASSWORD` en vez de `-e PGPASSWORD=...`.
+- `deploy/kafka/render-client-config.sh`: `--password <pass>` desapareció; el password SCRAM entra
+  por `KAFKA_CLIENT_PASSWORD` o `--password-stdin`.
+- `deploy/persistence/INDICES.md`: el ejemplo con password literal usa `read -rsp` + `mongosh --eval`.
+
+### PLAT-12 — gateway sin privilegios
+
+`nginxinc/nginx-unprivileged:1.27-alpine`, `USER nginx`, puertos **8080/8443**, `pid` y temporales en
+`/tmp`, logs a stdout/stderr, certificados en `tmpfs` (`/etc/nginx/certs:mode=1777`) y, en producción,
+`read_only: true` con `tmpfs: /tmp`. `entrypoint.sh` falla con mensaje claro si el directorio de
+certificados no es escribible. Detalle en `deploy/gateway/README.md` §12.
+
+### PLAT-13 — imágenes pineadas por digest
+
+- `deploy/prod/pin-images.sh` pinea ahora **también** las imágenes de infraestructura, exporters y
+  gateway (`POSTGRES_IMAGE`, `MONGO_IMAGE`, `REDIS_IMAGE`, `NEO4J_IMAGE`, `KAFKA_IMAGE`,
+  `KAFKA_EXPORTER_IMAGE`, `POSTGRES_EXPORTER_IMAGE`, `REDIS_EXPORTER_IMAGE`, `PROMETHEUS_IMAGE`,
+  `GATEWAY_IMAGE`) en `deploy/prod/images.env`; `--apps-only` conserva el comportamiento P1-5.
+- `compose.yaml` (raíz) usa `${POSTGRES_IMAGE:-postgres:17-alpine}`, `${MONGO_IMAGE:-mongo:8.2}` y
+  `${NEO4J_IMAGE:-neo4j:5.26-community}` (antes `${*_VERSION}`), de modo que un digest se puede
+  fijar por entorno también en desarrollo.
+- `NEO4J_INITIALIZE_SCHEMA` (prod) pasa a `${NEO4J_INITIALIZE_SCHEMA:-false}`: el DDL de esquema se
+  ejecuta solo como paso explícito de bootstrap (ver MS05-08).
+- **Pendiente de otro dueño:** las imágenes base de los servicios
+  (`eclipse-temurin:25-jdk`/`25-jre`) y el `apt-get upgrade -y` de sus `Dockerfile` (microservices/).
+
+### PLAT-14 — release sin etiquetas flotantes ni artefactos sin firmar
+
+`release-images.yml` publica solo `<sha>` y `<versión>`, con `provenance: mode=max` y `sbom: true`.
+Ya no se publica `latest`.
+
+### PLAT-15 — `JAVA_OPTS` citado en el entrypoint de los servicios
+
+Fuera de alcance de plataforma (microservices/): el `ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS …"]`
+de ms-02..ms-05 queda para el dueño de cada servicio; aquí solo se documenta.
+
+### PLAT-16 — cabeceras de seguridad
+
+`snippets/security-headers.conf` (`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
+no-referrer`, CSP `default-src 'none'`, `Permissions-Policy`, `Cache-Control: no-store`) se incluye
+en los servers de desarrollo y producción y también en las respuestas 503/429; HSTS solo en el server
+TLS de producción. `nginx.conf` oculta `Server` y `X-Powered-By` del upstream.
+
+### PLAT-17 — administrador inicial apagado por defecto
+
+`BOOTSTRAP_ADMIN_ENABLED` pasa a `${BOOTSTRAP_ADMIN_ENABLED:-false}` y email/password a vacío por
+defecto; `.env.prod.example` trae `false`. Alta del primer admin como paso explícito:
+
+```bash
+# 1) en .env.prod: BOOTSTRAP_ADMIN_ENABLED=true, EMAIL y PASSWORD (openssl rand -base64 24)
+docker compose --env-file deploy/prod/.env.prod --env-file deploy/prod/images.env \
+  -f deploy/prod/compose.yaml up -d ms-01
+docker compose -f deploy/prod/compose.yaml logs ms-01 | grep -i "administrador inicial"
+# 2) volver a false en .env.prod y recrear ms-01
+```
+
+Si `enabled=true` y faltan email/password, ms-01 arranca igual y omite el alta con un warning
+(`BootstrapAdminRunner`).
+
+### PLAT-18 — procedencia del backup
+
+`deploy/backup/restore.sh` compara el `compose_project` del `manifest.txt` con el proyecto activo y
+aborta si no coincide (salvo `ALLOW_OTHER_PROJECT=1`); avisa si el `host` difiere. El HMAC
+(`checksums.sha256.hmac`, `BACKUP_HMAC_KEY_FILE`) y `--skip-checksums` con `ALLOW_UNVERIFIED=1`
+vienen de la fase MEDIA.
+
+### PLAT-19 — documentación de despliegue alineada
+
+- Este README y `deploy/gateway/README.md` describen el estado real: gateway con TLS y redirect,
+  Kafka con SASL_SSL, imágenes pineadas, bootstrap admin apagado.
+- §8 "Limitaciones conocidas" es la lista de pendientes bloqueantes; cualquier afirmación de
+  seguridad de `README.md` (raíz) debe poder rastrearse a un archivo de `deploy/`.
+
+### MS02-13 — MongoDB de desarrollo sin autenticación (riesgo aceptado)
+
+`compose.yaml` mantiene MongoDB sin auth **a propósito**: solo escucha en `127.0.0.1` y en la red
+interna `smxplore-stack`; no hay datos reales y ms-02/ms-04 necesitan el replica set para las
+transacciones del outbox. No exponer ese puerto fuera del host. Producción usa replica set de tres
+nodos con `--auth`, keyfile, usuarios por base y TLS (`deploy/prod/compose.yaml`).
+
+### MS05-08 — Neo4j: usuario único y DDL opt-in
+
+Neo4j Community (la del stack) solo tiene el usuario `neo4j`; el RBAC multiusuario es Enterprise, así
+que no se puede crear un "usuario de aplicación" separado. Medidas aplicadas: contraseña obligatoria
+(`${NEO4J_PASSWORD:?}`), sin puertos publicados (solo red interna), `NEO4J_INITIALIZE_SCHEMA=false`
+por defecto en producción (el DDL se ejecuta una vez de forma explícita y luego se apaga) y
+`neo4j` como usuario de solo-aplicación en documentación. Queda como limitación aceptada.
+
+### Pruebas de regresión de la fase 3
+
+```bash
+# PLAT-13: images.env tiene digests para infra y gateway
+grep -c '@sha256:' deploy/prod/images.env            # 5 con --apps-only; 15 completo
+
+# PLAT-17: bootstrap apagado salvo que se pida
+grep -n 'BOOTSTRAP_ADMIN_ENABLED' deploy/prod/compose.yaml deploy/prod/.env.prod.example
+
+# PLAT-11: sin credenciales en argv (sin Docker)
+grep -n -- '--password' deploy/mongo/init-replica-auth.sh deploy/backup/*.sh
+
+# PLAT-12: puertos no privilegiados y usuario nginx
+grep -n 'listen \|USER nginx' deploy/gateway/conf.d/gateway.conf deploy/gateway/Dockerfile
+
+# PLAT-16: cabeceras en respuestas de error (con el stack arriba)
+curl.exe -s -D - -o NUL http://127.0.0.1:8088/api/v1/activities/0 | Select-String "X-Frame-Options"
+
+# MS05-08: sin DDL implícito
+grep -n 'NEO4J_INITIALIZE_SCHEMA' deploy/prod/compose.yaml deploy/prod/.env.prod.example
+```
+
+Variables nuevas que deben existir en `.env.prod`: `NEO4J_INITIALIZE_SCHEMA` (opcional, `false`).
+Variables de la integracion MS04-11 / PLAT-19 (tabla completa en §4): `NOTIFICATIONS_DLQ_TOPIC`
+(topic `kafka.dlq.bookings.reservation.changed`, creado por `deploy/kafka/topics.env`; ACL de
+escritura para ms-04 y lectura para `dlq-replay` en `deploy/kafka/create-acls.sh`),
+`REVIEW_REQUIRE_COMPLETED_BOOKING` (`true`), `REVIEW_AI_FAIL_OPEN` (`false`), `HSTS_ENABLED`
+(`true` en ms-02), y en desarrollo `MAILPIT_UI_AUTH`, `KAFKA_UI_USER`, `KAFKA_UI_PASSWORD`. Para
+reproducir el DLQ: `bash scripts/kafka-dlq-replay.sh --dlq kafka.dlq.bookings.reservation.changed
+--target bookings.reservation.changed --command-config <admin>.properties` (el nombre no permite deducir
+el destino quitando el sufijo).
+Variables opcionales para desarrollo/reproducibilidad: `POSTGRES_IMAGE`, `MONGO_IMAGE`, `NEO4J_IMAGE`
+(en `.env.example`/entorno local; por defecto mantienen los tags actuales).
+
+## 13. Metricas de los servicios endurecidos (fase BAJA)
+
+Desde el endurecimiento de seguridad, `/actuator/metrics` y `/actuator/prometheus` ya no
+son anonimos fuera de los perfiles de desarrollo:
+
+- `ms-01`: solo `health` e `info` publicos (`ACTUATOR_PUBLIC_METRICS=true` los abre, uso
+  previsto para una red de gestion aislada).
+- `ms-02`, `ms-03`, `ms-05`: exigen rol `ADMIN` y su exposicion viene apagada por defecto
+  (`MANAGEMENT_EXPOSED_ENDPOINTS`, `MANAGEMENT_EXPOSURE`, `MANAGEMENT_ENDPOINTS`).
+- `ms-04`: mantiene el actuator publico dentro de la red de Compose.
+
+Consecuencia practica: el `prometheus.yml` de `deploy/observability/` seguira recibiendo
+401/403 de `ms-01`, `ms-02`, `ms-03` y `ms-05` hasta que se elija una de estas opciones
+(pendiente, no bloquea esta entrega porque el stack de produccion no se despliega aqui):
+
+1. Publicar dichas metricas con un flag de operacion y aislarlas por red (puerto de
+   gestion interno, sin publicar al host).
+2. Scrapear con un token de operacion emitido por `ms-01` (rol de solo lectura).
+3. Desplegar un sidecar/agente por servicio que exponga las metricas sin abrir el
+   actuator.
+
+Las metricas de infraestructura (kafka-exporter, postgres-exporter, redis-exporter,
+Neo4j) no cambian y siguen disponibles.

@@ -16,33 +16,36 @@ interna de Docker.
 
 ```
 deploy/gateway/
-├── Dockerfile                 # nginx:1.27-alpine + openssl; instala el entrypoint de certs
+├── Dockerfile                 # nginxinc/nginx-unprivileged:1.27-alpine + openssl (PLAT-12)
 ├── entrypoint.sh              # genera/valida el certificado TLS antes de arrancar nginx
 ├── nginx.conf                 # configuración global (http, logs, upstreams, cabeceras, límites)
 ├── conf.d/
-│   └── gateway.conf           # servers :80 y :443 de DESARROLLO (ambos con las mismas rutas)
+│   └── gateway.conf           # servers 8080 y 8443 de DESARROLLO (ambos con las mismas rutas)
 ├── prod/
-│   └── gateway.conf           # servers de PRODUCCIÓN: :80 solo redirige a HTTPS (PLAT-03)
+│   └── gateway.conf           # servers de PRODUCCIÓN: 8080 solo redirige a HTTPS (PLAT-03)
 ├── snippets/
-│   └── routes.conf            # tabla de rutas ruta -> servicio (lo que más vas a editar)
+│   ├── routes.conf            # tabla de rutas ruta -> servicio (lo que más vas a editar)
+│   └── security-headers.conf  # cabeceras de seguridad comunes (PLAT-16)
 └── README.md                  # este documento
 ```
 
 | Archivo | Se monta en el contenedor | Para qué |
 |---|---|---|
 | `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, tiempos, límites de conexión, zonas de rate limiting, upstreams `ms_01..ms_05`, cabeceras |
-| `conf.d/gateway.conf` | `/etc/nginx/conf.d/gateway.conf` (dev) | servers `:80` y `:443`; `include` de las rutas |
-| `prod/gateway.conf` | `/etc/nginx/conf.d/default.conf` (prod) | `:443` con rutas y HSTS; `:80` solo `/healthz` + redirect 308 |
-| `snippets/` | `/etc/nginx/snippets/` | `routes.conf`, incluido dentro de cada server |
+| `conf.d/gateway.conf` | `/etc/nginx/conf.d/gateway.conf` (dev) | servers `8080` y `8443`; `include` de las rutas y de las cabeceras de seguridad |
+| `prod/gateway.conf` | `/etc/nginx/conf.d/default.conf` (prod) | `8443` con rutas y HSTS; `8080` solo `/healthz` + redirect 308 |
+| `snippets/` | `/etc/nginx/snippets/` | `routes.conf` y `security-headers.conf`, incluidos dentro de cada server |
 
-`deploy/prod/compose.yaml` monta `prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`** (la
-imagen de producción es `nginx:1.27-alpine` sin el Dockerfile propio, así que si no se reemplaza, el
-`default.conf` de la imagen quedaría como virtual host por defecto en `:80` y serviría su página de
-bienvenida). En producción la API nunca se sirve por HTTP (ver sección 9).
+`deploy/prod/compose.yaml` monta `prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`**: la
+imagen de producción (`GATEWAY_IMAGE`, por defecto `nginxinc/nginx-unprivileged:1.27-alpine`) no se
+construye desde el Dockerfile del repo, así que si no se reemplaza, su `default.conf` quedaría como
+virtual host por defecto y serviría su página de bienvenida. En producción la API nunca se sirve por
+HTTP (ver sección 9).
 
 Todo se monta **desde el repositorio** (no se copia dentro de la imagen): para cambiar el ruteo
-basta editar el archivo en el repo y reiniciar el contenedor. El único artefacto que sí vive dentro
-del contenedor es el certificado autofirmado, en el volumen `gateway_certs`.
+basta editar el archivo en el repo y reiniciar el contenedor. El certificado autofirmado de
+desarrollo se escribe en un `tmpfs` (`/etc/nginx/certs:mode=1777`), no en un volumen: el contenedor
+corre como `nginx` y nunca necesita escribir en el sistema de archivos de la imagen.
 
 El servicio está declarado en `compose.yaml` (raíz) y en `deploy/prod/compose.yaml`.
 
@@ -130,17 +133,17 @@ En **Windows PowerShell 5.1** el `-d` con comillas dobles se rompe al pasarlo a 
 
 ### TLS en desarrollo
 
-`entrypoint.sh` genera un certificado autofirmado la primera vez y lo guarda en el volumen
-`gateway_certs`. Los clientes deben usar `-k` / `--insecure` o confiar en `deploy/gateway/certs/`
-si generas los certificados en el host.
+`entrypoint.sh` genera un certificado autofirmado al arrancar y lo deja en un `tmpfs` (`/etc/nginx/certs`),
+de modo que el contenedor no necesita escribir en el sistema de archivos de la imagen ni corre como
+root (PLAT-12). El certificado se regenera en cada arranque del contenedor; los clientes deben usar
+`-k` / `--insecure` o confiar en `deploy/gateway/certs/` si generas los certificados en el host.
 
-Para regenerarlo (por ejemplo, si cambiaste `GATEWAY_TLS_CN`):
+Para regenerarlo (por ejemplo, si cambiaste `GATEWAY_TLS_CN`), basta con recrear el contenedor:
 
 ```powershell
-docker compose down gateway
-docker volume rm smxplore_gateway_certs
-docker compose up -d gateway
+docker compose up -d --force-recreate gateway
 ```
+
 
 ---
 
@@ -432,10 +435,58 @@ curl.exe -s -o NUL -w "%{http_code}\n" http://127.0.0.1/healthz   # 200 ok
 
 ---
 
-## 11. Referencias
+## 12. Endurecimiento del contenedor y cabeceras (fase 3: PLAT-12 / PLAT-16)
 
-- `compose.yaml` (raíz): servicio `gateway`, volumen `gateway_certs`, variables `GATEWAY_*`.
-- `deploy/prod/compose.yaml`: servicio `gateway` con secretos TLS reales.
+**Contenedor sin privilegios (PLAT-12).** El gateway corre como usuario `nginx`, no como root:
+
+- `deploy/gateway/Dockerfile` parte de `nginxinc/nginx-unprivileged:1.27-alpine`; `USER root` solo
+  se usa para instalar `openssl` y borrar `default.conf`, y vuelve a `USER nginx` antes del arranque.
+- nginx escucha en **8080/8443** (puertos no privilegiados) y en `nginx.conf` el `pid` y las rutas
+  temporales viven en `/tmp`; los logs van a `stdout`/`stderr` (`/dev/stdout`, `/dev/stderr`).
+- El certificado autofirmado de desarrollo se escribe en un `tmpfs` con `mode=1777` montado en
+  `/etc/nginx/certs`; `entrypoint.sh` comprueba que el directorio es escribible y falla con un
+  mensaje claro si no lo es.
+- En producción (`deploy/prod/compose.yaml`) el contenedor es `read_only: true`, con `tmpfs` en
+  `/tmp`, y el material TLS entra por secretos de solo lectura en `/etc/nginx/certs`.
+- El healthcheck usa `http://127.0.0.1:8080/healthz` dentro del contenedor.
+
+**Cabeceras de seguridad (PLAT-16).** `snippets/security-headers.conf` aplica a todas las respuestas
+del gateway (desarrollo y producción):
+
+| Cabecera | Valor |
+|---|---|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `no-referrer` |
+| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` |
+| `Cache-Control` | `no-store` (las respuestas pueden llevar datos personales) |
+| `Strict-Transport-Security` | solo en el server TLS de producción (`prod/gateway.conf`) |
+
+Detalles que importan:
+
+- nginx **no** hereda `add_header` en un contexto hijo que declara sus propias cabeceras; por eso
+  `security-headers.conf` se incluye también dentro de `@gateway_bad_gateway` y
+  `@gateway_rate_limited` (las respuestas de error 503/429 también llevan las cabeceras).
+- `nginx.conf` añade `proxy_hide_header Server;` y `proxy_hide_header X-Powered-By;` para no filtrar
+  la versión del upstream.
+- HSTS se mantiene **solo sobre TLS**: el server `8080` de producción no lo envía (un cliente HTTP
+  plano no debe fijar HSTS).
+
+```bash
+# sin Docker: comprobar que los includes y las cabeceras están declarados
+grep -n "security-headers.conf" deploy/gateway/conf.d/gateway.conf deploy/gateway/prod/gateway.conf
+grep -n "proxy_hide_header" deploy/gateway/nginx.conf
+# con el stack arriba (desarrollo):
+curl.exe -s -D - -o NUL http://127.0.0.1:8088/healthz | Select-String "X-Content-Type-Options|Content-Security-Policy"
+```
+
+---
+
+## 13. Referencias
+
+- `compose.yaml` (raíz): servicio `gateway`, `tmpfs` de certificados, variables `GATEWAY_*`.
+- `deploy/prod/compose.yaml`: servicio `gateway` con secretos TLS reales y `read_only`.
 - `deploy/prod/README.md`: despliegue completo, secretos y verificación de producción.
 - `README.md` (raíz): arranque del stack y tabla de puertos.
 - `deploy/gateway/snippets/routes.conf`: la tabla de rutas real (fuente de verdad).

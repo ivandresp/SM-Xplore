@@ -92,6 +92,21 @@ fi
 # --- Helpers de conexion ----------------------------------------------------
 # mongosh es Node: leemos usuarios/passwords desde process.env dentro del JS,
 # asi no hay que escapar passwords en JSON ni en la linea de comandos.
+#
+# PLAT-11: la password NUNCA se pasa por argv (--password), porque `ps` y
+# /proc/<pid>/cmdline la exponen a cualquier proceso del contenedor/host.
+# Nos conectamos sin credenciales y autenticamos dentro del JS con
+# process.env, que si viaja por el entorno del proceso.
+export MONGO_ROOT_USER MONGO_ROOT_PASSWORD
+
+ROOT_AUTH_JS='const __admin = db.getSiblingDB("admin");
+try {
+  __admin.auth(process.env.MONGO_ROOT_USER, process.env.MONGO_ROOT_PASSWORD);
+} catch (e) {
+  print("AUTH_FAILED: " + e.message);
+  quit(2);
+}
+'
 
 mongosh_direct() { # host port js
   if [ "${MONGO_TLS}" = "true" ]; then
@@ -107,13 +122,10 @@ mongosh_rs_root() { # js ; autenticado como root
   # esperar 30s por intento en los bucles de espera.
   if [ "${MONGO_TLS}" = "true" ]; then
     mongosh --quiet "mongodb://${MONGO_HOSTS}/?replicaSet=${MONGO_REPLICA_SET}&serverSelectionTimeoutMS=5000" \
-      --username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" \
-      --authenticationDatabase admin \
-      --tls --tlsCAFile "${MONGO_CA_FILE}" --eval "$1"
+      --tls --tlsCAFile "${MONGO_CA_FILE}" --eval "${ROOT_AUTH_JS}$1"
   else
     mongosh --quiet "mongodb://${MONGO_HOSTS}/?replicaSet=${MONGO_REPLICA_SET}&serverSelectionTimeoutMS=5000" \
-      --username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" \
-      --authenticationDatabase admin --eval "$1"
+      --eval "${ROOT_AUTH_JS}$1"
   fi
 }
 
@@ -343,13 +355,32 @@ if [ "${HEALTHY}" -ne 1 ]; then
 fi
 
 # --- 6) Validacion de cada usuario de aplicacion ---------------------------
+# PLAT-11: sin `eval` (evita inyeccion de comandos via variables de entorno) y
+# sin `--password` en argv; las credenciales viajan por el entorno del proceso.
 log "validando autenticacion de usuarios de aplicacion"
 VALIDATION_FAILED=0
+VALIDATE_JS='try {
+  db.auth(process.env.MONGO_VALIDATE_USER, process.env.MONGO_VALIDATE_PASSWORD);
+} catch (e) {
+  print("AUTH_FAILED: " + e.message);
+  quit(2);
+}
+print(db.runCommand({ ping: 1 }).ok);'
+validate_chars() { # nombre variable ; valor
+  case "${2}" in
+    "") return 0 ;;
+    *[!A-Za-z0-9_.-]*)
+      die "${1} contiene caracteres no permitidos (solo A-Z a-z 0-9 _ . -)"
+      ;;
+  esac
+}
 for N in 01 02 03 04; do
-  eval "APP_USER=\${MONGO_USER_MS${N}:-}"
-  eval "APP_PASS=\${MONGO_PASSWORD_MS${N}:-}"
-  eval "APP_DB_OVERRIDE=\${MONGO_DB_MS${N}:-}"
+  APP_USER="$(printenv "MONGO_USER_MS${N}" || true)"
+  APP_PASS="$(printenv "MONGO_PASSWORD_MS${N}" || true)"
+  APP_DB_OVERRIDE="$(printenv "MONGO_DB_MS${N}" || true)"
   [ -n "${APP_USER}" ] || continue
+  validate_chars "MONGO_USER_MS${N}" "${APP_USER}"
+  validate_chars "MONGO_DB_MS${N}" "${APP_DB_OVERRIDE}"
 
   case "${N}" in
     01) APP_DB="smxplore_reviews" ;;
@@ -360,15 +391,14 @@ for N in 01 02 03 04; do
   esac
   [ -n "${APP_DB_OVERRIDE}" ] && APP_DB="${APP_DB_OVERRIDE}"
 
+  export MONGO_VALIDATE_USER="${APP_USER}" MONGO_VALIDATE_PASSWORD="${APP_PASS}"
   if [ "${MONGO_TLS}" = "true" ]; then
     AUTH_TEST="$(mongosh --quiet "mongodb://${MONGO_HOSTS}/${APP_DB}?replicaSet=${MONGO_REPLICA_SET}&serverSelectionTimeoutMS=5000" \
-      --username "${APP_USER}" --password "${APP_PASS}" --authenticationDatabase "${APP_DB}" \
       --tls --tlsCAFile "${MONGO_CA_FILE}" \
-      --eval 'db.runCommand({ ping: 1 }).ok' 2>&1 || true)"
+      --eval "${VALIDATE_JS}" 2>&1 || true)"
   else
     AUTH_TEST="$(mongosh --quiet "mongodb://${MONGO_HOSTS}/${APP_DB}?replicaSet=${MONGO_REPLICA_SET}&serverSelectionTimeoutMS=5000" \
-      --username "${APP_USER}" --password "${APP_PASS}" --authenticationDatabase "${APP_DB}" \
-      --eval 'db.runCommand({ ping: 1 }).ok' 2>&1 || true)"
+      --eval "${VALIDATE_JS}" 2>&1 || true)"
   fi
 
   if [ "${AUTH_TEST}" = "1" ]; then

@@ -503,11 +503,15 @@ services:
       MFA_SECRET_KEY: ${MFA_SECRET_KEY:?}
       MFA_REQUIRED_FOR_ADMINS: "true"
       SECURITY_HSTS_ENABLED: "true"
+      # BAJA: fail-closed en produccion (ms-01 revisa resenas y aplica el filtro IA).
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?}
-      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
-      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?}
+      # PLAT-17: apagado por defecto. Para crear el primer admin: poner true en .env.prod,
+      # `docker compose up -d ms-01`, comprobar el alta y volver a false.
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-false}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?}
       MAIL_HOST: ${SMTP_HOST:-localhost}
@@ -553,6 +557,9 @@ services:
       JWT_AUDIENCE: ${JWT_AUDIENCE:?}
       JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
       MS01_BASE_URL: http://ms-01:8081
+      # HSTS del propio servicio (application.yaml: app.security.headers.hsts).
+      # El gateway tambien lo envia; se deja explicito para no depender del perfil.
+      HSTS_ENABLED: ${HSTS_ENABLED:-true}
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
       # PLAT-01: Kafka de producción exige SASL_SSL + SCRAM-SHA-512. Spring Boot
@@ -687,6 +694,11 @@ services:
       SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TRUSTSTORE_PASSWORD:?}
       SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PKCS12
       NOTIFICATIONS_ENABLED: "true"
+      # MS04-11: topic de descarte del listener de bookings.reservation.changed.
+      NOTIFICATIONS_DLQ_TOPIC: ${NOTIFICATIONS_DLQ_TOPIC:-kafka.dlq.bookings.reservation.changed}
+      # BAJA: resenas solo de reservas completadas y filtro IA fail-closed.
+      REVIEW_REQUIRE_COMPLETED_BOOKING: ${REVIEW_REQUIRE_COMPLETED_BOOKING:-true}
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       # El correo saliente requiere un SMTP real; se deja apagado hasta configurarlo.
       NOTIFICATIONS_EMAIL_ENABLED: "false"
       CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-false}
@@ -737,7 +749,9 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?}
-      NEO4J_INITIALIZE_SCHEMA: "true"
+      # PLAT-13/MS05-08: el DDL se ejecuta solo cuando se pide de forma explicita (bootstrap
+      # de esquema). Con false el servicio no crea constraints/indices al arrancar.
+      NEO4J_INITIALIZE_SCHEMA: ${NEO4J_INITIALIZE_SCHEMA:-false}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:?}
@@ -811,8 +825,8 @@ services:
       # API por TLS; :80 redirige. Las apps siguen en 127.0.0.1 y la
       # infraestructura (Postgres, Mongo, Kafka, Redis, Neo4j, exporters,
       # Prometheus) no publica ningun puerto.
-      - "${GATEWAY_HTTP_PORT:?}:80"
-      - "${GATEWAY_HTTPS_PORT:?}:443"
+      - "${GATEWAY_HTTP_PORT:?}:8080"
+      - "${GATEWAY_HTTPS_PORT:?}:8443"
     volumes:
       - ../gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       # PLAT-03: se monta el server de produccion sobre el default.conf de la
@@ -821,6 +835,10 @@ services:
       # y la API completa viaja por 443.
       - ../gateway/prod/gateway.conf:/etc/nginx/conf.d/default.conf:ro
       - ../gateway/snippets:/etc/nginx/snippets:ro
+      # PLAT-12: sistema de archivos de solo lectura; nginx escribe solo en /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
     secrets:
       # Rutas absolutas: nginx espera /etc/nginx/certs/tls.crt y tls.key.
       - source: gateway_tls_cert
@@ -839,7 +857,7 @@ services:
       ms-05:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz | grep -q ok"]
       interval: 15s
       timeout: 5s
       retries: 20

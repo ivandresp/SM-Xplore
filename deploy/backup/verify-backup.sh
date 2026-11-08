@@ -53,6 +53,11 @@ GPG_PASSPHRASE_FILE="${GPG_PASSPHRASE_FILE:-}"
 BACKUP_HMAC_KEY_FILE="${BACKUP_HMAC_KEY_FILE:-}"
 WORK_DIR=""
 
+# PLAT-11: comillas de un escalar YAML de una linea (comillas simples; '' escapa ').
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
 log() { printf '[verify-backup] %s\n' "$*"; }
 warn() { printf '[verify-backup][AVISO] %s\n' "$*" >&2; }
 fail() { printf '[verify-backup][FALLO] %s\n' "$*" >&2; FAILURES=$((FAILURES + 1)); }
@@ -254,7 +259,10 @@ verify_postgres() {
 
   local flags=(-i)
   if [[ -n "${PG_PASSWORD}" ]]; then
-    flags+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    # PLAT-11: la password se hereda del entorno del proceso (docker exec -e VAR),
+  # no se escribe en argv (`docker exec -e VAR=valor` queda visible en `ps`).
+  export PGPASSWORD="${PG_PASSWORD}"
+  flags+=(-e PGPASSWORD)
   fi
 
   for dump in "${dumps[@]}"; do
@@ -277,19 +285,27 @@ verify_mongo() {
   [[ -n "${MONGO_CONTAINER}" ]] || { fail "MongoDB: no se encontro el contenedor"; return 0; }
 
   log "MongoDB: comprobando archivo con mongorestore --dryRun"
-  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore
-    "--uri=mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}"
-    --archive --gzip --dryRun)
-
-  if [[ "${MONGO_TLS}" = "true" ]]; then
-    cmd+=(--tls --tlsCAFile "${MONGO_CA_FILE}")
-  fi
-  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
-    cmd+=(--username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" --authenticationDatabase admin)
-  fi
+  # PLAT-11: credenciales por archivo de configuracion (umask 077), no en argv.
+  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore --archive --gzip --dryRun)
+  local cfg="/tmp/smxplore-mongo-verify-$$.yaml"
+  {
+    printf 'uri: %s\n' "$(yaml_quote "mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}")"
+    if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
+      printf 'username: %s\n' "$(yaml_quote "${MONGO_ROOT_USER}")"
+      printf 'password: %s\n' "$(yaml_quote "${MONGO_ROOT_PASSWORD}")"
+      printf 'authenticationDatabase: %s\n' "$(yaml_quote "admin")"
+    fi
+    if [[ "${MONGO_TLS}" = "true" ]]; then
+      printf 'tls: true\n'
+      printf 'tlsCAFile: %s\n' "$(yaml_quote "${MONGO_CA_FILE}")"
+    fi
+  } | docker exec -i "${MONGO_CONTAINER}" sh -c 'umask 077; cat > "$1"' sh "${cfg}" \
+    || { fail "MongoDB: no se pudo escribir la configuracion temporal"; return 0; }
+  cmd+=(--config "${cfg}")
 
   local output
   if output="$("${cmd[@]}" < "${archive}" 2>&1)"; then
+    docker exec "${MONGO_CONTAINER}" rm -f "${cfg}" >/dev/null 2>&1 || true
     # mongorestore --dryRun enumera los namespaces que restauraria.
     if printf '%s' "${output}" | grep -qiE 'would restore|done'; then
       log "MongoDB: mongo.archive.gz OK (archivo interpretado por mongorestore)"
@@ -297,6 +313,7 @@ verify_mongo() {
       log "MongoDB: mongo.archive.gz OK (dryRun sin errores)"
     fi
   else
+    docker exec "${MONGO_CONTAINER}" rm -f "${cfg}" >/dev/null 2>&1 || true
     fail "MongoDB: mongorestore --dryRun fallo: ${output}"
   fi
 }

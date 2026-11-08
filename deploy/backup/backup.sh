@@ -241,7 +241,10 @@ backup_postgres() {
   local db out file
   local pg_exec_flags=(-i)
   if [[ -n "${PG_PASSWORD}" ]]; then
-    pg_exec_flags+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    # PLAT-11: la password se hereda del entorno del proceso (docker exec -e VAR),
+    # no se escribe en argv (`docker exec -e VAR=valor` queda visible en `ps`).
+    pg_exec_flags+=(-e PGPASSWORD)
+    export PGPASSWORD="${PG_PASSWORD}"
   fi
   for db in ${PG_DATABASES}; do
     file="${DEST}/postgres/${db}.dump"
@@ -265,13 +268,42 @@ backup_postgres() {
 }
 
 # --- MongoDB ----------------------------------------------------------------
+# PLAT-11: las credenciales no van en argv (visibles en `ps`). mongodump lee
+# usuario/password/TLS de un archivo de configuracion YAML temporal que se
+# escribe dentro del contenedor por stdin con umask 077 y se borra al terminar.
+MONGO_CONFIG_PATH=""
+
+mongo_config_cleanup() {
+  if [[ -n "${MONGO_CONFIG_PATH}" ]]; then
+    docker exec "${MONGO_CONTAINER}" rm -f "${MONGO_CONFIG_PATH}" >/dev/null 2>&1 || true
+    MONGO_CONFIG_PATH=""
+  fi
+}
+
+# Comillas de un escalar YAML de una linea (comillas simples, '' escapa ').
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+mongo_config_yaml() {
+  printf 'uri: %s\n' "$(yaml_quote "mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}")"
+  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
+    printf 'username: %s\n' "$(yaml_quote "${MONGO_ROOT_USER}")"
+    printf 'password: %s\n' "$(yaml_quote "${MONGO_ROOT_PASSWORD}")"
+    printf 'authenticationDatabase: %s\n' "$(yaml_quote "admin")"
+  fi
+  if [[ "${MONGO_TLS}" = "true" ]]; then
+    printf 'tls: true\n'
+    printf 'tlsCAFile: %s\n' "$(yaml_quote "${MONGO_CA_FILE}")"
+  fi
+}
+
 mongo_dump_args() {
   printf '%s\n' '--archive'
   printf '%s\n' '--gzip'
   if [[ "${MONGO_OPLOG}" = "true" ]]; then
     printf '%s\n' '--oplog'
   fi
-  printf '%s\n' "--uri=mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}"
 }
 
 backup_mongo() {
@@ -280,24 +312,29 @@ backup_mongo() {
   local line
   while IFS= read -r line; do args+=("${line}"); done < <(mongo_dump_args)
 
-  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongodump)
-  cmd+=("${args[@]}")
-
-  if [[ "${MONGO_TLS}" = "true" ]]; then
-    cmd+=(--tls --tlsCAFile "${MONGO_CA_FILE}")
-  fi
-  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
-    cmd+=(--username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" --authenticationDatabase admin)
-  elif [[ "${MONGO_TLS}" = "true" ]]; then
+  if [[ "${MONGO_TLS}" = "true" && -z "${MONGO_ROOT_PASSWORD}" ]]; then
     die "MONGO_ROOT_PASSWORD es obligatorio con MONGO_TLS=true"
   fi
+
+  MONGO_CONFIG_PATH="/tmp/smxplore-mongodump-$$.yaml"
+  if ! mongo_config_yaml | docker exec -i "${MONGO_CONTAINER}" \
+    sh -c 'umask 077; cat > "$1"' sh "${MONGO_CONFIG_PATH}"; then
+    warn "no se pudo escribir la configuracion temporal de mongodump"
+    MONGO_CONFIG_PATH=""
+    return 1
+  fi
+
+  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongodump --config "${MONGO_CONFIG_PATH}")
+  cmd+=("${args[@]}")
 
   local file="${DEST}/mongo/mongo.archive.gz"
   if ! "${cmd[@]}" > "${file}"; then
     warn "fallo mongodump"
     rm -f "${file}"
+    mongo_config_cleanup
     return 1
   fi
+  mongo_config_cleanup
   [[ -s "${file}" ]] || { warn "archivo mongodump vacio"; rm -f "${file}"; return 1; }
   log "MongoDB -> mongo/mongo.archive.gz ($(du -h "${file}" | cut -f1))"
 }

@@ -34,6 +34,10 @@
 #   BACKUP_HMAC_KEY_FILE  clave HMAC para verificar la firma de los checksums.
 # El backup se descifra a un directorio temporal con permisos 0700 que se borra
 # al terminar. --skip-checksums exige ALLOW_UNVERIFIED=1.
+#
+# Procedencia (PLAT-18): el manifest del backup declara el proyecto Compose y el
+# host donde se tomo. Restaurar sobre otro proyecto aborta; si es intencionado,
+# exporta ALLOW_OTHER_PROJECT=1.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -170,6 +174,24 @@ find_service_container() {
 PROJECT="$(detect_project)"
 log "proyecto Compose: ${PROJECT}"
 
+# --- Procedencia del backup (PLAT-18) ---------------------------------------
+# El manifest dice de que proyecto y host salio el backup. Restaurar el backup
+# de otro stack (p. ej. produccion sobre desarrollo) sobrescribe datos con un
+# esquema distinto sin avisar; exigimos coincidencia salvo override explicito.
+MANIFEST_PROJECT="$(sed -n 's/^compose_project=//p' "${BACKUP_DIR}/manifest.txt" | head -n 1)"
+MANIFEST_HOST="$(sed -n 's/^host=//p' "${BACKUP_DIR}/manifest.txt" | head -n 1)"
+CURRENT_HOST="$(hostname 2>/dev/null || echo desconocido)"
+if [[ -n "${MANIFEST_PROJECT}" && "${MANIFEST_PROJECT}" != "${PROJECT}" ]]; then
+  if [[ "${ALLOW_OTHER_PROJECT:-0}" = "1" ]]; then
+    warn "el backup es del proyecto '${MANIFEST_PROJECT}' y el stack activo es '${PROJECT}' (ALLOW_OTHER_PROJECT=1)"
+  else
+    die "el backup es del proyecto '${MANIFEST_PROJECT}' y el stack activo es '${PROJECT}'; exporta ALLOW_OTHER_PROJECT=1 solo si restauras a proposito en otro entorno"
+  fi
+fi
+if [[ -n "${MANIFEST_HOST}" && "${MANIFEST_HOST}" != "${CURRENT_HOST}" ]]; then
+  warn "el backup se tomo en el host '${MANIFEST_HOST}' y este host es '${CURRENT_HOST}'"
+fi
+
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-$(find_service_container postgres || true)}"
 MONGO_CONTAINER="${MONGO_CONTAINER:-$(find_service_container mongo1 mongo || true)}"
 NEO4J_CONTAINER="${NEO4J_CONTAINER:-$(find_service_container neo4j || true)}"
@@ -263,7 +285,10 @@ FAILURES=0
 pg_exec() { # args... ; ejecuta psql/pg_restore con PGPASSWORD si aplica
   local flags=(-i)
   if [[ -n "${PG_PASSWORD}" ]]; then
-    flags+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    # PLAT-11: la password se hereda del entorno del proceso (docker exec -e VAR),
+  # no se escribe en argv (`docker exec -e VAR=valor` queda visible en `ps`).
+  export PGPASSWORD="${PG_PASSWORD}"
+  flags+=(-e PGPASSWORD)
   fi
   docker exec "${flags[@]}" "${POSTGRES_CONTAINER}" "$@"
 }
@@ -306,29 +331,62 @@ restore_postgres() {
 }
 
 # --- MongoDB ----------------------------------------------------------------
+# PLAT-11: mismo criterio que backup.sh, las credenciales no van en argv.
+MONGO_CONFIG_PATH=""
+
+mongo_config_cleanup() {
+  if [[ -n "${MONGO_CONFIG_PATH}" ]]; then
+    docker exec "${MONGO_CONTAINER}" rm -f "${MONGO_CONFIG_PATH}" >/dev/null 2>&1 || true
+    MONGO_CONFIG_PATH=""
+  fi
+}
+
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+mongo_config_yaml() {
+  printf 'uri: %s\n' "$(yaml_quote "mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}")"
+  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
+    printf 'username: %s\n' "$(yaml_quote "${MONGO_ROOT_USER}")"
+    printf 'password: %s\n' "$(yaml_quote "${MONGO_ROOT_PASSWORD}")"
+    printf 'authenticationDatabase: %s\n' "$(yaml_quote "admin")"
+  fi
+  if [[ "${MONGO_TLS}" = "true" ]]; then
+    printf 'tls: true\n'
+    printf 'tlsCAFile: %s\n' "$(yaml_quote "${MONGO_CA_FILE}")"
+  fi
+}
+
 restore_mongo() {
   local archive="${BACKUP_DIR}/mongo/mongo.archive.gz"
   [[ -f "${archive}" && -s "${archive}" ]] || { warn "no hay mongo/mongo.archive.gz en el backup"; return 1; }
 
+  if [[ "${MONGO_TLS}" = "true" && -z "${MONGO_ROOT_PASSWORD}" ]]; then
+    die "MONGO_ROOT_PASSWORD es obligatorio con MONGO_TLS=true"
+  fi
+
   log "MongoDB: restaurando archivo (--drop) en el replica set ${MONGO_REPLICA_SET}"
-  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore
-    "--uri=mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}"
-    --archive --gzip --drop)
+  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore --archive --gzip --drop)
 
   if [[ "${MONGO_OPLOG_REPLAY}" = "true" ]]; then
     cmd+=(--oplogReplay)
   fi
-  if [[ "${MONGO_TLS}" = "true" ]]; then
-    [[ -n "${MONGO_ROOT_PASSWORD}" ]] || die "MONGO_ROOT_PASSWORD es obligatorio con MONGO_TLS=true"
-    cmd+=(--tls --tlsCAFile "${MONGO_CA_FILE}")
+
+  MONGO_CONFIG_PATH="/tmp/smxplore-mongorestore-$$.yaml"
+  if ! mongo_config_yaml | docker exec -i "${MONGO_CONTAINER}" \
+    sh -c 'umask 077; cat > "$1"' sh "${MONGO_CONFIG_PATH}"; then
+    warn "no se pudo escribir la configuracion temporal de mongorestore"
+    MONGO_CONFIG_PATH=""
+    return 1
   fi
-  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
-    cmd+=(--username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" --authenticationDatabase admin)
-  fi
+  cmd+=(--config "${MONGO_CONFIG_PATH}")
 
   if "${cmd[@]}" < "${archive}"; then
+    mongo_config_cleanup
     log "MongoDB: restauracion completada"
   else
+    mongo_config_cleanup
     warn "mongorestore devolvio errores"
     return 1
   fi
@@ -349,7 +407,7 @@ cleanup_work() {
     WORK_DIR=""
   fi
 }
-trap 'neo4j_restart; cleanup_work' EXIT
+trap 'mongo_config_cleanup; neo4j_restart; cleanup_work' EXIT
 
 restore_neo4j() {
   local dump="${BACKUP_DIR}/neo4j/${NEO4J_DATABASE}.dump"

@@ -1,6 +1,7 @@
 # Publica las cinco imágenes de los microservicios en GitHub Container Registry.
 # Los pull request NUNCA publican: solo hay release con una etiqueta `v*` o a mano.
-# Cada imagen sale con tres etiquetas: <sha>, <version> y latest.
+# Cada imagen sale con dos etiquetas: <sha> y <version>. No se publica `latest` (PLAT-14):
+# el despliegue pinea por digest, asi no hay una referencia movil que "funcione sola".
 name: Release de imágenes
 
 on:
@@ -103,12 +104,13 @@ jobs:
           context: microservices/${{ matrix.service }}
           file: microservices/${{ matrix.service }}/Dockerfile
           push: true
-          provenance: false
-          sbom: false
+          # PLAT-14: sin etiqueta 'latest' mutable (el despliegue pinea por digest) y con
+          # procedencia + SBOM para poder auditar que se construyo y que contiene.
+          provenance: mode=max
+          sbom: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

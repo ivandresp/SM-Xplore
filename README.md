@@ -43,7 +43,7 @@ de la tabla siguiente.
 
 | Componente | Host | Contenedor | Notas |
 |---|---:|---:|---|
-| gateway (nginx) | 8088 / 8443 | 80 / 443 | Punto de entrada: `/api/v1/**` y `/svc/ms-0N/**`; TLS autofirmado en desarrollo |
+| gateway (nginx, sin privilegios) | 8088 / 8443 | 8080 / 8443 | Punto de entrada: `/api/v1/**` y `/svc/ms-0N/**`; TLS autofirmado en desarrollo |
 | ms-01 users-and-anomalies | 8081 | 8081 | Emisor JWT; JWKS en `/.well-known/jwks.json` |
 | ms-02 security-reports | 8080 | 8080 | Reportes y comentarios |
 | ms-03 activities-and-events | 8082 | 8082 | Actividades, eventos, reservas y reseñas |
@@ -106,14 +106,20 @@ El perfil por defecto de ms-01 es `dev`: genera y persiste las llaves JWT en el 
 ## Notas de seguridad (solo local)
 
 Este compose es de **desarrollo**. No usa TLS, MongoDB corre sin autenticacion (bases
-separadas por servicio) y los secretos viven en `.env`. En produccion:
+separadas por servicio, solo escucha en `127.0.0.1` y en la red interna; MS02-13 es un riesgo
+aceptado y documentado en `deploy/prod/README.md` §12) y los secretos viven en `.env`. En produccion:
 
 - Perfil `prod` en los cinco servicios (activa `ver`, MFA administrativo y validaciones de
   arranque).
-- MongoDB con autenticacion y usuarios por servicio; PostgreSQL con roles acotados.
-- TLS terminado en un gateway/reverse proxy comun.
+- MongoDB con autenticacion y usuarios por servicio; PostgreSQL con roles acotados y TLS
+  documentado; Neo4j con password obligatoria y DDL de esquema apagado por defecto.
+- TLS terminado en el gateway del stack (`deploy/prod/compose.yaml`: `443` con HSTS, `80` solo
+  redirige) o en un balanceador de la infraestructura (P3-11).
 - Secretos en un gestor, no en `.env`; Kafka con SASL/SCRAM-SHA-512 sobre TLS y ACLs por
-  servicio, y Redis con contraseña (ver `deploy/prod/`).
+  servicio, Redis con contraseña y administrador inicial apagado por defecto (ver `deploy/prod/`).
+
+Las limitaciones reales del despliegue estan en `deploy/prod/README.md` §8; las correcciones de
+seguridad por fase, con su prueba de regresion, en las secciones 11 y 12 del mismo documento.
 
 ## Operacion diaria
 
@@ -164,9 +170,11 @@ Las pruebas de integracion usan Testcontainers y requieren Docker.
 
 ## Estado del proyecto
 
-Los servicios compilan y sus suites pasan. El gateway nginx ya es el punto de entrada del stack
-local (TLS en produccion sigue pendiente de la decision P3-11: certificados reales y terminacion
-TLS definitiva).
+Los servicios compilan y sus suites pasan. El gateway nginx es el punto de entrada del stack local y
+de `deploy/prod/`, que ya termina TLS en el borde (`443`), redirige `80` con `308`, aplica HSTS y
+cabeceras de seguridad, y exige SASL/SCRAM-SHA-512 sobre TLS en Kafka. Lo que sigue fuera del
+repositorio es la emision de certificados reales y el terminador/balanceador de la infraestructura
+(P3-11), documentado en `deploy/prod/README.md` §8 y §9.
 
 Entregado y verificado: P0 (reindexado completo de ms-05, durabilidad de eventos de resena,
 eventos de zona y respuesta de resena, higiene de contratos), P1 (imagenes y manifiestos de

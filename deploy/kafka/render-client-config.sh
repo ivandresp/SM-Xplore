@@ -15,7 +15,9 @@
 # Opciones (cada una tiene su variable de entorno equivalente):
 #   --out <ruta>                 Archivo de salida (KAFKA_CLIENT_CONFIG).
 #   --username <user>            Usuario SCRAM (KAFKA_CLIENT_USERNAME).
-#   --password <pass>            Password SCRAM (KAFKA_CLIENT_PASSWORD).
+#   --password-stdin             Lee el password SCRAM de stdin (PLAT-11: no lo pases por argv,
+#                                queda en el historial del shell y en `ps`). Tambien vale
+#                                KAFKA_CLIENT_PASSWORD.
 #   --truststore <ruta>          Truststore PKCS12 (KAFKA_TRUSTSTORE_LOCATION,
 #                                por defecto /etc/kafka/secrets/kafka.truststore.p12).
 #   --truststore-password <pass> Password del truststore (KAFKA_TRUSTSTORE_PASSWORD).
@@ -53,7 +55,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --out)                  OUT="${2:?--out requiere una ruta}"; shift 2 ;;
         --username)             USERNAME="${2:?--username requiere un valor}"; shift 2 ;;
-        --password)             PASSWORD="${2:?--password requiere un valor}"; shift 2 ;;
+        --password-stdin)       read -r PASSWORD || true; shift ;;
         --truststore)           TRUSTSTORE="${2:?--truststore requiere una ruta}"; shift 2 ;;
         --truststore-password)  TRUSTSTORE_PASSWORD="${2:?--truststore-password requiere un valor}"; shift 2 ;;
         --truststore-type)      TRUSTSTORE_TYPE="${2:?--truststore-type requiere un valor}"; shift 2 ;;
@@ -67,7 +69,7 @@ done
 
 [[ -n "${OUT}" ]] || fail "--out no puede estar vacio"
 [[ -n "${USERNAME}" ]] || fail "falta el usuario SCRAM (--username o KAFKA_CLIENT_USERNAME)"
-[[ -n "${PASSWORD}" ]] || fail "falta el password SCRAM (--password o KAFKA_CLIENT_PASSWORD)"
+[[ -n "${PASSWORD}" ]] || fail "falta el password SCRAM (KAFKA_CLIENT_PASSWORD o --password-stdin)"
 [[ -n "${TRUSTSTORE_PASSWORD}" ]] || fail "falta el password del truststore (KAFKA_TRUSTSTORE_PASSWORD)"
 [[ -f "${TRUSTSTORE}" ]] || fail "no existe el truststore: ${TRUSTSTORE}"
 

@@ -77,7 +77,10 @@ MS04_GROUP="ms-04-notifications"
 MS05_CONSUMES="catalog.category.changed catalog.site.changed catalog.service.changed catalog.zone.changed activities.activity.changed activities.event.changed reviews.review.changed"
 MS05_GROUP="ms-05-recommendations"
 BUSINESS_TOPICS="catalog.category.changed catalog.site.changed catalog.service.changed catalog.zone.changed activities.activity.changed activities.event.changed reviews.review.changed bookings.reservation.changed security.report.changed"
-DLQ_TOPICS="catalog.site.changed.DLT catalog.site.changed.dlq catalog.service.changed.dlq catalog.category.changed.dlq catalog.zone.changed.dlq activities.event.changed.dlq activities.activity.changed.dlq reviews.review.changed.dlq"
+DLQ_TOPICS="catalog.site.changed.DLT catalog.site.changed.dlq catalog.service.changed.dlq catalog.category.changed.dlq catalog.zone.changed.dlq activities.event.changed.dlq activities.activity.changed.dlq reviews.review.changed.dlq kafka.dlq.bookings.reservation.changed"
+# MS04-11: topic de descarte del listener de notificaciones de ms-04 (no cuelga de un
+# .dlq de ms-05; el replay necesita --target bookings.reservation.changed).
+MS04_DLQ_TOPIC="${KAFKA_NOTIFICATIONS_DLQ_TOPIC:-kafka.dlq.bookings.reservation.changed}"
 DLQ_REPLAY_GROUP="kafka-dlq-replay"
 
 usage() {
@@ -247,6 +250,8 @@ for topic in ${MS04_PRODUCES}; do
     allow "${MS04_USERNAME}" --producer --topic "${topic}"
 done
 allow "${MS04_USERNAME}" --operation IdempotentWrite --cluster
+# Escritura en el DLQ propio de notificaciones (MS04-11).
+allow "${MS04_USERNAME}" --producer --topic "${MS04_DLQ_TOPIC}"
 for topic in ${MS04_CONSUMES}; do
     allow "${MS04_USERNAME}" --consumer --topic "${topic}" --group "${MS04_GROUP}"
 done

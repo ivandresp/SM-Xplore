@@ -87,6 +87,50 @@ jobs:
       - name: Validar el compose de infraestructura
         run: docker compose -f infrastructure/compose.yaml config --quiet
 
+      - name: Validar invariantes del compose de produccion
+        run: |
+          set -euo pipefail
+          file=deploy/prod/compose.yaml
+          status=0
+
+          # PLAT-03: solo el gateway publica en todas las interfaces; el resto solo en 127.0.0.1.
+          if grep -nE '^\s+- "\$\{[A-Z0-9_]+:\?\}:[0-9]+"' "$file" | grep -v 'GATEWAY_'; then
+            echo "::error title=PLAT-03::hay puertos publicados fuera de 127.0.0.1 en $file"
+            status=1
+          fi
+          if ! grep -q '127.0.0.1:\${MS01_PORT:?}' "$file"; then
+            echo "::error title=PLAT-03::los servicios deben publicarse en 127.0.0.1"
+            status=1
+          fi
+
+          # PLAT-01: Kafka autenticado (SASL_SSL) y sin autocreacion de topics.
+          if grep -q 'INTERNAL:PLAINTEXT' "$file"; then
+            echo "::error title=PLAT-01::el listener INTERNAL de Kafka no puede ser PLAINTEXT"
+            status=1
+          fi
+          if ! grep -q 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:.*INTERNAL:SASL_SSL' "$file"; then
+            echo "::error title=PLAT-01::falta KAFKA_LISTENER_SECURITY_PROTOCOL_MAP con INTERNAL:SASL_SSL"
+            status=1
+          fi
+          if ! grep -q 'KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"' "$file"; then
+            echo "::error title=PLAT-01::KAFKA_AUTO_CREATE_TOPICS_ENABLE debe ser false en produccion"
+            status=1
+          fi
+
+          # PLAT-17: el administrador inicial no se crea solo.
+          if ! grep -q 'BOOTSTRAP_ADMIN_ENABLED: \${BOOTSTRAP_ADMIN_ENABLED:-false}' "$file"; then
+            echo "::error title=PLAT-17::BOOTSTRAP_ADMIN_ENABLED debe ser false por defecto"
+            status=1
+          fi
+
+          # PLAT-13/PLAT-14: sin etiquetas flotantes en produccion.
+          if grep -nE ':(latest|main|stable)(["@ ]|$)' deploy/prod/.env.prod.example; then
+            echo "::error title=PLAT-13::etiqueta flotante en deploy/prod/.env.prod.example"
+            status=1
+          fi
+
+          exit $status
+
       - name: Validar scripts/smoke.sh
         run: bash -n scripts/smoke.sh
 
@@ -105,6 +149,15 @@ jobs:
         run: |
           bash -n deploy/postgres/01-databases.sh
           bash -n deploy/mongo/init-replica.sh
+          bash -n deploy/mongo/init-replica-auth.sh
+          bash -n deploy/backup/backup.sh
+          bash -n deploy/backup/restore.sh
+          bash -n deploy/backup/verify-backup.sh
+          bash -n deploy/kafka/gen-tls.sh
+          bash -n deploy/kafka/create-acls.sh
+          bash -n deploy/kafka/render-client-config.sh
+          bash -n deploy/kafka/create-topics.sh
+          bash -n scripts/kafka-dlq-replay.sh
 
   stack:
     name: Stack completo y flujo de negocio

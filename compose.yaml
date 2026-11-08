@@ -47,7 +47,7 @@ services:
   # ---------------------------------------------------------------------------
 
   postgres:
-    image: postgres:${POSTGRES_VERSION:-17-alpine}
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 512m
@@ -71,12 +71,25 @@ services:
       start_period: 30s
 
   mongo:
-    image: mongo:${MONGO_VERSION:-8.2}
+    image: ${MONGO_IMAGE:-mongo:8.2}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 768m
     # Replica set de un solo nodo: ms-02 y ms-04 usan transacciones (outbox).
+    # MS02-13 (riesgo aceptado): este MongoDB de desarrollo NO tiene autenticacion. Solo es
+    # accesible desde 127.0.0.1 y desde la red interna `smxplore-stack`; no lo publiques fuera
+    # del host ni lo reutilices para datos reales. La produccion usa replica set de 3 nodos con
+    # keyfile, usuarios por servicio y TLS (`deploy/prod/compose.yaml`).
     command: ["--replSet", "rs0", "--bind_ip_all"]
+    # MS02-13: la autenticacion es opcional en desarrollo. Para habilitarla:
+    #   1) cambia el comando por `["--replSet", "rs0", "--bind_ip_all", "--auth"]`;
+    #   2) exporta MONGO_ROOT_USER y MONGO_ROOT_PASSWORD (los mismos nombres que
+    #      usan deploy/mongo/init-replica-auth.sh y deploy/backup/*.sh) y ejecuta
+    #      `docker compose run --rm mongo-init`; el script crea el usuario root y los
+    #      usuarios por base de ms-01..ms-04;
+    #   3) anade usuario, password y authSource a las MONGODB_URI de ms-01/ms-02/ms-03/ms-04.
+    # No se activa por defecto para no romper `docker compose up --build --wait`; el
+    # stack de produccion (deploy/prod/compose.yaml) ya usa RS de 3 nodos con keyfile y TLS.
     ports:
       - "127.0.0.1:${MONGO_PORT:-27019}:27017"
     volumes:
@@ -89,7 +102,7 @@ services:
       start_period: 20s
 
   mongo-init:
-    image: mongo:${MONGO_VERSION:-8.2}
+    image: ${MONGO_IMAGE:-mongo:8.2}
     restart: "no"
     logging: *default-logging
     mem_limit: 128m
@@ -169,7 +182,7 @@ services:
       retries: 10
 
   neo4j:
-    image: neo4j:${NEO4J_VERSION:-5.26-community}
+    image: ${NEO4J_IMAGE:-neo4j:5.26-community}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 1536m
@@ -244,6 +257,9 @@ services:
       JWT_AUDIENCE: sm-xplore-services
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200,http://localhost:5173}
       BOOTSTRAP_ADMIN_ENABLED: "true"
+      # MS01-18: en local no se exige verificar el correo (SMTP Mailpit); en produccion queda activado por defecto.
+      EMAIL_VERIFICATION_ENABLED: "false"
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@smxplore.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador SM-Xplore}
@@ -284,6 +300,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
+      # BAJA: 401/403 no deben filtrar informacion; HSTS opcional en desarrollo.
+      HSTS_ENABLED: ${HSTS_ENABLED:-false}
       JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
     healthcheck:
@@ -324,6 +342,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-true}
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       # Solo local: ms-03 exige HTTPS para un JWKS remoto; dentro de Compose el emisor
       # se alcanza por HTTP en la red privada.
       JWT_ALLOW_INSECURE_JWKS: "true"
@@ -365,10 +384,15 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       NOTIFICATIONS_ENABLED: "true"
       NOTIFICATIONS_EMAIL_ENABLED: "false"
+      # MS04-11: topic donde el listener de bookings.reservation.changed descarta los
+      # eventos invalidos (debe existir: lo crea deploy/kafka/topics.env).
+      NOTIFICATIONS_DLQ_TOPIC: ${NOTIFICATIONS_DLQ_TOPIC:-kafka.dlq.bookings.reservation.changed}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-04
+      REVIEW_REQUIRE_COMPLETED_BOOKING: ${REVIEW_REQUIRE_COMPLETED_BOOKING:-true}
+      REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       CATALOG_SEED_ENABLED: ${CATALOG_SEED_ENABLED:-true}
       JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
       <<: *jwt-env
@@ -438,21 +462,26 @@ services:
         condition: service_healthy
       ms-05:
         condition: service_healthy
+    # PLAT-12: la imagen corre sin privilegios y escucha en 8080/8443; el host
+    # sigue publicando 8088/8443 en loopback.
     ports:
-      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8088}:80"
-      - "127.0.0.1:${GATEWAY_HTTPS_PORT:-8443}:443"
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-8088}:8080"
+      - "127.0.0.1:${GATEWAY_HTTPS_PORT:-8443}:8443"
     environment:
-      # En desarrollo el gateway genera un certificado autofirmado en el
-      # volumen gateway_certs la primera vez (ver deploy/gateway/entrypoint.sh).
+      # En desarrollo el gateway genera un certificado autofirmado al arrancar
+      # (ver deploy/gateway/entrypoint.sh). Va en un tmpfs escribible por el
+      # usuario sin privilegios y se regenera en cada arranque: el gateway no
+      # guarda estado propio ni reutiliza claves de desarrollo entre arranques.
       TLS_SELF_SIGNED: "true"
       TLS_CN: ${GATEWAY_TLS_CN:-localhost}
     volumes:
       - ./deploy/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./deploy/gateway/conf.d:/etc/nginx/conf.d:ro
       - ./deploy/gateway/snippets:/etc/nginx/snippets:ro
-      - gateway_certs:/etc/nginx/certs
+    tmpfs:
+      - /etc/nginx/certs:mode=1777
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q ok"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz | grep -q ok"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -469,4 +498,3 @@ volumes:
   redis_data:
   neo4j_data:
   ms01_data:
-  gateway_certs:
