@@ -80,11 +80,19 @@ app:
       timeout: ${SITE_EVENTS_TIMEOUT:PT10S}
       # Un evento que no se puede aplicar se reintenta y termina en catalog.site.changed.DLT.
       dlt-suffix: ${SITE_EVENTS_DLT_SUFFIX:.DLT}
+      # Deben ser coherentes con el resto de topicos del despliegue (deploy/kafka/topics.env): 1/1
+      # con un solo broker; un cluster de 3 brokers exige SITE_EVENTS_DLT_PARTITIONS=3 y
+      # SITE_EVENTS_DLT_REPLICATION=3 para no perder el DLT si cae un broker.
+      dlt-partitions: ${SITE_EVENTS_DLT_PARTITIONS:1}
+      dlt-replication: ${SITE_EVENTS_DLT_REPLICATION:1}
       retry-interval-ms: ${SITE_EVENTS_RETRY_INTERVAL_MS:1000}
       retry-max-elapsed-ms: ${SITE_EVENTS_RETRY_MAX_ELAPSED_MS:60000}
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}
+    # Tope de paginas al leer los sitios de una gestora (100 x 100 sitios): una respuesta anomal a
+    # de ms-04 no puede encadenar peticiones sin fin; al superarlo se responde 503.
+    max-pages: ${MS04_MAX_PAGES:100}
   reviews:
     # El evento de la resena se escribe en el outbox de Postgres desde una request cuya transaccion
     # es la de Mongo: puede perderse. Este job re-despacha las resenas sin eventPublishedAt confirmado.

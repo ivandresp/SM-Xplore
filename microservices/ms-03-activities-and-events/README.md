@@ -85,12 +85,13 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `FLYWAY_ENABLED` | `true` | Activa o desactiva las migraciones al arrancar. |
 | `MS04_BASE_URL` | `http://localhost:8084` | Base de ms-04 para validar el sitio al crear eventos. En Compose: `http://host.docker.internal:8084`. |
 | `MS04_TIMEOUT` | `3s` | Timeout de la llamada a ms-04. |
+| `MS04_MAX_PAGES` | `100` | Tope de páginas al listar los sitios de una gestora (100 × 100 sitios). Al superarlo se responde `503 SITE_CATALOG_UNAVAILABLE`. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Brokers para el relay del outbox y el consumidor de sitios. |
 | `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Protocolo del cliente Kafka. En producción se exige `SASL_SSL` (o `SSL`) con ACL por topic: `catalog.site.changed` reasigna el `manager_id` de los eventos. |
 | `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-512` | Mecanismo SASL cuando el protocolo es `SASL_*`. |
 | `KAFKA_SASL_JAAS_CONFIG` | vacío | Configuración JAAS (usuario y contraseña) cuando el protocolo es `SASL_*`. |
 | `SITE_EVENTS_ENABLED` | `false` | Activa el consumidor de `catalog.site.changed` que refresca el snapshot de sitio de los eventos. |
-| `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. |
+| `OUTBOX_ENABLED` | `false` | Activa el relay del outbox a Kafka. El default apagado solo permite arrancar sin broker; el despliegue real lo fija en `true` (ver la decisión explícita en la sección de reservas) y el arranque apagado deja un `WARN`. |
 | `OUTBOX_POLL_INTERVAL_MS` | `2000` | Frecuencia del relay. |
 | `OUTBOX_BATCH_SIZE` | `10` | Filas que reclama cada ciclo. El arranque falla si `batch-size × send-timeout > cycle-timeout`. |
 | `OUTBOX_MAX_ATTEMPTS` | `20` | Intentos antes de marcar la fila como `FAILED`. |
@@ -103,6 +104,8 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `OUTBOX_RETENTION_DAYS` | `30` | Retención de las filas `PUBLISHED`/`FAILED`. |
 | `SITE_EVENTS_RETRY_INTERVAL_MS` / `SITE_EVENTS_RETRY_MAX_ELAPSED_MS` | `1000` / `60000` | Reintentos del consumidor de sitios: backoff exponencial con tope de 60 s. |
 | `SITE_EVENTS_DLT_SUFFIX` | `.DLT` | Sufijo del topic de descarte; el topic se declara al arrancar. |
+| `SITE_EVENTS_DLT_PARTITIONS` | `1` | Particiones del topic de descarte. Debe ser coherente con `deploy/kafka/topics.env`; en un clúster de 3 brokers se fija en `3`. |
+| `SITE_EVENTS_DLT_REPLICATION` | `1` | Réplica del topic de descarte. `1` con un solo broker; en un clúster de 3 brokers se fija en `3` para no perder los mensajes descartados si cae un broker. |
 | `RESERVATION_AUTO_CLOSE_CRON` | `0 15 3 * * *` | Cron del job que cierra reservas vencidas. |
 | `RESERVATION_AUTO_CLOSE_GRACE` | `P1D` | Tiempo de gracia tras el fin del ítem antes de cerrar la reserva. |
 | `DEMAND_ZONE_ID` | `America/Bogota` | Zona horaria usada para agrupar la serie temporal y los días de la semana. |
@@ -225,6 +228,8 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 **Outbox:** las transiciones de reserva (`CONFIRMED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`) escriben `bookings.reservation.changed` v2 en `outbox_events` dentro de la misma transacción. El relay está desactivado por defecto; con `OUTBOX_ENABLED=true` publica en Kafka usando `KAFKA_BOOTSTRAP_SERVERS`. La v2 agrega `itemName`, `guideId`, `managerId` y `NO_SHOW`, y ms-04 la consume para notificar al turista, al guía y a la gestora. El nombre del ítem se copia a la reserva al crearla (`item_name`).
 
+**Decisión explícita sobre el relay (MS03-14):** el valor por defecto en el código es `OUTBOX_ENABLED=false` para que un `java -jar` de desarrollo sin broker arranque, pero **el relay apagado es un modo degradado, no el modo normal**: los `*.changed` se acumulan en `outbox_events`, ms-05 y ms-04 no ven los cambios y la cola de conciliación de reseñas nunca confirma la publicación. Un despliegue real arranca el relay: `compose.yaml` y `deploy/prod/compose.yaml` fijan `OUTBOX_ENABLED=true`. Además, el arranque con el relay apagado deja un `WARN` (`Outbox relay is disabled (OUTBOX_ENABLED=false)...`) para que el modo degradado nunca pase inadvertido y sea observable en `kubectl logs`/`docker logs`.
+
 **Alcance por gestora:** `GET /api/v1/reservations?status=` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=...` de ms-04 (reenviando el `Authorization` del usuario), luego sus eventos/actividades y finalmente sus reservas. Si no tiene sitios, devuelve una lista vacía. `ADMIN` sigue viendo todas.
 
 **Outbox de catálogo:** crear o modificar una actividad o un evento escribe `activities.activity.changed` v2 o `activities.event.changed` v2 en el outbox. La v2 usa el nombre de la categoría que el usuario escribe (no un `categoryId`), no publica coordenadas —son del sitio en ms-04— y admite los estados reales (`PAUSED`/`CANCELLED` en actividades, `POSTPONED` en eventos). El evento se escribe **en la misma transacción** que la fila de la actividad o del evento: si el `INSERT` del outbox falla, la escritura se revierte y no queda una fila sin evento.
@@ -286,7 +291,7 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 - **Filtro de IA:** con `REVIEW_AI_ENABLED=true` cada reseña con comentario pasa por el mismo littleLLM de ms-04. Si el score supera `REVIEW_AI_THRESHOLD`, queda `PENDING_REVIEW` (o `HIDDEN` con `REVIEW_AI_ACTION=HIDE`) y aparece en la cola administrativa. La decisión se guarda en `ai` para auditoría. Sin filtro, la reseña nace `PUBLISHED`.
 - **Moderación:** solo `ADMIN` cambia el estado. Cada cambio efectivo actualiza `updatedAt` y publica `reviews.review.changed`, para que ms-05 ajuste su agregado de reputación.
 - **Outbox de reseñas:** crear, responder o moderar una reseña escribe `reviews.review.changed` v1 en el outbox con `reviewId`, `touristId`, `itemType`, `itemId`, `rating`, `status` y `updatedAt`. El comentario libre **no** viaja en el evento.
-- La reseña vive en MongoDB y el outbox en PostgreSQL: no comparten transacción. La reseña se guarda primero; si el evento no se puede encolar se registra el error y la reseña se devuelve igual, porque la escritura del usuario ya ocurrió. Ese evento no se reintenta.
+- La reseña vive en MongoDB y el outbox en PostgreSQL: no comparten transacción. La reseña se guarda primero; si el evento no se puede encolar se registra el error y la reseña se devuelve igual, porque la escritura del usuario ya ocurrió. Un job de conciliación (`app.reviews.event-reconciliation.*`, `ReviewEventReconciliationJob`) revisa las reseñas publicadas cuyo `eventPublishedAt` sigue nulo y reintenta el encolado, con un `eventId` determinista (`reviews.review.changed:<reviewId>:<updatedAt>`) para que el `INSERT ... ON CONFLICT DO NOTHING` sea idempotente; cuando el evento entra en el outbox se marca `eventPublishedAt`.
 - **Reportes acotados:** `GET /api/v1/review-reports` resuelve los sitios de la gestora con `GET /api/v1/sites?managerId=` de ms-04, luego sus eventos, las reseñas de esos eventos y por último los reportes. Un reporte de una actividad no aparece en el listado de una gestora: las actividades son del guía. `ADMIN` conserva el listado global.
 - **Resolver un reporte** exige ser `ADMIN` o la entidad a cargo del ítem reseñado (guía de la actividad, gestora del evento), con la misma regla que la respuesta a la reseña. Un reporte `RESOLVED` (aceptado) oculta la reseña y publica el evento; `DISMISSED` la deja publicada.
 
@@ -294,11 +299,13 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 `Evento` guarda `siteId`, `siteName` y `managerId`. Al crear un evento con rol `DESTINATION_MANAGER`, `managerId` se toma del `sub` del JWT (no del body).
 
-Ese snapshot se usa como referencia, pero **responder una reseña lo revalida**: se consulta `GET /api/v1/sites/{siteId}` de ms-04 con el token del usuario y manda la gestora actual, así que una gestora reasignada pierde el derecho de inmediato. Si ms-04 no responde, o el sitio ya no existe, se usa el snapshot y se registra un `WARN`: la alternativa es rechazar todas las respuestas cada vez que el catálogo esté caído.
+Ese snapshot se usa como referencia, pero **toda escritura y las lecturas de reservas por ítem lo revalidan**: se consulta `GET /api/v1/sites/{siteId}` de ms-04 con el token del usuario y manda la gestora actual, así que una gestora reasignada pierde los derechos de inmediato. Si ms-04 no responde, el sitio ya no existe o la respuesta no se puede validar, la operación falla cerrada con **503** (`SITE_CATALOG_UNAVAILABLE`/`REVIEW_RESPONSE_UNAVAILABLE`) y **nunca** se cae al snapshot: aceptar el snapshot permitiría a una gestora cesada seguir gestionando el evento. El snapshot queda solo como dato de lectura auxiliar (nombre del sitio, filtros de listado).
 
 **Kafka:** ms-03 usa `spring-boot-starter-kafka`. Sin el starter no hay `KafkaTemplate` ni contenedor de listeners: el relay del outbox y el consumidor de sitios quedan inertes aunque `KAFKA_BOOTSTRAP_SERVERS` esté definido.
 
 **Refresco por Kafka (opcional):** con `SITE_EVENTS_ENABLED=true`, un consumidor de `catalog.site.changed` v2 (ms-04) actualiza `sitio_nombre` y `manager_id` de todos los eventos de ese sitio. Solo aplica el evento si su `updatedAt` es más nuevo que el último aplicado (columna `sitio_actualizado_en`), así que un mensaje reordenado no devuelve el sitio a la gestora anterior. Los mensajes v1 se ignoran: no traen `managerId`.
+
+**Topic de descarte y cota del catálogo (MS03-15):** el consumidor declara `catalog.site.changed.DLT` al arrancar con la forma configurada (`SITE_EVENTS_DLT_PARTITIONS`/`SITE_EVENTS_DLT_REPLICATION`, por defecto `1` y `1`). Con un solo broker —el stack local y el de `deploy/prod/compose.yaml`— la forma coherente es `1/1`; en un clúster de tres brokers hay que fijar `3/3` para que el DLT sobreviva a la caída de un broker y sea coherente con `deploy/kafka/topics.env`. La lectura paginada del catálogo de ms-04 tiene un tope (`MS04_MAX_PAGES`, por defecto 100 páginas de 100 sitios): si ms-04 declara más páginas (respuesta anómala) la petición termina en un `503 SITE_CATALOG_UNAVAILABLE` controlado en lugar de encadenar peticiones sin fin.
 
 ## Pruebas
 
@@ -307,4 +314,4 @@ Ese snapshot se usa como referencia, pero **responder una reseña lo revalida**:
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers (PostgreSQL y MongoDB) y requieren Docker. `ApplicationContextTest` levanta el contexto completo, ejecuta Flyway y valida el wiring RS256; los tests sin Docker se omiten. La suite completa son **49 clases y 331 pruebas** e incluye `ArchitectureTest` (dominio sin frameworks, application sin infrastructure y controladores que devuelven `Publisher`) y `SiteChangedEventConsumerContractTest` (contrato consumidor de `catalog.site.changed` v2, v1 ignorado y fallo explícito cuando falta `managerId`, que en producción termina en `catalog.site.changed.DLT`).
+Las pruebas de integración usan Testcontainers (PostgreSQL y MongoDB) y requieren Docker; sin Docker esas suites se omiten. `ApplicationContextTest` levanta el contexto completo, ejecuta Flyway y valida el wiring RS256. La suite completa son **55 clases y 424 pruebas** e incluye `ArchitectureTest` (dominio sin frameworks, application sin infrastructure y controladores que devuelven `Publisher`) y `SiteChangedEventConsumerContractTest` (contrato consumidor de `catalog.site.changed` v2, v1 ignorado y fallo explícito cuando falta `managerId`, que en producción termina en `catalog.site.changed.DLT`).

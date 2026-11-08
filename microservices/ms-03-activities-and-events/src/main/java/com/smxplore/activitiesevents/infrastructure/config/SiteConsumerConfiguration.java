@@ -33,19 +33,25 @@ import org.springframework.util.backoff.ExponentialBackOff;
 public class SiteConsumerConfiguration {
 
     public static final String CONTAINER_FACTORY = "siteSnapshotContainerFactory";
-    private static final int DLT_PARTITIONS = 1;
-    private static final short DLT_REPLICATION = 1;
 
     /**
      * Crea el topic de descarte al arrancar: con {@code auto.create.topics.enable=false} (lo normal
      * en produccion) el recoverer fallaria, el offset no avanzaria y la particion quedaria bloqueada.
+     *
+     * <p>Particiones y replica son configurables para que el topic sea coherente con el resto del
+     * despliegue (`deploy/kafka/topics.env`): el stack con un solo broker usa {@code 1/1}; un cluster
+     * de tres brokers debe fijar {@code SITE_EVENTS_DLT_PARTITIONS=3} y
+     * {@code SITE_EVENTS_DLT_REPLICATION=3}. Un topic de descarte sin replica en un cluster grande
+     * pierde mensajes si cae el broker que lo hospeda.
      */
     @Bean
     public NewTopic siteChangedDeadLetterTopic(
-            @Value("${app.events.site-consumer.dlt-suffix:.DLT}") String deadLetterSuffix) {
+            @Value("${app.events.site-consumer.dlt-suffix:.DLT}") String deadLetterSuffix,
+            @Value("${app.events.site-consumer.dlt-partitions:1}") int partitions,
+            @Value("${app.events.site-consumer.dlt-replication:1}") short replication) {
         return TopicBuilder.name(SiteChangedEventDecoder.EVENT_TYPE + deadLetterSuffix)
-                .partitions(DLT_PARTITIONS)
-                .replicas(DLT_REPLICATION)
+                .partitions(partitions)
+                .replicas(replication)
                 .build();
     }
 

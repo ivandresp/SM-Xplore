@@ -16,6 +16,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Relays pending outbox rows to Kafka. Disabled unless {@code OUTBOX_ENABLED=true}.
  *
+ * <p>El relay apagado es un <b>modo degradado</b>, no el modo normal: los {@code *.changed} se
+ * guardan en {@code outbox_events} pero no llegan a Kafka, asi que ms-05 no ve los cambios y la
+ * cola crece hasta que la retencion borra las filas terminales. El despliegue (Compose local y de
+ * produccion) fija {@code OUTBOX_ENABLED=true}; el valor por defecto se deja apagado para que un
+ * {@code java -jar} sin broker no marque eventos como fallidos, y el arranque registra un WARN para
+ * que el modo degradado nunca pase inadvertido.
+ *
  * <p>Each cycle claims a batch with a lease and a {@code FOR UPDATE SKIP LOCKED} select, so several
  * instances can relay the same table without delivering a row twice and a crashed worker's rows are
  * reclaimed (counting the lost delivery as an attempt) when their lease expires. A failed send is
@@ -46,6 +53,12 @@ public class OutboxRelay {
         this.kafkaTemplateProvider = kafkaTemplateProvider;
         this.properties = properties;
         this.metrics = metrics;
+        if (!properties.isEnabled()) {
+            // Modo degradado visible en el arranque: sin relay los eventos de dominio no salen del
+            // servicio y el outbox crece. El despliegue lo enciende con OUTBOX_ENABLED=true.
+            log.warn("Outbox relay is disabled (OUTBOX_ENABLED=false): domain events will not reach"
+                    + " Kafka and the outbox table will keep growing until the relay is enabled.");
+        }
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:2000}")

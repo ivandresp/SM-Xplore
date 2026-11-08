@@ -11,6 +11,7 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityS
 import com.smxplore.activitiesevents.domain.exceptions.catalog.CatalogExportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogExportException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogFilterException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.SiteCatalogUnavailableException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventCapacityException;
@@ -105,6 +106,15 @@ public class GlobalExceptionHandler {
         // Fail closed: sin poder verificar al gestor en ms-04 no se permite responder.
         return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange,
                 "REVIEW_RESPONSE_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(SiteCatalogUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleSiteCatalogUnavailable(
+            SiteCatalogUnavailableException exception, ServerWebExchange exchange) {
+        // ms-04 devolvio mas paginas de las acotadas: se corta la lectura en vez de encadenar
+        // peticiones sin fin. Sin un catalogo fiable no se asume la propiedad de ningun sitio.
+        return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange,
+                "SITE_CATALOG_UNAVAILABLE");
     }
 
     @ExceptionHandler(ReviewReportLimitExceededException.class)
