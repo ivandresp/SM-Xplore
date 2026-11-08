@@ -360,6 +360,16 @@ class ActivityControllerTest {
     }
 
     @Test
+    void invalidFilterValueReturnsAStableCode() {
+        webTestClient.get().uri("/api/v1/activities?status=BASURA")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_FILTER")
+                .jsonPath("$.detail").isEqualTo("Some filter is not valid.");
+    }
+
+    @Test
     void guideListsEveryOwnActivityWhenFilteringByOwnGuideId() {
         given(consultActivitiesUseCase.handle(argThat(filter ->
                 filter.status() == null && GUIDE_ID.equals(filter.guideId()))))

@@ -49,6 +49,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebInputException;
@@ -143,6 +144,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ServerWebInputException.class)
     public ResponseEntity<ProblemDetail> handleUnreadableBody(ServerWebInputException exception,
                                                               ServerWebExchange exchange) {
+        // Un query param que no convierte (por ejemplo status=BASURA) llega envuelto aqui.
+        if (exception.getCause() instanceof TypeMismatchException) {
+            return build(HttpStatus.BAD_REQUEST, "Some filter is not valid.", exchange, "INVALID_FILTER");
+        }
         return build(HttpStatus.BAD_REQUEST, exception.getReason(), exchange);
     }
 
@@ -159,10 +164,18 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ProblemDetail> build(HttpStatus status, String message, ServerWebExchange exchange) {
+        return build(status, message, exchange, null);
+    }
+
+    private ResponseEntity<ProblemDetail> build(HttpStatus status, String message, ServerWebExchange exchange,
+                                                String code) {
         var detail = message == null || message.isBlank() ? status.getReasonPhrase() : message;
         var problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(status.getReasonPhrase());
         problem.setInstance(URI.create(exchange.getRequest().getPath().value()));
+        if (code != null) {
+            problem.setProperty("code", code);
+        }
         return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(problem);
