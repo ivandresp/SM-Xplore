@@ -80,7 +80,29 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 - El usuario y su nombre se toman del JWT; no se aceptan en el body.
 - Flujo de estado: `ONGOING → REPORTED` con `/close`; `REPORTED → SOLVED` con `/solve`.
 - Alertas cercanas: `GET /api/v1/security-reports/nearby?latitude=&longitude=&radiusKm=&status=&size=`.
+  Devuelve una proyección anonimizada (ver «Proyección de `nearby`» más abajo); `size` se limita a 50 y `radiusKm` a 20 km.
 - Cada escritura publica `security.report.changed` por el outbox transaccional de MongoDB.
+
+### Proyección de `nearby` (MS02-01)
+
+`GET /api/v1/security-reports/nearby` no devuelve el reporte completo: expone solo `id`, `title`, `status`,
+`latitude`/`longitude` redondeadas a 3 decimales (~110 m), `createdAt` y `updatedAt`. Nunca incluye `user`,
+`description` ni `photosUrls`, ni siquiera para el autor del reporte o el staff, porque el endpoint es un mapa
+de seguridad y no una vía de lectura del detalle. Acepta como máximo `size=50` y `radiusKm=20` (5 km por defecto).
+
+```json
+[
+  {
+    "id": "…",
+    "title": "Robo en la playa",
+    "status": "ONGOING",
+    "latitude": 10.392,
+    "longitude": -75.479,
+    "createdAt": "2026-11-08T12:00:00Z",
+    "updatedAt": "2026-11-08T12:00:00Z"
+  }
+]
+```
 
 ## Evento `security.report.changed`
 
@@ -129,7 +151,7 @@ Respuesta:
 - `cursor`: se omite en la primera petición.
 - Cuando `nextCursor` es `null` o `hasNext` es `false`, no hay más páginas.
 
-Reportes: orden `createdAt DESC`, `_id DESC`. Comentarios: orden `createdAt ASC`, `_id ASC`. La consulta `nearby` usa un índice `2dsphere` sobre `position` y ordena por distancia; no usa cursor.
+Reportes: orden `createdAt DESC`, `_id DESC`. Comentarios: orden `createdAt ASC`, `_id ASC`. La consulta `nearby` usa un índice `2dsphere` sobre `position` y ordena por distancia; no usa cursor, devuelve la proyección anonimizada y limita `size` a 50 y `radiusKm` a 20 km.
 
 ## Seguridad
 
@@ -144,6 +166,7 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - `GET /security-reports` (listado global por estado) requiere `ADMIN` o `DESTINATION_MANAGER`.
 - Los usuarios solo pueden modificar sus propios reportes, salvo staff.
 - El detalle de un reporte (`GET /security-reports/{reportId}`) y sus comentarios solo los ve su autor o el staff (`ADMIN`/`DESTINATION_MANAGER`): sin ese control cualquier usuario autenticado leía el título, la descripción, las fotos y el denunciante de un incidente.
+- `GET /security-reports/nearby` solo devuelve la proyección anonimizada (`id`, `title`, `status`, coordenadas con 3 decimales, fechas): ni el denunciante, ni la descripción, ni las fotos, ni siquiera al autor o al staff; y acota `size` ≤ 50 y `radiusKm` ≤ 20 km (MS02-01).
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - La llave pública se obtiene del JWKS de ms-01 o de un PEM local; nunca se comparte una llave privada.
 - Los errores usan RFC 9457 (`application/problem+json`) con `type`, `title`, `status`, `detail` e `instance`.
@@ -164,4 +187,4 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **44 pruebas** y valida el contrato `security.report.changed`, el evento generado, la geolocalización y los errores RFC 9457.
+Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **53 pruebas** y valida el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`) y los errores RFC 9457.

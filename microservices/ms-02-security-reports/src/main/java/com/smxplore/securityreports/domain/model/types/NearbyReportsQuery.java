@@ -12,8 +12,8 @@ public record NearbyReportsQuery(
         int limit
 ) {
 
-    public static final double MAX_RADIUS_KM = 50.0;
-    public static final int MAX_LIMIT = 100;
+    public static final double MAX_RADIUS_KM = 20.0;
+    public static final int MAX_LIMIT = 50;
 
     public NearbyReportsQuery {
         if (latitude < -90.0 || latitude > 90.0) {

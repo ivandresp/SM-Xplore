@@ -4,6 +4,7 @@ import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.domain.model.types.*;
 import com.smxplore.securityreports.domain.ports.usecases.*;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.ChangeReportContentRequest;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.NearbySecurityReportResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PhotosRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportRequest;
@@ -64,15 +65,16 @@ public class SecurityReportController {
     }
 
     @GetMapping("/nearby")
-    @Operation(summary = "List security reports near a coordinate, ordered by distance")
-    public Flux<SecurityReportResponse> findNearby(
+    @Operation(summary = "List anonymized security reports near a coordinate, ordered by distance; "
+            + "coordinates are rounded to three decimals and reporter, description and photos are never exposed")
+    public Flux<NearbySecurityReportResponse> findNearby(
             @RequestParam double latitude,
             @RequestParam double longitude,
             @RequestParam(defaultValue = "5") double radiusKm,
             @RequestParam(required = false) SecurityReportStatus status,
             @RequestParam(defaultValue = "20") int size) {
         var query = new NearbyReportsQuery(latitude, longitude, radiusKm, status, size);
-        return consultNearbyReportsUseCase.handle(query).map(mapper::toResponse);
+        return consultNearbyReportsUseCase.handle(query).map(mapper::toNearbyResponse);
     }
 
     @GetMapping("/{reportId}")

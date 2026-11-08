@@ -9,6 +9,9 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface SecurityReportWebMapper {
     @Mapping(target = "id", ignore = true)
@@ -34,4 +37,27 @@ public interface SecurityReportWebMapper {
     Location toDomain(LocationDto location);
 
     LocationDto toDto(Location location);
+
+    /**
+     * Maps a report to the anonymized nearby projection: no reporter, no description, no photos
+     * and coordinates rounded to three decimals.
+     */
+    default NearbySecurityReportResponse toNearbyResponse(SecurityReport securityReport) {
+        var location = securityReport.getLocation();
+        return new NearbySecurityReportResponse(
+                securityReport.getId(),
+                securityReport.getTitle(),
+                securityReport.getStatus(),
+                roundCoordinate(location == null ? null : location.latitude()),
+                roundCoordinate(location == null ? null : location.longitude()),
+                securityReport.getCreatedAt(),
+                securityReport.getUpdatedAt()
+        );
+    }
+
+    private static Double roundCoordinate(Double value) {
+        return value == null ? null : BigDecimal.valueOf(value)
+                .setScale(3, RoundingMode.HALF_UP)
+                .doubleValue();
+    }
 }
