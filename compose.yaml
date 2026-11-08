@@ -215,6 +215,10 @@ services:
     ports:
       - "127.0.0.1:${MS01_PORT:-8081}:8081"
     environment:
+      # ms-01 no tiene perfil "local": su perfil de desarrollo es "dev" (llaves JWT
+      # autogeneradas + persistidas en ms01_data, admin de ejemplo, MFA opcional).
+      # El perfil "prod" del Dockerfile solo aplica a producción, nunca a este stack.
+      SPRING_PROFILES_ACTIVE: ${MS01_SPRING_PROFILES_ACTIVE:-dev}
       R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
       DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
       DB_USERNAME: smxplore
@@ -261,6 +265,10 @@ services:
       - "127.0.0.1:${MS02_PORT:-8080}:8080"
     environment:
       MONGODB_URI: mongodb://mongo:27017/security_reports?replicaSet=rs0
+      # En local dejamos que Spring cree los índices declarados (incluido el 2dsphere de
+      # /security-reports/nearby); en producción se aprovisionan con deploy/persistence/INDICES.md
+      # y MONGO_AUTO_INDEX_CREATION queda en false.
+      MONGO_AUTO_INDEX_CREATION: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
