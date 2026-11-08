@@ -17,7 +17,7 @@ class SecurityReportTests {
     void cannotSolveReportBeforeItIsReported() {
         var report = validReport();
 
-        assertThatThrownBy(report::markAsSolved)
+        assertThatThrownBy(() -> report.markAsSolved(UUID.randomUUID(), "corr-1"))
                 .isInstanceOf(InvalidStatusTransitionException.class)
                 .hasMessageContaining("must be reported");
     }
@@ -25,20 +25,46 @@ class SecurityReportTests {
     @Test
     void followsOngoingReportedSolvedFlow() {
         var report = validReport();
+        var actor = UUID.randomUUID();
 
-        report.markAsReported();
-        report.markAsSolved();
+        report.markAsReported(actor, "corr-1");
+        report.markAsSolved(actor, "corr-2");
 
         assertThat(report.getStatus()).isEqualTo(SecurityReportStatus.SOLVED);
+        assertThat(report.getLastStatusChange()).isNotNull();
+        assertThat(report.getLastStatusChange().actorId()).isEqualTo(actor);
+        assertThat(report.getLastStatusChange().from()).isEqualTo(SecurityReportStatus.REPORTED);
+        assertThat(report.getLastStatusChange().to()).isEqualTo(SecurityReportStatus.SOLVED);
+        assertThat(report.getLastStatusChange().correlationId()).isEqualTo("corr-2");
     }
 
     @Test
     void cannotReportAnAlreadyReportedReport() {
         var report = validReport();
-        report.markAsReported();
+        report.markAsReported(UUID.randomUUID(), "corr-1");
 
-        assertThatThrownBy(report::markAsReported)
+        assertThatThrownBy(() -> report.markAsReported(UUID.randomUUID(), "corr-2"))
                 .isInstanceOf(InvalidStatusTransitionException.class);
+    }
+
+    /**
+     * MS02-15: cada transicion deja rastro de quien la hizo, desde/hacia que estado y cuando.
+     */
+    @Test
+    void recordsTheActorAndTimestampOfTheStatusChange() {
+        var report = validReport();
+        var actor = UUID.randomUUID();
+
+        report.markAsReported(actor, "corr-42");
+
+        var change = report.getLastStatusChange();
+        assertThat(change).isNotNull();
+        assertThat(change.actorId()).isEqualTo(actor);
+        assertThat(change.from()).isEqualTo(SecurityReportStatus.ONGOING);
+        assertThat(change.to()).isEqualTo(SecurityReportStatus.REPORTED);
+        assertThat(change.correlationId()).isEqualTo("corr-42");
+        assertThat(change.at()).isNotNull();
+        assertThat(report.getUpdatedAt()).isEqualTo(change.at());
     }
 
     @Test

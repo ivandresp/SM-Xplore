@@ -6,6 +6,7 @@ import com.smxplore.securityreports.domain.exceptions.InvalidUserReporterExcepti
 import com.smxplore.securityreports.domain.exceptions.ReportWithoutContentException;
 import com.smxplore.securityreports.domain.model.types.Location;
 import com.smxplore.securityreports.domain.model.types.PlainText;
+import com.smxplore.securityreports.domain.model.types.StatusChange;
 import com.smxplore.securityreports.domain.model.types.UserRef;
 import lombok.Builder;
 import lombok.Getter;
@@ -46,6 +47,9 @@ public class SecurityReport {
     private Instant updatedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
     private Long version;
+
+    /** Last transition to REPORTED/SOLVED with its actor and timestamp (MS02-15). */
+    private StatusChange lastStatusChange;
 
     //Methods
     public void validate() {
@@ -120,23 +124,29 @@ public class SecurityReport {
         return SecurityReportStatus.SOLVED.equals(status);
     }
 
-    public void markAsSolved() {
+    public void markAsSolved(UUID actorId, String correlationId) {
         if (isSolved()) throw new InvalidStatusTransitionException("Already solved");
         if (!isReported()) {
             throw new InvalidStatusTransitionException("SecurityReport must be reported before being solved");
         }
-        status = SecurityReportStatus.SOLVED;
-        touch();
+        recordStatusChange(actorId, correlationId, SecurityReportStatus.SOLVED);
     }
 
     public List<String> getPhotosUrls() {
         return Collections.unmodifiableList(photosUrls);
     }
 
-    public void markAsReported() {
+    public void markAsReported(UUID actorId, String correlationId) {
         if (!isOngoing()) throw new InvalidStatusTransitionException("SecurityReport is not ongoing");
-        status = SecurityReportStatus.REPORTED;
-        touch();
+        recordStatusChange(actorId, correlationId, SecurityReportStatus.REPORTED);
+    }
+
+    private void recordStatusChange(UUID actorId, String correlationId, SecurityReportStatus target) {
+        var origin = status;
+        var changedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        status = target;
+        lastStatusChange = new StatusChange(actorId, origin, target, changedAt, correlationId);
+        updatedAt = changedAt;
     }
 
     private void validateTitle(String title) {

@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface MarkReportAsSolvedUseCasePort {
 
-    Mono<SecurityReport> handle(UUID securityReportId, String correlationId);
+    Mono<SecurityReport> handle(UUID securityReportId, UUID actorId, String correlationId);
 }

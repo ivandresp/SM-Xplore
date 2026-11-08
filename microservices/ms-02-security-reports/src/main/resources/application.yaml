@@ -88,3 +88,8 @@ app:
     # MS02-09: el outbox guarda el evento con PII; 7 dias bastan para reintentos y diagnostico.
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     retention-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
+  # MS02-16: el backfill de datos heredados corre por lotes y con presupuesto de tiempo.
+  migration:
+    enabled: ${MIGRATION_ENABLED:true}
+    batch-size: ${MIGRATION_BATCH_SIZE:100}
+    timeout: ${MIGRATION_TIMEOUT:60s}

@@ -101,7 +101,7 @@ class PersistenceAdaptersIntegrationTests {
 
         var reportToUpdate = securityReportRepository.findById(firstReport.getId()).block();
         reportToUpdate.changeContent("Título actualizado", "Descripción actualizada");
-        reportToUpdate.markAsReported();
+        reportToUpdate.markAsReported(UUID.randomUUID(), "corr-it");
         securityReportRepository.save(reportToUpdate).block();
 
         var updated = securityReportRepository.findById(firstReport.getId()).block();
@@ -109,6 +109,8 @@ class PersistenceAdaptersIntegrationTests {
         assertThat(updated.getTitle()).isEqualTo("Título actualizado");
         assertThat(updated.getDescription()).isEqualTo("Descripción actualizada");
         assertThat(updated.getStatus()).isEqualTo(SecurityReportStatus.REPORTED);
+        assertThat(updated.getLastStatusChange()).isNotNull();
+        assertThat(updated.getLastStatusChange().to()).isEqualTo(SecurityReportStatus.REPORTED);
     }
 
     @Test

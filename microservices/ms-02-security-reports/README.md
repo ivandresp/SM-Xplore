@@ -82,6 +82,9 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `OUTBOX_MAX_ATTEMPTS` / `OUTBOX_*_BACKOFF` | `20` / `1s`–`1m` | Reintentos y backoff. |
 | `OUTBOX_LEASE_DURATION` | `3m` | Lease del worker que publica. |
 | `OUTBOX_RETENTION_DAYS` | `7` | Retención de eventos publicados/fallidos (antes 30; el payload lleva datos del reporte, MS02-09). |
+| `MIGRATION_ENABLED` | `true` | Ejecuta el backfill idempotente de datos heredados al arrancar (MS02-16). |
+| `MIGRATION_BATCH_SIZE` | `100` | Documentos por lote del backfill de `position` (1–1000). |
+| `MIGRATION_TIMEOUT` | `60s` | Presupuesto total del backfill; al agotarse no se bloquea el arranque y se reintenta en el siguiente. |
 | `HSTS_ENABLED` | `false` | Añade `Strict-Transport-Security`; en el perfil `prod` está activo (MS02-12). |
 | `SPRINGDOC_API_DOCS_ENABLED` | `false` | Habilita `/v3/api-docs` (solo local/dev). |
 | `SPRINGDOC_SWAGGER_UI_ENABLED` | `false` | Habilita Swagger UI (solo local/dev). |
@@ -92,7 +95,8 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 - Actualizar: `title` y `description` mediante `PATCH /api/v1/security-reports/{reportId}/content`.
 - Leer: `title`, `description`, `location`, `photosUrls`, `status`, `createdAt`, `updatedAt`.
 - El usuario y su nombre se toman del JWT; no se aceptan en el body.
-- Flujo de estado: `ONGOING → REPORTED` con `/close`; `REPORTED → SOLVED` con `/solve`.
+- Flujo de estado: `ONGOING → REPORTED` con `/close`; `REPORTED → SOLVED` con `/solve`. Cada cierre o resolución guarda
+  en el documento `lastStatusChange` (`actorId`, `from`, `to`, `at`, `correlationId`); no se expone en la API pública.
 - Alertas cercanas: `GET /api/v1/security-reports/nearby?latitude=&longitude=&radiusKm=&status=&size=`.
   Devuelve una proyección anonimizada (ver «Proyección de `nearby`» más abajo); `size` se limita a 50 y `radiusKm` a 20 km.
 - Cada escritura publica `security.report.changed` por el outbox transaccional de MongoDB.
@@ -268,6 +272,30 @@ este servicio) y está reportada al Lead.
 parameter.» / «Malformed request.») y el detalle queda en el log; los errores de validación de campos públicos y de
 dominio siguen siendo descriptivos para el cliente.
 
+### Trazabilidad de cierres (MS02-15)
+
+`POST /close` y `POST /solve` no solo cambian el estado: cada transición guarda en el propio reporte
+`lastStatusChange` con `actorId` (claim `sub` del JWT), `from`, `to`, `at` y `correlationId`, y emite un log
+estructurado (`Security report status changed: reportId=… from=… to=… actorId=… correlationId=…`). No hay colección
+de auditoría separada: el rastro viaja con el documento y se conserva mientras el reporte exista.
+
+### Backfill acotado (MS02-16)
+
+El backfill de datos heredados ya no carga la colección completa ni bloquea el arranque: procesa `position` en lotes
+de `MIGRATION_BATCH_SIZE`, con presupuesto total `MIGRATION_TIMEOUT`, y escribe un marcador
+`_id="legacy-backfill-v1"` en `security_report_migrations` cuando termina. Si se agota el presupuesto se registra el
+error, no se escribe el marcador y el proceso (idempotente) se reanuda en el siguiente arranque;
+`MIGRATION_ENABLED=false` lo desactiva.
+
+### Índices (MS02-17)
+
+Si `MONGO_AUTO_INDEX_CREATION=false`, `MongoIndexGuard` verifica al arrancar que existan
+`idx_security_reports_status_created_at_v2`, `idx_security_reports_user_created_at_v2`,
+`idx_security_reports_position` (2dsphere) e `idx_security_report_comments_report_created_at_v2`; fuera de
+`local`/`dev`/`test` el arranque falla indicando los nombres y el DDL en `deploy/persistence/INDICES.md`. En
+producción se mantiene `MONGO_AUTO_INDEX_CREATION=true` (ver ese documento); el guard cubre despliegues que lo
+apaguen y aprovisionen los índices con un job.
+
 ### Riesgos aceptados
 
 - **XSS residual en el cliente**: el servicio devuelve JSON y rechaza HTML, pero si un cliente renderizara el
@@ -286,12 +314,21 @@ dominio siguen siendo descriptivos para el cliente.
   externa tipo X.509/IAM).
 - **Mensajes de error genéricos (MS02-14)**: se pierde detalle en la respuesta, pero el log del servidor conserva la
   causa; es el intercambio aceptado para no filtrar internals.
+- **Auditoría en el propio reporte (MS02-15)**: no hay colección de auditoría inmutable; el rastro de la última
+  transición vive con el documento y se pierde si el reporte se elimina fuera del servicio. El log estructurado y la
+  retención de logs de la plataforma cubren la consulta histórica.
+- **Backfill best-effort (MS02-16)**: si el presupuesto `MIGRATION_TIMEOUT` se agota, el backfill no termina en ese
+  arranque (se reanuda en el siguiente, es idempotente); volúmenes mayores que el presupuesto requerirán un job
+  dedicado.
+- **Validación de índices, no creación (MS02-17)**: el guard comprueba al arrancar que existan los índices, pero no
+  los crea; con `MONGO_AUTO_INDEX_CREATION=true` (valor documentado para producción) es Spring Data quien los crea.
 
 ## Migraciones y datos legados
 
-- Al arrancar se ejecuta un backfill idempotente de `createdAt`, `updatedAt` y `position` (GeoJSON) para reportes antiguos.
+- Al arrancar se ejecuta un backfill idempotente de `createdAt`, `updatedAt`, `version` y `position` (GeoJSON) para reportes antiguos: por lotes, con presupuesto de tiempo y marcador de completado en `security_report_migrations` (MS02-16).
 - Si un comentario legado no tiene `createdAt`, el mapper usa `Instant.EPOCH` como respaldo para evitar errores de paginación.
 - Los índices usan sufijo `_v2` para evitar conflictos con definiciones anteriores. Los índices antiguos pueden eliminarse manualmente después de verificar el plan de consulta.
+- Con `MONGO_AUTO_INDEX_CREATION=false`, el arranque valida que existan los índices requeridos (MS02-17).
 - El outbox vive en `security_report_outbox` y requiere MongoDB en replica set.
 
 ## Pruebas
@@ -301,4 +338,4 @@ dominio siguen siendo descriptivos para el cliente.
 ./gradlew build
 ```
 
-Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **128 pruebas** (96 unitarias + 32 de integración): unitarias para las reglas de dominio y de seguridad (contenido, allowlist de fotos, límites por cuenta, guard de arranque, HSTS, Kafka, correlation id, coordenadas finitas) e integración para el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`), la autorización de comentarios, el 404 sin oráculo y los errores RFC 9457.
+Las pruebas de integración usan Testcontainers con `mongo:7.0` en replica set y requieren Docker. La suite tiene **144 pruebas** (112 unitarias + 32 de integración): unitarias para las reglas de dominio y de seguridad (contenido, allowlist de fotos, límites por cuenta, guards de arranque de JWT/Kafka/Mongo, auditoría de transiciones, backfill acotado, HSTS, correlation id, coordenadas finitas) e integración para el contrato `security.report.changed`, el evento generado, la geolocalización (incluida la proyección anonimizada de `nearby`), la autorización de comentarios, el 404 sin oráculo, la traza de `lastStatusChange` y los errores RFC 9457.

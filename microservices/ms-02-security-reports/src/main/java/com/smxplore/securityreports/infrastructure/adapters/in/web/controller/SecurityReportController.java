@@ -147,17 +147,22 @@ public class SecurityReportController {
     @Operation(summary = "Close a security report (marks it as reported)")
     public Mono<SecurityReportResponse> close(@PathVariable UUID reportId,
                                               @RequestHeader(value = "X-Correlation-Id", required = false)
-                                              String correlationId) {
-        return closeReportUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
+                                              String correlationId,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        return closeReportUseCase
+                .handle(reportId, jwtUserResolver.subjectId(jwt), correlationId(correlationId))
+                .map(mapper::toResponse);
     }
 
     @PostMapping("/{reportId}/solve")
     @Operation(summary = "Mark a security report as solved")
     public Mono<SecurityReportResponse> solve(@PathVariable UUID reportId,
                                               @RequestHeader(value = "X-Correlation-Id", required = false)
-                                              String correlationId) {
-        return markReportAsSolvedUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
-
+                                              String correlationId,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        return markReportAsSolvedUseCase
+                .handle(reportId, jwtUserResolver.subjectId(jwt), correlationId(correlationId))
+                .map(mapper::toResponse);
     }
 
     /** Acepta solo identificadores acotados; si el cliente envia basura se genera uno nuevo (MS02-08). */

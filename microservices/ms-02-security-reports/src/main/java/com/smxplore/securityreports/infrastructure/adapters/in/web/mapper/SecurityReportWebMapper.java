@@ -20,6 +20,7 @@ public interface SecurityReportWebMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "version", ignore = true)
     @Mapping(target = "user", ignore = true)
+    @Mapping(target = "lastStatusChange", ignore = true)
     SecurityReport toDomain(SecurityReportRequest request);
 
     SecurityReportResponse toResponse(SecurityReport securityReport);
