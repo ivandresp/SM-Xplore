@@ -304,6 +304,39 @@ recomendaciones de un `touristId` distinto del suyo, se registra
 `recommendations.admin.access`. La capacidad de soporte se mantiene, pero deja de ser invisible:
 se puede alertar sobre ella sin romper el flujo.
 
+### Endurecimiento de la fase informativa de seguridad (MS05-11, MS05-12, MS05-14 y MS05-15)
+
+**MS05-11 — CSP y HSTS en las respuestas del servicio.** `SecurityHeadersWebFilter` añade siempre
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`
+(el servicio solo devuelve JSON) y `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+cuando la petición llegó por TLS (`request.getSslInfo()`) o el gateway la reescribió con
+`X-Forwarded-Proto: https`. **Pendiente de plataforma:** el gateway termina TLS y es quien debe
+enviar HSTS al cliente; ms-05 no puede cubrir el primer acceso ni las respuestas que no pasan por
+él. Esta es una decisión de plataforma, no de este servicio.
+
+**MS05-12 — autorización cerrada por defecto.** La cadena de seguridad ya no usa
+`anyExchange().authenticated()` como red de seguridad: la última regla es
+`anyExchange().denyAll()`. Cada ruta debe declararse de forma explícita con su rol
+(`/actuator/health|info` público; `metrics`/`prometheus` y `/internal/admin/**` con `ADMIN`;
+`/api/v1/recommendations` con `TOURIST|ADMIN`; preferencias e interacciones con `TOURIST`;
+documentación solo con `SECURITY_DOCS_PUBLIC=true`). Consecuencia operativa: **toda ruta nueva
+responde 403 hasta que se añada su regla**, y su test de autorización por rol. `SecurityAuthorizationTest`
+fija este comportamiento, incluida una ruta de prueba no declarada que debe dar 403.
+
+**MS05-14 — una sola regla de identidad.** `JwtIdentityResolver` centraliza la lectura del UUID:
+`sub` y, si falta, el claim configurable `JWT_USER_ID_CLAIM` (`userId` por defecto). Lo usan tanto
+`JwtUserResolver` (resolución de la petición) como `AuthVersionValidator` (validación del claim
+`ver`), que antes caía a un claim fijo `id` y podía devolver 401 con emisores que solo envían
+`userId`. Requiere UUID válido; un valor ausente o no-UUID se rechaza con `InvalidJwtException`.
+
+**MS05-15 — imagen endurecida.** El `Dockerfile` ya parte de `eclipse-temurin:25-jdk` y
+`eclipse-temurin:25-jre` pineados por digest, instala solo `curl` con `--no-install-recommends`, no
+ejecuta `apt-get upgrade` y corre con el usuario no root `app`. `DockerImageHardeningTest` fija esos
+invariantes. **Pendiente de plataforma/CI:** no hay escaneo de dependencias (Trivy/Grype) ni SBOM en
+la tubería; se documenta como riesgo aceptado hasta que CI lo añada. Las dependencias con CVE ya
+están forzadas en `build.gradle.kts` (`lz4-java`, `snappy-java`) y los starters van por BOM de
+Spring Boot.
+
 **JWKS** (JSON Web Key Set) es el estándar para publicar las llaves públicas con las que se
 verifican los JWT. ms-01 firma con su llave privada y expone las públicas en un endpoint como
 `/.well-known/jwks.json`; ms-05 descarga ese conjunto, elige la llave por el `kid` del header

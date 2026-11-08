@@ -2,6 +2,7 @@ package com.smxplore.recommendations.infrastructure.adapters.in.web.security;
 
 import com.smxplore.recommendations.domain.exception.InvalidJwtException;
 import com.smxplore.recommendations.infrastructure.config.JwtProperties;
+import com.smxplore.recommendations.infrastructure.security.JwtIdentityResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -12,7 +13,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtUserResolverTest {
 
-    private final JwtUserResolver resolver = new JwtUserResolver(new JwtProperties());
+    private final JwtProperties properties = new JwtProperties();
+    private final JwtUserResolver resolver =
+            new JwtUserResolver(properties, new JwtIdentityResolver(properties));
 
     @Test
     void readsTheTouristIdFromTheStandardSubject() {

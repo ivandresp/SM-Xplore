@@ -54,7 +54,11 @@ public class SecurityConfiguration {
                     exchanges.pathMatchers(HttpMethod.DELETE, "/api/v1/preferences/**").hasRole("TOURIST");
                     exchanges.pathMatchers(HttpMethod.POST, "/api/v1/interactions/view/**").hasRole("TOURIST");
                     exchanges.pathMatchers("/internal/admin/**").hasRole("ADMIN");
-                    exchanges.anyExchange().authenticated();
+                    // MS05-12: denegar por defecto. Toda ruta nueva debe declararse de forma
+                    // explicita con su rol; cualquier ruta que se olvide (o que se registre por
+                    // accidente en el futuro) responde 403 aun con un token valido, en lugar de
+                    // quedar accesible a cualquier rol autenticado como ocurria antes.
+                    exchanges.anyExchange().denyAll();
                 })
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiAuthenticationEntryPoint)
