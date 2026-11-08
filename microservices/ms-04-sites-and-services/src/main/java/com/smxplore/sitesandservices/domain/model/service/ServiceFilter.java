@@ -3,6 +3,7 @@ package com.smxplore.sitesandservices.domain.model.service;
 import com.smxplore.sitesandservices.domain.exception.InvalidCatalogException;
 import com.smxplore.sitesandservices.domain.model.common.ContentStatus;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record ServiceFilter(
@@ -13,6 +14,8 @@ public record ServiceFilter(
         ContentStatus status,
         String type,
         String search,
+        BigDecimal priceMin,
+        BigDecimal priceMax,
         int page,
         int size
 ) {

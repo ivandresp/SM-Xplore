@@ -366,11 +366,79 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
+    @Test
+    void filtersServicesByPriceRange() {
+        UUID managerId = UUID.randomUUID();
+        UUID providerId = UUID.randomUUID();
+        UUID touristId = UUID.randomUUID();
+
+        CategoryResponse category = createCategory(managerId);
+        ZoneResponse zone = createZone(managerId);
+        SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
+        ServiceResponse cheap = createServiceWithPrice(
+                providerId, category.categoryId(), zone.zoneId(), site.siteId(), "50000");
+        ServiceResponse mid = createServiceWithPrice(
+                providerId, category.categoryId(), zone.zoneId(), site.siteId(), "100000");
+        ServiceResponse expensive = createServiceWithPrice(
+                providerId, category.categoryId(), zone.zoneId(), site.siteId(), "200000");
+
+        PageResponse<ServiceResponse> range = listServicesByPrice(
+                touristId, site.siteId(), "60000", "150000");
+        assertThat(range.total()).isEqualTo(1);
+        assertThat(range.content()).extracting(ServiceResponse::serviceId)
+                .containsExactly(mid.serviceId());
+
+        PageResponse<ServiceResponse> minOnly = listServicesByPrice(
+                touristId, site.siteId(), "60000", null);
+        assertThat(minOnly.total()).isEqualTo(2);
+        assertThat(minOnly.content()).extracting(ServiceResponse::serviceId)
+                .containsExactlyInAnyOrder(mid.serviceId(), expensive.serviceId());
+
+        PageResponse<ServiceResponse> maxOnly = listServicesByPrice(
+                touristId, site.siteId(), null, "60000");
+        assertThat(maxOnly.total()).isEqualTo(1);
+        assertThat(maxOnly.content()).extracting(ServiceResponse::serviceId)
+                .containsExactly(cheap.serviceId());
+
+        PageResponse<ServiceResponse> noPrice = listServicesByPrice(
+                touristId, site.siteId(), null, null);
+        assertThat(noPrice.total()).isEqualTo(3);
+    }
+
+    private PageResponse<ServiceResponse> listServicesByPrice(
+            UUID callerId, UUID siteId, String priceMin, String priceMax) {
+        String uri = "/api/v1/services?siteId=" + siteId;
+        if (priceMin != null) {
+            uri += "&priceMin=" + priceMin;
+        }
+        if (priceMax != null) {
+            uri += "&priceMax=" + priceMax;
+        }
+        return clientFor(callerId, "TOURIST")
+                .get().uri(uri)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<ServiceResponse>>() {
+                })
+                .returnResult()
+                .getResponseBody();
+    }
+
     private ServiceResponse createService(
             UUID providerId,
             UUID categoryId,
             UUID zoneId,
             UUID siteId
+    ) {
+        return createServiceWithPrice(providerId, categoryId, zoneId, siteId, "50000");
+    }
+
+    private ServiceResponse createServiceWithPrice(
+            UUID providerId,
+            UUID categoryId,
+            UUID zoneId,
+            UUID siteId,
+            String price
     ) {
         return clientFor(providerId, "SERVICE_PROVIDER")
                 .post().uri("/api/v1/services")
@@ -385,14 +453,14 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                           "zoneId":"%s",
                           "latitude":10.39,
                           "longitude":-75.47,
-                          "price":50000,
+                          "price":%s,
                           "maxCapacity":20,
                           "availability":[{"dayOfWeek":"MONDAY","opensAt":"10:00:00","closesAt":"18:00:00"}],
                           "photosUrls":[],
                           "cancellationPolicy":"48 horas",
                           "status":"PUBLISHED"
                         }
-                        """.formatted(categoryId, siteId, zoneId))
+                        """.formatted(categoryId, siteId, zoneId, price))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(ServiceResponse.class)
