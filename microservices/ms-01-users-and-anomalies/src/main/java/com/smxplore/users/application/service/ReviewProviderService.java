@@ -2,6 +2,7 @@ package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.ReviewProviderCommand;
 import com.smxplore.users.application.port.in.ReviewProviderUseCase;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
@@ -24,6 +25,7 @@ public final class ReviewProviderService implements ReviewProviderUseCase {
     private final UserRepository users;
     private final AuditTrailRecorder audit;
     private final ProviderReviewNotifier notifier;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -31,11 +33,13 @@ public final class ReviewProviderService implements ReviewProviderUseCase {
             UserRepository users,
             AuditTrailRecorder audit,
             ProviderReviewNotifier notifier,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.audit = audit;
         this.notifier = notifier;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -65,6 +69,8 @@ public final class ReviewProviderService implements ReviewProviderUseCase {
         provider.changeRegistrationStatus(decision, now);
         return users.save(provider)
                 .then(audit.record(actorId, actionFor(decision), provider.id(), details(decision, command), now))
+                // MS01-15: aprobar o rechazar la prestadora incrementa authVersion del usuario.
+                .then(evictor.evict(provider.id()))
                 .thenReturn(provider);
     }
 

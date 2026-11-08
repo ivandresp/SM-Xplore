@@ -3,6 +3,7 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.ResetPasswordCommand;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
 import com.smxplore.users.application.port.out.AccountAttemptLimiter;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.TokenHasher;
@@ -23,6 +24,7 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
     private final TokenHasher tokenHasher;
     private final LoginProtection loginProtection;
     private final AccountAttemptLimiter accountAttemptLimiter;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -33,6 +35,7 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
             TokenHasher tokenHasher,
             LoginProtection loginProtection,
             AccountAttemptLimiter accountAttemptLimiter,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
@@ -41,6 +44,7 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
         this.tokenHasher = tokenHasher;
         this.loginProtection = loginProtection;
         this.accountAttemptLimiter = accountAttemptLimiter;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -69,6 +73,9 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
                                             return users.save(user)
                                                     .then(resetTokens.save(token.markUsed(now)))
                                                     .then(resetTokens.invalidateAllForUser(user.id(), now))
+                                                    // MS01-15: la contraseña cambió (authVersion++): invalidar la
+                                                    // versión cacheada para expulsar los tokens anteriores ya.
+                                                    .then(evictor.evict(user.id()))
                                                     .then(clearLockout(user));
                                         })))))
                 .then();

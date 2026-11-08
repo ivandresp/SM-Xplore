@@ -2,6 +2,7 @@ package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.ChangePasswordCommand;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.TransactionPort;
@@ -20,6 +21,7 @@ public final class ChangeOwnPasswordService implements ChangeOwnPasswordUseCase 
     private final UserRepository users;
     private final PasswordResetTokenRepository resetTokens;
     private final PasswordHasher passwordHasher;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -27,11 +29,13 @@ public final class ChangeOwnPasswordService implements ChangeOwnPasswordUseCase 
             UserRepository users,
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.resetTokens = resetTokens;
         this.passwordHasher = passwordHasher;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -59,11 +63,17 @@ public final class ChangeOwnPasswordService implements ChangeOwnPasswordUseCase 
         return passwordHasher.matches(command.currentPassword(), user.passwordHash());
     }
 
+    /**
+     * MS01-15: cambiar la contraseña incrementa {@code authVersion}; se descarta la entrada cacheada para que la
+     * revocación de sesiones sea inmediata y no espere el TTL de 15 s.
+     */
     private Mono<Void> changePassword(Usuario user, ChangePasswordCommand command) {
         Instant now = clock.instant();
         return passwordHasher.hash(command.newPassword()).flatMap(passwordHash -> {
             user.changePassword(passwordHash, now);
-            return users.save(user).then(resetTokens.invalidateAllForUser(user.id(), now));
+            return users.save(user)
+                    .then(resetTokens.invalidateAllForUser(user.id(), now))
+                    .then(evictor.evict(user.id()));
         });
     }
 }

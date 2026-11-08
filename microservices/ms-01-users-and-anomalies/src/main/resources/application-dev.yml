@@ -13,6 +13,9 @@ app:
       required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
     headers:
       hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
+    actuator:
+      # En local se permite leer métricas sin JWT para depurar; en producción el valor seguro es false.
+      public-metrics: ${ACTUATOR_PUBLIC_METRICS:true}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   reviews:

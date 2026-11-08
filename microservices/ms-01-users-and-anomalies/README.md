@@ -142,6 +142,10 @@ docker compose --profile full down
 | `BOOTSTRAP_ADMIN_EMAIL` | `admin@smxplore.local` solo en `dev` |
 | `BOOTSTRAP_ADMIN_PASSWORD` | `ChangeMe123!` solo en `dev`; fuera de desarrollo debe ser distinta |
 | `FRONTEND_BASE_URL` | `http://localhost:5173` |
+| `FRONTEND_VERIFY_EMAIL_PATH` | `/verificar-correo` |
+| `EMAIL_VERIFICATION_ENABLED` | `true`: exige correo verificado para publicar reseñas |
+| `EMAIL_VERIFICATION_TTL` | `PT24H` |
+| `ACTUATOR_PUBLIC_METRICS` | `false`: métricas y Prometheus exigen JWT; `true` solo en `dev` |
 
 Cambiar las credenciales de bootstrap fuera de desarrollo.
 
@@ -205,6 +209,37 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 El administrador inicial solo se crea si la tabla `users` está vacía, es decir, en el primer arranque real de una instalación nueva (MS01-12). Si más adelante se elimina o se le cambia el rol, no se recrea con la contraseña de la variable de entorno; la creación queda auditada como `ADMIN_INICIAL_CREADO`. Para instalaciones existentes, crea administradores desde `POST /api/v1/admin/users` o con el flujo de invitación.
 
+## Endurecimiento MS01-13 a MS01-19 (fase BAJA)
+
+- **MS01-13 (CSV):** toda celda de la exportación de auditoría que empiece por `=`, `+`, `-`, `@`, tabulador o
+  retorno de carro se prefija con un apóstrofo, igual que en ms-03, para que Excel o LibreOffice no la evalúen como
+  fórmula (DDE / exfiltración). El PDF no es vulnerable porque se dibuja como texto, no como fórmulas.
+- **MS01-14 (Actuator):** solo `health` e `info` son públicos. `metrics` y `prometheus` exigen JWT salvo que se
+  habilite `ACTUATOR_PUBLIC_METRICS=true` (el perfil `dev` lo hace para trabajar en local). En `prod` la exposición
+  queda en `health,info`; el gateway además devuelve 404 para `/actuator/**` desde fuera.
+- **MS01-15 (revocación):** la caché de `authVersion` baja a 15 s y, además, cada operación que incrementa `ver`
+  (cambio y restablecimiento de contraseña, cambio de rol o estado, baja y aprobación/rechazo de prestadora) descarta
+  la entrada de caché del usuario en el acto. Si hay réplicas, cada instancia mantiene su propia caché: el TTL acota
+  la ventana máxima de inconsistencia.
+- **MS01-16 (validador de arranque):** fuera de `dev`/`local`/`test` el arranque falla si faltan llaves JWT reales,
+  si `JWT_ALLOW_INSECURE_JWKS=true`, si `JWT_TTL` supera 12 h, si el bootstrap está activo con contraseña vacía, por
+  defecto o débil, si MFA no es obligatorio para administradores, si `MFA_SECRET_KEY` está vacía, si HSTS está
+  deshabilitado, si `INTERNAL_API_KEY` no está configurada o si CORS permite `*` o un origen local.
+- **MS01-17 (llaves de desarrollo):** el PEM que se autogenera en `.local/jwt/keys.pem` se crea con permisos `600`
+  y su directorio con `700` cuando el sistema de archivos soporta POSIX; en otros sistemas solo se documenta.
+- **MS01-18 (verificación de correo):** al registrarse (turista o prestadora) se emite un token de un solo uso de
+  24 h (`password_reset_tokens.purpose = EMAIL_VERIFICATION`) y se envía un enlace
+  `FRONTEND_BASE_URL + FRONTEND_VERIFY_EMAIL_PATH?token=...`. `POST /api/v1/auth/verify-email` consume el token y
+  marca la cuenta como verificada (auditoría `CORREO_VERIFICADO`); `POST /api/v1/users/me/email-verification`
+  reenvía el enlace (invalida los anteriores). Las cuentas sin verificar pueden iniciar sesión y editar su perfil,
+  pero no publicar reseñas (`403 FORBIDDEN_OPERATION`). La tabla `email_verifications` marca como verificadas las
+  cuentas que ya existían en la migración `V12`; las cuentas creadas por un administrador deben verificar su correo
+  igual que el resto. Riesgo residual aceptado: no se consulta HIBP (no hay servicio externo en la infraestructura
+  del proyecto) y no se verifica la entregabilidad real del buzón, solo la posesión del enlace.
+- **MS01-19 (contraseñas):** además de 12–72 caracteres se exigen al menos tres de cuatro clases (minúsculas,
+  mayúsculas, dígitos, símbolos) y se rechaza una lista local de contraseñas comunes o previsibles. Los mensajes de
+  error son genéricos para no filtrar la causa.
+
 ## Retención de datos y ARCO (Ley 1581)
 
 La política completa (finalidades, plazos, procedimiento ARCO y canal de atención) se entrega con la documentación del proyecto, fuera de este repositorio.
@@ -227,6 +262,8 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | POST | `/api/v1/auth/forgot-password` | Público |
 | POST | `/api/v1/auth/reset-password` | Público |
 | POST | `/api/v1/auth/mfa/verify` | Público, canjea el desafío MFA por un token |
+| POST | `/api/v1/auth/verify-email` | Público, consume el token de verificación de correo |
+| POST | `/api/v1/users/me/email-verification` | Autenticado, reenvía el enlace de verificación |
 | GET | `/api/v1/users/me/mfa` | Autenticado, estado de la inscripción |
 | POST | `/api/v1/users/me/mfa/enroll` | Autenticado, exige contraseña; genera secreto TOTP y códigos de recuperación |
 | POST | `/api/v1/users/me/mfa/confirm` | Autenticado, exige contraseña y código; activa el segundo factor y revoca sesiones |
@@ -454,11 +491,11 @@ Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
 `PasswordResetMailpitTest` levanta un Mailpit real, recupera el correo de restablecimiento por su API y comprueba
 que el enlace cambia la contraseña y que el token no se puede reutilizar. Las pruebas unitarias de regresión de la
-fase MEDIA cubren la respuesta uniforme del login, el bloqueo con correo de aviso y autodesbloqueo, el desafío MFA
-de un solo uso y atado a `ver`, los códigos de recuperación de 160 bits con sal, el filtro de IA delimitado y
-fail-closed, el DTO público sin `touristId`, la firma HMAC del endpoint interno y el bootstrap solo en instalación
-vacía. La suite son **52 clases y 188 pruebas**; las pruebas de integración se omiten automáticamente cuando no hay
-Docker (48 en un entorno sin Docker).
+fase BAJA cubren la neutralización de fórmulas en el CSV, la exposición de Actuator sin autenticación, la
+invalidación inmediata de la caché de `authVersion` al cambiar la contraseña, el validador de arranque endurecido,
+los permisos POSIX de la llave JWT, la verificación de correo (token de un solo uso, propósito y puerta de reseñas)
+y la política de contraseñas. La suite son **57 clases y 212 pruebas**; las pruebas de integración se omiten
+automáticamente cuando no hay Docker.
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

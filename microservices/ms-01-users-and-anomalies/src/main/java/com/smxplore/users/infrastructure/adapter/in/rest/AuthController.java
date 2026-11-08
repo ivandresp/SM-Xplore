@@ -12,11 +12,13 @@ import com.smxplore.users.application.port.in.LoginUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
+import com.smxplore.users.application.port.in.VerifyEmailUseCase;
 import com.smxplore.users.infrastructure.adapter.in.dto.ForgotPasswordRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.LoginRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegisterProviderRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegisterTouristRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.ResetPasswordRequest;
+import com.smxplore.users.infrastructure.adapter.in.dto.VerifyEmailRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import org.springframework.http.HttpStatus;
@@ -37,18 +39,21 @@ public class AuthController {
     private final LoginUseCase login;
     private final ForgotPasswordUseCase forgotPassword;
     private final ResetPasswordUseCase resetPassword;
+    private final VerifyEmailUseCase verifyEmail;
 
     public AuthController(
             RegisterTouristUseCase registerTourist,
             RegisterProviderUseCase registerProvider,
             LoginUseCase login,
             ForgotPasswordUseCase forgotPassword,
-            ResetPasswordUseCase resetPassword) {
+            ResetPasswordUseCase resetPassword,
+            VerifyEmailUseCase verifyEmail) {
         this.registerTourist = registerTourist;
         this.registerProvider = registerProvider;
         this.login = login;
         this.forgotPassword = forgotPassword;
         this.resetPassword = resetPassword;
+        this.verifyEmail = verifyEmail;
     }
 
     @PostMapping("/register/turista")
@@ -101,5 +106,15 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return resetPassword.reset(new ResetPasswordCommand(request.token(), request.newPassword()));
+    }
+
+    /**
+     * MS01-18: confirma la propiedad del correo con el token enviado al registrarse. Es público porque el usuario aún
+     * puede no tener sesión (por ejemplo, si abrió el enlace en otro dispositivo).
+     */
+    @PostMapping("/verify-email")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return verifyEmail.verify(request.token());
     }
 }

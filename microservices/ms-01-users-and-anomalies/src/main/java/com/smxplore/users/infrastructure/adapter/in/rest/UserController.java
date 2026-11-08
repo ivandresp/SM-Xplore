@@ -7,6 +7,7 @@ import com.smxplore.users.application.dto.UserView;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
 import com.smxplore.users.application.port.in.GetCurrentUserUseCase;
 import com.smxplore.users.application.port.in.LogoutUseCase;
+import com.smxplore.users.application.port.in.SendEmailVerificationUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.infrastructure.adapter.in.dto.ChangePasswordRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.UpdateProfileRequest;
@@ -33,16 +34,19 @@ public class UserController {
     private final UpdateProfileUseCase updateProfile;
     private final ChangeOwnPasswordUseCase changeOwnPassword;
     private final LogoutUseCase logout;
+    private final SendEmailVerificationUseCase sendEmailVerification;
 
     public UserController(
             GetCurrentUserUseCase getCurrentUser,
             UpdateProfileUseCase updateProfile,
             ChangeOwnPasswordUseCase changeOwnPassword,
-            LogoutUseCase logout) {
+            LogoutUseCase logout,
+            SendEmailVerificationUseCase sendEmailVerification) {
         this.getCurrentUser = getCurrentUser;
         this.updateProfile = updateProfile;
         this.changeOwnPassword = changeOwnPassword;
         this.logout = logout;
+        this.sendEmailVerification = sendEmailVerification;
     }
 
     @GetMapping("/me")
@@ -84,6 +88,15 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> logout(@AuthenticationPrincipal Jwt jwt) {
         return logout.logout(userId(jwt));
+    }
+
+    /**
+     * MS01-18: reenvía el enlace de verificación de correo. Idempotente: si la cuenta ya está verificada no hace nada.
+     */
+    @PostMapping("/me/email-verification")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> resendEmailVerification(@AuthenticationPrincipal Jwt jwt) {
+        return sendEmailVerification.send(userId(jwt));
     }
 
     private static UUID userId(Jwt jwt) {

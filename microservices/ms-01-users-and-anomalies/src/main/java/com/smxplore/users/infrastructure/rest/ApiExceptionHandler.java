@@ -8,6 +8,7 @@ import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
+import com.smxplore.users.domain.exception.InvalidEmailVerificationTokenException;
 import com.smxplore.users.domain.exception.InvalidMfaChallengeException;
 import com.smxplore.users.domain.exception.InvalidMfaCodeException;
 import com.smxplore.users.domain.exception.InvalidPasswordResetTokenException;
@@ -75,6 +76,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(TooManyLoginAttemptsException.class)
     public ResponseEntity<ProblemDetail> handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
         return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Correo electrónico o contraseña incorrectos");
+    }
+
+    @ExceptionHandler(InvalidEmailVerificationTokenException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidEmailVerificationToken(
+            InvalidEmailVerificationTokenException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_EMAIL_VERIFICATION_TOKEN", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidCurrentPasswordException.class)

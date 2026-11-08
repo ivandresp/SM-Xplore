@@ -39,7 +39,7 @@ final class AuditCsvFormatter {
     private static String details(AuditEntry entry) {
         return entry.details().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .map(detail -> detail.getKey() + "=" + detail.getValue())
+                .map(detail -> neutralizeFormula(detail.getKey()) + "=" + neutralizeFormula(detail.getValue()))
                 .collect(Collectors.joining("; "));
     }
 
@@ -47,8 +47,28 @@ final class AuditCsvFormatter {
         if (value == null) {
             return "";
         }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
+        String neutralized = neutralizeFormula(value);
+        if (neutralized.contains(",")
+                || neutralized.contains("\"")
+                || neutralized.contains("\n")
+                || neutralized.contains("\r")) {
+            return "\"" + neutralized.replace("\"", "\"\"") + "\"";
+        }
+        return neutralized;
+    }
+
+    /**
+     * MS01-13: una celda que empieza por {@code =}, {@code +}, {@code -}, {@code @}, tabulador o retorno de carro la
+     * interpreta Excel (y LibreOffice) como fórmula, lo que permite ejecutar DDE o exfiltrar datos al abrir el CSV. Se
+     * antepone un apóstrofo para que la celda sea texto, igual que hace el exportador de ms-03.
+     */
+    private static String neutralizeFormula(String value) {
+        if (value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return "'" + value;
         }
         return value;
     }

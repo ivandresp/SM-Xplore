@@ -1,6 +1,7 @@
 package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.TransactionPort;
@@ -27,6 +28,7 @@ public final class DeleteUserService implements DeleteUserUseCase {
     private final PasswordResetTokenRepository resetTokens;
     private final PasswordHasher passwordHasher;
     private final AuditTrailRecorder audit;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -35,12 +37,14 @@ public final class DeleteUserService implements DeleteUserUseCase {
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
             AuditTrailRecorder audit,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.resetTokens = resetTokens;
         this.passwordHasher = passwordHasher;
         this.audit = audit;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -78,7 +82,9 @@ public final class DeleteUserService implements DeleteUserUseCase {
 
             return users.save(anonymized)
                     .then(resetTokens.invalidateAllForUser(target.id(), now))
-                    .then(audit.record(actorId, AuditAction.CUENTA_ELIMINADA, target.id(), Map.of(), now));
+                    .then(audit.record(actorId, AuditAction.CUENTA_ELIMINADA, target.id(), Map.of(), now))
+                    // MS01-15: la baja incrementa authVersion; la sesión del usuario debe caer de inmediato.
+                    .then(evictor.evict(target.id()));
         });
     }
 }

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -106,14 +107,29 @@ final class JwtKeyStore {
             Path parent = path.toAbsolutePath().getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
+                restrictPermissions(parent, "rwx------");
             }
             Files.writeString(
                     path,
                     toPem("PRIVATE KEY", key.toRSAPrivateKey().getEncoded())
                             + toPem("PUBLIC KEY", key.toRSAPublicKey().getEncoded()),
                     StandardCharsets.UTF_8);
+            restrictPermissions(path, "rw-------");
         } catch (IOException | JOSEException exception) {
             throw new IllegalStateException("No se pudo guardar el almacén de llaves JWT en " + path, exception);
+        }
+    }
+
+    /**
+     * MS01-17: la llave privada generada en desarrollo se escribía con los permisos por defecto del sistema (~0644) y
+     * quedaba legible por cualquier usuario de la máquina. Se restringe el directorio a 0700 y el archivo a 0600 cuando
+     * el sistema de archivos soporta POSIX; en otros (Windows) se conservan los permisos del sistema.
+     */
+    private static void restrictPermissions(Path path, String permissions) {
+        try {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // El sistema de archivos no soporta permisos POSIX: no hay nada más que hacer.
         }
     }
 

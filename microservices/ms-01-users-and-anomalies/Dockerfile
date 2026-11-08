@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 ## Imagen de ms-01: build multi-etapa con el Gradle Wrapper y runtime JRE sin privilegios.
 
-FROM eclipse-temurin:25-jdk-noble AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:95e350ad1eb738f943e141640f7e3d797e483359a3b33c3864255bfd1ad71f8a AS build
 
 WORKDIR /workspace
 ENV GRADLE_USER_HOME=/workspace/.gradle-home
@@ -16,14 +16,13 @@ RUN ./gradlew --no-daemon --console=plain bootJar \
     && JAR="$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -print -quit)" \
     && cp "$JAR" /workspace/app.jar
 
-FROM eclipse-temurin:25-jre-noble AS runtime
+FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS runtime
 
 LABEL org.opencontainers.image.title="ms-01-users-and-anomalies" \
       org.opencontainers.image.description="Identidad, reseñas y anomalías de SM-Xplore" \
       org.opencontainers.image.source="https://github.com/ivandresp/SM-Xplore"
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system app \

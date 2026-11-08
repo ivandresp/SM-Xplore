@@ -26,8 +26,9 @@ management:
   endpoints:
     web:
       exposure:
-        # En produccion solo el scrape: /actuator/metrics/{name} expone nombres y tags internos.
-        include: health,info,prometheus
+        # MS01-14: en producción solo health e info. Prometheus queda fuera hasta que exista un scrape autenticado;
+        # el gateway ya bloquea /actuator/** desde el exterior.
+        include: health,info
   endpoint:
     health:
       show-details: never

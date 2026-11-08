@@ -91,6 +91,8 @@ public class AuthRateLimitWebFilter implements WebFilter {
             case "/api/v1/auth/register/prestadora" -> "register-prestadora";
             case "/api/v1/auth/reset-password" -> "reset-password";
             case "/api/v1/auth/mfa/verify" -> "mfa-verify";
+            // MS01-18: la verificación de correo consume un token de un solo uso; se limita por IP.
+            case "/api/v1/auth/verify-email" -> "verify-email";
             default -> null;
         };
     }

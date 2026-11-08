@@ -75,6 +75,21 @@ public class PasswordResetTokenRepositoryAdapter implements PasswordResetTokenRe
     }
 
     @Override
+    public Mono<Void> invalidateByPurposeForUser(UUID userId, TokenPurpose purpose, Instant now) {
+        return databaseClient
+                .sql("""
+                        UPDATE password_reset_tokens SET used_at = :now
+                        WHERE user_id = :userId AND purpose = :purpose AND used_at IS NULL
+                        """)
+                .bind("now", toOffsetDateTime(now))
+                .bind("userId", userId)
+                .bind("purpose", purpose.name())
+                .fetch()
+                .rowsUpdated()
+                .then();
+    }
+
+    @Override
     public Mono<Long> deleteCreatedBefore(Instant cutoff) {
         return databaseClient
                 .sql("DELETE FROM password_reset_tokens WHERE created_at < :cutoff")
