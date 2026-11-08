@@ -128,7 +128,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     @Test
-    void touristCannotCreateCatalogResourcesAndAnonymousCannotRead() {
+    void touristCannotCreateCatalogResourcesAndAnonymousCanReadCatalog() {
         UUID touristId = UUID.randomUUID();
 
         clientFor(touristId, "TOURIST")
@@ -138,7 +138,38 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .exchange()
                 .expectStatus().isForbidden();
 
+        // El catalogo es lectura publica: el turista lo consulta antes de registrarse.
         webTestClient.get().uri("/api/v1/sites")
+                .exchange()
+                .expectStatus().isOk();
+
+        webTestClient.get().uri("/api/v1/zones")
+                .exchange()
+                .expectStatus().isOk();
+
+        webTestClient.get().uri("/api/v1/categories")
+                .exchange()
+                .expectStatus().isOk();
+
+        webTestClient.get().uri("/api/v1/services")
+                .exchange()
+                .expectStatus().isOk();
+
+        // Filtrar por gestora exige saber quien pregunta: un anonimo recibe 403, no 500.
+        webTestClient.get().uri("/api/v1/sites?managerId=" + UUID.randomUUID())
+                .exchange()
+                .expectStatus().isForbidden();
+
+        // Lo que no es catalogo sigue exigiendo sesion.
+        webTestClient.get().uri("/api/v1/notifications")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        webTestClient.get().uri("/api/v1/reservations")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        webTestClient.get().uri("/api/v1/admin/catalog/export")
                 .exchange()
                 .expectStatus().isUnauthorized();
 

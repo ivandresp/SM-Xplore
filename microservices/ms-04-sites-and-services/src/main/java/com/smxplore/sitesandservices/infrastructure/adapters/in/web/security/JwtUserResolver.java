@@ -24,6 +24,14 @@ public class JwtUserResolver {
         return new Actor(userId, userRole, name);
     }
 
+    /**
+     * Devuelve {@code null} cuando la peticion es anonima: las lecturas publicas del
+     * catalogo no traen JWT y no hay actor que resolver.
+     */
+    public Actor resolveOptional(Jwt jwt) {
+        return jwt == null ? null : resolve(jwt);
+    }
+
     public UUID userId(Jwt jwt) {
         return parseUuid(identity(jwt));
     }

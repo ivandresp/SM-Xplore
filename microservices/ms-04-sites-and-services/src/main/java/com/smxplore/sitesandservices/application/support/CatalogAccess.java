@@ -70,7 +70,14 @@ public class CatalogAccess {
     }
 
     public Mono<SiteFilter> requireSiteFilterScope(SiteFilter filter, Actor actor) {
-        if (filter.managerId() == null || actor.isAdmin()) {
+        if (filter.managerId() == null) {
+            return Mono.just(filter);
+        }
+        if (actor == null) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Anonymous callers cannot filter sites by manager"));
+        }
+        if (actor.isAdmin()) {
             return Mono.just(filter);
         }
         if (actor.isGestora() && actor.owns(filter.managerId())) {

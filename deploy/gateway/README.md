@@ -298,8 +298,8 @@ curl.exe -s -o NUL -w "metricas:    %{http_code}`n"  http://127.0.0.1:8088/actua
 # el backend completo se valida con el E2E del proyecto; el smoke clásico usa puertos directos.
 ```
 
-`/api/v1/sites` sin token debe devolver `401` (no `502` ni `404`): eso confirma que llegó a ms-04 y
-que es ms-04 quien decide sobre el token.
+`/api/v1/sites` sin token debe devolver `200` (no `502` ni `404`): el catálogo es lectura pública y
+es ms-04 quien lo sirve. Una ruta privada como `/api/v1/reservations` sí debe devolver `401`.
 
 ---
 
