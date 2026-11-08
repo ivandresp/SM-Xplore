@@ -112,20 +112,20 @@ public class ActivityController {
     }
 
     /**
-     * El catálogo público solo ve lo publicado; el guía de una actividad puede
-     * listar todo lo suyo y el staff, cualquier estado.
+     * El catálogo público solo ve lo publicado. El guía dueño puede listar todo
+     * lo suyo y el admin, cualquier estado; una gestora no enumera borradores
+     * ajenos.
      */
     private ActivityStatus resolveStatus(ActivityStatus requested, UUID guideId, Jwt jwt) {
+        var owns = ownsGuide(guideId, jwt);
         if (requested == null) {
-            return accessGuard.isGuide(jwt) && ownsGuide(guideId, jwt) ? null : ActivityStatus.PUBLISHED;
+            return owns ? null : ActivityStatus.PUBLISHED;
         }
-        if (requested == ActivityStatus.PUBLISHED
-                || accessGuard.isStaff(jwt)
-                || (accessGuard.isGuide(jwt) && ownsGuide(guideId, jwt))) {
+        if (requested == ActivityStatus.PUBLISHED || owns || accessGuard.isAdmin(jwt)) {
             return requested;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Only staff or the guide of record can list unpublished activities.");
+                "Only an admin or the guide of record can list unpublished activities.");
     }
 
     private static boolean ownsGuide(UUID guideId, Jwt jwt) {

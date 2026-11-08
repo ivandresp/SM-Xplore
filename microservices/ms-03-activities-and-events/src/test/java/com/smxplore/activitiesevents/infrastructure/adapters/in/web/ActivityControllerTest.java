@@ -96,6 +96,13 @@ class ActivityControllerTest {
                 .mutateWith(SecurityMockServerConfigurers.csrf());
     }
 
+    private WebTestClient managerClient() {
+        return baseClient
+                .mutateWith(SecurityMockServerConfigurers.mockJwt()
+                        .jwt(jwt -> jwt.subject(UUID.randomUUID().toString()).claim("role", "DESTINATION_MANAGER")))
+                .mutateWith(SecurityMockServerConfigurers.csrf());
+    }
+
     private Activity activityWith(UUID id, ActivityStatus status) {
         Instant startsAt = Instant.parse("2026-11-01T10:00:00Z");
         return Activity.builder()
@@ -368,6 +375,23 @@ class ActivityControllerTest {
         guideClient().get().uri("/api/v1/activities?status=DRAFT&guideId={guideId}", UUID.randomUUID())
                 .exchange()
                 .expectStatus().isForbidden();
+    }
+
+    @Test
+    void managerCannotListEveryGuidesUnpublishedActivities() {
+        managerClient().get().uri("/api/v1/activities?status=DRAFT")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void adminListsUnpublishedActivities() {
+        given(consultActivitiesUseCase.handle(argThat(filter -> filter.status() == ActivityStatus.DRAFT)))
+                .willReturn(Mono.just(new PageResult<>(List.of(), 0, 20, 0L)));
+
+        webTestClient.get().uri("/api/v1/activities?status=DRAFT")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
