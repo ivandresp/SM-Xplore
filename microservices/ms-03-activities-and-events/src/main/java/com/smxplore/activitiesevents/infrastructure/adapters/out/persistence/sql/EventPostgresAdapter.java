@@ -80,7 +80,8 @@ public class EventPostgresAdapter implements EventRepositoryPort {
                     + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%'");
         }
         if (hasText(filter.category())) {
-            conditions.append(" AND lower(category) = lower(:category)");
+            conditions.append(" AND translate(lower(category), 'áéíóúüñ', 'aeiouun')"
+                    + " LIKE '%' || translate(lower(:category), 'áéíóúüñ', 'aeiouun') || '%'");
         }
         if (filter.siteId() != null) {
             conditions.append(" AND sitio_id = :siteId");

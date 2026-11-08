@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Filtros del catálogo de actividades. Todos son opcionales; {@code status} nulo
  * significa cualquier estado y el controlador decide cuándo se permite.
- * {@code sort} admite priceAsc, priceDesc, dateAsc y dateDesc.
+ * {@code sort} admite priceAsc, priceDesc, dateAsc, dateDesc y durationAsc.
  */
 public record ActivityFilter(
         String search,

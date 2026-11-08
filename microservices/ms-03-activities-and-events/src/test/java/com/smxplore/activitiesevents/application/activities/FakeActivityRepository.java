@@ -85,6 +85,7 @@ class FakeActivityRepository implements ActivityRepositoryPort {
             case "priceDesc" -> Comparator.comparing(Activity::getPrice).reversed();
             case "dateAsc" -> Comparator.comparing(Activity::getStartsAt);
             case "dateDesc" -> Comparator.comparing(Activity::getStartsAt).reversed();
+            case "durationAsc" -> Comparator.comparing(Activity::getDurationMinutes);
             default -> Comparator.comparing(Activity::getName);
         };
     }

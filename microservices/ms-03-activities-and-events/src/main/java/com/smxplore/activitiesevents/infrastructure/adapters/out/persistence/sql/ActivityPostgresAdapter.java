@@ -85,7 +85,8 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
                     + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%'");
         }
         if (hasText(filter.category())) {
-            conditions.append(" AND lower(category) = lower(:category)");
+            conditions.append(" AND translate(lower(category), 'áéíóúüñ', 'aeiouun')"
+                    + " LIKE '%' || translate(lower(:category), 'áéíóúüñ', 'aeiouun') || '%'");
         }
         if (filter.siteId() != null) {
             conditions.append(" AND sitio_id = :siteId");
@@ -136,6 +137,7 @@ public class ActivityPostgresAdapter implements ActivityRepositoryPort {
             case "priceDesc" -> "price DESC, id";
             case "dateAsc" -> "starts_at, id";
             case "dateDesc" -> "starts_at DESC, id";
+            case "durationAsc" -> "duration_mins, id";
             default -> "name, id";
         };
     }
