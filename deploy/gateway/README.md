@@ -18,7 +18,7 @@ interna de Docker.
 deploy/gateway/
 ├── Dockerfile                 # nginx:1.27-alpine + openssl; instala el entrypoint de certs
 ├── entrypoint.sh              # genera/valida el certificado TLS antes de arrancar nginx
-├── nginx.conf                 # configuración global (http, logs, upstreams, cabeceras)
+├── nginx.conf                 # configuración global (http, logs, upstreams, cabeceras, zonas de rate limit)
 ├── conf.d/
 │   └── gateway.conf           # los dos servers: :80 y :443 (TLS), ambos con las mismas rutas
 ├── snippets/
@@ -28,7 +28,7 @@ deploy/gateway/
 
 | Archivo | Se monta en el contenedor | Para qué |
 |---|---|---|
-| `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, límites, upstreams `ms_01..ms_05`, cabeceras |
+| `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, límites, zonas de rate limiting, upstreams `ms_01..ms_05`, cabeceras |
 | `conf.d/` | `/etc/nginx/conf.d/` | servers `:80` y `:443`; `include` de las rutas |
 | `snippets/` | `/etc/nginx/snippets/` | `routes.conf`, incluido dentro de cada server |
 
@@ -48,6 +48,9 @@ El servicio está declarado en `compose.yaml` (raíz) y en `deploy/prod/compose.
 3. La respuesta vuelve tal cual: el gateway **no reescribe códigos, ni cuerpos, ni cabeceras de
    negocio**. Un `401` del servicio sigue siendo un `401`; un `400` con `application/problem+json`
    sigue siendo el mismo `400`.
+4. Antes de reenviar, nginx aplica **rate limiting por IP** (sección 7). Si el cliente supera el
+   cubo de su zona, responde `429` con `application/problem+json` y `Retry-After` sin llegar al
+   servicio.
 
 Cabeceras que el gateway añade a toda petición reenviada:
 
@@ -55,10 +58,15 @@ Cabeceras que el gateway añade a toda petición reenviada:
 |---|---|---|
 | `Host` | host original | que los servicios vean el host público, no el del contenedor |
 | `X-Real-IP` | IP del cliente | auditoría y rate limiting por IP en los servicios |
-| `X-Forwarded-For` | cadena de proxies | idem |
+| `X-Forwarded-For` | **IP del cliente (sobrescrita)** | idem; se reemplaza el valor recibido, no se concatena (ver nota) |
 | `X-Forwarded-Proto` | `http` o `https` | que los servicios sepan si el cliente vino por TLS |
 | `X-Forwarded-Port` | puerto original | idem |
 | `X-Request-Id` | el del cliente o uno generado | correlación entre el log del gateway y los logs de los servicios |
+
+> **`X-Forwarded-For` se sobrescribe con `$remote_addr`** (no se usa `$proxy_add_x_forwarded_for`).
+> Si el cliente envía un `X-Forwarded-For` propio, se descarta. Así un atacante no puede rotar la
+> cabecera para caer en otro cubo de rate limit (MS01-01) ni falsear la IP en los logs. Los servicios
+> deben leer `X-Real-IP` (o la IP TCP de la conexión), nunca confiar en la cadena de XFF recibida.
 
 Los logs del gateway (`docker compose logs gateway`) muestran el mismo `rid=` para una petición y
 sus reintentos.
@@ -265,14 +273,51 @@ No lo actives antes de tener todos los subdominios en HTTPS.
 | `proxy_read_timeout` | 60 s | `nginx.conf` | exportaciones CSV/PDF y consultas lentas |
 | `proxy_connect_timeout` | 5 s | `nginx.conf` | fallar rápido si el servicio no está |
 | `X-Forwarded-Proto` | `$scheme` | `nginx.conf` | los servicios generan URLs/redirects correctos |
+| `X-Forwarded-For` | `$remote_addr` (sobrescrita) | `nginx.conf` | el rate limit del borde y los logs usan la IP real, no una cabecera falseable |
 | gzip | JSON > 512 B | `nginx.conf` | las respuestas de catálogo son grandes |
 | `server_tokens` | `off` | `nginx.conf` | no revelar versión de nginx |
+| rate limit `auth` | 30 r/m, burst 10 `nodelay` | `nginx.conf` + `routes.conf` | frenar fuerza bruta de login/MFA sin encolar |
+| rate limit `public` | 120 r/m, burst 40 | `nginx.conf` + `routes.conf` | catálogo público y recomendaciones: absorber picos, cortar ráfagas abusivas |
+| rate limit `api` | 600 r/m, burst 100 | `nginx.conf` + `routes.conf` | resto de la superficie publicada |
+| `limit_req_status` | `429` | `nginx.conf` | el exceso se rechaza en formato `problem+json` (con `Retry-After`) |
+
+### Rate limiting por IP (MS01-01)
+
+El gateway limita **en el borde** con `limit_req` + `limit_req_zone`. La clave es
+`$binary_remote_addr`: la IP TCP de la conexión tal como la ve nginx, que el cliente **no puede
+falsear** (a diferencia de `X-Forwarded-For`, que el gateway además sobrescribe).
+
+| Zona | Rate | Burst | Dónde se aplica |
+|---|---|---|---|
+| `auth` | 30 r/m (1 cada 2 s) | 10, `nodelay` | `location /api/v1/auth/` → ms-01 (login, MFA, recuperación) |
+| `public` | 120 r/m (2 por s) | 40 | GET de catálogo público: `/api/v1/activities`, `/events`, `/reviews/*`, `/sites`, `/services`, `/categories`, `/zones`, `/recommendations` |
+| `api` | 600 r/m (10 por s) | 100 | resto de rutas publicadas (usuarios, admin, reservas, preferencias, interacciones, namespace `/svc/...`) |
+
+- **Cómo se comporta un exceso:** nginx responde `429` con cuerpo
+  `{"type":"about:blank","title":"Demasiadas peticiones",...}` y `Retry-After: 1`. La petición **no
+  llega al servicio** (no consume cupo de sus filtros internos).
+- **Con `nodelay` (auth)** el burst se atiende de inmediato y lo que excede se rechaza: ideal para
+  cortar fuerza bruta. **Sin `nodelay` (public/api)** el exceso se encola (hasta `burst` peticiones,
+  como máximo `burst / rate` segundos de espera) y solo cuando la cola desborda se responde `429`.
+- **Cubo compartido por IP:** si muchos clientes salen por la misma IP (NAT, proxy corporativo,
+  runner de CI), comparten el cubo. Curl/Postman desde la misma máquina también. Si una suite E2E
+  dispara >10 logins seguidos en frío o >40 lecturas de catálogo en un segundo, verá `429`: espacia
+  las peticiones o sube el `burst` (ver siguiente punto), no bajes el rate sin justificarlo.
+- **Cómo ajustar:** el **rate** de cada zona se cambia en `nginx.conf`
+  (`limit_req_zone ... rate=30r/m`; admite `r/s` y `r/m`); el **burst** (y `nodelay`) se cambia en
+  la `location` correspondiente de `snippets/routes.conf`. Tras editar: `nginx -t` y
+  `docker compose restart gateway`. Las zonas son independientes: subir `public` no afecta a `auth`.
+- **Memoria:** `10m` por zona ≈ 160.000 IPs tracked; suficiente para el despliegue actual. Si se
+  agranda, recuerda que es memoria compartida por worker.
+- **Qué NO limita el gateway:** sigue siendo responsabilidad de cada servicio su propia política de
+  negocio (por ejemplo, intentos de login por cuenta, cuotas por usuario, capacidad de reservas).
+  El borde protege contra volumen por IP, no sustituye esos límites.
 
 Cosas que el gateway **no** hace a propósito: CORS (lo resuelven los servicios con
-`CORS_ALLOWED_ORIGINS`), rate limiting (lo hacen `AuthRateLimitWebFilter`,
-`ReportRateLimitWebFilter` y las políticas de reservas), cacheo de respuestas ni transformación de
-cuerpos. Si en el futuro se centraliza CORS aquí, hay que quitar las cabeceras equivalentes de los
-servicios para no duplicarlas.
+`CORS_ALLOWED_ORIGINS`), rate limiting por **usuario/cuenta** (solo por IP; los límites de negocio
+siguen en los servicios: `AuthRateLimitWebFilter`, `ReportRateLimitWebFilter` y las políticas de
+reservas), cacheo de respuestas ni transformación de cuerpos. Si en el futuro se centraliza CORS
+aquí, hay que quitar las cabeceras equivalentes de los servicios para no duplicarlas.
 
 ---
 
@@ -298,6 +343,35 @@ curl.exe -s -o NUL -w "metricas:    %{http_code}`n"  http://127.0.0.1:8088/actua
 # el backend completo se valida con el E2E del proyecto; el smoke clásico usa puertos directos.
 ```
 
+### Verificar el rate limiting
+
+```bash
+# 1) auth: el burst es 10 y el rate 30 r/m; 20 logins seguidos deben acabar en 429
+for i in $(seq 1 20); do
+  code=$(curl -sk -o /dev/null -w '%{http_code}' -X POST https://127.0.0.1:8443/api/v1/auth/login \
+    -H 'Content-Type: application/json' -d '{"email":"nadie@example.com","password":"x"}')
+  echo "$i -> $code"
+done
+# esperado: los primeros ~10 dan 401/400 y el resto 429
+
+# 2) cuerpo problem+json y Retry-After del 429
+curl -sk -D - -o - -X POST https://127.0.0.1:8443/api/v1/auth/login \
+  -H 'Content-Type: application/json' -d '{"email":"nadie@example.com","password":"x"}'
+
+# 3) el rate limit NO se evade rotando X-Forwarded-For: la cabecera se sobrescribe
+for i in $(seq 1 20); do
+  curl -sk -o /dev/null -w '%{http_code} ' -X POST https://127.0.0.1:8443/api/v1/auth/login \
+    -H "X-Forwarded-For: 203.0.113.$i" \
+    -H 'Content-Type: application/json' -d '{"email":"nadie@example.com","password":"x"}'
+done; echo
+# esperado: también acaba en 429 (misma IP real)
+
+# 4) catálogo público: tras agotar el burst de la zona public debe aparecer 429
+for i in $(seq 1 60); do
+  curl -sk -o /dev/null -w '%{http_code} ' https://127.0.0.1:8443/api/v1/activities
+done; echo
+```
+
 `/api/v1/sites` sin token debe devolver `200` (no `502` ni `404`): el catálogo es lectura pública y
 es ms-04 quien lo sirve. Una ruta privada como `/api/v1/reservations` sí debe devolver `401`.
 
@@ -315,6 +389,7 @@ es ms-04 quien lo sirve. Una ruta privada como `/api/v1/reservations` sí debe d
 | `413 Request Entity Too Large` | Cuerpo > 10 MB | Sube `client_max_body_size` en `nginx.conf` |
 | El gateway arranca en bucle en producción | Faltan `gateway_tls_cert`/`gateway_tls_key` o no son PEM válidos | Revisa `docker compose logs gateway` y los secretos |
 | `401` inesperado solo a través del gateway | Falta `Authorization` o el token expira | Es el servicio quien valida: el gateway no toca el header |
+| `429` con "Demasiadas peticiones" en pruebas locales | La misma IP superó el cubo de `auth` o `public` (común en suites E2E) | Espera unos segundos, espacia las peticiones o sube el `burst` de esa `location` (sección 7). No es un fallo del servicio |
 
 ---
 
