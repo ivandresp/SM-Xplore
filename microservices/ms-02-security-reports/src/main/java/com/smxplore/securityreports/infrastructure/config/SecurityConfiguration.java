@@ -64,6 +64,10 @@ public class SecurityConfiguration {
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.DESTINATION_MANAGER.name())
                         .pathMatchers(HttpMethod.HEAD, "/api/v1/security-reports")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.DESTINATION_MANAGER.name())
+                        .pathMatchers(HttpMethod.GET, "/api/v1/security-reports/counts")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.DESTINATION_MANAGER.name())
+                        .pathMatchers(HttpMethod.HEAD, "/api/v1/security-reports/counts")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.DESTINATION_MANAGER.name())
                         .pathMatchers(HttpMethod.POST, "/api/v1/security-reports/*/close",
                                 "/api/v1/security-reports/*/solve")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.DESTINATION_MANAGER.name())

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -62,6 +63,16 @@ public class SecurityReportPersistenceAdapter implements SecurityReportRepositor
     public Mono<Page<SecurityReport>> findAllByUserId(UUID userId, PageRequest pageRequest) {
         var query = Query.query(Criteria.where("user.userId").is(userId.toString()));
         return findPage(query, pageRequest);
+    }
+
+    @Override
+    public Mono<Map<SecurityReportStatus, Long>> countByStatus() {
+        return Flux.fromArray(SecurityReportStatus.values())
+                .flatMap(status -> mongoOperations.count(
+                                Query.query(Criteria.where("status").is(status)),
+                                SecurityReportDocument.class)
+                        .map(count -> Map.entry(status, count)))
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 
     @Override

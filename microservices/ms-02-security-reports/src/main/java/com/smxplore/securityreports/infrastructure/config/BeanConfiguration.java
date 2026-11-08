@@ -49,6 +49,12 @@ public class BeanConfiguration {
     }
 
     @Bean
+    public ConsultReportCountsUseCasePort consultReportCountsUseCase(
+            SecurityReportRepositoryPort securityReportRepository) {
+        return new ConsultReportCountsUseCase(securityReportRepository);
+    }
+
+    @Bean
     public ConsultReportsByUserUseCasePort consultReportsByUserUseCase(SecurityReportRepositoryPort securityReportRepository) {
         return new ConsultReportsByUserUseCase(securityReportRepository);
     }
