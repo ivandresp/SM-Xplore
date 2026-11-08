@@ -6,10 +6,12 @@ import com.smxplore.recommendations.domain.exception.DomainValidationException;
 import com.smxplore.recommendations.domain.exception.ForbiddenOperationException;
 import com.smxplore.recommendations.domain.exception.InvalidJwtException;
 import com.smxplore.recommendations.domain.exception.ItemNotFoundException;
+import com.smxplore.recommendations.domain.exception.RateLimitExceededException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.exceptions.Neo4jException;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -62,6 +64,22 @@ public class GlobalExceptionHandler {
         log.error("Domain state error while processing {}", exchange.getRequest().getPath().value(), exception);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error",
                 "An internal consistency error occurred.", exchange);
+    }
+
+    /**
+     * Per-user quota on the recommendation path (MS05-02). The response is problem+json and
+     * carries {@code Retry-After} so clients back off instead of retrying immediately.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleRateLimit(RateLimitExceededException exception,
+                                                          ServerWebExchange exchange) {
+        log.warn("Rate limit reached while processing {}: {}",
+                exchange.getRequest().getPath().value(), exception.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(exception.retryAfterSeconds()))
+                .body(problem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests",
+                        exception.getMessage(), exchange));
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
@@ -140,11 +158,16 @@ public class GlobalExceptionHandler {
 
     private static ResponseEntity<ProblemDetail> error(HttpStatus status, String title, String detail,
                                                        ServerWebExchange exchange) {
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem(status, title, detail, exchange));
+    }
+
+    private static ProblemDetail problem(HttpStatus status, String title, String detail,
+                                        ServerWebExchange exchange) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(title);
         problem.setInstance(URI.create(exchange.getRequest().getPath().value()));
-        return ResponseEntity.status(status)
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(problem);
+        return problem;
     }
 }

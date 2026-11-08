@@ -23,6 +23,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
@@ -33,6 +34,8 @@ import java.util.UUID;
 public class ProjectionEventDecoder {
 
     private final ObjectMapper objectMapper;
+    private final EventConsumerProperties properties;
+    private final Clock clock;
 
     public ProjectedEvent decode(String topic, String key, String json) {
         JsonNode root = parse(json);
@@ -59,7 +62,9 @@ public class ProjectionEventDecoder {
             throw new InvalidEventException("Kafka key must be the aggregateId");
         }
 
-        return switch (topic) {
+        validateProducer(metadata);
+
+        ProjectedEvent event = switch (topic) {
             case EventTopics.CATALOG_CATEGORY_CHANGED -> decodeCategory(metadata, payload);
             case EventTopics.CATALOG_ZONE_CHANGED -> decodeZone(metadata, payload);
             case EventTopics.CATALOG_SITE_CHANGED -> decodeSite(metadata, payload);
@@ -69,6 +74,37 @@ public class ProjectionEventDecoder {
             case EventTopics.REVIEWS_REVIEW_CHANGED -> decodeReview(metadata, payload);
             default -> throw new InvalidEventException("Unsupported eventType: " + metadata.eventType());
         };
+        validateTimestamps(event);
+        return event;
+    }
+
+    /**
+     * Rejects events attributed to a different producer than the one that owns the topic
+     * (MS05-01). The field is self-declared, so this only catches publisher mistakes and
+     * first-line forgery; the broker still has to add authentication and ACLs.
+     */
+    private void validateProducer(EventMetadata metadata) {
+        String expected = EventTopics.expectedProducer(metadata.eventType());
+        if (expected != null && !expected.equals(metadata.producer())) {
+            throw new InvalidEventException(
+                    "producer " + metadata.producer() + " is not the expected producer "
+                            + expected + " for " + metadata.eventType());
+        }
+    }
+
+    /**
+     * Rejects events whose {@code occurredAt} or {@code updatedAt} is further in the future
+     * than the configured skew (MS05-01). A future timestamp would make the freshness query
+     * discard every legitimate later event, freezing the projected entity.
+     */
+    private void validateTimestamps(ProjectedEvent event) {
+        Instant limit = clock.instant().plus(properties.getMaxFutureSkew());
+        if (event.metadata().occurredAt().isAfter(limit)) {
+            throw new InvalidEventException("occurredAt must not be in the future");
+        }
+        if (event.updatedAt().isAfter(limit)) {
+            throw new InvalidEventException("updatedAt must not be in the future");
+        }
     }
 
     private ProjectedEvent decodeCategory(EventMetadata metadata, JsonNode payload) {

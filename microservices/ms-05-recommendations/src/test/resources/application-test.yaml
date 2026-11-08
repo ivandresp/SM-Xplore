@@ -2,6 +2,10 @@ app:
   recommendations:
     cache:
       enabled: false
+    # The per-user quota is unit tested in isolation; disabling it keeps the web tests
+    # from sharing a budget across test methods.
+    quota:
+      enabled: false
   neo4j:
     initialize-schema: true
   seed:

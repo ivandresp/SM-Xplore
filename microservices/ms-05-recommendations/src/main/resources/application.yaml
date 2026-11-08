@@ -85,6 +85,13 @@ app:
       local-max-size: ${RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE:1000}
       key-prefix: ${RECOMMENDATIONS_CACHE_KEY_PREFIX:ms05:recommendations:}
       version-key: ${RECOMMENDATIONS_CACHE_VERSION_KEY:ms05:graph:version}
+    # MS05-02: per-tourist budget for GET /api/v1/recommendations. A cache miss costs two
+    # Cypher queries, so the API answers 429 when a caller exceeds the window.
+    quota:
+      enabled: ${RECOMMENDATIONS_QUOTA_ENABLED:true}
+      max-requests: ${RECOMMENDATIONS_QUOTA_MAX_REQUESTS:120}
+      window: ${RECOMMENDATIONS_QUOTA_WINDOW:1m}
+      max-entries: ${RECOMMENDATIONS_QUOTA_MAX_ENTRIES:10000}
   neo4j:
     initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
   seed:
@@ -99,6 +106,8 @@ app:
       backoff-multiplier: ${EVENTS_CONSUMER_BACKOFF_MULTIPLIER:2.0}
       concurrency: ${EVENTS_CONSUMER_CONCURRENCY:1}
       dlq-suffix: ${EVENTS_CONSUMER_DLQ_SUFFIX:.dlq}
+      # MS05-01: reject events dated further in the future than this tolerance.
+      max-future-skew: ${EVENTS_CONSUMER_MAX_FUTURE_SKEW:5m}
     retention:
       enabled: ${EVENTS_RETENTION_ENABLED:true}
       days: ${EVENTS_RETENTION_DAYS:30}
@@ -111,9 +120,14 @@ app:
     catalog-base-url: ${CATALOG_EXPORT_BASE_URL:http://localhost:8084}
     activities-base-url: ${MS03_BASE_URL:http://localhost:8082}
     events-base-url: ${MS03_BASE_URL:http://localhost:8082}
+    # MS05-03: the ADMIN bearer is only forwarded to one of these hosts.
+    allowed-hosts: ${REINDEX_ALLOWED_HOSTS:localhost,127.0.0.1,::1,ms-03,ms-04,host.docker.internal}
     page-size: ${REINDEX_PAGE_SIZE:200}
     max-pages: ${REINDEX_MAX_PAGES:500}
     timeout: ${REINDEX_TIMEOUT:30s}
+    # MS05-03: hard cap of projected events per request and throttle per administrator.
+    max-events-per-request: ${REINDEX_MAX_EVENTS_PER_REQUEST:2000}
+    min-interval: ${REINDEX_MIN_INTERVAL:60s}
 
 springdoc:
   api-docs:

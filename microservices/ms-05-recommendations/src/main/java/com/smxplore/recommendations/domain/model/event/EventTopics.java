@@ -35,4 +35,26 @@ public record EventTopics() {
     public static boolean isConsumed(String topic) {
         return CONSUMED_SET.contains(topic);
     }
+
+    /**
+     * Producer that owns a consumed topic. The projection only accepts events whose
+     * {@code producer} metadata matches this value: ms-04 publishes the catalog (sites,
+     * services, categories and zones) and ms-03 publishes activities, events and reviews.
+     *
+     * <p>The producer field is self-declared, so this is a consistency check and not a
+     * signature. It stops a misconfigured or rogue publisher inside the stack from
+     * attributing events to another service, and it is the first line of defence while
+     * the broker has no authentication (MS05-01).</p>
+     *
+     * @return expected producer or {@code null} when the topic is not consumed
+     */
+    public static String expectedProducer(String topic) {
+        return switch (topic) {
+            case CATALOG_SITE_CHANGED, CATALOG_SERVICE_CHANGED,
+                    CATALOG_CATEGORY_CHANGED, CATALOG_ZONE_CHANGED -> "ms-04";
+            case ACTIVITIES_EVENT_CHANGED, ACTIVITIES_ACTIVITY_CHANGED,
+                    REVIEWS_REVIEW_CHANGED -> "ms-03";
+            default -> null;
+        };
+    }
 }

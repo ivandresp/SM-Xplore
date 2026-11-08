@@ -4,11 +4,15 @@ import com.smxplore.recommendations.domain.model.catalog.CatalogEntity;
 import com.smxplore.recommendations.domain.model.reindex.ReindexResult;
 import com.smxplore.recommendations.domain.ports.in.ReindexCatalogUseCase;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.ReindexResponse;
+import com.smxplore.recommendations.infrastructure.adapters.in.web.security.AuthenticatedUser;
+import com.smxplore.recommendations.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,15 +29,18 @@ import java.time.Instant;
 public class ReindexController {
 
     private final ReindexCatalogUseCase reindexCatalogUseCase;
+    private final JwtUserResolver jwtUserResolver;
 
     @PostMapping("/reindex")
     @Operation(summary = "Reindex a catalog entity from the admin catalog export of ms-04 or ms-03")
     public Mono<ReindexResponse> reindex(
             @RequestParam CatalogEntity entity,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant updatedSince,
-            @RequestHeader(name = HttpHeaders.AUTHORIZATION) String authorization
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION) String authorization,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return reindexCatalogUseCase.handle(entity, updatedSince, authorization)
+        AuthenticatedUser actor = jwtUserResolver.resolve(jwt);
+        return reindexCatalogUseCase.handle(entity, updatedSince, authorization, actor.touristId())
                 .map(ReindexController::toResponse);
     }
 

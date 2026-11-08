@@ -108,12 +108,20 @@ Topics consumidos:
 | `catalog.site.changed` | ms-04 | Upsert de `Sitio` y enlaces con categoría/ítems hijos |
 | `catalog.service.changed` | ms-04 | Upsert de `Servicio` |
 | `catalog.category.changed` | ms-04 | Upsert de `Categoria` y jerarquía |
+| `catalog.zone.changed` | ms-04 | Upsert de `Zona` y enlace `Sitio -[:PERTENECE_A]-> Zona` |
 | `activities.event.changed` | ms-03 | Upsert de `Evento` |
 | `activities.activity.changed` | ms-03 | Upsert de `Actividad` |
 | `reviews.review.changed` | ms-03 | Arista `RESEÑO` y agregados de calidad |
 
 `bookings.reservation.changed` **no se consume**. Grupo de consumo:
 `ms-05-recommendations`. La key debe ser el `aggregateId`.
+
+El productor es parte del contrato (MS05-01): `ProjectionEventDecoder` rechaza el mensaje si
+el `producer` no es el esperado para el topic (`ms-04` para `catalog.*`, `ms-03` para
+`activities.*` y `reviews.*`), y también si `occurredAt` o el `updatedAt` del evento caen más
+de `EVENTS_CONSUMER_MAX_FUTURE_SKEW` (5 minutos por defecto) en el futuro. Un evento con un
+`updatedAt` futuro congelaría la entidad para el resto de eventos legítimos, porque la
+comparación de frescura descarta todo lo anterior o igual.
 
 Cada mensaje se procesa en una transacción de Neo4j que, en la misma operación:
 
@@ -129,23 +137,36 @@ cambio o de publicar en la DLQ.
 ### Reindexado del catálogo
 
 El grafo es una proyección: si se borra o se desincroniza, se reconstruye sin esperar a que
-ms-04 vuelva a emitir cada evento. `POST /internal/admin/reindex?entity=SITES|SERVICES|CATEGORIES`
-recorre el feed `GET /api/v1/admin/catalog/export` de ms-04 y aplica **el mismo camino de
-proyección** que los consumidores de Kafka:
+ms-04 vuelva a emitir cada evento. `POST /internal/admin/reindex?entity=SITES|SERVICES|CATEGORIES|ACTIVITIES|EVENTS`
+recorre el feed `GET /api/v1/admin/catalog/export` de ms-04 (catálogo) o de ms-03 (actividades y
+eventos) y aplica **el mismo camino de proyección** que los consumidores de Kafka:
 
 - reenvía el token del administrador que invoca el endpoint (ms-05 no tiene credenciales propias);
 - cada ítem del feed se convierte en el evento equivalente (`catalog.site.changed`, etc.) y pasa
   por `ProjectionEventDecoder`, así que las validaciones de contrato son las mismas;
-- la versión del sobre es la que envía ms-04 en el ítem (`eventVersion`). Si un ms-04 antiguo no la
-  manda, ms-05 la infiere del payload (un sitio con `managerId` es v2) en lugar de asumir v1;
+- la versión del sobre es la que envía el productor en el ítem (`eventVersion`). Si un feed
+  antiguo no la manda, ms-05 la infiere del payload (un sitio con `managerId` es v2) en lugar de
+  asumir v1;
 - el `eventId` se deriva de `eventType + aggregateId + updatedAt`, de modo que repetir una página
   es idempotente y una entidad que cambió después genera un marcador nuevo;
 - `updatedSince` permite reanudar un recorrido interrumpido y `REINDEX_MAX_PAGES` evita bucles
   infinitos si el feed no termina;
 - la respuesta resume `pages`, `events`, `applied`, `duplicate` y `stale`.
 
-Docker-local: ms-04 se publica en `http://localhost:8084`, que es el `CATALOG_EXPORT_BASE_URL`
-por defecto.
+Reindexado con límites (MS05-03):
+
+- el bearer ADMIN solo se envía a hosts de `REINDEX_ALLOWED_HOSTS`
+  (por defecto `localhost`, `127.0.0.1`, `::1`, `ms-03`, `ms-04`, `host.docker.internal`);
+  se valida en cada petición, no solo al arrancar;
+- una petición no puede proyectar más de `REINDEX_MAX_EVENTS_PER_REQUEST` eventos (2000 por
+  defecto); si el feed pide más, se responde 400 con la indicación de acotar `updatedSince`;
+- dos reindexados del mismo administrador deben estar separados por `REINDEX_MIN_INTERVAL`
+  (60 segundos por defecto); el segundo responde 400 con los segundos que faltan;
+- cada corrida deja una línea de auditoría con `actor`, `entity`, `pages`, `events`, `applied`,
+  `duplicate`, `stale` y duración, más otra al iniciar.
+
+Docker-local: ms-04 se publica en `http://localhost:8084` (`CATALOG_EXPORT_BASE_URL`) y ms-03 en
+`http://localhost:8082` (`MS03_BASE_URL`), que son los valores por defecto.
 
 ### Ejemplo de respuesta
 
@@ -195,6 +216,33 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - El idioma **no** es un claim del token; se toma de `Accept-Language`.
 - Errores en RFC 9457 (`ProblemDetail`), incluidos 401/403.
 
+### Endurecimiento de la fase 2 de seguridad
+
+Estas tres correcciones salen de la auditoría estática (`MS05-01`, `MS05-02` y `MS05-03`) y
+están activas por defecto, también en local.
+
+**MS05-01 — proyección solo desde los productores esperados.** `ProjectionEventDecoder` valida
+`producer` contra el topic (`catalog.*` → `ms-04`; `activities.*` y `reviews.*` → `ms-03`) y
+rechaza `occurredAt`/`updatedAt` que estén más de `EVENTS_CONSUMER_MAX_FUTURE_SKEW` en el futuro
+(`5m` por defecto, máximo `1h`). Un mensaje inválido no se proyecta: sigue el camino normal de
+DLQ (`<topic>.dlq`). Esto no sustituye la autenticación del broker; la defensa de red sigue
+siendo necesaria.
+
+**MS05-02 — cuota por turista en recomendaciones.** Cada `TOURIST` (el `sub` del token) puede
+pedir como máximo `RECOMMENDATIONS_QUOTA_MAX_REQUESTS` recomendaciones por
+`RECOMMENDATIONS_QUOTA_WINDOW` (`120` por `1m` por defecto). Al superarla se responde
+`429 Too Many Requests` con `ProblemDetail` (`application/problem+json`) y cabecera
+`Retry-After` en segundos. La cuota es por instancia y en memoria (Caffeine acotado por
+`RECOMMENDATIONS_QUOTA_MAX_ENTRIES`); el rate limiting por IP del gateway es la primera capa y
+esto limita el abuso de un solo token. `ADMIN` también consume su propio presupuesto al consultar
+en nombre de un turista. Se desactiva con `RECOMMENDATIONS_QUOTA_ENABLED=false` (los tests del
+perfil `test` ya lo hacen).
+
+**MS05-03 — reindexado acotado y auditable.** Ver la sección de reindexado: allowlist de hosts
+para el bearer, tope de eventos por petición, intervalo mínimo por administrador y auditoría por
+corrida. En un entorno real conviene además que ms-04/ms-03 emitan un token de servicio para este
+flujo y no reutilicen el token humano.
+
 **JWKS** (JSON Web Key Set) es el estándar para publicar las llaves públicas con las que se
 verifican los JWT. ms-01 firma con su llave privada y expone las públicas en un endpoint como
 `/.well-known/jwks.json`; ms-05 descarga ese conjunto, elige la llave por el `kid` del header
@@ -217,6 +265,10 @@ un arranque silencioso sin validación de tokens.
 | `RECOMMENDATIONS_CACHE_LOCAL_TTL` | `10s` | Vida de la capa en memoria (Caffeine) |
 | `RECOMMENDATIONS_CACHE_REDIS_TTL` | `1m` | Vida de la capa compartida (Redis) |
 | `RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE` | `1000` | Entradas máximas de la capa en memoria |
+| `RECOMMENDATIONS_QUOTA_ENABLED` | `true` | Cuota por turista en recomendaciones (MS05-02) |
+| `RECOMMENDATIONS_QUOTA_MAX_REQUESTS` | `120` | Peticiones por ventana |
+| `RECOMMENDATIONS_QUOTA_WINDOW` | `1m` | Ventana fija de la cuota |
+| `RECOMMENDATIONS_QUOTA_MAX_ENTRIES` | `10000` | Turistas con ventana activa en memoria |
 | `NEO4J_INITIALIZE_SCHEMA` | `true` | Crea constraints/índices al arrancar |
 | `SEED_ENABLED` | `false` | Carga datos de demo; usar solo en local/test |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
@@ -237,15 +289,20 @@ un arranque silencioso sin validación de tokens.
 | `EVENTS_CONSUMER_BACKOFF_MULTIPLIER` | `2.0` | Multiplicador del backoff |
 | `EVENTS_CONSUMER_CONCURRENCY` | `1` | Hilos por listener |
 | `EVENTS_CONSUMER_DLQ_SUFFIX` | `.dlq` | Sufijo del topic de descarte |
+| `EVENTS_CONSUMER_MAX_FUTURE_SKEW` | `5m` | Tolerancia de reloj para `occurredAt`/`updatedAt` (MS05-01, máximo `1h`) |
 | `EVENTS_RETENTION_ENABLED` | `true` | Purga periódica de marcadores `ProcessedEvent` |
 | `EVENTS_RETENTION_DAYS` | `30` | Antigüedad mínima para borrar un marcador |
 | `EVENTS_RETENTION_BATCH_SIZE` | `1000` | Marcadores por lote |
 | `EVENTS_RETENTION_MAX_BATCHES` | `20` | Lotes máximos por corrida |
 | `EVENTS_RETENTION_INTERVAL` | `1h` | Espera entre corridas |
 | `CATALOG_EXPORT_BASE_URL` | `http://localhost:8084` | Base URL de ms-04 para el reindexado |
+| `MS03_BASE_URL` | `http://localhost:8082` | Base URL de ms-03 para reindexar actividades y eventos |
 | `REINDEX_PAGE_SIZE` | `200` | Ítems pedidos por página (máximo 200) |
 | `REINDEX_MAX_PAGES` | `500` | Tope de páginas por reindexado |
-| `REINDEX_TIMEOUT` | `30s` | Timeout de cada llamada a ms-04 |
+| `REINDEX_TIMEOUT` | `30s` | Timeout de cada llamada al feed |
+| `REINDEX_ALLOWED_HOSTS` | `localhost,127.0.0.1,::1,ms-03,ms-04,host.docker.internal` | Hosts a los que se puede enviar el bearer ADMIN (MS05-03) |
+| `REINDEX_MAX_EVENTS_PER_REQUEST` | `2000` | Tope de eventos proyectados por petición |
+| `REINDEX_MIN_INTERVAL` | `60s` | Espera mínima entre dos reindexados del mismo administrador |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes |
 | `RECOMMENDATIONS_*` | ver `application.yaml` | Pesos, límites y diversidad |
 
@@ -338,6 +395,9 @@ Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafk
   errores de ms-04 y endpoint administrativo (incluido el 403 para roles que no son `ADMIN`);
 - idioma desde `Accept-Language` y JWT sin claim `locale`;
 - métricas de recomendaciones servidas, cache y diversidad;
+- regresiones de la fase 2 de seguridad: `producer`/`occurredAt`/`updatedAt` en el decoder,
+  cuota por turista con `429` + `Retry-After`, y allowlist de hosts, tope de eventos e intervalo
+  mínimo del reindexado;
 
 ## Métricas
 
