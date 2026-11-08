@@ -129,6 +129,27 @@ public class ReservationPostgresAdapter implements ReservationRepositoryPort {
     }
 
     @Override
+    public Mono<Boolean> existsReservationForReview(UUID touristId, UUID itemId, ReservationItemType type) {
+        var sql = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM reservations
+                    WHERE tourist_id = :touristId
+                      AND item_id = :itemId
+                      AND item_type = :type
+                      AND status IN ('CONFIRMED', 'COMPLETED')
+                ) AS booked
+                """;
+        return template.getDatabaseClient().sql(sql)
+                .bind("touristId", touristId)
+                .bind("itemId", itemId)
+                .bind("type", type.name())
+                .map((row, metadata) -> row.get("booked", Boolean.class))
+                .one()
+                .defaultIfEmpty(false);
+    }
+
+    @Override
     public Mono<Long> countActiveByTourist(UUID touristId) {
         return repository.countActiveByTourist(touristId);
     }

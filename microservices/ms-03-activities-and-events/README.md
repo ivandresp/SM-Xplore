@@ -98,7 +98,8 @@ Si no defines `R2DBC_URL` ni `FLYWAY_URL`, ambas conexiones se derivan de `POSTG
 | `OUTBOX_LEASE_DURATION` | `PT3M` | Lease del claim; al vencer, otra instancia retoma la fila. |
 | `OUTBOX_SEND_TIMEOUT` | `PT5S` | Timeout del envío a Kafka. |
 | `OUTBOX_CYCLE_TIMEOUT` | `PT60S` | Tope de un ciclo completo del relay; debe cubrir `batch-size × send-timeout`. |
-| `SCHEDULING_POOL_SIZE` | `3` | Hilos del scheduler: relay, retención y cierre automático no se bloquean entre sí. |
+| `SCHEDULING_POOL_SIZE` | `4` | Hilos del scheduler: relay, retención y cierre automático no se bloquean entre sí. |
+| `MANAGEMENT_EXPOSURE` | `health,info` | Endpoints de Actuator expuestos. `metrics` y `prometheus` solo son públicos en los perfiles `local`, `dev` y `test`; fuera de ellos exigen un token `ADMIN`. |
 | `OUTBOX_RETENTION_DAYS` | `30` | Retención de las filas `PUBLISHED`/`FAILED`. |
 | `SITE_EVENTS_RETRY_INTERVAL_MS` / `SITE_EVENTS_RETRY_MAX_ELAPSED_MS` | `1000` / `60000` | Reintentos del consumidor de sitios: backoff exponencial con tope de 60 s. |
 | `SITE_EVENTS_DLT_SUFFIX` | `.DLT` | Sufijo del topic de descarte; el topic se declara al arrancar. |
@@ -185,6 +186,16 @@ Los informes de demanda en CSV neutralizan las celdas que empiezan por `=`, `+`,
 
 `AUTH_VERSION_ENABLED` y `MFA_REQUIRE_ADMIN` son seguros por defecto (`true`); solo los perfiles `local`, `dev` y `test` los relajan mediante `application-local.yaml`, `application-dev.yaml` y `application-test.yaml`, y `JwtProductionGuard` impide arrancar fuera de esos perfiles con cualquiera de los dos apagado.
 
+Actuator solo expone `health` e `info` por defecto (`MANAGEMENT_EXPOSURE`); `metrics` y `prometheus` quedan fuera de la exposición salvo que se pidan explícitamente, y en ese caso solo son públicos en los perfiles `local`, `dev` y `test`: fuera de ellos exigen un token `ADMIN`. Si el stack de producción necesita scrapear `/actuator/prometheus`, debe habilitarlo con `MANAGEMENT_EXPOSURE=health,info,metrics,prometheus` y mantener el scrape en la red interna o con credenciales.
+
+La disponibilidad de actividades y eventos no publicados no es pública: un anónimo recibe `404` (igual que si el ítem no existiera), y solo el `ADMIN` o el dueño del recurso (`guideId` de la actividad, `managerId` del evento) pueden consultarla.
+
+Cambiar el aforo o la franja de una actividad con plazas ya reservadas devuelve `409` con código `ACTIVITY_RESERVATION_CONFLICT`: no se permite dejar el aforo por debajo de las plazas `CONFIRMED` ni reprogramar un ítem con reservas vivas (hay que cancelarlas antes).
+
+Responder a la reseña de un evento revalida siempre la gestora actual del sitio contra ms-04; si ms-04 no responde o el sitio ya no existe, la respuesta falla con `503` y código `REVIEW_RESPONSE_UNAVAILABLE`, nunca con el `managerId` congelado del snapshot.
+
+Crear una reseña exige que el turista tenga una reserva `CONFIRMED` o `COMPLETED` para el ítem; sin ella responde `403`.
+
 ## Limitaciones conocidas
 
 - No hay bloqueo optimista en las escrituras (ver `shortcut:` en los adaptadores).
@@ -253,7 +264,7 @@ Reglas: la reserva es **simbólica** y nace `CONFIRMED`; aparta cupo y el pago s
 
 | Método | Ruta | Acceso |
 |---|---|---|
-| POST | `/api/v1/reviews` | Autenticado; no exige reserva |
+| POST | `/api/v1/reviews` | Autenticado; exige una reserva `CONFIRMED` o `COMPLETED` del turista para el ítem |
 | GET | `/api/v1/reviews/events/{eventId}` | Público |
 | GET | `/api/v1/reviews/activities/{activityId}` | Público |
 | GET | `/api/v1/reviews/events/{eventId}/metrics` | Público |

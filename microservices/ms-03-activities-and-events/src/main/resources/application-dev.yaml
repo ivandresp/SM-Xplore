@@ -6,3 +6,9 @@ app:
       enabled: false
     mfa:
       require-admin: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

@@ -102,6 +102,16 @@ public class FakeReservationRepository implements ReservationRepositoryPort {
     }
 
     @Override
+    public Mono<Boolean> existsReservationForReview(UUID touristId, UUID itemId, ReservationItemType type) {
+        return findAllByTouristId(touristId, Integer.MAX_VALUE)
+                .filter(reservation -> reservation.getItemId().equals(itemId)
+                        && reservation.getItemType() == type
+                        && (reservation.getStatus() == ReservationStatus.CONFIRMED
+                        || reservation.getStatus() == ReservationStatus.COMPLETED))
+                .hasElements();
+    }
+
+    @Override
     public Mono<Long> countActiveByTourist(UUID touristId) {
         return findAllByTouristId(touristId, Integer.MAX_VALUE)
                 .filter(reservation -> reservation.getStatus() == ReservationStatus.CONFIRMED)

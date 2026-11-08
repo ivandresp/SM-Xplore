@@ -5,11 +5,16 @@ import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
@@ -44,16 +49,23 @@ public class SecurityConfiguration {
                                                          CorsConfigurationSource corsConfigurationSource,
                                                          ReactiveJwtAuthenticationConverter jwtAuthenticationConverter,
                                                          ServerAuthenticationEntryPoint apiAuthenticationEntryPoint,
-                                                         ServerAccessDeniedHandler apiAccessDeniedHandler) {
+                                                         ServerAccessDeniedHandler apiAccessDeniedHandler,
+                                                         Environment environment) {
+        // Las metricas internas solo se publican en los perfiles de desarrollo: en el resto
+        // exigen el rol ADMIN, igual que el resto de la superficie de operacion.
+        var publicMetrics = environment.acceptsProfiles(Profiles.of("local", "dev", "test"));
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
-                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                         .permitAll()
+                        // /actuator/metrics y /actuator/prometheus exponen estado interno
+                        // (grupos Kafka, pool R2DBC, outbox): publicos solo en desarrollo.
+                        .pathMatchers("/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .access((authentication, context) -> metricsAccess(authentication, publicMetrics))
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**")
                         .permitAll()
                         // Public catalog
@@ -101,6 +113,24 @@ public class SecurityConfiguration {
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper().findAndRegisterModules();
+    }
+
+    /**
+     * Decide el acceso a las metricas de Actuator: publico en los perfiles de desarrollo (donde
+     * Prometheus vive en la misma red) y solo ADMIN en el resto. Los endpoints ni siquiera estan
+     * expuestos fuera de desarrollo (ver {@code management.endpoints.web.exposure.include}).
+     */
+    static Mono<AuthorizationResult> metricsAccess(Mono<Authentication> authentication,
+                                                   boolean publicMetrics) {
+        if (publicMetrics) {
+            return Mono.just(new AuthorizationDecision(true));
+        }
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .map(principal -> (AuthorizationResult) new AuthorizationDecision(
+                        principal.getAuthorities().stream()
+                                .anyMatch(authority -> ("ROLE_" + ADMIN).equals(authority.getAuthority()))))
+                .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     @Bean

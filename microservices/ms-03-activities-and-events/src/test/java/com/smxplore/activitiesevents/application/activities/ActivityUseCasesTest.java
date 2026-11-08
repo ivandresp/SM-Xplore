@@ -1,14 +1,19 @@
 package com.smxplore.activitiesevents.application.activities;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityReservationConflictException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityCapacityException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityRequestException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityScheduleException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 class ActivityUseCasesTest {
 
@@ -45,7 +52,7 @@ class ActivityUseCasesTest {
         registerActivity = new RegisterActivityUseCase(activityRepo, activityEvents, publisher);
         updateActivity = new UpdateActivityUseCase(activityRepo, activityEvents, publisher);
         manageAvailability = new ManageAvailabilityUseCase(activityRepo, new com.smxplore.activitiesevents.application.reservations.FakeReservationRepository());
-        manageSlots = new ManageSlotsUseCase(activityRepo);
+        manageSlots = new ManageSlotsUseCase(activityRepo, new com.smxplore.activitiesevents.application.reservations.FakeReservationRepository());
         cancelActivity = new CancelActivityUseCase(activityRepo, activityEvents, publisher);
         changeActivityStatus = new ChangeActivityStatusUseCase(activityRepo, activityEvents, publisher);
         consultActivities = new ConsultActivitiesUseCase(activityRepo);
@@ -167,6 +174,47 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(id)).block();
 
         assertThrows(InvalidActivityCapacityException.class, () -> manageSlots.handle(id, 0).block());
+    }
+
+    @Test
+    void shouldRejectCapacityBelowTheSeatsAlreadyReserved() {
+        UUID id = UUID.randomUUID();
+        activityRepo.save(validActivity(id)).block();
+        int originalCapacity = activityRepo.findById(id).blockOptional().orElseThrow().getMaxCapacity();
+        ReservationRepositoryPort reservationRepo = mock(ReservationRepositoryPort.class);
+        given(reservationRepo.sumActivePeopleForItem(id, ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(originalCapacity));
+        var useCase = new ManageSlotsUseCase(activityRepo, reservationRepo);
+
+        assertThrows(ActivityReservationConflictException.class,
+                () -> useCase.handle(id, originalCapacity - 1).block());
+        assertEquals(originalCapacity,
+                activityRepo.findById(id).blockOptional().orElseThrow().getMaxCapacity());
+    }
+
+    @Test
+    void shouldRejectReschedulingAnActivityWithSeatsReserved() {
+        UUID id = UUID.randomUUID();
+        activityRepo.save(validActivity(id)).block();
+        Instant originalStart = activityRepo.findById(id).blockOptional().orElseThrow().getStartsAt();
+        ReservationRepositoryPort reservationRepo = mock(ReservationRepositoryPort.class);
+        given(reservationRepo.sumActivePeopleForItem(id, ReservationItemType.ACTIVITY)).willReturn(Mono.just(2));
+        var useCase = new ManageAvailabilityUseCase(activityRepo, reservationRepo);
+        Instant newStart = Instant.now().plusSeconds(7200);
+
+        assertThrows(ActivityReservationConflictException.class,
+                () -> useCase.handle(id, newStart, newStart.plusSeconds(3600)).block());
+        assertEquals(originalStart, activityRepo.findById(id).blockOptional().orElseThrow().getStartsAt());
+    }
+
+    @Test
+    void shouldRejectReschedulingAnActivityIntoThePast() {
+        UUID id = UUID.randomUUID();
+        activityRepo.save(validActivity(id)).block();
+        Instant past = Instant.now().minusSeconds(3600);
+
+        assertThrows(InvalidActivityScheduleException.class,
+                () -> manageAvailability.handle(id, past, past.plusSeconds(3600)).block());
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundExcept
 import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyExistsException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewWithoutReservationException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
@@ -15,10 +16,12 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewAiPolicy;
 import com.smxplore.activitiesevents.domain.model.review.ReviewAiRequest;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.ports.ai.ReviewAiFilter;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.review.CreateReviewUseCasePort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
@@ -26,13 +29,17 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Users can review a published event/activity without having a reservation. */
+/**
+ * Solo un turista con reserva confirmada o completada puede resenar el item: la resena acredita
+ * una experiencia real (antes bastaba con estar registrado).
+ */
 @RequiredArgsConstructor
 public class CreateReviewUseCase implements CreateReviewUseCasePort {
 
     private final ReviewRepositoryPort reviewRepo;
     private final EventRepositoryPort eventRepo;
     private final ActivityRepositoryPort activityRepo;
+    private final ReservationRepositoryPort reservationRepo;
     private final ReviewAiFilter aiFilter;
     private final ReviewAiPolicy aiPolicy;
     private final ReviewEventPublisher publisher;
@@ -53,6 +60,12 @@ public class CreateReviewUseCase implements CreateReviewUseCasePort {
         review.validate();
 
         return validateItem(itemId, itemType, userId)
+                .then(reservationRepo.existsReservationForReview(userId, itemId,
+                        ReservationItemType.valueOf(itemType.name())))
+                .flatMap(booked -> booked
+                        ? Mono.<Void>empty()
+                        : Mono.error(new ReviewWithoutReservationException(
+                                "Only tourists with a confirmed reservation can review this item.")))
                 .then(reviewRepo.existsByItemAndUser(itemId, itemType, userId))
                 .flatMap(exists -> exists
                         ? Mono.error(new ReviewAlreadyExistsException(

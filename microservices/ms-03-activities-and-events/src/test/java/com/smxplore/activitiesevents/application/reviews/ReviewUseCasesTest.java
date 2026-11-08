@@ -11,6 +11,8 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundExce
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportLimitExceededException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewWithoutReservationException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.activity.ActivityStatus;
 import com.smxplore.activitiesevents.domain.model.event.Event;
@@ -25,11 +27,13 @@ import com.smxplore.activitiesevents.domain.model.review.ReviewReport;
 import com.smxplore.activitiesevents.domain.model.review.ReviewReportStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewStatus;
 import com.smxplore.activitiesevents.domain.model.review.ReviewUser;
+import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.ports.ai.ReviewAiFilter;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewReportRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.ReservationRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.repository.ReviewRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +65,9 @@ class ReviewUseCasesTest {
     private ReviewReportRepositoryPort reportRepo;
 
     @Mock
+    private ReservationRepositoryPort reservationRepo;
+
+    @Mock
     private EventRepositoryPort eventRepo;
 
     @Mock
@@ -86,17 +93,20 @@ class ReviewUseCasesTest {
         publisher = new ReviewEventPublisher(outbox,
                 new ReviewEventFactory(new ObjectMapper().findAndRegisterModules()), reviewRepo,
                 new ReviewEventMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
-        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, aiPolicy,
-                publisher);
+        createReview = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, reservationRepo,
+                aiFilter, aiPolicy, publisher);
         respondToReview = new RespondToReviewUseCase(reviewRepo, activityRepo, eventRepo, siteCatalog,
                 publisher);
         lenient().when(outbox.enqueue(any())).thenReturn(Mono.empty());
-        // El publicador marca la reseña tras el enqueue; el Mockito puro devolveria null.
+        // El publicador marca la reseÃ±a tras el enqueue; el Mockito puro devolveria null.
         lenient().when(reviewRepo.markEventPublished(any(), any())).thenReturn(Mono.just(true));
+        // Solo quien ha reservado puede resenar; los casos que no prueban esa regla la dan por buena.
+        lenient().when(reservationRepo.existsReservationForReview(any(), any(), any()))
+                .thenReturn(Mono.just(true));
     }
 
     @Test
-    void createsReviewWithoutReservationAndKeepsNestedUser() {
+    void createsReviewForTouristWithReservationAndKeepsNestedUser() {
         var activity = activity(UUID.randomUUID());
         var userId = UUID.randomUUID();
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
@@ -118,6 +128,21 @@ class ReviewUseCasesTest {
 
         then(outbox).should().enqueue(org.mockito.ArgumentMatchers.argThat(
                 event -> "reviews.review.changed".equals(event.eventType())));
+    }
+
+    @Test
+    void rejectsReviewWithoutAReservation() {
+        var activity = activity(UUID.randomUUID());
+        var userId = UUID.randomUUID();
+        given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
+        given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
+                .willReturn(Mono.just(false));
+        given(reservationRepo.existsReservationForReview(userId, activity.getId(), ReservationItemType.ACTIVITY))
+                .willReturn(Mono.just(false));
+
+        StepVerifier.create(createReview.handle(activity.getId(), ReviewItemType.ACTIVITY, userId, "Ana", 5, "Great"))
+                .expectError(ReviewWithoutReservationException.class)
+                .verify();
     }
 
     @Test
@@ -178,7 +203,7 @@ class ReviewUseCasesTest {
         var activity = activity(UUID.randomUUID());
         var userId = UUID.randomUUID();
         var hidePolicy = new ReviewAiPolicy(0.7, ReviewAiAction.HIDE, true);
-        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, hidePolicy,
+        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, reservationRepo, aiFilter, hidePolicy,
                 publisher);
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
         given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
@@ -197,7 +222,7 @@ class ReviewUseCasesTest {
         var activity = activity(UUID.randomUUID());
         var userId = UUID.randomUUID();
         var closedPolicy = new ReviewAiPolicy(0.7, ReviewAiAction.PENDING_REVIEW, false);
-        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, aiFilter, closedPolicy,
+        var useCase = new CreateReviewUseCase(reviewRepo, eventRepo, activityRepo, reservationRepo, aiFilter, closedPolicy,
                 publisher);
         given(activityRepo.findById(activity.getId())).willReturn(Mono.just(activity));
         given(reviewRepo.existsByItemAndUser(activity.getId(), ReviewItemType.ACTIVITY, userId))
@@ -265,9 +290,11 @@ class ReviewUseCasesTest {
     @Test
     void guideCannotRespondToEventReview() {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
-        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
-        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                event.getSiteId(), UUID.randomUUID(), "Sitio")));
 
         StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "GUIDE", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
@@ -278,9 +305,11 @@ class ReviewUseCasesTest {
     void destinationManagerInChargeCanRespondToEventReview() {
         var managerId = UUID.randomUUID();
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(managerId);
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
-        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(managerId)));
-        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                event.getSiteId(), managerId, "Sitio")));
         given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         StepVerifier.create(respondToReview.handle(review.getId(), managerId, "DESTINATION_MANAGER", "Thanks!", "token"))
@@ -291,9 +320,11 @@ class ReviewUseCasesTest {
     @Test
     void anotherDestinationManagerCannotRespondToEventReview() {
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(UUID.randomUUID());
         given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
-        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event(UUID.randomUUID())));
-        given(siteCatalog.findById(any(), any())).willReturn(Mono.empty());
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(any(), any())).willReturn(Mono.just(new SiteCatalogPort.SiteSnapshot(
+                event.getSiteId(), UUID.randomUUID(), "Sitio")));
 
         StepVerifier.create(respondToReview.handle(review.getId(), UUID.randomUUID(), "DESTINATION_MANAGER", "Thanks!", "token"))
                 .expectError(ReviewResponseNotAllowedException.class)
@@ -336,7 +367,7 @@ class ReviewUseCasesTest {
     }
 
     @Test
-    void fallsBackToTheSnapshotWhenMs04Fails() {
+    void deniesTheResponseWhenMs04Fails() {
         var managerId = UUID.randomUUID();
         var review = review(ReviewItemType.EVENT, UUID.randomUUID());
         var event = event(managerId);
@@ -344,12 +375,26 @@ class ReviewUseCasesTest {
         given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
         given(siteCatalog.findById(event.getSiteId(), "token"))
                 .willReturn(Mono.error(new IllegalStateException("ms-04 down")));
-        given(reviewRepo.save(any())).willAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
         StepVerifier.create(respondToReview.handle(review.getId(), managerId,
                         "DESTINATION_MANAGER", "Thanks!", "token"))
-                .assertNext(updated -> assertThat(updated.getReply()).isNotNull())
-                .verifyComplete();
+                .expectError(ReviewResponseUnavailableException.class)
+                .verify();
+    }
+
+    @Test
+    void deniesTheResponseWhenTheSiteNoLongerExists() {
+        var managerId = UUID.randomUUID();
+        var review = review(ReviewItemType.EVENT, UUID.randomUUID());
+        var event = event(managerId);
+        given(reviewRepo.findById(review.getId())).willReturn(Mono.just(review));
+        given(eventRepo.findById(review.getItemId())).willReturn(Mono.just(event));
+        given(siteCatalog.findById(event.getSiteId(), "token")).willReturn(Mono.empty());
+
+        StepVerifier.create(respondToReview.handle(review.getId(), managerId,
+                        "DESTINATION_MANAGER", "Thanks!", "token"))
+                .expectError(ReviewResponseUnavailableException.class)
+                .verify();
     }
 
     @Test

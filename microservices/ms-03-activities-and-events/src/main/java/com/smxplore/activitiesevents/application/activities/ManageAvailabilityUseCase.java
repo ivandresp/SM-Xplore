@@ -1,6 +1,8 @@
 package com.smxplore.activitiesevents.application.activities;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityReservationConflictException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityScheduleException;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
@@ -22,17 +24,25 @@ public class ManageAvailabilityUseCase implements ManageAvailabilityUseCasePort 
 
     @Override
     public Mono<Activity> handle(UUID activityId, Instant startsAt, Instant endsAt) {
+        if (startsAt == null || !startsAt.isAfter(Instant.now())) {
+            return Mono.error(new InvalidActivityScheduleException(
+                    "The new start time must be in the future."));
+        }
         return activityRepo.findById(activityId)
                 .switchIfEmpty(Mono.error(new ActivityNotFoundException(activityId)))
-                .map(activity -> updateSchedule(activity, startsAt, endsAt))
-                .flatMap(activityRepo::save)
+                .flatMap(activity -> reservationRepo
+                        .sumActivePeopleForItem(activityId, ReservationItemType.ACTIVITY)
+                        .flatMap(reserved -> {
+                            if (reserved > 0) {
+                                return Mono.error(new ActivityReservationConflictException(
+                                        "The activity has %d seats already reserved; cancel them before "
+                                                .formatted(reserved) + "rescheduling it."));
+                            }
+                            activity.updateSchedule(startsAt, endsAt);
+                            return activityRepo.save(activity);
+                        }))
                 .flatMap(saved -> reservationRepo
                         .rescheduleItem(saved.getId(), ReservationItemType.ACTIVITY, saved.getStartsAt())
                         .thenReturn(saved));
-    }
-
-    private Activity updateSchedule(Activity activity, Instant startsAt, Instant endsAt) {
-        activity.updateSchedule(startsAt, endsAt);
-        return activity;
     }
 }

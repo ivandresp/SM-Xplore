@@ -52,8 +52,10 @@ management:
   endpoints:
     web:
       exposure:
-        # El stack local scrapea /actuator/prometheus; en produccion se aisla por red.
-        include: health,info,metrics,prometheus
+        # Por defecto solo health/info: metrics y prometheus exponen estado interno (Kafka, pool
+        # R2DBC, outbox). Los perfiles local/dev/test los habilitan y SecurityConfiguration los
+        # deja publicos solo ahi; fuera de desarrollo exigen JWT con rol ADMIN.
+        include: ${MANAGEMENT_EXPOSURE:health,info}
 
 app:
   outbox:

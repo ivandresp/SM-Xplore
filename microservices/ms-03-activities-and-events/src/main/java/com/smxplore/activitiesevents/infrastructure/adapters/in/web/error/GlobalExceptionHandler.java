@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.error;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityReservationConflictException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityCapacityException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityNameException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityPriceException;
@@ -42,6 +43,8 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundExce
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportLimitExceededException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewWithoutReservationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DuplicateKeyException;
@@ -76,14 +79,15 @@ public class GlobalExceptionHandler {
             TooManyActiveReservationsException.class,
             ReviewAlreadyExistsException.class,
             ReviewAlreadyReportedException.class,
-            ReviewAlreadyRespondedException.class})
+            ReviewAlreadyRespondedException.class,
+            ActivityReservationConflictException.class})
     public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class,
             ReviewModerationNotAllowedException.class, DemandAccessDeniedException.class,
-            CatalogExportNotAllowedException.class})
+            CatalogExportNotAllowedException.class, ReviewWithoutReservationException.class})
     public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
@@ -93,6 +97,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(
             ReviewFilterUnavailableException exception, ServerWebExchange exchange) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewResponseUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleReviewResponseUnavailable(
+            ReviewResponseUnavailableException exception, ServerWebExchange exchange) {
+        // Fail closed: sin poder verificar al gestor en ms-04 no se permite responder.
+        return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange,
+                "REVIEW_RESPONSE_UNAVAILABLE");
     }
 
     @ExceptionHandler(ReviewReportLimitExceededException.class)

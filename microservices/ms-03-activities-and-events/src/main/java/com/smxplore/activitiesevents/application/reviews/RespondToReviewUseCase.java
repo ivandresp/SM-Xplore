@@ -6,6 +6,7 @@ import com.smxplore.activitiesevents.domain.exceptions.review.InvalidReviewExcep
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespondedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseUnavailableException;
 import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
@@ -97,22 +98,27 @@ public class RespondToReviewUseCase implements RespondToReviewUseCasePort {
      * Resolves the manager that owns the site right now instead of trusting the snapshot taken when
      * the event was created, so a reassigned manager loses the reply right immediately.
      *
-     * <p>If ms-04 does not answer, or the site no longer exists, the stored snapshot is used: the
-     * alternative is rejecting every reply whenever the catalog is down. The warning is the only
-     * trace, so the fallback is visible in the logs.
+     * <p>Si el catalogo no responde o el sitio ya no existe se deniega con 503: aceptar el snapshot
+     * por defecto dejaria responder a un gestor cesado justo cuando ms-04 esta caido. El fallo se
+     * registra para que quede rastro en los logs.
      */
     private Mono<UUID> managerInCharge(Event event, String bearerToken) {
-        var snapshot = Mono.justOrEmpty(event.getManagerId());
         if (event.getSiteId() == null || bearerToken == null || bearerToken.isBlank()) {
-            return snapshot;
+            return Mono.error(new ReviewResponseUnavailableException(
+                    "Cannot verify the destination manager of this event right now."));
         }
         return siteCatalog.findById(event.getSiteId(), bearerToken)
                 .map(SiteCatalogPort.SiteSnapshot::managerId)
-                .switchIfEmpty(snapshot)
-                .onErrorResume(error -> {
+                .switchIfEmpty(Mono.error(new ReviewResponseUnavailableException(
+                        "Cannot verify the destination manager of this event right now.")))
+                .onErrorMap(error -> {
+                    if (error instanceof ReviewResponseUnavailableException) {
+                        return error;
+                    }
                     log.warn("Could not revalidate the site manager of event {}: {}",
                             event.getId(), error.toString());
-                    return snapshot;
+                    return new ReviewResponseUnavailableException(
+                            "Cannot verify the destination manager of this event right now.", error);
                 });
     }
 }

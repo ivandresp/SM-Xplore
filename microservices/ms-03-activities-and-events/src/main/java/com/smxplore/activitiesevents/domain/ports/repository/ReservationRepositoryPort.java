@@ -48,6 +48,12 @@ public interface ReservationRepositoryPort {
     /** People already booked (CONFIRMED) for an event or activity. */
     Mono<Integer> sumActivePeopleForItem(UUID itemId, ReservationItemType type);
 
+    /**
+     * Reserva CONFIRMED o COMPLETED del turista para el item: solo quien ha reservado (o asistido)
+     * puede resenar, para que la resena acredite una experiencia real.
+     */
+    Mono<Boolean> existsReservationForReview(UUID touristId, UUID itemId, ReservationItemType type);
+
     /** CONFIRMED reservations of a tourist whose item has not started yet. */
     Mono<Long> countActiveByTourist(UUID touristId);
 
