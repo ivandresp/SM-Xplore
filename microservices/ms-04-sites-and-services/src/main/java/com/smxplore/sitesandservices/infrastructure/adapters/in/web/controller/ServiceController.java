@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @RestController
@@ -119,11 +120,14 @@ public class ServiceController {
             @RequestParam(required = false) ContentStatus status,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) BigDecimal priceMin,
+            @RequestParam(required = false) BigDecimal priceMax,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         ServiceFilter filter = new ServiceFilter(
-                categoryId, zoneId, siteId, providerId, status, type, search, page, size);
+                categoryId, zoneId, siteId, providerId, status, type, search,
+                priceMin, priceMax, page, size);
         return listUseCase.handle(filter)
                 .map(result -> PageResponse.from(result, webMapper::toResponse));
     }

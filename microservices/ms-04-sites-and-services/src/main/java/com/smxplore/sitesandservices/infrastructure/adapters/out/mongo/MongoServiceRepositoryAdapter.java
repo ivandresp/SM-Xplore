@@ -165,6 +165,16 @@ public class MongoServiceRepositoryAdapter implements ServiceRepositoryPort {
         if (filter.type() != null && !filter.type().isBlank()) {
             criteria.and("type").is(filter.type());
         }
+        if (filter.priceMin() != null || filter.priceMax() != null) {
+            Criteria price = Criteria.where("price");
+            if (filter.priceMin() != null) {
+                price = price.gte(filter.priceMin());
+            }
+            if (filter.priceMax() != null) {
+                price = price.lte(filter.priceMax());
+            }
+            criteria.andOperator(price);
+        }
         if (filter.search() != null && !filter.search().isBlank()) {
             String pattern = Pattern.quote(filter.search().trim());
             criteria.orOperator(
