@@ -97,6 +97,8 @@ se acepta con un perfil local, y el perfil `prod` lo prohibe y exige emisor y au
 | PostgreSQL | `smxplore` / `smxplore` |
 | Roles ms-03 | `ms03_flyway` / `ms03_flyway`, `ms03_app` / `ms03_app` |
 | Neo4j | `neo4j` / `change-me` |
+| Kafka UI (8090) | `admin` / `kafka-ui-dev` (`KAFKA_UI_USER` / `KAFKA_UI_PASSWORD`) |
+| Mailpit UI (8025) | `mailpit` / `mailpit-dev` (`MAILPIT_UI_AUTH` en formato `usuario:password`) |
 
 El perfil por defecto de ms-01 es `dev`: genera y persiste las llaves JWT en el volumen
 `ms01_data`. Si borras el volumen, los tokens emitidos dejan de valer.

@@ -290,11 +290,13 @@ else
 fi
 
 echo "== Herramientas =="
+# PLAT-08: Kafka UI y Mailpit exigen login (basic auth) desde que se cerraron las
+# UIs de desarrollo, asi que un 401 tambien cuenta como "arriba y protegida".
 for entry in "Kafka UI:$KAFKA_UI_PORT" "Mailpit:$MAILPIT_UI_PORT" "Neo4j:$NEO4J_HTTP_PORT"; do
   label=${entry%%:*}
   port=${entry##*:}
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$HOST:$port/" || true)
-  if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+  if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "401" ]; then
     pass "$label responde en $port"
   else
     fail "$label no responde en $port (codigo $code)"

@@ -202,10 +202,17 @@ $tools = @(
 foreach ($tool in $tools) {
   $label = $tool[0]
   $port = $tool[1]
+  # PLAT-08: Kafka UI y Mailpit piden basic auth; el 401 confirma que estan arriba
+  # y protegidas. En PS 5.1 Invoke-WebRequest lanza excepcion con 401, asi que se
+  # inspecciona la respuesta del error.
   try {
     $response = Invoke-WebRequest -Uri ("http://" + $HostName + ":" + $port + "/") -TimeoutSec 5 -UseBasicParsing
-    if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 302) { Pass "$label responde en $port" } else { Fail "$label codigo $($response.StatusCode)" }
-  } catch { Fail "$label no responde: $_" }
+    if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 302 -or $response.StatusCode -eq 401) { Pass "$label responde en $port" } else { Fail "$label codigo $($response.StatusCode)" }
+  } catch {
+    $status = $null
+    if ($_.Exception.Response -ne $null) { $status = [int]$_.Exception.Response.StatusCode }
+    if ($status -eq 401) { Pass "$label responde en $port (auth requerida)" } else { Fail "$label no responde: $_" }
+  }
 }
 
 Write-Host ""

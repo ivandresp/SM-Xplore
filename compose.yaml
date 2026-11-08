@@ -145,6 +145,12 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: smxplore
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # PLAT-08: las UIs de desarrollo ya solo escuchan en 127.0.0.1, pero seguian
+      # abiertas a cualquiera del host (kafka-ui permite producir y borrar topics).
+      # Se exige login; las credenciales por defecto son de desarrollo.
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USER:-admin}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:-kafka-ui-dev}
 
   redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}
@@ -192,6 +198,12 @@ services:
     ports:
       - "127.0.0.1:${SMTP_PORT:-1025}:1025"
       - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      # PLAT-08: la UI web captura todo el correo (incluidos enlaces de
+      # verificacion y recuperacion de contraseña), asi que exige basic auth.
+      # El SMTP se deja sin auth a proposito: ms-01 lo usa sin credenciales y
+      # solo escucha en loopback.
+      MP_UI_AUTH: ${MAILPIT_UI_AUTH:-mailpit:mailpit-dev}
 
   # ---------------------------------------------------------------------------
   # Microservicios

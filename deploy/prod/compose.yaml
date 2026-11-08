@@ -62,9 +62,13 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: ${POSTGRES_USER:-smxplore}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-      # Las usa deploy/postgres/01-databases.sh para crear la base y los roles de ms-03.
+      # Las usa deploy/postgres/01-databases.sh para crear las bases y los roles
+      # acotados de cada servicio (PLAT-05). Ningun servicio de aplicacion usa el
+      # superusuario del cluster en produccion.
+      MS01_APP_PASSWORD: ${MS01_APP_PASSWORD:?}
       MS03_APP_PASSWORD: ${MS03_APP_PASSWORD:?}
       MS03_FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:?}
+      MS04_APP_PASSWORD: ${MS04_APP_PASSWORD:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
@@ -419,7 +423,9 @@ services:
     mem_limit: 128m
     logging: *prod-logging
     environment:
-      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-smxplore}:${POSTGRES_PASSWORD:?}@postgres:5432/postgres?sslmode=disable
+      # PLAT-05: "disable" solo es aceptable mientras PostgreSQL no tenga TLS.
+      # Con TLS activo (ver README, seccion 10) usar POSTGRES_SSLMODE=verify-full.
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-smxplore}:${POSTGRES_PASSWORD:?}@postgres:5432/postgres?sslmode=${POSTGRES_SSLMODE:-disable}
     depends_on:
       postgres:
         condition: service_healthy
@@ -479,10 +485,15 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: "8081"
-      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
-      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
-      DB_USERNAME: ${POSTGRES_USER:-smxplore}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # PLAT-05: ms-01 entra con su propio rol (dueno de smxplore_users, sin ser
+      # superusuario del cluster) en lugar del usuario administrativo compartido.
+      # Los sufijos opcionales permiten activar TLS en PostgreSQL sin editar el
+      # compose: POSTGRES_R2DBC_QUERY="?sslMode=verify-full" y
+      # POSTGRES_JDBC_QUERY="?sslmode=verify-full" (ver README, seccion 10).
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users${POSTGRES_R2DBC_QUERY:-}
+      DB_URL: jdbc:postgresql://postgres:5432/smxplore_users${POSTGRES_JDBC_QUERY:-}
+      DB_USERNAME: ${MS01_APP_USER:-ms01_app}
+      DB_PASSWORD: ${MS01_APP_PASSWORD:?}
       MONGODB_URI: "mongodb://${MONGO_USER_MS01:-ms01_app}:${MONGO_PASSWORD_MS01:?}@mongo1:27017,mongo2:27017,mongo3:27017/smxplore_reviews?replicaSet=rs0&authSource=smxplore_reviews&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
       JWT_ISSUER: ${JWT_ISSUER:?}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?}
@@ -589,14 +600,15 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: "8082"
-      R2DBC_URL: r2dbc:postgresql://postgres:5432/activities_events
+      # PLAT-05: sufijos opcionales para TLS (POSTGRES_R2DBC_QUERY / _JDBC_QUERY).
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/activities_events${POSTGRES_R2DBC_QUERY:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: activities_events
       POSTGRES_USER: ${MS03_APP_USER:-ms03_app}
       POSTGRES_PASSWORD: ${MS03_APP_PASSWORD:?}
       FLYWAY_ENABLED: "true"
-      FLYWAY_URL: jdbc:postgresql://postgres:5432/activities_events
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/activities_events${POSTGRES_JDBC_QUERY:-}
       FLYWAY_USER: ${MS03_FLYWAY_USER:-ms03_flyway}
       FLYWAY_PASSWORD: ${MS03_FLYWAY_PASSWORD:?}
       MONGODB_URI: "mongodb://${MONGO_USER_MS03:-ms03_app}:${MONGO_PASSWORD_MS03:?}@mongo1:27017,mongo2:27017,mongo3:27017/reviews?replicaSet=rs0&authSource=reviews&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
@@ -658,10 +670,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: "8080"
-      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore
-      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/smxplore
-      POSTGRES_USER: ${POSTGRES_USER:-smxplore}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # PLAT-05: ms-04 usa su propio rol (dueno de smxplore), no el superusuario.
+      POSTGRES_R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore${POSTGRES_R2DBC_QUERY:-}
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/smxplore${POSTGRES_JDBC_QUERY:-}
+      POSTGRES_USER: ${MS04_APP_USER:-ms04_app}
+      POSTGRES_PASSWORD: ${MS04_APP_PASSWORD:?}
       MONGODB_URI: "mongodb://${MONGO_USER_MS04:-ms04_app}:${MONGO_PASSWORD_MS04:?}@mongo1:27017,mongo2:27017,mongo3:27017/smxplore?replicaSet=rs0&authSource=smxplore&tls=true&tlsCAFile=%2Frun%2Fsecrets%2Fmongo_ca"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_CONSUMER_GROUP_ID: ms-04-notifications
@@ -794,11 +807,19 @@ services:
       # variable queda documentada para que nadie arranque el gateway con autofirmado en produccion.
       TLS_SELF_SIGNED: "false"
     ports:
+      # PLAT-03: el gateway es el unico borde publico (0.0.0.0) y solo sirve la
+      # API por TLS; :80 redirige. Las apps siguen en 127.0.0.1 y la
+      # infraestructura (Postgres, Mongo, Kafka, Redis, Neo4j, exporters,
+      # Prometheus) no publica ningun puerto.
       - "${GATEWAY_HTTP_PORT:?}:80"
       - "${GATEWAY_HTTPS_PORT:?}:443"
     volumes:
       - ../gateway/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ../gateway/conf.d:/etc/nginx/conf.d:ro
+      # PLAT-03: se monta el server de produccion sobre el default.conf de la
+      # imagen (que si no quedaria como virtual host por defecto en :80 y servia
+      # la pagina de bienvenida de nginx). Asi el puerto 80 solo redirige a HTTPS
+      # y la API completa viaja por 443.
+      - ../gateway/prod/gateway.conf:/etc/nginx/conf.d/default.conf:ro
       - ../gateway/snippets:/etc/nginx/snippets:ro
     secrets:
       # Rutas absolutas: nginx espera /etc/nginx/certs/tls.crt y tls.key.

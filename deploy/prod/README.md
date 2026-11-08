@@ -4,10 +4,13 @@ Stack de producción en un solo host con Docker Compose. Cubre build/publicació
 imágenes, pineado por digest, secretos, arranque, verificación y rollback.
 
 **Fuera de alcance (diferido):**
-- **Gateway y TLS: P3-11.** Este compose NO termina TLS ni incluye proxy. Se asume un proxy
-  externo (Nginx, Traefik, ALB…) que termina TLS y reenvía a los puertos publicados en
-  `127.0.0.1` de este host. Por eso `SECURITY_HSTS_ENABLED=true` y `server.forward-headers-strategy`
-  (perfil prod) esperan las cabeceras `X-Forwarded-*` del proxy.
+- **TLS de extremo a extremo / HA del borde: P3-11.** Este compose **sí** incluye el gateway nginx
+  como único borde público: `:443` sirve la API con TLS (certificados en secretos
+  `gateway_tls_cert`/`gateway_tls_key`) y `:80` solo redirige con 308 (PLAT-03, sección 11). Lo que
+  queda diferido es un balanceador/HA por delante y la rotación automática de certificados (p. ej.
+  ACME); si se añade un proxy externo, este puede seguir terminando TLS y reenviar al `:443` del
+  gateway. `SECURITY_HSTS_ENABLED=true` y `server.forward-headers-strategy` (perfil prod) siguen
+  esperando las cabeceras `X-Forwarded-*` que inyecta el gateway.
 - **Tópicos y alertas:** `deploy/kafka/topics.env`, `deploy/observability/prometheus.yml` y
   `deploy/observability/alerts.yml` los mantiene P1-6. El arranque de Kafka **sí** forma parte de
   este stack: formato del volumen, material TLS, usuarios SCRAM, ACLs y creación de tópicos
@@ -31,17 +34,19 @@ imágenes, pineado por digest, secretos, arranque, verificación y rollback.
 
 ## Servicios y puertos
 
-| Servicio | Puerto interno | Puerto host (`127.0.0.1`) | Salud |
+| Servicio | Puerto interno | Puerto host | Salud |
 | --- | --- | --- | --- |
-| ms-01-users-and-anomalies | 8081 | `${MS01_PORT}` = 8081 | `/actuator/health` |
-| ms-02-security-reports | 8080 | `${MS02_PORT}` = 8080 | `/actuator/health` |
-| ms-03-activities-and-events | 8082 | `${MS03_PORT}` = 8082 | `/actuator/health` |
-| ms-04-sites-and-services | 8080 | `${MS04_PORT}` = 8084 | `/actuator/health` |
-| ms-05-recommendations | 8080 | `${MS05_PORT}` = 8085 | `/actuator/health` |
-| postgres / mongo1-3 / kafka / redis / neo4j / prometheus | internos | **ninguno** | healthcheck interno |
+| ms-01-users-and-anomalies | 8081 | `127.0.0.1:${MS01_PORT}` = 8081 | `/actuator/health` |
+| ms-02-security-reports | 8080 | `127.0.0.1:${MS02_PORT}` = 8080 | `/actuator/health` |
+| ms-03-activities-and-events | 8082 | `127.0.0.1:${MS03_PORT}` = 8082 | `/actuator/health` |
+| ms-04-sites-and-services | 8080 | `127.0.0.1:${MS04_PORT}` = 8084 | `/actuator/health` |
+| ms-05-recommendations | 8080 | `127.0.0.1:${MS05_PORT}` = 8085 | `/actuator/health` |
+| gateway | 80 / 443 | `${GATEWAY_HTTP_PORT}` = 80 y `${GATEWAY_HTTPS_PORT}` = 443, **en todas las interfaces** | `/healthz` en `:80` |
+| postgres / mongo1-3 / kafka / redis / neo4j / prometheus / exporters | internos | **ninguno** | healthcheck interno |
 
 Ninguna base de datos, broker, caché, Prometheus ni exporter publica puertos: solo se exponen los
-`808x` de las aplicaciones, atados a loopback para que el proxy externo sea el único ingreso.
+`808x` de las aplicaciones (atados a loopback para operación) y el gateway en `0.0.0.0`, que es el
+único ingreso público y solo sirve la API por TLS (PLAT-03).
 
 Orden de arranque: Postgres y Mongo (3 nodos) sanos → `mongo-init` (replica set + usuarios) →
 `kafka-format` (formatea el volumen y siembra el usuario admin SCRAM) → `kafka` (SASL_SSL) →
@@ -205,6 +210,12 @@ antes de volver.
 - **Sin mTLS en Kafka** (`KAFKA_SSL_CLIENT_AUTH=none`): los clientes se autentican solo con
   SCRAM-SHA-512 sobre TLS; si se requiere identidad por certificado, hay que distribuir un
   certificado por servicio y cambiar `ssl.client.auth` a `required`.
+- **PostgreSQL sin TLS en esta entrega** (PLAT-05): los roles por servicio ya están separados, pero
+  el tráfico dentro de `smxplore-prod` sigue en claro hasta montar certificados y activar
+  `POSTGRES_R2DBC_QUERY`/`POSTGRES_JDBC_QUERY`/`POSTGRES_SSLMODE` (sección 11).
+- **Claves de backup fuera del host**: sin `AGE_IDENTITY_FILE`/`BACKUP_HMAC_KEY_FILE` un backup
+  cifrado no se puede restaurar ni verificar (PLAT-07); guárdalas en el gestor de secretos, nunca
+  junto a `deploy/backups/`.
 
 ## 9. Decisiones de despliegue (P3-8 y P3-11, firmadas el 2026-11-06)
 
@@ -213,9 +224,9 @@ antes de volver.
   - TLS en el propio gateway (`TLS_SELF_SIGNED=false` y secretos `gateway_tls_cert` /
     `gateway_tls_key` montados en `/etc/nginx/certs`), o
   - HTTP detrás del balanceador (el balanceador termina TLS, inyecta `X-Forwarded-Proto: https` y
-    redirige 80→443). En este modo el gateway no redirige para no duplicar el `listen`; si se
-    quiere forzar HTTPS dentro del stack, se agrega un `conf.d/00-redirect.conf` como explica
-    `deploy/gateway/README.md`.
+    redirige 80→443). En este modo el gateway **también** redirige (PLAT-03: `deploy/gateway/prod/gateway.conf`
+    montado en el compose), así que un cliente que llegue por HTTP nunca recibe la API en claro; el
+    doble redirect del balanceador y del gateway es inocuo.
 - **Auth entre servicios (P3-8, opción A)**: los servicios se autentican con el JWT del usuario y la
   red privada `smxplore-stack`; solo el gateway publica 80/443 y las 808x quedan en 127.0.0.1 para
   operación. No hay `client_credentials` en esta entrega: si se agrega, ms-01 emite un token de
@@ -281,3 +292,153 @@ Todos los productores reciben además `IdempotentWrite` sobre el clúster (ACL `
   paralelo y un truststore que contenga ambas, y retira la vieja después.
 - **`kafka_data` existente**: no se reformatea; si se pierde el usuario admin, recréalo con
   `create-acls.sh` usando una sesión admin todavía válida.
+
+## 11. Correcciones MEDIA de plataforma (fase 2 de seguridad)
+
+### PLAT-03 — TLS obligatorio y superficie publicada
+
+`compose.yaml` monta `deploy/gateway/prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`** en
+lugar de montar el directorio `conf.d/` de desarrollo (así también desaparece el `default.conf` de la
+imagen `nginx:1.27-alpine`, que si no sería el virtual host por defecto en `:80`):
+
+- `:443` sirve `routes.conf` (toda la API) con TLS 1.2/1.3 y HSTS (`max-age=31536000`).
+- `:80` **no** publica la API: solo conserva `location = /healthz` (healthcheck del contenedor) y
+  responde `308 https://$host$request_uri` a cualquier otra ruta.
+
+El gateway sigue escuchando en `0.0.0.0` porque es el único borde público; las cinco aplicaciones se
+publican en `127.0.0.1:${MS0X_PORT}` (operación) y la infraestructura (PostgreSQL, MongoDB, Kafka,
+Redis, Neo4j, exporters, Prometheus) no publica ningún puerto. Si hay un balanceador por delante que
+ya redirige, se puede montar `conf.d/gateway.conf` otra vez (ver sección 9) sin efectos de seguridad:
+el 308 es idempotente.
+
+### PLAT-05 — Roles de PostgreSQL por servicio y TLS documentado
+
+`deploy/postgres/01-databases.sh` crea un rol LOGIN por servicio:
+
+| Base | Rol dueño | Uso |
+| --- | --- | --- |
+| `smxplore_users` | `ms01_app` | ms-01 (migra con Flyway con este mismo rol) |
+| `activities_events` | `ms03_flyway` (DDL) / `ms03_app` (DML) | ms-03 |
+| `smxplore` | `ms04_app` | ms-04 |
+
+`POSTGRES_USER`/`POSTGRES_PASSWORD` quedan como cuenta administrativa del clúster (initdb, backups y
+`postgres-exporter`); ningún servicio la usa. Además se ejecuta
+`REVOKE ALL ON DATABASE <base> FROM PUBLIC` para que un rol LOGIN cualquiera no pueda conectarse a
+bases ajenas. Las contraseñas se declaran con `:?` en el compose: `MS01_APP_PASSWORD`,
+`MS03_APP_PASSWORD`, `MS03_FLYWAY_PASSWORD`, `MS04_APP_PASSWORD`.
+
+**TLS opcional (fuerte).** El contenedor de PostgreSQL de esta entrega no trae certificados, pero los
+servicios aceptan activarlo sin editar el compose. Con un `postgres` con TLS (`ssl=on`,
+`ssl_cert_file`, `ssl_key_file` montados y `POSTGRES_INITDB_ARGS`/`postgresql.conf` equivalente),
+basta con:
+
+```bash
+POSTGRES_R2DBC_QUERY="?sslMode=verify-full"   # r2dbc-postgresql
+POSTGRES_JDBC_QUERY="?sslmode=verify-full"    # JDBC (Flyway)
+POSTGRES_SSLMODE=verify-full                  # postgres-exporter
+```
+
+`POSTGRES_R2DBC_QUERY`/`POSTGRES_JDBC_QUERY` se concatenan a las URLs de los servicios; vacías (por
+defecto) el tráfico sigue en claro dentro de la red `smxplore-prod`. Las bases existentes no se
+migran solas: para un volumen ya creado hay que ejecutar el `CREATE ROLE`/`GRANT`/`REVOKE` del script
+a mano y reiniciar los contenedores con las nuevas credenciales.
+
+### PLAT-06 — Datos personales y retención en Kafka
+
+`deploy/kafka/topics.env` documenta qué payloads llevan datos personales y por qué cada retención es
+la que es:
+
+| Tópico | Dato personal | Retención |
+| --- | --- | --- |
+| `security.report.changed` | `reporterId`, `title`, `latitude`, `longitude` | **3 días** (recortada desde 7; no tiene consumidor) |
+| `bookings.reservation.changed` | `touristId`, `guideId`, `managerId`, `providerId` | 7 días |
+| `reviews.review.changed` | `touristId`, `response.text` | 7 días |
+| `catalog.*`, `activities.*` | solo `managerId` (identificador interno) | 7 días |
+| DLQ / DLT | mismos campos que su tópico | 14 días |
+
+Reducir el contenido (quitar `title`/`latitude`/`longitude` de los reportes o no publicar
+`touristId` a proyecciones que no lo necesitan) exige una versión nueva de contrato en `contracts/`
+y a los consumidores preparados: queda como recomendación para el equipo de contratos, no se cambió
+ningún esquema en esta fase.
+
+`create-topics.sh` usa `--if-not-exists`: en un clúster que ya existe la retención nueva **no** se
+aplica sola. Para alinear los tópicos ya creados:
+
+```bash
+docker compose --env-file .env.prod --env-file images.env -f deploy/prod/compose.yaml \
+  run --rm --no-deps kafka-init bash -lc '
+    /scripts/render-client-config.sh --out /tmp/admin.properties &&
+    kafka-configs.sh --bootstrap-server kafka:9092 --command-config /tmp/admin.properties \
+      --entity-type topics --entity-name security.report.changed \
+      --alter --add-config retention.ms=259200000'
+```
+
+### PLAT-07 — Backups cifrados, firmados y con permisos restrictivos
+
+`deploy/backup/backup.sh` ahora:
+
+- cifra cada volcado con **age** (por defecto) o gpg y **borra el original**:
+  `postgres/<base>.dump.age`, `postgres/globals.sql.age`, `mongo/mongo.archive.gz.age`,
+  `neo4j/neo4j.dump.age`;
+- firma `checksums.sha256` con HMAC-SHA256 (`checksums.sha256.hmac`) cuando hay
+  `BACKUP_HMAC_KEY_FILE` — el SHA-256 solo prueba integridad, el HMAC prueba autenticidad;
+- crea el directorio con `umask 077`, `0700` en el árbol y `chmod -R go-rwx` al terminar; el dump de
+  Neo4j ya no necesita un directorio `0777` (se usa `chmod 0770` y el contenedor efímero corre como
+  `7474:0`).
+
+Variables: `BACKUP_ENCRYPTION` (`age|gpg|none`), `AGE_RECIPIENT` o `AGE_RECIPIENTS_FILE`,
+`BACKUP_HMAC_KEY_FILE`; `BACKUP_ENCRYPTION=none` exige además `ALLOW_PLAINTEXT_BACKUPS=1`.
+
+`restore.sh` y `verify-backup.sh` descifran a un directorio temporal `0700` que borran al salir
+(`AGE_IDENTITY_FILE`, `GPG_PASSPHRASE_FILE`), verifican el HMAC si existe, y
+`--skip-checksums` exige `ALLOW_UNVERIFIED=1`. **Guarda `AGE_IDENTITY_FILE` y la clave HMAC fuera del
+host de backups**: sin ellas un backup cifrado es irrecuperable y sin HMAC no se detecta una
+alteración.
+
+### PLAT-08 — UIs de desarrollo
+
+`kafka-ui` (raíz e `infrastructure/compose.yaml`) exige `AUTH_TYPE=LOGIN_FORM` con
+`KAFKA_UI_USER`/`KAFKA_UI_PASSWORD`; `mailpit` exige basic auth en la UI
+(`MAILPIT_UI_AUTH`, formato `usuario:password`). Ambos siguen en `127.0.0.1` y **no están en
+`deploy/prod/compose.yaml`**. `scripts/smoke.sh`/`smoke.ps1` aceptan `401` como prueba de que la UI
+está arriba y protegida. Cambia los valores por defecto en `.env` si el host es compartido.
+
+### PLAT-10 — Límites de conexión y tiempos en el gateway
+
+`nginx.conf` fija `keepalive_timeout 30s`, `keepalive_requests 1000`, `client_header_timeout 10s`,
+`send_timeout 30s` y `reset_timedout_connection on`, define la zona `conn_per_ip` (10m) y
+`limit_conn_status 429`; los dos servers aplican `limit_conn conn_per_ip 20`. El 429 usa el mismo
+`application/problem+json` con `Retry-After` que el rate limiting por petición. Con
+HTTP/2 una conexión multiplexa muchas peticiones: el límite de 20 conexiones es holgado para clientes
+legítimos y corta el agotamiento de `worker_connections` (1024).
+
+### Pruebas de regresión de la fase 2
+
+```bash
+# PLAT-03: por HTTP solo healthz y redirect; la API exige HTTPS
+curl -s -o /dev/null -w '%{http_code}\n' http://HOST/healthz                     # 200
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://HOST/api/v1/activities  # 308 https://...
+curl -s -o /dev/null -w '%{http_code}\n' -k https://HOST/api/v1/activities       # 200
+
+# PLAT-05: cada servicio conecta con su rol, no con el superusuario
+docker compose -f deploy/prod/compose.yaml exec postgres \
+  psql -U smxplore -d postgres -c "\du" | grep -E 'ms01_app|ms03_app|ms03_flyway|ms04_app'
+# y desde ms-01: SELECT current_user;  -> ms01_app
+
+# PLAT-06: retención efectiva
+docker compose -f deploy/prod/compose.yaml exec kafka \
+  kafka-configs.sh --bootstrap-server localhost:9092 --command-config /tmp/admin.properties \
+  --entity-type topics --entity-name security.report.changed --describe   # retention.ms=259200000
+
+# PLAT-07: un backup se verifica y se restaura cifrado
+BACKUP_ENCRYPTION=age AGE_RECIPIENT=age1... bash deploy/backup/backup.sh
+AGE_IDENTITY_FILE=... bash deploy/backup/verify-backup.sh --backup deploy/backups/<ts>
+AGE_IDENTITY_FILE=... bash deploy/backup/restore.sh --backup deploy/backups/<ts> --yes
+
+# PLAT-08: las UIs de desarrollo piden credenciales
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/    # 401
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8025/    # 401
+
+# PLAT-10: 429 de conexión con 21 conexiones simultáneas
+seq 1 21 | xargs -P21 -I{} curl -sk -o /dev/null -w '%{http_code}\n' https://HOST/api/v1/activities
+```

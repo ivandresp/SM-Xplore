@@ -18,9 +18,11 @@ interna de Docker.
 deploy/gateway/
 ├── Dockerfile                 # nginx:1.27-alpine + openssl; instala el entrypoint de certs
 ├── entrypoint.sh              # genera/valida el certificado TLS antes de arrancar nginx
-├── nginx.conf                 # configuración global (http, logs, upstreams, cabeceras, zonas de rate limit)
+├── nginx.conf                 # configuración global (http, logs, upstreams, cabeceras, límites)
 ├── conf.d/
-│   └── gateway.conf           # los dos servers: :80 y :443 (TLS), ambos con las mismas rutas
+│   └── gateway.conf           # servers :80 y :443 de DESARROLLO (ambos con las mismas rutas)
+├── prod/
+│   └── gateway.conf           # servers de PRODUCCIÓN: :80 solo redirige a HTTPS (PLAT-03)
 ├── snippets/
 │   └── routes.conf            # tabla de rutas ruta -> servicio (lo que más vas a editar)
 └── README.md                  # este documento
@@ -28,9 +30,15 @@ deploy/gateway/
 
 | Archivo | Se monta en el contenedor | Para qué |
 |---|---|---|
-| `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, límites, zonas de rate limiting, upstreams `ms_01..ms_05`, cabeceras |
-| `conf.d/` | `/etc/nginx/conf.d/` | servers `:80` y `:443`; `include` de las rutas |
+| `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, tiempos, límites de conexión, zonas de rate limiting, upstreams `ms_01..ms_05`, cabeceras |
+| `conf.d/gateway.conf` | `/etc/nginx/conf.d/gateway.conf` (dev) | servers `:80` y `:443`; `include` de las rutas |
+| `prod/gateway.conf` | `/etc/nginx/conf.d/default.conf` (prod) | `:443` con rutas y HSTS; `:80` solo `/healthz` + redirect 308 |
 | `snippets/` | `/etc/nginx/snippets/` | `routes.conf`, incluido dentro de cada server |
+
+`deploy/prod/compose.yaml` monta `prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`** (la
+imagen de producción es `nginx:1.27-alpine` sin el Dockerfile propio, así que si no se reemplaza, el
+`default.conf` de la imagen quedaría como virtual host por defecto en `:80` y serviría su página de
+bienvenida). En producción la API nunca se sirve por HTTP (ver sección 9).
 
 Todo se monta **desde el repositorio** (no se copia dentro de la imagen): para cambiar el ruteo
 basta editar el archivo en el repo y reiniciar el contenedor. El único artefacto que sí vive dentro
@@ -237,31 +245,29 @@ El gateway también está en `deploy/prod/compose.yaml`:
 
 ### Forzar HTTPS
 
-Por defecto el server `:80` también enruta (útil en local para smoke tests). En producción puedes
-redirigir todo a HTTPS agregando `deploy/gateway/conf.d/00-redirect.conf`:
+Por defecto el server `:80` de **desarrollo** también enruta la API (útil en local para smoke tests).
+En **producción** ya está resuelto: `deploy/prod/compose.yaml` monta `deploy/gateway/prod/gateway.conf`,
+que sirve la API solo por `:443` y en `:80` únicamente responde `/healthz` y redirige con `308` al
+mismo host en HTTPS (PLAT-03). No hace falta ningún archivo extra:
 
 ```nginx
+# fragmento de prod/gateway.conf
 server {
     listen 80;
-    server_name _;
     location = /healthz { access_log off; default_type text/plain; return 200 "ok\n"; }
     location / { return 308 https://$host$request_uri; }
 }
 ```
 
-> Ojo: ese archivo **no** debe convivir con el server `:80` de `conf.d/gateway.conf` (dos servers
-> en el mismo puerto = `duplicate listen`). En producción, monta solo uno de los dos, o elimina el
-> server HTTP de `gateway.conf` para ese despliegue.
+Si en algún momento necesitas el mismo redirect en local, copia `prod/gateway.conf` sobre
+`conf.d/gateway.conf`; **no** montes los dos a la vez (dos servers en `:80` = `duplicate listen`).
 
-### HSTS (opcional)
+### HSTS
 
-Cuando el dominio público ya sirve HTTPS de forma estable, añade en el server `:443`:
-
-```nginx
-add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
-```
-
-No lo actives antes de tener todos los subdominios en HTTPS.
+`prod/gateway.conf` ya envía `Strict-Transport-Security "max-age=31536000; includeSubDomains"` en el
+server `:443`. Si el dominio público aún no tiene todos los subdominios en HTTPS, quita esa línea de
+`prod/gateway.conf` hasta que los tenga: un HSTS prematuro deja esos subdominios inaccesibles por HTTP
+durante un año.
 
 ---
 
@@ -377,7 +383,38 @@ es ms-04 quien lo sirve. Una ruta privada como `/api/v1/reservations` sí debe d
 
 ---
 
-## 9. Problemas frecuentes
+## 9. Límites de conexión y modo producción (PLAT-03 / PLAT-10)
+
+**Tiempos y conexiones por IP** (`nginx.conf`, fase 2 de seguridad): `keepalive_timeout 30s`,
+`keepalive_requests 1000`, `client_header_timeout 10s`, `send_timeout 30s`,
+`reset_timedout_connection on`, zona `limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m` y
+`limit_conn conn_per_ip 20` en ambos servers. El 429 de conexión sale con el mismo
+`application/problem+json` y `Retry-After` que el de rate limiting.
+
+- 20 conexiones simultáneas por IP es holgado para un navegador o un móvil (HTTP/2 multiplexa las
+  peticiones en una conexión) y evita que una sola IP agote `worker_connections 1024`.
+- Un cliente detrás de un NAT compartido (oficina, operador móvil) puede acercarse al límite: si
+  necesitas subirlo, `limit_conn conn_per_ip 50` en `prod/gateway.conf` y en `conf.d/gateway.conf`.
+- El límite de **conexiones** es independiente del de **peticiones**: una petición lenta (`slowloris`
+  de cuerpo completo) está acotada por `client_body_timeout 30s` y `send_timeout 30s`, no por
+  `limit_conn`.
+
+**Producción** (`deploy/prod/compose.yaml`): monta `prod/gateway.conf`, donde `:443` sirve la API con
+TLS y HSTS y `:80` solo responde `/healthz` y redirige con `308` a `https://$host$request_uri`. El
+gateway es el único borde público (`0.0.0.0`); los cinco servicios se publican solo en
+`127.0.0.1:${MS0X_PORT}` para operación y la infraestructura no publica puertos. En desarrollo
+(`conf.d/gateway.conf`) el `:80` sigue sirviendo la API para no romper el smoke ni las pruebas E2E.
+
+```bash
+# comprobar el redirect de producción (sin Docker: no aplica; con el stack arriba)
+curl.exe -s -o NUL -w "%{http_code} %{redirect_url}\n" http://127.0.0.1/api/v1/activities
+# esperado: 308 https://.../api/v1/activities
+curl.exe -s -o NUL -w "%{http_code}\n" http://127.0.0.1/healthz   # 200 ok
+```
+
+---
+
+## 10. Problemas frecuentes
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
@@ -390,10 +427,12 @@ es ms-04 quien lo sirve. Una ruta privada como `/api/v1/reservations` sí debe d
 | El gateway arranca en bucle en producción | Faltan `gateway_tls_cert`/`gateway_tls_key` o no son PEM válidos | Revisa `docker compose logs gateway` y los secretos |
 | `401` inesperado solo a través del gateway | Falta `Authorization` o el token expira | Es el servicio quien valida: el gateway no toca el header |
 | `429` con "Demasiadas peticiones" en pruebas locales | La misma IP superó el cubo de `auth` o `public` (común en suites E2E) | Espera unos segundos, espacia las peticiones o sube el `burst` de esa `location` (sección 7). No es un fallo del servicio |
+| `429` inmediato con muchas pestañas o peticiones paralelas | Se superaron las 20 conexiones simultáneas por IP (`limit_conn conn_per_ip 20`) | Cierra conexiones o sube el límite (sección 9); no afecta a un cliente normal |
+| El `:80` devuelve `308` en producción | Comportamiento intencional: la API solo se sirve por HTTPS | Usa `https://`; `/healthz` sigue respondiendo `200` en claro |
 
 ---
 
-## 10. Referencias
+## 11. Referencias
 
 - `compose.yaml` (raíz): servicio `gateway`, volumen `gateway_certs`, variables `GATEWAY_*`.
 - `deploy/prod/compose.yaml`: servicio `gateway` con secretos TLS reales.

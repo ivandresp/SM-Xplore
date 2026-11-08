@@ -42,6 +42,11 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: smxplore
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # PLAT-08: mismo criterio que en el compose raiz. Solo escucha en 127.0.0.1,
+      # pero exige login porque desde esta UI se pueden producir/borrar topics.
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USER:-admin}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:-kafka-ui-dev}
 
   redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}
