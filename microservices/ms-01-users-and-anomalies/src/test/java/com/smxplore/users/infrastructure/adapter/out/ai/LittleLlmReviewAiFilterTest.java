@@ -123,6 +123,37 @@ class LittleLlmReviewAiFilterTest {
         assertThat(assessment.status()).isEqualTo(ReviewAiAssessment.Status.SKIPPED);
     }
 
+    @Test
+    void wrapsTheReviewTextWithNonceDelimitersAndTreatsItAsUntrustedData() {
+        try (StubLlm llm = StubLlm.start(
+                (exchange, body) -> reply(exchange, 200, chatResponse("{\"flagged\":false,\"score\":0.05}")))) {
+            filter(llm.baseUrl(), Duration.ofSeconds(2)).assess(REQUEST).block();
+
+            assertThat(llm.lastBody.get()).contains("DATOS NO CONFIABLES").contains("<resena-");
+        }
+    }
+
+    @Test
+    void returnsUnavailableWhenTheVerdictDoesNotFollowTheContract() {
+        try (StubLlm llm = StubLlm.start((exchange, body) -> reply(
+                exchange,
+                200,
+                chatResponse("{\"score\":0.1,\"categories\":[\"SPAM\"],\"reason\":\"sin veredicto\"}")))) {
+            ReviewAiAssessment assessment =
+                    filter(llm.baseUrl(), Duration.ofSeconds(2)).assess(REQUEST).block();
+
+            assertThat(assessment.status()).isEqualTo(ReviewAiAssessment.Status.UNAVAILABLE);
+        }
+
+        try (StubLlm llm = StubLlm.start((exchange, body) ->
+                reply(exchange, 200, chatResponse("{\"flagged\":\"true\",\"score\":0.9,\"categories\":[\"SPAM\"]}")))) {
+            ReviewAiAssessment assessment =
+                    filter(llm.baseUrl(), Duration.ofSeconds(2)).assess(REQUEST).block();
+
+            assertThat(assessment.status()).isEqualTo(ReviewAiAssessment.Status.UNAVAILABLE);
+        }
+    }
+
     private static LittleLlmReviewAiFilter filter(String baseUrl, Duration timeout) {
         return filter(baseUrl, timeout, 0.0);
     }

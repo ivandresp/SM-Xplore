@@ -11,6 +11,7 @@ import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.Usuario;
 import com.smxplore.users.support.FakeMfaRepository;
 import com.smxplore.users.support.FakePasswordHasher;
+import com.smxplore.users.support.FakeRecoveryCodeHasher;
 import com.smxplore.users.support.FakeTotpAuthenticator;
 import com.smxplore.users.support.FakeTransactionPort;
 import com.smxplore.users.support.FakeUserRepository;
@@ -37,7 +38,7 @@ class EnrollMfaServiceTest {
             mfa,
             totp,
             () -> "ABCD-EFGH",
-            raw -> "hash:" + raw,
+            new FakeRecoveryCodeHasher(),
             new FakeTransactionPort(),
             Clock.fixed(NOW, ZoneOffset.UTC),
             "SM-Xplore");

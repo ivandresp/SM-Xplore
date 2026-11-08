@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -68,16 +67,14 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage());
     }
 
+    /**
+     * MS01-04: el bloqueo por intentos fallidos responde exactamente igual que una contraseña incorrecta (401
+     * genérico, sin {@code retryAfterSeconds}). Antes devolvía 429 {@code TOO_MANY_ATTEMPTS}, lo que permitía a un
+     * atacante distinguir un correo registrado de uno inexistente (oráculo de existencia de cuentas).
+     */
     @ExceptionHandler(TooManyLoginAttemptsException.class)
     public ResponseEntity<ProblemDetail> handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
-        long retryAfterSeconds = Math.max(1, exception.retryAfter().toSeconds());
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
-        problem.setTitle("Too Many Requests");
-        problem.setProperty("code", "TOO_MANY_ATTEMPTS");
-        problem.setProperty("retryAfterSeconds", retryAfterSeconds);
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
-                .body(problem);
+        return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Correo electrónico o contraseña incorrectos");
     }
 
     @ExceptionHandler(InvalidCurrentPasswordException.class)

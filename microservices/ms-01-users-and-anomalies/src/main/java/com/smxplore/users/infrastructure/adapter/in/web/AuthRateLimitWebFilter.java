@@ -85,6 +85,10 @@ public class AuthRateLimitWebFilter implements WebFilter {
         return switch (path) {
             case "/api/v1/auth/login" -> "login";
             case "/api/v1/auth/forgot-password" -> "forgot-password";
+            // MS01-04: el registro también devuelve 409 cuando el correo ya existe; se limita por IP para
+            // que no se pueda usar como oráculo de enumeración a alta velocidad.
+            case "/api/v1/auth/register/turista" -> "register-turista";
+            case "/api/v1/auth/register/prestadora" -> "register-prestadora";
             case "/api/v1/auth/reset-password" -> "reset-password";
             case "/api/v1/auth/mfa/verify" -> "mfa-verify";
             default -> null;

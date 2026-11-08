@@ -67,9 +67,10 @@ class LoginProtectionFlowTest {
         assertThat(loginStatus("bloqueo@example.com", "Incorrecta123!")).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         Exchange locked = login("bloqueo@example.com", "ChangeMe123!");
-        assertThat(locked.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-        assertThat(locked.retryAfter()).isNotBlank();
-        assertThat(locked.body()).contains("TOO_MANY_ATTEMPTS").contains("retryAfterSeconds");
+        // MS01-04: la respuesta es indistinguible de una contraseña incorrecta; ya no se revela el bloqueo.
+        assertThat(locked.status()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(locked.retryAfter()).isNull();
+        assertThat(locked.body()).contains("INVALID_CREDENTIALS").doesNotContain("TOO_MANY_ATTEMPTS");
 
         ResponseEntity<Map> forgot = client.post()
                 .uri("/api/v1/auth/forgot-password")

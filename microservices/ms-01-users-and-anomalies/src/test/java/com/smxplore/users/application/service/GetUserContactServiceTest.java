@@ -127,6 +127,11 @@ class GetUserContactServiceTest {
         }
 
         @Override
+        public Mono<Long> countAll() {
+            return Mono.just(0L);
+        }
+
+        @Override
         public Mono<UserStatistics> statistics() {
             return Mono.error(new UnsupportedOperationException("No usado en esta prueba"));
         }

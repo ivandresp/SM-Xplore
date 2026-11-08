@@ -5,7 +5,7 @@ import com.smxplore.users.application.port.in.EnrollMfaUseCase;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
-import com.smxplore.users.application.port.out.TokenHasher;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.TotpAuthenticator;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
@@ -30,7 +30,7 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
     private final MfaRepository mfa;
     private final TotpAuthenticator totp;
     private final RecoveryCodeGenerator recoveryCodeGenerator;
-    private final TokenHasher tokenHasher;
+    private final RecoveryCodeHasher recoveryCodeHasher;
     private final TransactionPort transactions;
     private final Clock clock;
     private final String issuerName;
@@ -41,7 +41,7 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
             MfaRepository mfa,
             TotpAuthenticator totp,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             TransactionPort transactions,
             Clock clock,
             String issuerName) {
@@ -50,7 +50,7 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
         this.mfa = mfa;
         this.totp = totp;
         this.recoveryCodeGenerator = recoveryCodeGenerator;
-        this.tokenHasher = tokenHasher;
+        this.recoveryCodeHasher = recoveryCodeHasher;
         this.transactions = transactions;
         this.clock = clock;
         this.issuerName = issuerName;
@@ -80,8 +80,9 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
         List<String> recoveryCodes = IntStream.range(0, RECOVERY_CODE_COUNT)
                 .mapToObj(index -> recoveryCodeGenerator.generate())
                 .toList();
+        // MS01-07: hash con sal por código en lugar del SHA-256 sin sal.
         List<String> hashes = recoveryCodes.stream()
-                .map(code -> tokenHasher.hash(MfaCodeVerifier.recoveryForm(code)))
+                .map(code -> recoveryCodeHasher.hash(MfaCodeVerifier.recoveryForm(code)))
                 .toList();
         MfaEnrollment enrollment = MfaEnrollment.pending(user.id(), secret, now);
 

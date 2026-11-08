@@ -10,7 +10,6 @@ import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
 import com.smxplore.users.application.port.out.UserRepository;
-import com.smxplore.users.domain.exception.AccountNotActiveException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.model.Email;
 import com.smxplore.users.domain.model.MfaEnrollment;
@@ -86,11 +85,14 @@ public final class LoginService implements LoginUseCase {
                                         .then(Mono.<Usuario>error(new InvalidCredentialsException()));
                             }
                             if (!user.isActive()) {
+                                // MS01-04: una cuenta inactiva responde igual que una contraseña incorrecta.
+                                // Antes se lanzaba AccountNotActiveException (403), lo que permitía distinguir
+                                // cuentas existentes bloqueadas o suspendidas de correos inexistentes.
                                 return protection
                                         .clear(email)
                                         .then(accountAttemptLimiter.clear(accountKey))
                                         .then(failedLogins.record())
-                                        .then(Mono.<Usuario>error(new AccountNotActiveException()));
+                                        .then(Mono.<Usuario>error(new InvalidCredentialsException()));
                             }
                             return protection
                                     .clear(email)

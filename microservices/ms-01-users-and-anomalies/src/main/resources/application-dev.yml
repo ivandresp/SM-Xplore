@@ -18,6 +18,9 @@ app:
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:true}
+    ai-filter:
+      # En desarrollo se prioriza no bloquear el flujo de reseñas si LittleLLM no responde (MS01-09).
+      fail-open: true
 
 springdoc:
   api-docs:

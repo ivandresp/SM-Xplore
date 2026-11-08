@@ -22,6 +22,9 @@ public interface UserRepository {
 
     Mono<Long> countActiveByRole(Role role);
 
+    /** MS01-12: total de cuentas, usado para crear el administrador inicial solo en el primer arranque. */
+    Mono<Long> countAll();
+
     Mono<UserStatistics> statistics();
 
     Mono<Usuario> save(Usuario user);

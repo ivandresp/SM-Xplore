@@ -122,7 +122,10 @@ docker compose --profile full down
 | `MFA_REQUIRED_FOR_ADMINS` | `true` en la base y en `prod`; `false` en `dev` y pruebas |
 | `MFA_CHALLENGE_TTL` | `PT5M` |
 | `MFA_SECRET_KEY` | Vacía en desarrollo (llave local); obligatoria fuera de desarrollo: 32 bytes en Base64 |
-| `INTERNAL_API_KEY` | Vacía en desarrollo; el endpoint interno responde `503` mientras no se configure |
+| `INTERNAL_API_KEY` | Clave maestra HMAC; vacía en desarrollo deshabilita `/internal/**` (`503`) |
+| `INTERNAL_ALLOWED_SERVICES` | Lista opcional de servicios autorizados (coma); vacía acepta cualquier servicio bien firmado |
+| `INTERNAL_MAX_CLOCK_SKEW` | `PT5M`, tolerancia del `X-Internal-Timestamp` |
+| `INTERNAL_RATE_LIMIT_PER_MINUTE` | `60` peticiones por servicio y minuto |
 | `RETENTION_ENABLED` | `true` |
 | `RETENTION_AUTH_ARTIFACTS_DAYS` | `30` |
 | `RETENTION_AUDIT_LOG_DAYS` | `1825` (cinco años) |
@@ -134,7 +137,7 @@ docker compose --profile full down
 | `REVIEW_AI_THRESHOLD` | `0.7` |
 | `REVIEW_AI_TEMPERATURE` | `0.0` (muestreo voraz: veredictos estables y reproducibles) |
 | `REVIEW_AI_ACTION` | `PENDING_REVIEW` (`HIDE` para ocultar de inmediato) |
-| `REVIEW_AI_FAIL_OPEN` | `true` |
+| `REVIEW_AI_FAIL_OPEN` | `false` en la base y en `prod`; `true` solo en `dev` |
 | `BOOTSTRAP_ADMIN_ENABLED` | `false` en la base; `true` en el perfil `dev` con credenciales de ejemplo |
 | `BOOTSTRAP_ADMIN_EMAIL` | `admin@smxplore.local` solo en `dev` |
 | `BOOTSTRAP_ADMIN_PASSWORD` | `ChangeMe123!` solo en `dev`; fuera de desarrollo debe ser distinta |
@@ -156,11 +159,11 @@ faltan, el servicio falla al arrancar en lugar de emitir tokens con una llave ef
 
 ## Protección de acceso
 
-- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password` y `/mfa/verify`. Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
-- **Límite por cuenta**: además del límite por IP, `InMemoryAccountAttemptLimiter` cuenta los fallos por correo en `/auth/login` y por usuario en `/auth/mfa/verify` (`AUTH_ACCOUNT_MAX_ATTEMPTS`, 10 en `AUTH_ACCOUNT_WINDOW`, `PT15M`). Rotar direcciones no evita el cupo de la cuenta; responde `429` con `code=TOO_MANY_ATTEMPTS`.
-- **Bloqueo por cuenta**: tras `LOGIN_LOCKOUT_MAX_ATTEMPTS` fallos consecutivos dentro de la ventana, la cuenta queda bloqueada durante `LOGIN_LOCKOUT_DURATION` y responde `429` con `code=TOO_MANY_ATTEMPTS`. Un inicio de sesión exitoso limpia el contador y la recuperación de contraseña sigue disponible. El estado se guarda en `login_attempts`, no en memoria, para sobrevivir reinicios y compartirse entre instancias.
+- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password`, `/mfa/verify` y los dos registros (`/register/turista`, `/register/prestadora`). Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
+- **Límite por cuenta**: además del límite por IP, `InMemoryAccountAttemptLimiter` cuenta los fallos por correo en `/auth/login` y por usuario en `/auth/mfa/verify` (`AUTH_ACCOUNT_MAX_ATTEMPTS`, 10 en `AUTH_ACCOUNT_WINDOW`, `PT15M`). Rotar direcciones no evita el cupo de la cuenta y el bloqueo por cuenta no revela si la cuenta existe.
+- **Respuesta uniforme ante fallos de acceso (MS01-04)**: un correo inexistente, una contraseña incorrecta, una cuenta inactiva y una cuenta bloqueada responden todos `401` con `code=INVALID_CREDENTIALS` y el mismo mensaje, sin `retryAfterSeconds` ni códigos que distingan el caso. Así, comparar respuestas ya no sirve para enumerar cuentas. En el registro, `EMAIL_ALREADY_EXISTS` (`409`) sí confirma la existencia del correo: es un riesgo aceptado y documentado porque el registro público necesita dar una respuesta útil; lo mitiga el límite por IP añadido a los dos endpoints de registro. Si se quiere cerrar por completo, el registro debe responder `202` genérico y confirmar por correo.
+- **Bloqueo por cuenta (MS01-05)**: tras `LOGIN_LOCKOUT_MAX_ATTEMPTS` fallos consecutivos dentro de la ventana, la cuenta queda bloqueada durante `LOGIN_LOCKOUT_DURATION`; el estado se guarda en `login_attempts` para sobrevivir reinicios y compartirse entre instancias. Un inicio de sesión exitoso limpia el contador. Al bloquearse se envía un correo de aviso (`EmailAccountLockedNotifier`) y el usuario puede desbloquearse restableciendo la contraseña, porque `ResetPasswordService` limpia el contador persistente y el límite por cuenta. El bloqueo sigue siendo un vector de denegación de servicio para un atacante que conozca el correo; se acepta y se mitiga con la notificación y el autodesbloqueo (un captcha o un desafío progresivo lo cerrarían del todo).
 - La detección de anomalías sigue registrando los fallos por separado: el bloqueo es preventivo, la anomalía es diagnóstica.
-- El bloqueo se aplica por cuenta existente y responde `429`, así que un atacante que conozca un correo puede provocar un bloqueo temporal o inferir que la cuenta existe. El límite por IP reduce ese abuso; si se necesita evitar por completo, conviene añadir un captcha o un desafío progresivo.
 - **Cabeceras**: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`. HSTS solo se emite con `SECURITY_HSTS_ENABLED=true`, cuando el servicio está detrás de TLS.
 - **Enumeración por tiempos**: un correo inexistente también ejecuta una comparación BCrypt señuelo, así que el inicio de sesión tarda lo mismo exista o no la cuenta.
 - **Cierre de sesión**: `POST /api/v1/users/me/logout` incrementa `auth_version` y descarta la versión cacheada, de modo que los tokens ya emitidos dejan de valer de inmediato en ms-01. Al ser tokens sin estado, otros servicios los aceptarán hasta su `exp`; el contrato JWT pide validar `ver` contra ms-01 si necesitan revocación inmediata.
@@ -181,11 +184,16 @@ La inscripción y la confirmación responden `400` si falta la contraseña y `40
 
 El desafío es un JWT con `scope=mfa` y `MFA_CHALLENGE_TTL` de vigencia; el decodificador de acceso lo rechaza, así que no sirve como credencial. Cada paso TOTP se registra en `last_used_step` y no puede reutilizarse.
 
+El desafío también está protegido contra reutilización y contra cambios de sesión (MS01-06 y MS01-08): incluye un `jti` que se persiste en `mfa_challenges` y se marca como usado en el primer canje exitoso, de modo que el mismo `mfaChallengeToken` no sirve dos veces; y lleva el claim `ver`, que `/api/v1/auth/mfa/verify` compara con el `authVersion` vigente de la cuenta. Si el usuario cambió la contraseña, cerró sesión o fue bloqueado entre el login y la verificación, el desafío se rechaza y hay que iniciar sesión de nuevo. La verificación además tiene límite por cuenta (`AUTH_ACCOUNT_MAX_ATTEMPTS`), para que probar códigos desde muchas IPs no baste.
+
 Con `MFA_REQUIRED_FOR_ADMINS=true`, un administrador sin MFA recibe `403` con `code=MFA_ENROLLMENT_REQUIRED` en todo salvo su perfil y la propia inscripción. El token de acceso incluye `mfa=false` hasta que complete el segundo factor.
 
 El secreto TOTP se cifra con AES-GCM antes de guardarse en `mfa_enrollments`; la llave se toma de
-`MFA_SECRET_KEY` (32 bytes en Base64) o, en desarrollo, de `.local/mfa/secret.key`. Los códigos de recuperación se
-guardan como hash SHA-256. Protege los respaldos de PostgreSQL y la llave fuera de la base de datos.
+`MFA_SECRET_KEY` (32 bytes en Base64) o, en desarrollo, de `.local/mfa/secret.key`. Los códigos de recuperación
+tienen 160 bits de entropía (20 bytes en Base32, 32 caracteres agrupados de 4 en 4) y se guardan con **SHA-256
+con sal aleatoria de 16 bytes por código** (`v1$<sal>$<hash>`, ver `SaltedSha256RecoveryCodeHasher`), no con un
+hash desnudo: un volcado de `mfa_recovery_codes` ya no permite probar un diccionario compartido entre usuarios
+ni correlacionar códigos iguales. Protege los respaldos de PostgreSQL y la llave fuera de la base de datos.
 
 Los códigos de recuperación se pueden rotar sin desactivar el segundo factor con
 `POST /api/v1/users/me/mfa/recovery-codes` (contraseña + código TOTP): invalida los anteriores y devuelve 10 nuevos.
@@ -193,7 +201,9 @@ La regeneración queda auditada como `CODIGOS_RECUPERACION_REGENERADOS`.
 
 ## Perfil `prod`
 
-`application-prod.yml` desactiva el administrador inicial, exige llaves JWT explícitas, activa MFA para administradores y HSTS, apaga Swagger, oculta los detalles de salud y habilita el apagado ordenado. `ProductionSecurityValidatorRunner` se ejecuta en todos los perfiles: en `dev`, `local` y `test` solo advierte, y en cualquier otro perfil detiene el arranque si hay llaves JWT ausentes o autogeneradas, `JWT_ALLOW_INSECURE_JWKS=true`, contraseña de bootstrap por defecto o vacía, MFA opcional para administradores o HSTS deshabilitado. `server.forward-headers-strategy` es `none` en `prod`: la IP del cliente se resuelve solo con proxies de confianza.
+`application-prod.yml` desactiva el administrador inicial, exige llaves JWT explícitas, activa MFA para administradores y HSTS, apaga Swagger, oculta los detalles de salud y habilita el apagado ordenado. `ProductionSecurityValidatorRunner` se ejecuta en todos los perfiles: en `dev`, `local` y `test` solo advierte, y en cualquier otro perfil detiene el arranque si hay llaves JWT ausentes o autogeneradas, `JWT_ALLOW_INSECURE_JWKS=true`, contraseña de bootstrap por defecto o vacía, MFA opcional para administradores o HSTS deshabilitado. `server.forward-headers-strategy` es `none` en `prod`: la IP del cliente se resuelve solo con proxies de confianza. El perfil `prod` mantiene `REVIEW_AI_FAIL_OPEN=false`: si el filtro de IA no responde, la reseña no se publica (`503 REVIEW_FILTER_UNAVAILABLE`).
+
+El administrador inicial solo se crea si la tabla `users` está vacía, es decir, en el primer arranque real de una instalación nueva (MS01-12). Si más adelante se elimina o se le cambia el rol, no se recrea con la contraseña de la variable de entorno; la creación queda auditada como `ADMIN_INICIAL_CREADO`. Para instalaciones existentes, crea administradores desde `POST /api/v1/admin/users` o con el flujo de invitación.
 
 ## Retención de datos y ARCO (Ley 1581)
 
@@ -256,7 +266,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | GET | `/api/v1/admin/anomaly-thresholds` | ADMIN, umbrales de detección |
 | PUT | `/api/v1/admin/anomaly-thresholds/{type}` | ADMIN, actualiza un umbral |
 | GET | `/.well-known/jwks.json` | Público |
-| GET | `/internal/users/{userId}/contact` | Interno, encabezado `X-Internal-Api-Key` (sin JWT) |
+| GET | `/internal/users/{userId}/contact` | Interno, firmado con `X-Internal-Service` + `X-Internal-Timestamp` + `X-Internal-Signature` (sin JWT) |
 | GET | `/actuator/health` | Público |
 
 ### Sitio web de las prestadoras
@@ -280,6 +290,7 @@ Las reseñas de guías y prestadoras viven en MongoDB (`smxplore_reviews`, colec
 - El destino puede responder una vez y cualquier usuario autenticado puede reportar la reseña.
 - El administrador consulta las reportadas y decide `HIDE` o `KEEP`; una reseña oculta desaparece de los listados públicos y la decisión queda auditada.
 - La reputación devuelve cantidad de reseñas, promedio y distribución de 1 a 5 estrellas.
+- **Anonimato del listado público (MS01-10)**: `GET /api/v1/public/reviews` devuelve `PublicReviewView`, que no incluye `touristId` ni ningún dato del autor. Antes el `touristId` viajaba en la respuesta y coincide con el claim `sub` del JWT, así que cualquiera podía reconstruir el recorrido de un turista (destinos, fechas y calificaciones) y cruzarlo con otros servicios. El identificador sigue disponible en los DTOs internos y administrativos.
 
 #### Filtro de reseñas con IA (review bombing)
 
@@ -292,7 +303,9 @@ llave en `Authorization: Bearer` (cabecera y prefijo configurables) y el modelo 
 - Si `flagged=true` y `score >= REVIEW_AI_THRESHOLD`, la reseña queda en `PENDIENTE_REVISION` (acción `PENDING_REVIEW`) o directamente `HIDDEN` (acción `HIDE`). En ambos casos sale de los listados públicos y de la reputación.
 - El administrador la ve en `GET /api/v1/admin/reviews/ai-flagged` con la puntuación, categorías, motivo y modelo, y la resuelve con el mismo `PATCH /moderation` (`KEEP` la publica, `HIDE` la confirma).
 - El resultado se persiste en la reseña (`aiStatus`, `aiScore`, `aiCategories`, `aiReason`, `aiModel`, `aiCheckedAt`).
-- Si el LLM falla, expira (`REVIEW_AI_TIMEOUT`) o devuelve un formato inválido, la reseña se guarda con `aiStatus=UNAVAILABLE` y se publica cuando `REVIEW_AI_FAIL_OPEN=true`; con `false` la creación responde `503 REVIEW_FILTER_UNAVAILABLE`.
+- El texto de la reseña viaja delimitado por un marcador aleatorio por petición (`<resena-XXXX>…</resena-XXXX>`) y el prompt lo declara explícitamente como **datos no confiables, nunca instrucciones** (MS01-09). Además se recortan los caracteres de control y la longitud se limita a 2000 caracteres. Un intento de inyectar instrucciones no cambia el rol del mensaje; aun así el filtro es una capa de apoyo, no la única defensa: la moderación humana sigue disponible.
+- La respuesta del LLM se valida de forma estricta: `flagged` debe ser booleano, `score` numérico entre 0 y 1 y `categories` una lista. Cualquier desviación del contrato se trata como `UNAVAILABLE`, no como veredicto limpio.
+- Si el LLM falla, expira (`REVIEW_AI_TIMEOUT`) o devuelve un formato inválido, la reseña se guarda con `aiStatus=UNAVAILABLE` y se publica solo cuando `REVIEW_AI_FAIL_OPEN=true`; en la base y en `prod` el valor es `false`, así que la creación responde `503 REVIEW_FILTER_UNAVAILABLE` (fail-closed). El perfil `dev` lo deja en `true` para no bloquear el trabajo local sin LLM.
 - Solo se envía el texto de la reseña y la calificación; no se envían datos del turista. El LLM debe correr en la infraestructura del proyecto.
 - Se asume el contrato de chat de OpenAI. Si littleLLM expone otro esquema, solo cambia `LittleLlmReviewAiFilter`; la configuración y el resto del flujo se mantienen.
 
@@ -379,19 +392,46 @@ Tokens RS256, access-only, sin refresh token. Claims relevantes:
 depender de un token de usuario. Responde `200` con `{userId, email, fullName, role, phone, active}` (`phone`
 puede ser `null`) y `404` con `code=USER_NOT_FOUND` si el identificador no existe.
 
-No usa JWT porque el llamador es un servicio, no una persona. La autorización es el encabezado
-`X-Internal-Api-Key`, comparado en tiempo constante (SHA-256 + `MessageDigest.isEqual`, para que el tiempo no
-dependa de la longitud recibida) contra `INTERNAL_API_KEY` / `app.internal.api-key`:
+No usa JWT porque el llamador es un servicio, no una persona. Desde la fase de hardening (MS01-11) la autorización
+es una **firma HMAC por servicio**, no una clave única compartida: cada microservicio tiene su propia identidad y
+una clave derivada, de modo que rotar o revocar a uno no obliga a tocar a los demás, y la clave maestra nunca viaja
+en la petición. La clave maestra se toma de `INTERNAL_API_KEY` / `app.internal.api-key`; si está vacía el endpoint
+responde `503` y no queda abierto.
 
-- clave no configurada → `503` con `code=INTERNAL_API_NOT_CONFIGURED`: un despliegue sin la variable **no**
-  deja el endpoint abierto;
-- clave ausente o distinta → `403` con `code=INVALID_INTERNAL_API_KEY`;
-- la clave se valida antes de consultar la cuenta, así que un llamador no autorizado no puede inferir qué
-  identificadores existen.
+Encabezados obligatorios:
 
-`SecurityConfig` marca `permitAll` solo para esa ruta exacta; el resto de `/internal/**` sigue exigiendo un
-token de usuario y el gateway bloquea `/internal/**` hacia el exterior. Es un mecanismo **provisional**: P3-8
-lo sustituye por autenticación servicio a servicio.
+- `X-Internal-Service`: nombre del servicio llamador (`^[a-z0-9-]{2,32}$`, por ejemplo `ms-03-reservations`). Si
+  `INTERNAL_ALLOWED_SERVICES` no está vacío, debe estar en la lista.
+- `X-Internal-Timestamp`: segundos epoch; se rechaza si se desvía más de `INTERNAL_MAX_CLOCK_SKEW` (`PT5M`).
+- `X-Internal-Signature`: HMAC-SHA-256 en hexadecimal.
+
+Derivación y firma:
+
+```
+claveServicio = HMAC-SHA-256(INTERNAL_API_KEY, nombreServicio)
+mensaje       = nombreServicio + "\n" + método + "\n" + ruta + "\n" + timestamp
+firma         = hex(HMAC-SHA-256(claveServicio, mensaje))   // comparación en tiempo constante
+```
+
+`ruta` es la ruta completa de la petición (`/internal/users/{uuid}/contact`). Enviar `X-Internal-Api-Key` ya no
+autoriza nada.
+
+Respuestas y trazas:
+
+- firma o timestamp inválidos → `403` con `code=INVALID_INTERNAL_SIGNATURE`;
+- servicio mal formado o no permitido → `403` con `code=INVALID_INTERNAL_SERVICE`;
+- más de `INTERNAL_RATE_LIMIT_PER_MINUTE` peticiones del mismo servicio en un minuto → `429` con
+  `code=RATE_LIMIT_EXCEEDED`;
+- `200` con `{userId, email, fullName, role, phone, active}` (`phone` puede ser `null`) o `404` con
+  `code=USER_NOT_FOUND`;
+- clave maestra no configurada → `503` con `code=INTERNAL_API_NOT_CONFIGURED`.
+
+Todas las llamadas, exitosas o no, quedan en `internal_access_log` (`service`, `target_user_id`, `outcome`,
+`occurred_at`), con lo que una lectura de PII deja rastro y se puede auditar quién consultó qué. La firma se valida
+antes de consultar la cuenta, así que un llamador no autorizado no puede inferir qué identificadores existen.
+`SecurityConfig` marca `permitAll` solo para esa ruta exacta; el resto de `/internal/**` sigue exigiendo un token de
+usuario y el gateway bloquea `/internal/**` hacia el exterior. Es un mecanismo **provisional**: P3-8 lo sustituye por
+autenticación servicio a servicio con credenciales de corta duración.
 
 ## Pruebas
 
@@ -413,8 +453,12 @@ cuenta, la resolución de la IP del cliente tras un proxy de confianza, las cabe
 Las pruebas del filtro de IA usan un servidor HTTP falso
 que imita a littleLLM y cubren respuesta limpia, bombing, error 500, JSON inválido, timeout y la llave de API.
 `PasswordResetMailpitTest` levanta un Mailpit real, recupera el correo de restablecimiento por su API y comprueba
-que el enlace cambia la contraseña y que el token no se puede reutilizar. La suite son **46 clases**; las pruebas
-de integración se omiten automáticamente cuando no hay Docker.
+que el enlace cambia la contraseña y que el token no se puede reutilizar. Las pruebas unitarias de regresión de la
+fase MEDIA cubren la respuesta uniforme del login, el bloqueo con correo de aviso y autodesbloqueo, el desafío MFA
+de un solo uso y atado a `ver`, los códigos de recuperación de 160 bits con sal, el filtro de IA delimitado y
+fail-closed, el DTO público sin `touristId`, la firma HMAC del endpoint interno y el bootstrap solo en instalación
+vacía. La suite son **52 clases y 188 pruebas**; las pruebas de integración se omiten automáticamente cuando no hay
+Docker (48 en un entorno sin Docker).
 
 El workflow `.github/workflows/ms-01-ci.yml` ejecuta `check` en cada push o pull request y, en un job aparte,
 construye la imagen, levanta el stack completo y espera a que `/actuator/health` responda `UP`.

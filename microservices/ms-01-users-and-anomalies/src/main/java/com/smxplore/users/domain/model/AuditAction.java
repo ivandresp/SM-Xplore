@@ -1,6 +1,7 @@
 package com.smxplore.users.domain.model;
 
 public enum AuditAction {
+    ADMIN_INICIAL_CREADO,
     CUENTA_INTERNA_CREADA,
     ESTADO_CAMBIADO,
     ROL_CAMBIADO,

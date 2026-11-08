@@ -1,8 +1,8 @@
 package com.smxplore.users.infrastructure.adapter.in.rest;
 
 import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.PublicReviewView;
 import com.smxplore.users.application.dto.ReputationSummaryView;
-import com.smxplore.users.application.dto.ReviewView;
 import com.smxplore.users.application.port.in.GetReputationSummaryUseCase;
 import com.smxplore.users.application.port.in.ListReviewsUseCase;
 import com.smxplore.users.domain.exception.ValidationException;
@@ -26,8 +26,9 @@ public class PublicReviewController {
         this.getReputationSummary = getReputationSummary;
     }
 
+    /** MS01-10: devuelve {@link PublicReviewView}, que no incluye el identificador del turista. */
     @GetMapping
-    public Mono<PageResult<ReviewView>> list(
+    public Mono<PageResult<PublicReviewView>> list(
             @RequestParam String targetType,
             @RequestParam UUID targetId,
             @RequestParam(defaultValue = "0") int page,

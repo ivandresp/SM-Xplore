@@ -196,6 +196,14 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Mono<Long> countAll() {
+        return databaseClient
+                .sql("SELECT count(*) AS total FROM users")
+                .map((row, metadata) -> row.get("total", Long.class))
+                .one();
+    }
+
+    @Override
     public Mono<UserStatistics> statistics() {
         OffsetDateTime since = OffsetDateTime.ofInstant(clock.instant().minus(30, ChronoUnit.DAYS), ZoneOffset.UTC);
         return databaseClient

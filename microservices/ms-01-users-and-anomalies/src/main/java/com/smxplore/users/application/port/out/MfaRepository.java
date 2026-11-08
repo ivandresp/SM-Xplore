@@ -22,9 +22,10 @@ public interface MfaRepository {
     Mono<Void> replaceRecoveryCodes(UUID userId, List<String> codeHashes, Instant now);
 
     /**
-     * Consume un código de recuperación. Devuelve {@code true} si existía y no había sido usado.
+     * Consume un código de recuperación comparándolo con los hashes con sal almacenados. Devuelve {@code true} si
+     * existía, no había sido usado y coincidía (MS01-07: el adaptador es quien conoce el esquema de hash).
      */
-    Mono<Boolean> consumeRecoveryCode(UUID userId, String codeHash, Instant now);
+    Mono<Boolean> consumeRecoveryCode(UUID userId, String rawCode, Instant now);
 
     /**
      * Elimina los códigos de recuperación ya usados antes del corte. Devuelve la cantidad de filas borradas.

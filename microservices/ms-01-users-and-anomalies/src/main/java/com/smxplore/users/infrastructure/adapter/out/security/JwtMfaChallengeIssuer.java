@@ -2,6 +2,7 @@ package com.smxplore.users.infrastructure.adapter.out.security;
 
 import com.nimbusds.jose.jwk.RSAKey;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
+import com.smxplore.users.application.port.out.MfaChallengeRepository;
 import com.smxplore.users.domain.model.Usuario;
 import com.smxplore.users.infrastructure.config.JwtProperties;
 import com.smxplore.users.infrastructure.config.MfaProperties;
@@ -23,23 +24,31 @@ public class JwtMfaChallengeIssuer implements MfaChallengeIssuer {
     private final JwtEncoder jwtEncoder;
     private final JwtProperties properties;
     private final MfaProperties mfaProperties;
+    private final MfaChallengeRepository challenges;
     private final RSAKey rsaKey;
     private final Clock clock;
 
     public JwtMfaChallengeIssuer(
-            JwtEncoder jwtEncoder, JwtProperties properties, MfaProperties mfaProperties, RSAKey rsaKey, Clock clock) {
+            JwtEncoder jwtEncoder,
+            JwtProperties properties,
+            MfaProperties mfaProperties,
+            MfaChallengeRepository challenges,
+            RSAKey rsaKey,
+            Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
         this.mfaProperties = mfaProperties;
+        this.challenges = challenges;
         this.rsaKey = rsaKey;
         this.clock = clock;
     }
 
     @Override
     public Mono<IssuedChallenge> issue(Usuario user) {
-        return Mono.fromCallable(() -> {
+        return Mono.defer(() -> {
             Instant now = clock.instant();
             Instant expiresAt = now.plus(mfaProperties.challengeTtl());
+            UUID jti = UUID.randomUUID();
 
             JwtClaimsSet claims = JwtClaimsSet.builder()
                     .issuer(properties.issuer())
@@ -47,7 +56,7 @@ public class JwtMfaChallengeIssuer implements MfaChallengeIssuer {
                     .subject(user.id().toString())
                     .issuedAt(now)
                     .expiresAt(expiresAt)
-                    .id(UUID.randomUUID().toString())
+                    .id(jti.toString())
                     .claim("scope", "mfa")
                     .claim("ver", user.authVersion())
                     .build();
@@ -58,7 +67,11 @@ public class JwtMfaChallengeIssuer implements MfaChallengeIssuer {
 
             String token =
                     jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
-            return new IssuedChallenge(token, expiresAt);
+            // MS01-06: se registra el jti para poder consumir el desafío una sola vez.
+            return challenges
+                    .deleteExpiredBefore(now)
+                    .then(challenges.save(jti, user.id(), expiresAt))
+                    .thenReturn(new IssuedChallenge(token, expiresAt));
         });
     }
 }

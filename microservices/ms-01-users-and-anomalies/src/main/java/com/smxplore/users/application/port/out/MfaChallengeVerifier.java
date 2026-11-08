@@ -1,12 +1,10 @@
 package com.smxplore.users.application.port.out;
 
-import java.util.UUID;
+import com.smxplore.users.application.dto.MfaChallengeContent;
 import reactor.core.publisher.Mono;
 
 public interface MfaChallengeVerifier {
 
-    /**
-     * Valida un token de desafío MFA y devuelve el identificador del usuario.
-     */
-    Mono<UUID> verify(String token);
+    /** Valida la firma y vigencia del desafío y devuelve su contenido: usuario, versión de sesión y {@code jti}. */
+    Mono<MfaChallengeContent> verify(String token);
 }

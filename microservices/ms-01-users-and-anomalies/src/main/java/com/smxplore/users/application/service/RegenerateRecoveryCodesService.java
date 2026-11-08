@@ -5,7 +5,7 @@ import com.smxplore.users.application.port.in.RegenerateRecoveryCodesUseCase;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
-import com.smxplore.users.application.port.out.TokenHasher;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
@@ -31,7 +31,7 @@ public final class RegenerateRecoveryCodesService implements RegenerateRecoveryC
     private final MfaRepository mfa;
     private final PasswordHasher passwordHasher;
     private final RecoveryCodeGenerator recoveryCodeGenerator;
-    private final TokenHasher tokenHasher;
+    private final RecoveryCodeHasher recoveryCodeHasher;
     private final MfaCodeVerifier codeVerifier;
     private final TransactionPort transactions;
     private final AuditTrailRecorder audit;
@@ -42,7 +42,7 @@ public final class RegenerateRecoveryCodesService implements RegenerateRecoveryC
             MfaRepository mfa,
             PasswordHasher passwordHasher,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             MfaCodeVerifier codeVerifier,
             TransactionPort transactions,
             AuditTrailRecorder audit,
@@ -51,7 +51,7 @@ public final class RegenerateRecoveryCodesService implements RegenerateRecoveryC
         this.mfa = mfa;
         this.passwordHasher = passwordHasher;
         this.recoveryCodeGenerator = recoveryCodeGenerator;
-        this.tokenHasher = tokenHasher;
+        this.recoveryCodeHasher = recoveryCodeHasher;
         this.codeVerifier = codeVerifier;
         this.transactions = transactions;
         this.audit = audit;
@@ -85,7 +85,7 @@ public final class RegenerateRecoveryCodesService implements RegenerateRecoveryC
                 .mapToObj(index -> recoveryCodeGenerator.generate())
                 .toList();
         List<String> hashes = codes.stream()
-                .map(code -> tokenHasher.hash(MfaCodeVerifier.recoveryForm(code)))
+                .map(code -> recoveryCodeHasher.hash(MfaCodeVerifier.recoveryForm(code)))
                 .toList();
         return transactions
                 .execute(mfa.replaceRecoveryCodes(user.id(), hashes, now)

@@ -103,15 +103,21 @@ app:
       threshold: ${REVIEW_AI_THRESHOLD:0.7}
       temperature: ${REVIEW_AI_TEMPERATURE:0.0}
       action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
-      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:false}
       json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
   anomalies:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}
       interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
   internal:
-    # Clave compartida para /internal/** (P2-9). Vacía = endpoint deshabilitado (responde 503).
+    # Secreto maestro para firmar llamadas servicio-a-servicio (MS01-11). Vacío = endpoint deshabilitado (503).
     api-key: ${INTERNAL_API_KEY:}
+    # Lista blanca de servicios (vacía = se acepta cualquier servicio bien firmado).
+    allowed-services: ${INTERNAL_ALLOWED_SERVICES:}
+    # Tolerancia de reloj entre el emisor y este servicio para el timestamp de la firma.
+    max-clock-skew: ${INTERNAL_MAX_CLOCK_SKEW:PT5M}
+    # Límite de solicitudes por servicio y minuto (además del límite por IP).
+    rate-limit-per-minute: ${INTERNAL_RATE_LIMIT_PER_MINUTE:60}
   retention:
     enabled: ${RETENTION_ENABLED:true}
     auth-artifacts-days: ${RETENTION_AUTH_ARTIFACTS_DAYS:30}

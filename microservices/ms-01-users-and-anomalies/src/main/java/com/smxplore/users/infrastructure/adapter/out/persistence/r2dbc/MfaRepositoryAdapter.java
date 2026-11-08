@@ -1,6 +1,7 @@
 package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 
 import com.smxplore.users.application.port.out.MfaRepository;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.domain.model.MfaEnrollment;
 import com.smxplore.users.infrastructure.security.MfaSecretCipher;
 import java.time.Instant;
@@ -53,14 +54,23 @@ public class MfaRepositoryAdapter implements MfaRepository {
             WHERE user_id = :userId AND code_hash = :codeHash AND used_at IS NULL
             """;
 
+    private static final String SELECT_UNUSED_CODES = """
+            SELECT code_hash
+            FROM mfa_recovery_codes
+            WHERE user_id = :userId AND used_at IS NULL
+            """;
+
     private static final String DELETE_ENROLLMENT = "DELETE FROM mfa_enrollments WHERE user_id = :userId";
 
     private final DatabaseClient databaseClient;
     private final MfaSecretCipher secretCipher;
+    private final RecoveryCodeHasher recoveryCodeHasher;
 
-    public MfaRepositoryAdapter(DatabaseClient databaseClient, MfaSecretCipher secretCipher) {
+    public MfaRepositoryAdapter(
+            DatabaseClient databaseClient, MfaSecretCipher secretCipher, RecoveryCodeHasher recoveryCodeHasher) {
         this.databaseClient = databaseClient;
         this.secretCipher = secretCipher;
+        this.recoveryCodeHasher = recoveryCodeHasher;
     }
 
     @Override
@@ -143,16 +153,28 @@ public class MfaRepositoryAdapter implements MfaRepository {
                 .then();
     }
 
+    /**
+     * MS01-07: los hashes llevan sal, así que no se puede buscar por igualdad en SQL. Se leen los códigos no usados del
+     * usuario y se comparan uno a uno; al coincidir se marca usado ese hash concreto de forma atómica.
+     */
     @Override
-    public Mono<Boolean> consumeRecoveryCode(UUID userId, String codeHash, Instant now) {
+    public Mono<Boolean> consumeRecoveryCode(UUID userId, String rawCode, Instant now) {
         return databaseClient
-                .sql(CONSUME_CODE)
+                .sql(SELECT_UNUSED_CODES)
                 .bind("userId", userId)
-                .bind("codeHash", codeHash)
-                .bind("now", toOffsetDateTime(now))
-                .fetch()
-                .rowsUpdated()
-                .map(updated -> updated > 0);
+                .map((row, metadata) -> row.get("code_hash", String.class))
+                .all()
+                .filter(stored -> recoveryCodeHasher.matches(rawCode, stored))
+                .next()
+                .flatMap(stored -> databaseClient
+                        .sql(CONSUME_CODE)
+                        .bind("userId", userId)
+                        .bind("codeHash", stored)
+                        .bind("now", toOffsetDateTime(now))
+                        .fetch()
+                        .rowsUpdated()
+                        .map(updated -> updated > 0))
+                .defaultIfEmpty(false);
     }
 
     @Override

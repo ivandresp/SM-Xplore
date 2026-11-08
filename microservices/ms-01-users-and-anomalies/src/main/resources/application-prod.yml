@@ -12,6 +12,9 @@ app:
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:false}
+    ai-filter:
+      # MS01-09: en producción, si el filtro de IA falla o responde algo inválido la reseña NO se publica.
+      fail-open: false
 
 springdoc:
   api-docs:

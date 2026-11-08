@@ -55,6 +55,7 @@ class LoginServiceAccountLimitTest {
             new LoginProtection(
                     new FakeLoginAttemptRepository(),
                     new LoginLockoutPolicy(5, Duration.ofMinutes(15), Duration.ofMinutes(15)),
+                    new com.smxplore.users.support.FakeAccountLockedNotifier(),
                     false,
                     Clock.fixed(NOW, ZoneOffset.UTC)),
             limiter,

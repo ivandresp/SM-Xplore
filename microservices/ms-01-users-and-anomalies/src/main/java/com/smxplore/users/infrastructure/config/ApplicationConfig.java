@@ -47,6 +47,7 @@ import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
 import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
+import com.smxplore.users.application.port.out.AccountLockedNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
@@ -55,6 +56,7 @@ import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
+import com.smxplore.users.application.port.out.MfaChallengeRepository;
 import com.smxplore.users.application.port.out.MfaChallengeVerifier;
 import com.smxplore.users.application.port.out.MfaEnabledNotifier;
 import com.smxplore.users.application.port.out.MfaRepository;
@@ -63,6 +65,7 @@ import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewAiFilter;
 import com.smxplore.users.application.port.out.ReviewRepository;
@@ -162,10 +165,14 @@ public class ApplicationConfig {
 
     @Bean
     public LoginProtection loginProtection(
-            LoginAttemptRepository loginAttempts, LockoutProperties properties, Clock clock) {
+            LoginAttemptRepository loginAttempts,
+            LockoutProperties properties,
+            AccountLockedNotifier accountLockedNotifier,
+            Clock clock) {
         return new LoginProtection(
                 loginAttempts,
                 new LoginLockoutPolicy(properties.maxAttempts(), properties.window(), properties.duration()),
+                accountLockedNotifier,
                 properties.enabled(),
                 clock);
     }
@@ -204,8 +211,8 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public MfaCodeVerifier mfaCodeVerifier(MfaRepository mfa, TotpAuthenticator totp, TokenHasher tokenHasher) {
-        return new MfaCodeVerifier(mfa, totp, tokenHasher);
+    public MfaCodeVerifier mfaCodeVerifier(MfaRepository mfa, TotpAuthenticator totp) {
+        return new MfaCodeVerifier(mfa, totp);
     }
 
     @Bean
@@ -215,7 +222,7 @@ public class ApplicationConfig {
             MfaRepository mfa,
             TotpAuthenticator totp,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             TransactionPort transactions,
             Clock clock,
             MfaProperties properties) {
@@ -225,7 +232,7 @@ public class ApplicationConfig {
                 mfa,
                 totp,
                 recoveryCodeGenerator,
-                tokenHasher,
+                recoveryCodeHasher,
                 transactions,
                 clock,
                 properties.issuer());
@@ -262,12 +269,13 @@ public class ApplicationConfig {
             UserRepository users,
             MfaRepository mfa,
             MfaChallengeVerifier challengeVerifier,
+            MfaChallengeRepository challenges,
             MfaCodeVerifier codeVerifier,
             AccountAttemptLimiter accountAttemptLimiter,
             TokenIssuer tokenIssuer,
             Clock clock) {
         return new VerifyMfaLoginService(
-                users, mfa, challengeVerifier, codeVerifier, accountAttemptLimiter, tokenIssuer, clock);
+                users, mfa, challengeVerifier, challenges, codeVerifier, accountAttemptLimiter, tokenIssuer, clock);
     }
 
     @Bean
@@ -276,7 +284,7 @@ public class ApplicationConfig {
             MfaRepository mfa,
             PasswordHasher passwordHasher,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             MfaCodeVerifier codeVerifier,
             TransactionPort transactions,
             AuditTrailRecorder audit,
@@ -286,7 +294,7 @@ public class ApplicationConfig {
                 mfa,
                 passwordHasher,
                 recoveryCodeGenerator,
-                tokenHasher,
+                recoveryCodeHasher,
                 codeVerifier,
                 transactions,
                 audit,
@@ -348,9 +356,19 @@ public class ApplicationConfig {
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
             TokenHasher tokenHasher,
+            LoginProtection loginProtection,
+            AccountAttemptLimiter accountAttemptLimiter,
             TransactionPort transactions,
             Clock clock) {
-        return new ResetPasswordService(users, resetTokens, passwordHasher, tokenHasher, transactions, clock);
+        return new ResetPasswordService(
+                users,
+                resetTokens,
+                passwordHasher,
+                tokenHasher,
+                loginProtection,
+                accountAttemptLimiter,
+                transactions,
+                clock);
     }
 
     @Bean
@@ -513,8 +531,12 @@ public class ApplicationConfig {
 
     @Bean
     public BootstrapAdminUseCase bootstrapAdminUseCase(
-            UserRepository users, PasswordHasher passwordHasher, TransactionPort transactions, Clock clock) {
-        return new BootstrapAdminService(users, passwordHasher, transactions, clock);
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            Clock clock) {
+        return new BootstrapAdminService(users, passwordHasher, transactions, audit, clock);
     }
 
     @Bean

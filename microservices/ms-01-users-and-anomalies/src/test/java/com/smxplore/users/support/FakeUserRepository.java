@@ -61,6 +61,11 @@ public final class FakeUserRepository implements UserRepository {
     }
 
     @Override
+    public Mono<Long> countAll() {
+        return Mono.just((long) users.size());
+    }
+
+    @Override
     public Mono<UserStatistics> statistics() {
         return unsupported();
     }
