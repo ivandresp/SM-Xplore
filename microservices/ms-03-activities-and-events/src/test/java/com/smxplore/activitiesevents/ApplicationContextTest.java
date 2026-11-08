@@ -399,7 +399,7 @@ class ApplicationContextTest {
 
         var filter = new com.smxplore.activitiesevents.domain.model.event.EventFilter(
                 "Filtro Bahia", EventStatus.PUBLISHED, "Nautico", sharedSite, null,
-                new java.math.BigDecimal("10000.00"), new java.math.BigDecimal("100000.00"), null, null, 0, 20);
+                new java.math.BigDecimal("10000.00"), new java.math.BigDecimal("100000.00"), null, null, null, 0, 20);
         var page = eventRepository.findPage(filter).block();
 
         assertThat(page).isNotNull();
@@ -441,13 +441,49 @@ class ApplicationContextTest {
         var filter = new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
                 "Filtro Bahia", ActivityStatus.PUBLISHED, "Aventura", sharedSite, null,
                 new java.math.BigDecimal("10000.00"), new java.math.BigDecimal("100000.00"),
-                start.minusSeconds(3_600), start.plusSeconds(3_600), 0, 20);
+                start.minusSeconds(3_600), start.plusSeconds(3_600), null, 0, 20);
         var page = activityRepository.findPage(filter).block();
 
         assertThat(page).isNotNull();
         assertThat(page.content()).hasSize(1);
         assertThat(page.content().getFirst().getStatus()).isEqualTo(ActivityStatus.PUBLISHED);
         assertThat(page.total()).isEqualTo(1);
+    }
+
+    @Test
+    void activitySortOrderIsAppliedInTheDatabase() {
+        var start = Instant.now().plusSeconds(86_400);
+        for (var price : new String[]{"80000.00", "20000.00"}) {
+            activityRepository.save(Activity.builder()
+                    .siteId(UUID.randomUUID())
+                    .guideId(UUID.randomUUID())
+                    .name("Orden Filtro")
+                    .category("Aventura")
+                    .status(ActivityStatus.PUBLISHED)
+                    .price(new java.math.BigDecimal(price))
+                    .maxCapacity(10)
+                    .durationMinutes(90)
+                    .startsAt(start)
+                    .endsAt(start.plusSeconds(5_400))
+                    .build()).block();
+        }
+
+        var ascending = activityRepository.findPage(
+                new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
+                        "Orden Filtro", ActivityStatus.PUBLISHED, null, null, null,
+                        null, null, null, null, "priceAsc", 0, 20)).block();
+        var descending = activityRepository.findPage(
+                new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
+                        "Orden Filtro", ActivityStatus.PUBLISHED, null, null, null,
+                        null, null, null, null, "priceDesc", 0, 20)).block();
+
+        assertThat(ascending).isNotNull();
+        assertThat(ascending.content()).hasSize(2);
+        assertThat(ascending.content().getFirst().getPrice())
+                .isEqualByComparingTo(new java.math.BigDecimal("20000.00"));
+        assertThat(descending).isNotNull();
+        assertThat(descending.content().getFirst().getPrice())
+                .isEqualByComparingTo(new java.math.BigDecimal("80000.00"));
     }
 
     @Test

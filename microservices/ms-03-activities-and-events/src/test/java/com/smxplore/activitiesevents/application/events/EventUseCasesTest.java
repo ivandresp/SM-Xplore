@@ -156,7 +156,7 @@ class EventUseCasesTest {
                 .toBuilder().status(EventStatus.DRAFT).category("Musica").build()).block();
 
         var filter = new com.smxplore.activitiesevents.domain.model.event.EventFilter(
-                null, EventStatus.DRAFT, "Musica", null, null, null, null, null, null, 0, 20);
+                null, EventStatus.DRAFT, "Musica", null, null, null, null, null, null, null, 0, 20);
 
         var page = Objects.requireNonNull(consultEvents.handle(filter).block());
 

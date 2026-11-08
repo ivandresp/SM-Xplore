@@ -51,7 +51,7 @@ class FakeEventRepository implements EventRepositoryPort {
 
     @Override
     public Mono<PageResult<Event>> findPage(com.smxplore.activitiesevents.domain.model.event.EventFilter filter) {
-        var matches = findAll()
+        var found = findAll()
                 .filter(event -> filter.status() == null || event.getStatus() == filter.status())
                 .filter(event -> !hasText(filter.search())
                         || event.getName().toLowerCase().contains(filter.search().trim().toLowerCase()))
@@ -68,7 +68,19 @@ class FakeEventRepository implements EventRepositoryPort {
                 .filter(event -> filter.startsBefore() == null
                         || !event.getStartsAt().isAfter(filter.startsBefore()))
                 .collectList().block();
-        return Mono.just(page(matches == null ? List.of() : matches, filter.page(), filter.size()));
+        var matches = new java.util.ArrayList<>(found == null ? List.<Event>of() : found);
+        matches.sort(sortComparator(filter.sort()));
+        return Mono.just(page(matches, filter.page(), filter.size()));
+    }
+
+    private static Comparator<Event> sortComparator(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> Comparator.comparing(Event::getPrice);
+            case "priceDesc" -> Comparator.comparing(Event::getPrice).reversed();
+            case "name" -> Comparator.comparing(Event::getName);
+            case "dateDesc" -> Comparator.comparing(Event::getStartsAt).reversed();
+            default -> Comparator.comparing(Event::getStartsAt);
+        };
     }
 
     private static boolean hasText(String value) {

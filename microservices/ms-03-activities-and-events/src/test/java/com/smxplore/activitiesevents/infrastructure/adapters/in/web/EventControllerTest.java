@@ -272,7 +272,8 @@ class EventControllerTest {
                         && "Nautical".equals(filter.category())
                         && siteId.equals(filter.siteId())
                         && new BigDecimal("50000").compareTo(filter.priceMin()) == 0
-                        && filter.startsBefore() != null)))
+                        && filter.startsBefore() != null
+                        && "dateDesc".equals(filter.sort()))))
                 .willReturn(Mono.just(
                         new PageResult<>(List.of(eventWith(UUID.randomUUID(), EventStatus.PUBLISHED)), 0, 20, 1L)));
 
@@ -282,6 +283,7 @@ class EventControllerTest {
                         .queryParam("siteId", siteId)
                         .queryParam("priceMin", "50000")
                         .queryParam("startsBefore", "2026-12-31T23:59:59Z")
+                        .queryParam("sort", "dateDesc")
                         .build())
                 .exchange()
                 .expectStatus().isOk()

@@ -103,7 +103,8 @@ public class EventPostgresAdapter implements EventRepositoryPort {
 
         var client = template.getDatabaseClient();
         var offset = (long) filter.page() * filter.size();
-        var rows = bind(client.sql("SELECT *" + conditions + " ORDER BY starts_at, id LIMIT :limit OFFSET :offset"), filter)
+        var rows = bind(client.sql("SELECT *" + conditions + " ORDER BY " + orderBy(filter.sort())
+                + " LIMIT :limit OFFSET :offset"), filter)
                 .bind("limit", filter.size())
                 .bind("offset", offset)
                 .map((row, metadata) -> template.getConverter().read(EventEntity.class, row))
@@ -121,6 +122,17 @@ public class EventPostgresAdapter implements EventRepositoryPort {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** Orden por lista blanca: solo columnas conocidas, nunca texto del cliente. */
+    private static String orderBy(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> "price, id";
+            case "priceDesc" -> "price DESC, id";
+            case "name" -> "name, id";
+            case "dateDesc" -> "starts_at DESC, id";
+            default -> "starts_at, id";
+        };
     }
 
     /** Bindea solo los filtros presentes: R2DBC no puede inferir el tipo de un parámetro nulo. */

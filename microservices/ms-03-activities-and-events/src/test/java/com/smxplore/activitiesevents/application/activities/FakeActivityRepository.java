@@ -57,7 +57,7 @@ class FakeActivityRepository implements ActivityRepositoryPort {
 
     @Override
     public Mono<PageResult<Activity>> findPage(com.smxplore.activitiesevents.domain.model.activity.ActivityFilter filter) {
-        var matches = findAll()
+        var found = findAll()
                 .filter(activity -> filter.status() == null || activity.getStatus() == filter.status())
                 .filter(activity -> !hasText(filter.search())
                         || activity.getName().toLowerCase().contains(filter.search().trim().toLowerCase()))
@@ -74,7 +74,19 @@ class FakeActivityRepository implements ActivityRepositoryPort {
                 .filter(activity -> filter.startsBefore() == null
                         || !activity.getStartsAt().isAfter(filter.startsBefore()))
                 .collectList().block();
-        return Mono.just(page(matches == null ? List.of() : matches, filter.page(), filter.size()));
+        var matches = new java.util.ArrayList<>(found == null ? List.<Activity>of() : found);
+        matches.sort(sortComparator(filter.sort()));
+        return Mono.just(page(matches, filter.page(), filter.size()));
+    }
+
+    private static Comparator<Activity> sortComparator(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "priceAsc" -> Comparator.comparing(Activity::getPrice);
+            case "priceDesc" -> Comparator.comparing(Activity::getPrice).reversed();
+            case "dateAsc" -> Comparator.comparing(Activity::getStartsAt);
+            case "dateDesc" -> Comparator.comparing(Activity::getStartsAt).reversed();
+            default -> Comparator.comparing(Activity::getName);
+        };
     }
 
     private static boolean hasText(String value) {

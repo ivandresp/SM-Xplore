@@ -261,7 +261,7 @@ class ActivityUseCasesTest {
         var filter = new com.smxplore.activitiesevents.domain.model.activity.ActivityFilter(
                 "bahia", ActivityStatus.PUBLISHED, null, null, null,
                 new BigDecimal("10000.00"), new BigDecimal("100000.00"),
-                start, start.plusSeconds(7200), 0, 20);
+                start, start.plusSeconds(7200), null, 0, 20);
 
         var page = Objects.requireNonNull(consultActivities.handle(filter).block());
 

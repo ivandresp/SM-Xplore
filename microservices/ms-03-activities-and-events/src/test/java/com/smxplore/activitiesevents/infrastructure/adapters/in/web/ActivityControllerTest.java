@@ -332,7 +332,8 @@ class ActivityControllerTest {
                         && new BigDecimal("1000").compareTo(filter.priceMin()) == 0
                         && new BigDecimal("90000").compareTo(filter.priceMax()) == 0
                         && Instant.parse("2026-11-01T00:00:00Z").equals(filter.startsAfter())
-                        && filter.startsBefore() == null)))
+                        && filter.startsBefore() == null
+                        && "priceAsc".equals(filter.sort()))))
                 .willReturn(Mono.just(
                         new PageResult<>(List.of(activityWith(UUID.randomUUID(), ActivityStatus.PUBLISHED)), 0, 20, 1L)));
 
@@ -343,6 +344,7 @@ class ActivityControllerTest {
                         .queryParam("priceMin", "1000")
                         .queryParam("priceMax", "90000")
                         .queryParam("startsAfter", "2026-11-01T00:00:00Z")
+                        .queryParam("sort", "priceAsc")
                         .build())
                 .exchange()
                 .expectStatus().isOk()
