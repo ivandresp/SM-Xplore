@@ -1,6 +1,7 @@
 app:
   seed:
-    enabled: true
+    # Demo catalog with invented ids that do not exist in ms-03/ms-04; enable only with SEED_ENABLED=true.
+    enabled: ${SEED_ENABLED:false}
   neo4j:
     initialize-schema: true
 
