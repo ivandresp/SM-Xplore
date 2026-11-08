@@ -243,6 +243,67 @@ para el bearer, tope de eventos por petición, intervalo mínimo por administrad
 corrida. En un entorno real conviene además que ms-04/ms-03 emitan un token de servicio para este
 flujo y no reutilicen el token humano.
 
+### Endurecimiento de la fase 3 de seguridad (hallazgos BAJA)
+
+Estas correcciones salen de la auditoría estática (`MS05-04` a `MS05-10` y `MS05-13`) y también
+están activas por defecto; las relajaciones viven solo en los perfiles `local` y `test`.
+
+**MS05-04 — presupuesto en las escrituras del grafo.** Las vistas y las preferencias dejan de ser
+ilimitadas. Cada `TOURIST` tiene una ventana fija para `POST /api/v1/interactions/view/**`
+(`RECOMMENDATIONS_VIEW_QUOTA_MAX_REQUESTS`, `60`/`1m` por defecto) y otra para
+`POST`/`DELETE /api/v1/preferences` (`RECOMMENDATIONS_PREFERENCE_QUOTA_MAX_REQUESTS`, `30`/`1m`).
+Además, una vista repetida del mismo ítem dentro de `RECOMMENDATIONS_VIEW_DEDUPE_WINDOW` (`1m`) se
+responde `204` sin tocar Neo4j: no incrementa `VIO.count` ni reescribe la afinidad inferida. Al
+superar un presupuesto se responde `429` con `Retry-After`. Se desactiva por bloque con
+`RECOMMENDATIONS_VIEW_QUOTA_ENABLED=false` / `RECOMMENDATIONS_PREFERENCE_QUOTA_ENABLED=false`, o
+todo con el interruptor maestro `RECOMMENDATIONS_QUOTA_ENABLED=false`. Como la cuota de
+recomendaciones, es **por instancia y en memoria**.
+
+**MS05-05 — Redis y la clave de versión del grafo.** Las claves siguen el prefijo del servicio
+(`RECOMMENDATIONS_CACHE_KEY_PREFIX`, `ms05:recommendations:`) y la versión del grafo vive en
+`ms05:recommendations:graph:version`, namespaceada para que otro workload no pueda invalidar la
+cache escribiendo una clave genérica. Solo el job de proyección incrementa esa versión. Un valor
+leído de Redis se valida antes de usarlo: tamaño máximo, JSON legible, `touristId` coherente con la
+clave, ítems acotados y `score` en `[0,1]`; si no cuadra se descarta como un *miss*. El perfil
+`prod` exige `REDIS_PASSWORD` (falla al arrancar si falta). **Pendiente de plataforma:** el Redis
+del `compose.yaml` raíz todavía no usa `requirepass`/ACL; debe hacerse allí (el compose raíz es de
+plataforma, este servicio no lo modifica) y no exponerlo fuera de la red interna.
+
+**MS05-06 — revocación de tokens activa por defecto.** `AUTH_VERSION_ENABLED` pasa a `true` por
+defecto; solo `local` y `test` lo desactivan explícitamente porque no tienen ms-01 disponible. En
+`prod` la validación es fail-closed y la ventana efectiva de revocación es
+`AUTH_VERSION_CACHE_TTL` (`60s`) más la vida del token emitido por ms-01.
+
+**MS05-07 — actuator y documentación cerrados por defecto.** Se exponen solo `health` e `info`
+(`MANAGEMENT_ENDPOINTS`); `metrics` y `prometheus` requieren rol `ADMIN`; Swagger/OpenAPI y los
+`/webjars` quedan detrás de autenticación salvo `SECURITY_DOCS_PUBLIC=true`. Los perfiles `local`
+y `test` abren métricas y documentación para el trabajo diario; `prod` mantiene todo cerrado.
+
+**MS05-08 — Neo4j sin DDL implícito.** `NEO4J_INITIALIZE_SCHEMA` pasa a `false` por defecto
+(coincide con `@ConditionalOnProperty(matchIfMissing = false)`); el esquema solo se crea cuando se
+pide explícitamente. **Pendiente de plataforma:** el compose de `deploy/prod` sigue usando el
+usuario `neo4j` (superusuario); lo correcto es un usuario dedicado con permisos mínimos sobre las
+etiquetas/propiedades de ms-05 y ejecutar `cypher/schema.cypher` como job de migración, no en cada
+arranque. Este repositorio no toca el compose raíz ni el de `deploy/prod`.
+
+**MS05-09 — límites de longitud.** `ProjectionEventDecoder` acota los textos que llegan por Kafka
+(`name` 200, `description` 2000, `type` 50, `category` 200, `status` 50, `language` 35,
+`correlationId`/`producer` 100, `eventType` 60; un exceso va a DLQ) y `RequestLanguageResolver`
+descarta etiquetas `Accept-Language` de más de 35 caracteres antes de persistir
+`TuristaProfile.language`. El feed de reindexado se valida con el mismo decodificador.
+
+**MS05-10 — compose del servicio cerrado.** El `docker-compose.yml` de este servicio publica la API
+solo en `127.0.0.1`, exige `NEO4J_PASSWORD` (`${NEO4J_PASSWORD:?set NEO4J_PASSWORD}`) y deja
+`JWT_ALLOW_INSECURE_JWKS`, `SEED_ENABLED`, `NEO4J_INITIALIZE_SCHEMA` y `SPRINGDOC_*` en `false`
+salvo opt-in explícito. Para desarrollo local hay que exportar `NEO4J_PASSWORD` y, si se usan
+llaves PEM locales, `JWT_ALLOW_INSECURE_JWKS=true` de forma consciente.
+
+**MS05-13 — auditoría del acceso de ADMIN a otro turista.** Cuando un `ADMIN` consulta
+recomendaciones de un `touristId` distinto del suyo, se registra
+`audit: admin <sub> read recommendations for tourist <touristId>` y se incrementa el contador
+`recommendations.admin.access`. La capacidad de soporte se mantiene, pero deja de ser invisible:
+se puede alertar sobre ella sin romper el flujo.
+
 **JWKS** (JSON Web Key Set) es el estándar para publicar las llaves públicas con las que se
 verifican los JWT. ms-01 firma con su llave privada y expone las públicas en un endpoint como
 `/.well-known/jwks.json`; ms-05 descarga ese conjunto, elige la llave por el `kid` del header
@@ -259,17 +320,27 @@ un arranque silencioso sin validación de tokens.
 | `SERVER_PORT` | `8080` | Puerto interno |
 | `NEO4J_URI` | `bolt://localhost:7687` | URI de Neo4j |
 | `NEO4J_USER` | `neo4j` | Usuario |
-| `NEO4J_PASSWORD` | `change-me` | Contraseña |
+| `NEO4J_PASSWORD` | (requerido en compose) | Contraseña; el `docker-compose.yml` falla si no se define |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Redis compartido: cache de recomendaciones y versión del grafo |
+| `REDIS_PASSWORD` | vacío | Contraseña de Redis; obligatoria en `prod` (MS05-05) |
 | `RECOMMENDATIONS_CACHE_ENABLED` | `true` | Activa la cache en memoria + Redis |
+| `RECOMMENDATIONS_CACHE_KEY_PREFIX` | `ms05:recommendations:` | Prefijo de claves de la cache (MS05-05) |
+| `RECOMMENDATIONS_CACHE_VERSION_KEY` | `ms05:recommendations:graph:version` | Clave de la versión del grafo; solo la escribe la proyección |
 | `RECOMMENDATIONS_CACHE_LOCAL_TTL` | `10s` | Vida de la capa en memoria (Caffeine) |
 | `RECOMMENDATIONS_CACHE_REDIS_TTL` | `1m` | Vida de la capa compartida (Redis) |
 | `RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE` | `1000` | Entradas máximas de la capa en memoria |
-| `RECOMMENDATIONS_QUOTA_ENABLED` | `true` | Cuota por turista en recomendaciones (MS05-02) |
-| `RECOMMENDATIONS_QUOTA_MAX_REQUESTS` | `120` | Peticiones por ventana |
-| `RECOMMENDATIONS_QUOTA_WINDOW` | `1m` | Ventana fija de la cuota |
+| `RECOMMENDATIONS_QUOTA_ENABLED` | `true` | Interruptor maestro de cuotas por turista (MS05-02/MS05-04) |
+| `RECOMMENDATIONS_QUOTA_MAX_REQUESTS` | `120` | Recomendaciones por ventana |
+| `RECOMMENDATIONS_QUOTA_WINDOW` | `1m` | Ventana fija de la cuota de recomendaciones |
 | `RECOMMENDATIONS_QUOTA_MAX_ENTRIES` | `10000` | Turistas con ventana activa en memoria |
-| `NEO4J_INITIALIZE_SCHEMA` | `true` | Crea constraints/índices al arrancar |
+| `RECOMMENDATIONS_VIEW_QUOTA_ENABLED` | `true` | Cuota de vistas registradas (MS05-04) |
+| `RECOMMENDATIONS_VIEW_QUOTA_MAX_REQUESTS` | `60` | Vistas por ventana |
+| `RECOMMENDATIONS_VIEW_QUOTA_WINDOW` | `1m` | Ventana fija de la cuota de vistas |
+| `RECOMMENDATIONS_VIEW_DEDUPE_WINDOW` | `1m` | Ventana de deduplicación de vistas del mismo ítem |
+| `RECOMMENDATIONS_PREFERENCE_QUOTA_ENABLED` | `true` | Cuota de escrituras de preferencias (MS05-04) |
+| `RECOMMENDATIONS_PREFERENCE_QUOTA_MAX_REQUESTS` | `30` | Altas/bajas de preferencia por ventana |
+| `RECOMMENDATIONS_PREFERENCE_QUOTA_WINDOW` | `1m` | Ventana fija de la cuota de preferencias |
+| `NEO4J_INITIALIZE_SCHEMA` | `false` | Crea constraints/índices al arrancar; solo con opt-in explícito (MS05-08) |
 | `SEED_ENABLED` | `false` | Carga datos de demo; usar solo en local/test |
 | `JWK_SET_URI` | vacío | JWKS de ms-01 |
 | `JWT_PUBLIC_KEY_LOCATION` | vacío | Llave pública PEM para local/test |
@@ -278,6 +349,12 @@ un arranque silencioso sin validación de tokens.
 | `JWT_USER_ID_CLAIM` | `userId` | Claim de identidad si no viene `sub` |
 | `JWT_ROLE_CLAIM` | `role` | Claim de rol |
 | `JWT_NAME_CLAIM` | `name` | Claim de nombre |
+| `JWT_ALLOW_INSECURE_JWKS` | `false` | Permite JWKS por HTTP; solo desarrollo (MS05-10) |
+| `AUTH_VERSION_ENABLED` | `true` | Revoca tokens contra la versión de ms-01; `local`/`test` lo desactivan (MS05-06) |
+| `MS01_BASE_URL` | vacío | Base URL de ms-01 para validar la versión del token |
+| `AUTH_VERSION_CACHE_TTL` | `60s` | Ventana de cache de la versión (ventana efectiva de revocación) |
+| `SECURITY_DOCS_PUBLIC` | `false` | Publica Swagger/OpenAPI sin JWT; solo `local`/`test` (MS05-07) |
+| `MANAGEMENT_ENDPOINTS` | `health,info` | Endpoints de actuator expuestos; `metrics`/`prometheus` exigen ADMIN (MS05-07) |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker Kafka |
 | `KAFKA_CONSUMER_GROUP_ID` | `ms-05-recommendations` | Grupo de consumo |
 | `KAFKA_AUTO_OFFSET_RESET` | `earliest` | Política si no hay offset |
@@ -317,17 +394,21 @@ docker compose up -d
 
 cd ../microservices/ms-05-recommendations
 cp .env.example .env
-# Configura NEO4J_PASSWORD, JWK_SET_URI o JWT_PUBLIC_KEY_LOCATION, JWT_ISSUER
+# NEO4J_PASSWORD es obligatorio: el compose falla si no se define.
+# Configura también JWK_SET_URI o JWT_PUBLIC_KEY_LOCATION, JWT_ISSUER.
 docker compose up --build
 ```
 
-Servicios:
+Servicios (publicados solo en `127.0.0.1`):
 
 - API: `http://localhost:8085`
-- Swagger: `http://localhost:8085/swagger-ui.html`
+- Swagger: `http://localhost:8085/swagger-ui.html` (con `SECURITY_DOCS_PUBLIC=true` o JWT)
 - Health: `http://localhost:8085/actuator/health`
 - Neo4j HTTP: `http://localhost:7474`
 - Neo4j Bolt: `localhost:7687`
+
+El compose del servicio no activa el seed, ni el DDL de esquema, ni JWKS inseguro por defecto:
+esos valores se opt-in explícitamente (ver `docker-compose.yml`).
 
 Si usas una llave pública PEM dentro de Docker, monta el archivo en el contenedor y apunta
 `JWT_PUBLIC_KEY_LOCATION` a esa ruta (por ejemplo `file:/run/secrets/jwt-public.pem`). En

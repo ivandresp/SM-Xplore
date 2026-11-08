@@ -27,11 +27,29 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class ProjectionEventDecoder {
+
+    /**
+     * Maximum length of the free text fields persisted in the graph (MS05-09). A producer can
+     * publish a syntactically valid payload with an arbitrarily long string; without this bound
+     * those values inflate node properties, the cache and the recommendation reasons.
+     */
+    private static final Map<String, Integer> MAX_TEXT_LENGTHS = Map.of(
+            "eventType", 60,
+            "producer", 100,
+            "correlationId", 100,
+            "name", 200,
+            "description", 2000,
+            "type", 50,
+            "category", 200,
+            "status", 50,
+            "language", 35
+    );
 
     private final ObjectMapper objectMapper;
     private final EventConsumerProperties properties;
@@ -314,7 +332,9 @@ public class ProjectionEventDecoder {
         if (node == null || !node.isString() || node.asString().isBlank()) {
             throw new InvalidEventException(field + " is required");
         }
-        return node.asString();
+        String value = node.asString();
+        checkTextLength(field, value);
+        return value;
     }
 
     private UUID requiredUuid(JsonNode parent, String field) {
@@ -350,7 +370,18 @@ public class ProjectionEventDecoder {
             throw new InvalidEventException(field + " must be a string or null");
         }
         String value = node.asString();
-        return value.isBlank() ? null : value;
+        if (value.isBlank()) {
+            return null;
+        }
+        checkTextLength(field, value);
+        return value;
+    }
+
+    private static void checkTextLength(String field, String value) {
+        Integer maxLength = MAX_TEXT_LENGTHS.get(field);
+        if (maxLength != null && value.length() > maxLength) {
+            throw new InvalidEventException(field + " must be at most " + maxLength + " characters");
+        }
     }
 
     private int requiredInt(JsonNode parent, String field) {

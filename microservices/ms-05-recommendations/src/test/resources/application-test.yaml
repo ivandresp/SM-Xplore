@@ -14,6 +14,10 @@ app:
     consumer:
       enabled: false
   security:
+    # MS05-06: los tests no llaman a ms-01; la revocacion se desactiva de forma explicita.
+    auth-version:
+      enabled: false
+    docs-public: false
     jwt:
       public-key-location: classpath:keys/test-public.pem
       issuer: https://ms-05.local

@@ -12,6 +12,7 @@ final class RecordingMetrics implements RecommendationMetricsPort {
 
     private int cacheHits;
     private int cacheMisses;
+    private int adminCrossTouristAccess;
     private final List<RecommendationSource> sources = new ArrayList<>();
     private final List<Integer> items = new ArrayList<>();
     private final List<Integer> categories = new ArrayList<>();
@@ -37,6 +38,15 @@ final class RecordingMetrics implements RecommendationMetricsPort {
     public void diversity(int distinctCategories, int distinctSites) {
         categories.add(distinctCategories);
         sites.add(distinctSites);
+    }
+
+    @Override
+    public void adminCrossTouristAccess() {
+        adminCrossTouristAccess++;
+    }
+
+    int adminCrossTouristAccessCount() {
+        return adminCrossTouristAccess;
     }
 
     int cacheHits() {

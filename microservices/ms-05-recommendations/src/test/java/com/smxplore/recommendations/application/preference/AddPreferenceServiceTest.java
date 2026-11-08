@@ -2,9 +2,11 @@ package com.smxplore.recommendations.application.preference;
 
 import com.smxplore.recommendations.domain.exception.CategoryNotFoundException;
 import com.smxplore.recommendations.domain.exception.InvalidPreferenceException;
+import com.smxplore.recommendations.domain.exception.RateLimitExceededException;
 import com.smxplore.recommendations.domain.model.preference.Preference;
 import com.smxplore.recommendations.domain.model.preference.PreferenceSource;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,11 +38,14 @@ class AddPreferenceServiceTest {
     @Mock
     private RecommendationGraphPort graphPort;
 
+    @Mock
+    private RecommendationQuotaPort quotaPort;
+
     private AddPreferenceService service;
 
     @BeforeEach
     void setUp() {
-        service = new AddPreferenceService(graphPort, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new AddPreferenceService(graphPort, quotaPort, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -68,5 +75,17 @@ class AddPreferenceServiceTest {
     void rejectsMissingIds() {
         assertThatThrownBy(() -> service.handle(null, CATEGORY, "es"))
                 .isInstanceOf(InvalidPreferenceException.class);
+    }
+
+    @Test
+    void rejectsTheWriteWhenThePreferenceQuotaIsExceeded() {
+        // MS05-04: preference writes share a per-user budget.
+        doThrow(new RateLimitExceededException("Preference quota exceeded", 12))
+                .when(quotaPort).checkPreference(TOURIST);
+
+        assertThatThrownBy(() -> service.handle(TOURIST, CATEGORY, "es"))
+                .isInstanceOf(RateLimitExceededException.class);
+
+        verifyNoInteractions(graphPort);
     }
 }

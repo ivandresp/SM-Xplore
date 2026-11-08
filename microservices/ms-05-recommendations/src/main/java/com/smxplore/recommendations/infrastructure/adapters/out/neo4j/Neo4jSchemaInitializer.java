@@ -17,11 +17,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Runs {@code cypher/schema.cypher} once at startup, only when the property is set to true
+ * explicitly (MS05-08). The default is off: DDL must not run as a side effect of a restart,
+ * and the application user does not need schema privileges in production.
+ */
 @Slf4j
 @Order(0)
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.neo4j.initialize-schema", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.neo4j.initialize-schema", havingValue = "true", matchIfMissing = false)
 public class Neo4jSchemaInitializer implements ApplicationRunner {
 
     private final Driver driver;

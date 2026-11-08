@@ -14,6 +14,12 @@ public class RequestLanguageResolver {
 
     public static final String DEFAULT_LANGUAGE = "es";
 
+    /**
+     * The language tag is persisted in {@code TuristaProfile.language}, so an arbitrarily long
+     * header must never become a graph property (MS05-09).
+     */
+    private static final int MAX_LANGUAGE_LENGTH = 35;
+
     private static final Pattern LANGUAGE_TAG =
             Pattern.compile("^[a-z]{2,3}(-[a-z0-9]{2,8})*$");
 
@@ -27,7 +33,8 @@ public class RequestLanguageResolver {
                 continue;
             }
             String normalized = tag.replace('_', '-').toLowerCase(Locale.ROOT);
-            if (LANGUAGE_TAG.matcher(normalized).matches()) {
+            if (normalized.length() <= MAX_LANGUAGE_LENGTH
+                    && LANGUAGE_TAG.matcher(normalized).matches()) {
                 return normalized;
             }
         }

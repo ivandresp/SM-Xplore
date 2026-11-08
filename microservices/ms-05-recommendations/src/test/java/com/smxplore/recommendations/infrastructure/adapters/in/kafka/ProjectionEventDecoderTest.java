@@ -324,16 +324,33 @@ class ProjectionEventDecoderTest {
         assertThat(event).isInstanceOf(SiteChangedEvent.class);
     }
 
+    /** MS05-09: an unbounded payload text must never become a graph property or a reason. */
+    @Test
+    void rejectsAnOverlongTextInThePayload() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1, "ms-04",
+                "2026-11-02T15:00:00Z",
+                sitePayload(siteId, "x".repeat(201), "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("name must be at most 200 characters");
+    }
+
     private String sitePayload(UUID siteId, String updatedAt) {
+        return sitePayload(siteId, "Playa Cristal", updatedAt);
+    }
+
+    private String sitePayload(UUID siteId, String name, String updatedAt) {
         return """
                 "siteId": "%s",
-                "name": "Playa Cristal",
+                "name": "%s",
                 "categoryId": "%s",
                 "latitude": 11.31,
                 "longitude": -74.17,
                 "status": "PUBLISHED",
                 "updatedAt": "%s"
-                """.formatted(siteId, UUID.randomUUID(), updatedAt);
+                """.formatted(siteId, name, UUID.randomUUID(), updatedAt);
     }
 
     private Path examplePath(String topic) {

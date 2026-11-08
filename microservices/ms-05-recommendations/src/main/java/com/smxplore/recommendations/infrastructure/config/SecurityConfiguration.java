@@ -1,6 +1,7 @@
 package com.smxplore.recommendations.infrastructure.config;
 
 import com.smxplore.recommendations.infrastructure.adapters.in.web.error.SecurityProblemWriter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,25 +29,33 @@ public class SecurityConfiguration {
             CorsConfigurationSource corsConfigurationSource,
             ReactiveJwtAuthenticationConverter jwtAuthenticationConverter,
             ServerAuthenticationEntryPoint apiAuthenticationEntryPoint,
-            ServerAccessDeniedHandler apiAccessDeniedHandler
+            ServerAccessDeniedHandler apiAccessDeniedHandler,
+            @Value("${app.security.docs-public:false}") boolean docsPublic
     ) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
-                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
-                        .permitAll()
-                        .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/api/v1/recommendations").hasAnyRole("TOURIST", "ADMIN")
-                        .pathMatchers(HttpMethod.GET, "/api/v1/preferences").hasRole("TOURIST")
-                        .pathMatchers(HttpMethod.POST, "/api/v1/preferences").hasRole("TOURIST")
-                        .pathMatchers(HttpMethod.DELETE, "/api/v1/preferences/**").hasRole("TOURIST")
-                        .pathMatchers(HttpMethod.POST, "/api/v1/interactions/view/**").hasRole("TOURIST")
-                        .pathMatchers("/internal/admin/**").hasRole("ADMIN")
-                        .anyExchange().authenticated())
+                .authorizeExchange(exchanges -> {
+                    // MS05-07: solo health/info son anonimos; metrics y prometheus exigen ADMIN
+                    // y la documentacion solo se publica con app.security.docs-public=true.
+                    exchanges.pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
+                            .permitAll();
+                    exchanges.pathMatchers("/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                            .hasRole("ADMIN");
+                    if (docsPublic) {
+                        exchanges.pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
+                                "/webjars/**").permitAll();
+                    }
+                    exchanges.pathMatchers(HttpMethod.GET, "/api/v1/recommendations").hasAnyRole("TOURIST", "ADMIN");
+                    exchanges.pathMatchers(HttpMethod.GET, "/api/v1/preferences").hasRole("TOURIST");
+                    exchanges.pathMatchers(HttpMethod.POST, "/api/v1/preferences").hasRole("TOURIST");
+                    exchanges.pathMatchers(HttpMethod.DELETE, "/api/v1/preferences/**").hasRole("TOURIST");
+                    exchanges.pathMatchers(HttpMethod.POST, "/api/v1/interactions/view/**").hasRole("TOURIST");
+                    exchanges.pathMatchers("/internal/admin/**").hasRole("ADMIN");
+                    exchanges.anyExchange().authenticated();
+                })
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiAuthenticationEntryPoint)
                         .accessDeniedHandler(apiAccessDeniedHandler))

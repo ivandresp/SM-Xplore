@@ -103,6 +103,67 @@ class InMemoryRecommendationQuotaAdapterTest {
                 .hasMessageContaining("identity is required");
     }
 
+    @Test
+    void appliesAnIndependentBudgetToInteractionWrites() {
+        // MS05-04: views have their own budget, smaller than the recommendation one.
+        RecommendationQuotaProperties.Limit views = new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1));
+        properties.setViews(views);
+        InMemoryRecommendationQuotaAdapter adapter = new InMemoryRecommendationQuotaAdapter(properties, clock);
+
+        adapter.checkView(TOURIST);
+
+        assertThatThrownBy(() -> adapter.checkView(TOURIST))
+                .isInstanceOf(RateLimitExceededException.class)
+                .hasMessageContaining("Interaction quota exceeded");
+        assertThatCode(() -> adapter.check(TOURIST)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void appliesAnIndependentBudgetToPreferenceWrites() {
+        RecommendationQuotaProperties.Limit preferences =
+                new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1));
+        properties.setPreferences(preferences);
+        InMemoryRecommendationQuotaAdapter adapter = new InMemoryRecommendationQuotaAdapter(properties, clock);
+
+        adapter.checkPreference(TOURIST);
+
+        assertThatThrownBy(() -> adapter.checkPreference(TOURIST))
+                .isInstanceOf(RateLimitExceededException.class)
+                .hasMessageContaining("Preference quota exceeded");
+    }
+
+    @Test
+    void bypassesOneBudgetWithoutDisablingTheOthers() {
+        properties.setViews(new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1)));
+        properties.setPreferences(new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1)));
+        properties.getViews().setEnabled(false);
+        InMemoryRecommendationQuotaAdapter adapter = new InMemoryRecommendationQuotaAdapter(properties, clock);
+
+        assertThatCode(() -> {
+            adapter.checkView(TOURIST);
+            adapter.checkView(TOURIST);
+        }).doesNotThrowAnyException();
+
+        adapter.checkPreference(TOURIST);
+        assertThatThrownBy(() -> adapter.checkPreference(TOURIST))
+                .isInstanceOf(RateLimitExceededException.class);
+    }
+
+    @Test
+    void bypassesEveryWriteBudgetWhenTheMasterSwitchIsDisabled() {
+        properties.setEnabled(false);
+        properties.setViews(new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1)));
+        properties.setPreferences(new RecommendationQuotaProperties.Limit(1, Duration.ofMinutes(1)));
+        InMemoryRecommendationQuotaAdapter adapter = new InMemoryRecommendationQuotaAdapter(properties, clock);
+
+        assertThatCode(() -> {
+            adapter.check(TOURIST);
+            adapter.checkView(TOURIST);
+            adapter.checkPreference(TOURIST);
+            adapter.checkView(TOURIST);
+        }).doesNotThrowAnyException();
+    }
+
     private static final class MutableClock extends Clock {
 
         private Instant instant;

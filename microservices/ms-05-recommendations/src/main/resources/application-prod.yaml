@@ -8,6 +8,13 @@ app:
     mfa:
       require-admin: true
 
+spring:
+  data:
+    redis:
+      # MS05-05: en produccion Redis debe exigir autenticacion; si falta REDIS_PASSWORD
+      # el arranque falla en lugar de conectar a un Redis abierto.
+      password: ${REDIS_PASSWORD}
+
 springdoc:
   api-docs:
     enabled: false
@@ -15,6 +22,10 @@ springdoc:
     enabled: false
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
   endpoint:
     health:
       show-details: never

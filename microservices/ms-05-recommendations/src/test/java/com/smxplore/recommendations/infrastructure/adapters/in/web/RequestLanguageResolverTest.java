@@ -28,4 +28,12 @@ class RequestLanguageResolverTest {
     void ignoresWildcardsAndFallsBackToTheNextValidTag() {
         assertThat(resolver.resolve("*, en;q=0.8")).isEqualTo("en");
     }
+
+    @Test
+    void ignoresLanguageTagsLongerThanTheGraphPropertyBound() {
+        // MS05-09: the tag is persisted in TuristaProfile.language, so the resolver caps its length.
+        String overlong = "es-" + "a".repeat(40);
+        assertThat(resolver.resolve(overlong)).isEqualTo("es");
+        assertThat(resolver.resolve(overlong + ", en")).isEqualTo("en");
+    }
 }

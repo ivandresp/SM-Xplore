@@ -12,25 +12,27 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Fixed-window counter per tourist held in a bounded Caffeine cache (MS05-02). The state is
- * local to the instance, which is enough because the budget protects a single API instance:
- * the gateway already limits by IP and the quota only has to stop one account from turning
- * every request into two graph queries. A distributed counter is not worth a network hop
- * here.
+ * Fixed-window counters per tourist held in bounded Caffeine caches (MS05-02 and MS05-04).
+ * The state is local to the instance, which is enough because the budgets protect a single
+ * API instance: the gateway already limits by IP and the quotas only have to stop one account
+ * from turning every request into graph work. A distributed counter is not worth a network
+ * hop here.
  */
 public class InMemoryRecommendationQuotaAdapter implements RecommendationQuotaPort {
 
     private final RecommendationQuotaProperties properties;
     private final Clock clock;
-    private final Cache<UUID, Window> windows;
+    private final Cache<UUID, Window> recommendationWindows;
+    private final Cache<UUID, Window> viewWindows;
+    private final Cache<UUID, Window> preferenceWindows;
 
     public InMemoryRecommendationQuotaAdapter(RecommendationQuotaProperties properties, Clock clock) {
         this.properties = properties;
         this.clock = clock;
-        this.windows = Caffeine.newBuilder()
-                .expireAfterWrite(properties.getWindow())
-                .maximumSize(properties.getMaxEntries())
-                .build();
+        this.recommendationWindows = newCache(properties.getMaxEntries(), properties.getWindow());
+        this.viewWindows = newCache(properties.getMaxEntries(), properties.getViews().getWindow());
+        this.preferenceWindows = newCache(properties.getMaxEntries(),
+                properties.getPreferences().getWindow());
     }
 
     @Override
@@ -38,28 +40,59 @@ public class InMemoryRecommendationQuotaAdapter implements RecommendationQuotaPo
         if (!properties.isEnabled()) {
             return;
         }
-        if (touristId == null) {
-            throw new RateLimitExceededException("A tourist identity is required to query recommendations", 1);
+        check(recommendationWindows, touristId, properties.getMaxRequests(), properties.getWindow(),
+                "Recommendation");
+    }
+
+    @Override
+    public void checkView(UUID touristId) {
+        if (!properties.isEnabled() || !properties.getViews().isEnabled()) {
+            return;
         }
-        Window window = windows.get(touristId, key -> new Window(clock.instant()));
-        synchronized (window) {
+        check(viewWindows, touristId, properties.getViews().getMaxRequests(),
+                properties.getViews().getWindow(), "Interaction");
+    }
+
+    @Override
+    public void checkPreference(UUID touristId) {
+        if (!properties.isEnabled() || !properties.getPreferences().isEnabled()) {
+            return;
+        }
+        check(preferenceWindows, touristId, properties.getPreferences().getMaxRequests(),
+                properties.getPreferences().getWindow(), "Preference");
+    }
+
+    private void check(Cache<UUID, Window> windows, UUID touristId, int maxRequests, Duration window,
+                       String label) {
+        if (touristId == null) {
+            throw new RateLimitExceededException("A tourist identity is required to use this endpoint", 1);
+        }
+        Window current = windows.get(touristId, key -> new Window(clock.instant()));
+        synchronized (current) {
             Instant now = clock.instant();
-            Instant resetAt = window.start.plus(properties.getWindow());
+            Instant resetAt = current.start.plus(window);
             if (!now.isBefore(resetAt)) {
-                window.start = now;
-                window.count = 0;
-                resetAt = now.plus(properties.getWindow());
+                current.start = now;
+                current.count = 0;
+                resetAt = now.plus(window);
             }
-            if (window.count >= properties.getMaxRequests()) {
+            if (current.count >= maxRequests) {
                 long retryAfter = Math.max(1, Duration.between(now, resetAt).toSeconds() + 1);
                 throw new RateLimitExceededException(
-                        "Recommendation quota exceeded: at most " + properties.getMaxRequests()
-                                + " queries per " + properties.getWindow().toSeconds()
-                                + " seconds; try again in " + retryAfter + " seconds",
+                        label + " quota exceeded: at most " + maxRequests + " requests per "
+                                + window.toSeconds() + " seconds; try again in " + retryAfter
+                                + " seconds",
                         retryAfter);
             }
-            window.count++;
+            current.count++;
         }
+    }
+
+    private static Cache<UUID, Window> newCache(int maxEntries, Duration window) {
+        return Caffeine.newBuilder()
+                .expireAfterWrite(window)
+                .maximumSize(maxEntries)
+                .build();
     }
 
     private static final class Window {

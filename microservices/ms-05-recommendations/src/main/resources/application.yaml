@@ -51,7 +51,9 @@ app:
       role-claim: ${JWT_ROLE_CLAIM:role}
       name-claim: ${JWT_NAME_CLAIM:name}
     auth-version:
-      enabled: ${AUTH_VERSION_ENABLED:false}
+      # MS05-06: la revocacion de tokens queda activa por defecto (falla cerrado). Solo los
+      # perfiles local y test la desactivan de forma explicita.
+      enabled: ${AUTH_VERSION_ENABLED:true}
       base-url: ${MS01_BASE_URL:}
       timeout: ${AUTH_VERSION_TIMEOUT:2s}
       cache-ttl: ${AUTH_VERSION_CACHE_TTL:60s}
@@ -59,6 +61,9 @@ app:
       cache-max-entries: ${AUTH_VERSION_CACHE_MAX_ENTRIES:10000}
     mfa:
       require-admin: ${MFA_REQUIRE_ADMIN:false}
+    # MS05-07: la documentacion OpenAPI/Swagger solo se publica si se habilita de forma
+    # explicita (perfil local); en el resto de perfiles las rutas quedan denegadas.
+    docs-public: ${SECURITY_DOCS_PUBLIC:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
   recommendations:
@@ -84,16 +89,29 @@ app:
       redis-ttl: ${RECOMMENDATIONS_CACHE_REDIS_TTL:1m}
       local-max-size: ${RECOMMENDATIONS_CACHE_LOCAL_MAX_SIZE:1000}
       key-prefix: ${RECOMMENDATIONS_CACHE_KEY_PREFIX:ms05:recommendations:}
-      version-key: ${RECOMMENDATIONS_CACHE_VERSION_KEY:ms05:graph:version}
+      # MS05-05: clave con prefijo del servicio; solo la proyeccion (ProjectionService) la incrementa.
+      version-key: ${RECOMMENDATIONS_CACHE_VERSION_KEY:ms05:recommendations:graph:version}
     # MS05-02: per-tourist budget for GET /api/v1/recommendations. A cache miss costs two
     # Cypher queries, so the API answers 429 when a caller exceeds the window.
+    # MS05-04: the same in-memory quota covers the graph write paths (views and preferences).
     quota:
       enabled: ${RECOMMENDATIONS_QUOTA_ENABLED:true}
       max-requests: ${RECOMMENDATIONS_QUOTA_MAX_REQUESTS:120}
       window: ${RECOMMENDATIONS_QUOTA_WINDOW:1m}
       max-entries: ${RECOMMENDATIONS_QUOTA_MAX_ENTRIES:10000}
+      # Ventana en la que una misma vista (turista, tipo e item) se ignora en lugar de escribir.
+      view-dedupe-window: ${RECOMMENDATIONS_VIEW_DEDUPE_WINDOW:1m}
+      views:
+        enabled: ${RECOMMENDATIONS_VIEW_QUOTA_ENABLED:true}
+        max-requests: ${RECOMMENDATIONS_VIEW_QUOTA_MAX_REQUESTS:60}
+        window: ${RECOMMENDATIONS_VIEW_QUOTA_WINDOW:1m}
+      preferences:
+        enabled: ${RECOMMENDATIONS_PREFERENCE_QUOTA_ENABLED:true}
+        max-requests: ${RECOMMENDATIONS_PREFERENCE_QUOTA_MAX_REQUESTS:30}
+        window: ${RECOMMENDATIONS_PREFERENCE_QUOTA_WINDOW:1m}
   neo4j:
-    initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:true}
+    # MS05-08: DDL solo cuando se pide de forma explicita (perfil local/test o job de esquema).
+    initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:false}
   seed:
     enabled: ${SEED_ENABLED:false}
   events:
@@ -130,16 +148,18 @@ app:
     min-interval: ${REINDEX_MIN_INTERVAL:60s}
 
 springdoc:
+  # MS05-07: apagado por defecto; solo el perfil local lo enciende de forma explicita.
   api-docs:
-    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
   swagger-ui:
-    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        # MS05-07: por defecto solo health e info; metrics/prometheus se piden con rol ADMIN.
+        include: ${MANAGEMENT_ENDPOINTS:health,info}
   endpoint:
     health:
       probes:
