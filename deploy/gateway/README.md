@@ -298,7 +298,7 @@ falsear** (a diferencia de `X-Forwarded-For`, que el gateway además sobrescribe
 
 | Zona | Rate | Burst | Dónde se aplica |
 |---|---|---|---|
-| `auth` | 30 r/m (1 cada 2 s) | 10, `nodelay` | `location /api/v1/auth/` → ms-01 (login, MFA, recuperación) |
+| `auth` | 30 r/m (1 cada 2 s) | 10, `nodelay` | `location /api/v1/auth/` **y** `location /svc/ms-01/api/v1/auth/` → ms-01 (login, MFA, recuperación; el namespace no rebaja el límite) |
 | `public` | 120 r/m (2 por s) | 40 | GET de catálogo público: `/api/v1/activities`, `/events`, `/reviews/*`, `/sites`, `/services`, `/categories`, `/zones`, `/recommendations` |
 | `api` | 600 r/m (10 por s) | 100 | resto de rutas publicadas (usuarios, admin, reservas, preferencias, interacciones, namespace `/svc/...`) |
 
