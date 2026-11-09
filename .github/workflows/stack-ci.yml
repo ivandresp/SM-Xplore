@@ -57,6 +57,9 @@ jobs:
       MONGO_ROOT_PASSWORD: mongo-root
       MONGO_APP_USER: reviews_app
       MONGO_APP_PASSWORD: reviews-app
+      # ms-05 exige NEO4J_PASSWORD en su compose desde el endurecimiento MS05-10
+      # (el valor solo se usa para interpolar; `config` no levanta contenedores).
+      NEO4J_PASSWORD: neo4j-ci
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
