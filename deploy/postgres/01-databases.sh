@@ -76,6 +76,10 @@ echo "[postgres-init] otorgando privilegios en activities_events (ms-03)"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname activities_events <<'EOSQL'
 GRANT CONNECT ON DATABASE activities_events TO ms03_flyway, ms03_app;
+-- Flyway crea tablas temporales durante algunas migraciones (p. ej. V2 con el backfill
+-- de reservas simbolicas). El REVOKE de PUBLIC quita ese privilegio, asi que el rol de
+-- migraciones lo necesita explicitamente; ms03_app no lo usa en runtime.
+GRANT TEMPORARY ON DATABASE activities_events TO ms03_flyway;
 GRANT USAGE, CREATE ON SCHEMA public TO ms03_flyway;
 GRANT USAGE ON SCHEMA public TO ms03_app;
 
