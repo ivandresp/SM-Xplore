@@ -30,7 +30,7 @@ dependencies {
     // starter y no spring-kafka suelto: sin el auto-configurador de Kafka no hay KafkaTemplate ni
     // contenedor de listeners, asi que el relay del outbox y el consumidor de sitios no arrancaban.
     implementation("org.springframework.boot:spring-boot-starter-kafka")
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.2.0")
     implementation("org.mapstruct:mapstruct:1.6.3")
     // Reporte PDF de planificacion; ya se usa en ms-01 con la misma version.
     implementation("com.github.librepdf:openpdf:2.2.5")
