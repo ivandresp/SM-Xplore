@@ -71,7 +71,7 @@ dependencies {
         implementation("com.ongres.scram:scram-common:3.3") {
             because("CVE-2026-53712, degradación de autenticación por man-in-the-middle")
         }
-        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+        implementation("org.xerial.snappy:snappy-java:1.1.10.12") {
             because("CVE-2026-108106 y CVE-2026-93451, desbordamiento de búfer y denegación de servicio")
         }
     }
