@@ -186,6 +186,33 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .expectStatus().isOk();
     }
 
+    /**
+     * Auditoria final 2026-11-08: el listado publico de resenas mostraba el touristId (un UUID
+     * estable de la persona) a cualquiera. Ahora solo expone el nombre y la vista administrativa
+     * conserva el identificador.
+     */
+    @Test
+    void publicReviewListingShowsTheAuthorNameButNotTheIdentifier() {
+        UUID managerId = UUID.randomUUID();
+        UUID touristId = UUID.randomUUID();
+        CategoryResponse category = createCategory(managerId);
+        ZoneResponse zone = createZone(managerId);
+        SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
+        createReview(touristId, site.siteId());
+
+        String json = webTestClient.get()
+                .uri("/api/v1/reviews?itemType=SITE&itemId=" + site.siteId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(json).isNotNull();
+        assertThat(json).contains("\"touristName\"");
+        assertThat(json).doesNotContain("\"touristId\"");
+    }
+
     @Test
     void filtersSitesByManagerForAdministrators() {
         UUID managerA = UUID.randomUUID();

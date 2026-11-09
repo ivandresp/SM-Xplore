@@ -12,11 +12,14 @@ import java.util.UUID;
  *
  * <p>It deliberately excludes the AI assessment ({@link ReviewAiAssessmentResponse}): the verdict of
  * the abuse filter, its model, score and categories are internal moderation data. The
- * administrative view is {@link AdminReviewResponse}.
+ * administrative view is {@link AdminReviewResponse}.</p>
+ *
+ * <p>It also excludes {@code touristId}: the public view only shows the display name, so an
+ * anonymous reader cannot collect stable tourist identifiers (auditoria final 2026-11-08). The
+ * authoritative identifier stays in {@link AdminReviewResponse} and in the review events.</p>
  */
 public record ReviewResponse(
         UUID reviewId,
-        UUID touristId,
         String touristName,
         ItemType itemType,
         UUID itemId,
