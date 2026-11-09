@@ -12,6 +12,8 @@ COPY gradle ./gradle
 RUN chmod +x gradlew && ./gradlew --no-daemon --console=plain help
 
 COPY src ./src
+COPY healthcheck ./healthcheck
+RUN javac -d /workspace/healthcheck/classes /workspace/healthcheck/HealthCheck.java
 RUN ./gradlew --no-daemon --console=plain bootJar \
     && JAR="$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -print -quit)" \
     && cp "$JAR" /workspace/app.jar
@@ -23,22 +25,15 @@ LABEL org.opencontainers.image.title="ms-01-users-and-anomalies" \
       org.opencontainers.image.source="https://github.com/ivandresp/SM-Xplore"
 
 RUN set -eux; \
-    ok=0; \
-    for intento in 1 2 3; do \
-        if apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update \
-            && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 curl apt; then \
-            ok=1; \
-            break; \
-        fi; \
-        echo "reintento de apt ${intento}/3"; \
-        sleep 5; \
-    done; \
-    test "${ok}" = "1"; \
-    rm -rf /var/lib/apt/lists/*; \
+    dpkg --purge apt 2>/dev/null || true; \
+    dpkg --purge libapt-pkg6.0t64 2>/dev/null || true; \
+    dpkg --purge libapt-pkg7.0 2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /etc/apt /var/log/apt; \
     groupadd --system app; \
     useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 WORKDIR /app
+COPY --from=build /workspace/healthcheck/classes /app/healthcheck
 COPY --from=build --chown=app:app /workspace/app.jar /app/app.jar
 # El perfil dev genera las llaves JWT en .local/jwt; el directorio debe ser escribible por el usuario sin privilegios.
 RUN mkdir -p /app/.local/jwt && chown -R app:app /app
@@ -52,4 +47,4 @@ ENV SPRING_PROFILES_ACTIVE=prod
 ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:MaxRAMPercentage=75", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
-    CMD curl -fsS http://127.0.0.1:8081/actuator/health || exit 1
+    CMD ["java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8081/actuator/health"]
