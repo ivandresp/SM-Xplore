@@ -279,7 +279,7 @@ class CatalogExportClientTest {
         assertThat(activity.activityId()).isEqualTo(activityId);
         assertThat(activity.categoryName()).isEqualTo("Deportes acuáticos");
         assertThat(activity.metadata().eventVersion()).isEqualTo(2);
-        assertThat(activity.metadata().producer()).isEqualTo("ms-03");
+        assertThat(activity.metadata().producer()).isEqualTo("ms-03-activities-and-events");
         assertThat(ms03RequestUris).hasSize(1);
         assertThat(ms03RequestUris.getFirst())
                 .contains("entity=ACTIVITIES", "page=0", "size=50", "updatedSince=");

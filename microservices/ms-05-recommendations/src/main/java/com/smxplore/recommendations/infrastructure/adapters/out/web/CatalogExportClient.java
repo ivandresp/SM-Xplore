@@ -45,7 +45,7 @@ public class CatalogExportClient implements CatalogExportPort {
 
     static final String CORRELATION_ID = "ms-05-reindex";
     static final String PRODUCER_MS04 = "ms-04";
-    static final String PRODUCER_MS03 = "ms-03";
+    static final String PRODUCER_MS03 = "ms-03-activities-and-events";
     /** Version assumed when ms-04 does not send {@code eventVersion} (older builds). */
     static final int LEGACY_EVENT_VERSION = 1;
     /** ms-03 only publishes v2 activities/events, so its export is always v2. */

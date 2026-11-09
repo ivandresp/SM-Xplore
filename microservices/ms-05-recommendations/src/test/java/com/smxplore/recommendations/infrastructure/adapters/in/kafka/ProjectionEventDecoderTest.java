@@ -7,6 +7,7 @@ import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventTopics;
 import com.smxplore.recommendations.domain.model.event.ProjectedEvent;
+import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import org.junit.jupiter.api.Test;
@@ -335,6 +336,46 @@ class ProjectionEventDecoderTest {
         assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
                 .isInstanceOf(InvalidEventException.class)
                 .hasMessageContaining("name must be at most 200 characters");
+    }
+
+    /** reviews.review.changed has two legitimate publishers: ms-03 and ms-04. */
+    @Test
+    void acceptsBothLegitimateProducersOfReviews() {
+        UUID reviewId = UUID.randomUUID();
+        String payload = reviewPayload(reviewId, "2026-11-02T15:00:00Z");
+
+        for (String producer : new String[] {"ms-03-activities-and-events", "ms-04"}) {
+            String json = envelope(EventTopics.REVIEWS_REVIEW_CHANGED, reviewId, 1, producer,
+                    "2026-11-02T15:00:00Z", payload);
+
+            ProjectedEvent event = decoder.decode(EventTopics.REVIEWS_REVIEW_CHANGED, null, json);
+
+            assertThat(event).isInstanceOf(ReviewChangedEvent.class);
+        }
+    }
+
+    /** A publisher outside the two legitimate ones is still rejected. */
+    @Test
+    void rejectsAnUnknownProducerOfReviews() {
+        UUID reviewId = UUID.randomUUID();
+        String json = envelope(EventTopics.REVIEWS_REVIEW_CHANGED, reviewId, 1, "ms-02",
+                "2026-11-02T15:00:00Z", reviewPayload(reviewId, "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.REVIEWS_REVIEW_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("producer");
+    }
+
+    private String reviewPayload(UUID reviewId, String updatedAt) {
+        return """
+                "reviewId": "%s",
+                "touristId": "%s",
+                "itemType": "ACTIVITY",
+                "itemId": "%s",
+                "rating": 5,
+                "status": "PUBLISHED",
+                "updatedAt": "%s"
+                """.formatted(reviewId, UUID.randomUUID(), UUID.randomUUID(), updatedAt);
     }
 
     private String sitePayload(UUID siteId, String updatedAt) {

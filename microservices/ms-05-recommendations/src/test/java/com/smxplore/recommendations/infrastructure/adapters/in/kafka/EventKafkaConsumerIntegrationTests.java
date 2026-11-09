@@ -258,7 +258,7 @@ class EventKafkaConsumerIntegrationTests extends AbstractKafkaNeo4jIntegrationTe
                   "occurredAt": "%s",
                   "aggregateId": "%s",
                   "correlationId": "test-correlation",
-                  "producer": "ms-03",
+                  "producer": "ms-03-activities-and-events",
                   "payload": {
                     "eventId": "%s",
                     "siteId": "%s",
@@ -295,7 +295,7 @@ class EventKafkaConsumerIntegrationTests extends AbstractKafkaNeo4jIntegrationTe
                   "occurredAt": "%s",
                   "aggregateId": "%s",
                   "correlationId": "test-correlation",
-                  "producer": "ms-03",
+                  "producer": "ms-03-activities-and-events",
                   "payload": {
                     "activityId": "%s",
                     "siteId": "%s",

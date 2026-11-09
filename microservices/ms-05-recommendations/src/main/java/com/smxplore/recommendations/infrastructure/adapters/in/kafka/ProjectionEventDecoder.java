@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -97,15 +98,17 @@ public class ProjectionEventDecoder {
     }
 
     /**
-     * Rejects events attributed to a different producer than the one that owns the topic
-     * (MS05-01). The field is self-declared, so this only catches publisher mistakes and
-     * first-line forgery; the broker still has to add authentication and ACLs.
+     * Rejects events attributed to a producer that does not publish the topic (MS05-01).
+     * reviews.review.changed has two legitimate publishers (ms-03 for activities/events and
+     * ms-04 for sites/services), so the check accepts the whole set. The field is
+     * self-declared, so this only catches publisher mistakes and first-line forgery; the
+     * broker still has to add authentication and ACLs.
      */
     private void validateProducer(EventMetadata metadata) {
-        String expected = EventTopics.expectedProducer(metadata.eventType());
-        if (expected != null && !expected.equals(metadata.producer())) {
+        Set<String> expected = EventTopics.expectedProducers(metadata.eventType());
+        if (!expected.isEmpty() && !expected.contains(metadata.producer())) {
             throw new InvalidEventException(
-                    "producer " + metadata.producer() + " is not the expected producer "
+                    "producer " + metadata.producer() + " is not an expected producer "
                             + expected + " for " + metadata.eventType());
         }
     }

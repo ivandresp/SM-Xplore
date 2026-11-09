@@ -111,14 +111,16 @@ Topics consumidos:
 | `catalog.zone.changed` | ms-04 | Upsert de `Zona` y enlace `Sitio -[:PERTENECE_A]-> Zona` |
 | `activities.event.changed` | ms-03 | Upsert de `Evento` |
 | `activities.activity.changed` | ms-03 | Upsert de `Actividad` |
-| `reviews.review.changed` | ms-03 | Arista `RESEÑO` y agregados de calidad |
+| `reviews.review.changed` | ms-03 y ms-04 | Arista `RESEÑO` y agregados de calidad |
 
 `bookings.reservation.changed` **no se consume**. Grupo de consumo:
 `ms-05-recommendations`. La key debe ser el `aggregateId`.
 
 El productor es parte del contrato (MS05-01): `ProjectionEventDecoder` rechaza el mensaje si
-el `producer` no es el esperado para el topic (`ms-04` para `catalog.*`, `ms-03` para
-`activities.*` y `reviews.*`), y también si `occurredAt` o el `updatedAt` del evento caen más
+el `producer` no es el esperado para el topic (`ms-04` para `catalog.*`;
+`ms-03-activities-and-events` para `activities.*` y para las reseñas de actividades/eventos;
+`ms-04` también para las reseñas de sitios y servicios), y también si `occurredAt` o el
+`updatedAt` del evento caen más
 de `EVENTS_CONSUMER_MAX_FUTURE_SKEW` (5 minutos por defecto) en el futuro. Un evento con un
 `updatedAt` futuro congelaría la entidad para el resto de eventos legítimos, porque la
 comparación de frescura descarta todo lo anterior o igual.
@@ -222,7 +224,9 @@ Estas tres correcciones salen de la auditoría estática (`MS05-01`, `MS05-02` y
 están activas por defecto, también en local.
 
 **MS05-01 — proyección solo desde los productores esperados.** `ProjectionEventDecoder` valida
-`producer` contra el topic (`catalog.*` → `ms-04`; `activities.*` y `reviews.*` → `ms-03`) y
+`producer` contra el topic (`catalog.*` → `ms-04`; `activities.*` → `ms-03-activities-and-events`;
+`reviews.review.changed` → `ms-03-activities-and-events` o `ms-04`, porque el contrato tiene dos
+productores legítimos) y
 rechaza `occurredAt`/`updatedAt` que estén más de `EVENTS_CONSUMER_MAX_FUTURE_SKEW` en el futuro
 (`5m` por defecto, máximo `1h`). Un mensaje inválido no se proyecta: sigue el camino normal de
 DLQ (`<topic>.dlq`). Esto no sustituye la autenticación del broker; la defensa de red sigue

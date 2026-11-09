@@ -36,25 +36,36 @@ public record EventTopics() {
         return CONSUMED_SET.contains(topic);
     }
 
+    private static final Set<String> CATALOG_PRODUCERS = Set.of("ms-04");
+    /** ms-03 firma sus eventos con su constante PRODUCER, no con "ms-03". */
+    private static final Set<String> ACTIVITIES_PRODUCERS = Set.of("ms-03-activities-and-events");
     /**
-     * Producer that owns a consumed topic. The projection only accepts events whose
-     * {@code producer} metadata matches this value: ms-04 publishes the catalog (sites,
-     * services, categories and zones) and ms-03 publishes activities, events and reviews.
+     * reviews.review.changed has two legitimate producers by contract: ms-03 publishes the
+     * reviews of activities and events, and ms-04 publishes the reviews of sites and services.
+     */
+    private static final Set<String> REVIEWS_PRODUCERS =
+            Set.of("ms-03-activities-and-events", "ms-04");
+
+    /**
+     * Producers that may publish a consumed topic. The projection only accepts events whose
+     * {@code producer} metadata is one of these values: ms-04 publishes the catalog (sites,
+     * services, categories and zones) and ms-03 publishes activities and events, while
+     * reviews.review.changed is shared by ms-03 and ms-04.
      *
      * <p>The producer field is self-declared, so this is a consistency check and not a
      * signature. It stops a misconfigured or rogue publisher inside the stack from
      * attributing events to another service, and it is the first line of defence while
      * the broker has no authentication (MS05-01).</p>
      *
-     * @return expected producer or {@code null} when the topic is not consumed
+     * @return expected producers, or an empty set when the topic is not consumed
      */
-    public static String expectedProducer(String topic) {
+    public static Set<String> expectedProducers(String topic) {
         return switch (topic) {
             case CATALOG_SITE_CHANGED, CATALOG_SERVICE_CHANGED,
-                    CATALOG_CATEGORY_CHANGED, CATALOG_ZONE_CHANGED -> "ms-04";
-            case ACTIVITIES_EVENT_CHANGED, ACTIVITIES_ACTIVITY_CHANGED,
-                    REVIEWS_REVIEW_CHANGED -> "ms-03";
-            default -> null;
+                    CATALOG_CATEGORY_CHANGED, CATALOG_ZONE_CHANGED -> CATALOG_PRODUCERS;
+            case ACTIVITIES_EVENT_CHANGED, ACTIVITIES_ACTIVITY_CHANGED -> ACTIVITIES_PRODUCERS;
+            case REVIEWS_REVIEW_CHANGED -> REVIEWS_PRODUCERS;
+            default -> Set.of();
         };
     }
 }
