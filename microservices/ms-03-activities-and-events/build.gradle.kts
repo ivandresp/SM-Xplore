@@ -55,7 +55,7 @@ dependencies {
             because("CVE-2026-108106 y CVE-2026-93451: denegacion de servicio y desbordamiento en snappy-java 1.1.10.7")
         }
         // El cliente de PostgreSQL autentica con SCRAM y arrastra una version con CVE.
-        implementation("com.ongres.scram:scram-client:3.3") {
+        implementation("com.ongres.scram:scram-client:3.4") {
             because("CVE-2026-53712: fallo de autenticacion en scram-client 3.2")
         }
         implementation("com.ongres.scram:scram-common:3.3") {
