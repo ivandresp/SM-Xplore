@@ -10,9 +10,13 @@ public record ZoneFilter(
         int size
 ) {
 
+    /** Cota de desplazamiento para listados publicos (auditoria final 2026-11-08). */
+    private static final int MAX_OFFSET = 10_000;
+
     public ZoneFilter {
         validatePage(page);
         validateSize(size);
+        validatePagination(page, size);
     }
 
     private static void validatePage(int page) {
@@ -24,6 +28,12 @@ public record ZoneFilter(
     private static void validateSize(int size) {
         if (size < 1 || size > 100) {
             throw new InvalidCatalogException("size must be between 1 and 100");
+        }
+    }
+
+    private static void validatePagination(int page, int size) {
+        if ((long) page * size > MAX_OFFSET) {
+            throw new InvalidCatalogException("page and size are too large for this listing");
         }
     }
 }
