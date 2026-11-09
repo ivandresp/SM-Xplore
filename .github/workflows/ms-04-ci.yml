@@ -202,6 +202,7 @@ jobs:
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
           docker run -d --name ms-04 --network smxplore-net -p 8084:8080 \
+            -e SPRING_PROFILES_ACTIVE=local \
             -e MONGODB_URI="mongodb://mongo:27017/smxplore?replicaSet=rs0" \
             -e POSTGRES_R2DBC_URL="r2dbc:postgresql://postgres:5432/smxplore" \
             -e POSTGRES_JDBC_URL="jdbc:postgresql://postgres:5432/smxplore" \
@@ -231,7 +232,7 @@ jobs:
 
       - name: Mostrar logs si algo falló
         if: failure()
-        run: docker logs --no-color ms-04 || true
+        run: docker logs ms-04 || true
 
       - name: Apagar el stack
         if: always()

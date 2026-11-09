@@ -205,6 +205,7 @@ jobs:
           NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$(docker compose ps -q postgres)")
           echo "Red de compose: ${NETWORK}"
           docker run -d --name ms-03 --network "${NETWORK}" -p 8082:8082 \
+            -e SPRING_PROFILES_ACTIVE=local \
             -e R2DBC_URL="r2dbc:postgresql://postgres:5432/activities_events" \
             -e POSTGRES_USER="ms03_app" \
             -e POSTGRES_PASSWORD="ms03-app" \
@@ -245,7 +246,7 @@ jobs:
 
       - name: Mostrar logs si algo falló
         if: failure()
-        run: docker logs --no-color ms-03 || true
+        run: docker logs ms-03 || true
 
       - name: Apagar el stack
         if: always()

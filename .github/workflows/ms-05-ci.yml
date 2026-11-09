@@ -195,6 +195,7 @@ jobs:
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
           docker run -d --name ms-05 --network smxplore-net -p 8085:8080 \
+            -e SPRING_PROFILES_ACTIVE=local \
             -e NEO4J_URI="bolt://neo4j:7687" \
             -e NEO4J_USER="neo4j" \
             -e NEO4J_PASSWORD="change-me" \
@@ -225,7 +226,7 @@ jobs:
 
       - name: Mostrar logs si algo falló
         if: failure()
-        run: docker logs --no-color ms-05 || true
+        run: docker logs ms-05 || true
 
       - name: Apagar el stack
         if: always()

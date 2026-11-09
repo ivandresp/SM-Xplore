@@ -192,6 +192,7 @@ jobs:
         working-directory: ${{ env.SERVICE_DIR }}
         run: |
           docker run -d --name ms-02 --network smxplore-net -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=local \
             -e MONGODB_URI="mongodb://mongo:27017/security_reports?replicaSet=rs0" \
             -e KAFKA_BOOTSTRAP_SERVERS="kafka:9092" \
             -e JWT_PUBLIC_KEY_LOCATION="file:/keys/test-public.pem" \
@@ -219,7 +220,7 @@ jobs:
 
       - name: Mostrar logs si algo falló
         if: failure()
-        run: docker logs --no-color ms-02 || true
+        run: docker logs ms-02 || true
 
       - name: Apagar el stack
         if: always()
