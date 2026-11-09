@@ -15,7 +15,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 3
     groups:
       spring:
         patterns:
@@ -35,7 +35,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 3
     ignore:
       - dependency-name: "com.networknt:json-schema-validator"
         update-types: ["version-update:semver-major"]
@@ -58,7 +58,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 3
     ignore:
       - dependency-name: "com.networknt:json-schema-validator"
         update-types: ["version-update:semver-major"]
@@ -81,7 +81,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 3
     ignore:
       - dependency-name: "com.networknt:json-schema-validator"
         update-types: ["version-update:semver-major"]
@@ -104,7 +104,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 3
     ignore:
       - dependency-name: "com.networknt:json-schema-validator"
         update-types: ["version-update:semver-major"]
