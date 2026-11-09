@@ -15,7 +15,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     groups:
       spring:
         patterns:
@@ -23,13 +23,22 @@ updates:
       testcontainers:
         patterns:
           - "org.testcontainers*"
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gradle"
     directory: "/microservices/ms-02-security-reports"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "com.networknt:json-schema-validator"
+        update-types: ["version-update:semver-major"]
     groups:
       spring:
         patterns:
@@ -37,13 +46,22 @@ updates:
       testcontainers:
         patterns:
           - "org.testcontainers*"
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gradle"
     directory: "/microservices/ms-03-activities-and-events"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "com.networknt:json-schema-validator"
+        update-types: ["version-update:semver-major"]
     groups:
       spring:
         patterns:
@@ -51,13 +69,22 @@ updates:
       testcontainers:
         patterns:
           - "org.testcontainers*"
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gradle"
     directory: "/microservices/ms-04-sites-and-services"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "com.networknt:json-schema-validator"
+        update-types: ["version-update:semver-major"]
     groups:
       spring:
         patterns:
@@ -65,13 +92,22 @@ updates:
       testcontainers:
         patterns:
           - "org.testcontainers*"
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gradle"
     directory: "/microservices/ms-05-recommendations"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "com.networknt:json-schema-validator"
+        update-types: ["version-update:semver-major"]
     groups:
       spring:
         patterns:
@@ -79,6 +115,12 @@ updates:
       testcontainers:
         patterns:
           - "org.testcontainers*"
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # --- Imagenes base de los Dockerfiles de servicio --------------------------
   - package-ecosystem: "docker"
