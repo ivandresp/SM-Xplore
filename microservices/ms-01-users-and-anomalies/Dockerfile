@@ -22,11 +22,21 @@ LABEL org.opencontainers.image.title="ms-01-users-and-anomalies" \
       org.opencontainers.image.description="Identidad, reseñas y anomalías de SM-Xplore" \
       org.opencontainers.image.source="https://github.com/ivandresp/SM-Xplore"
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl apt \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system app \
-    && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
+RUN set -eux; \
+    ok=0; \
+    for intento in 1 2 3; do \
+        if apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update \
+            && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 curl apt; then \
+            ok=1; \
+            break; \
+        fi; \
+        echo "reintento de apt ${intento}/3"; \
+        sleep 5; \
+    done; \
+    test "${ok}" = "1"; \
+    rm -rf /var/lib/apt/lists/*; \
+    groupadd --system app; \
+    useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 WORKDIR /app
 COPY --from=build --chown=app:app /workspace/app.jar /app/app.jar
