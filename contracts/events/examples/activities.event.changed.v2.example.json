@@ -5,7 +5,7 @@
   "occurredAt": "2026-11-05T03:00:00Z",
   "aggregateId": "55555555-5555-5555-5555-555555555501",
   "correlationId": "8e21b2c3-d4e5-4f60-9b0a-1d2e3f4a5b6c",
-  "producer": "ms-03",
+  "producer": "ms-03-activities-and-events",
   "payload": {
     "eventId": "55555555-5555-5555-5555-555555555501",
     "siteId": "22222222-2222-2222-2222-222222222201",
