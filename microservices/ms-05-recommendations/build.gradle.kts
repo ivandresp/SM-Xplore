@@ -59,7 +59,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.testcontainers:testcontainers-neo4j")
     testImplementation("org.awaitility:awaitility")
-    testImplementation("com.networknt:json-schema-validator:1.5.9")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testImplementation(libs.archunit.junit5)
 
     testCompileOnly("org.projectlombok:lombok")
