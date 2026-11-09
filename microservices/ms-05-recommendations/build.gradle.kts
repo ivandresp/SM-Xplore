@@ -40,7 +40,7 @@ dependencies {
         implementation("at.yawk.lz4:lz4-java:1.11.4") {
             because("CVE-2026-106451: ejecucion arbitraria de codigo en lz4-java 1.11.2")
         }
-        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+        implementation("org.xerial.snappy:snappy-java:1.1.10.12") {
             because("CVE-2026-108106 y CVE-2026-93451: denegacion de servicio y desbordamiento en snappy-java 1.1.10.7")
         }
     }
