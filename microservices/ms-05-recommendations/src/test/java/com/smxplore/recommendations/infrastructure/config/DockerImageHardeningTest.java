@@ -11,10 +11,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * MS05-15: higiene de la imagen de ms-05.
  *
- * <p>La imagen ya está endurecida (bases pineadas por digest, usuario no root y sin
- * {@code apt-get upgrade}); este test lo fija para que una edición futura no lo deshaga. El
- * escaneo de dependencias/SBOM en CI queda como pendiente de plataforma y se documenta en el
- * README como riesgo aceptado.</p>
+ * <p>La imagen está endurecida: bases pineadas por digest, usuario no root y sin paquetes del
+ * sistema instalados durante el build. El healthcheck corre sobre la propia JVM, así que la imagen
+ * no necesita {@code curl} ni {@code apt}; además se purgan para que un escaneo de vulnerabilidades
+ * no los reporte. Este test fija esos invariantes.</p>
  */
 class DockerImageHardeningTest {
 
@@ -34,9 +34,16 @@ class DockerImageHardeningTest {
     }
 
     @Test
-    void doesNotUpgradePackagesDuringTheBuild() {
-        assertThat(dockerfile).doesNotContain("apt-get upgrade");
-        assertThat(dockerfile).contains("apt-get install -y --no-install-recommends curl");
+    void doesNotInstallSystemPackagesDuringTheBuild() {
+        assertThat(dockerfile).doesNotContain("apt-get");
+        assertThat(dockerfile).doesNotContain("curl -fsS");
+        assertThat(dockerfile).contains("dpkg --purge apt");
+    }
+
+    @Test
+    void healthcheckRunsOnTheJvmWithoutExtraPackages() {
+        assertThat(dockerfile).contains("RUN javac -d /workspace/healthcheck/classes /workspace/healthcheck/HealthCheck.java");
+        assertThat(dockerfile).contains("\"java\", \"-cp\", \"/app/healthcheck\", \"HealthCheck\"");
     }
 
     private static String dockerfile() {

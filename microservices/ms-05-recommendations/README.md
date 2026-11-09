@@ -334,8 +334,9 @@ fija este comportamiento, incluida una ruta de prueba no declarada que debe dar 
 `userId`. Requiere UUID válido; un valor ausente o no-UUID se rechaza con `InvalidJwtException`.
 
 **MS05-15 — imagen endurecida.** El `Dockerfile` ya parte de `eclipse-temurin:25-jdk` y
-`eclipse-temurin:25-jre` pineados por digest, instala solo `curl` con `--no-install-recommends`, no
-ejecuta `apt-get upgrade` y corre con el usuario no root `app`. `DockerImageHardeningTest` fija esos
+`eclipse-temurin:25-jre` pineados por digest, no instala paquetes del sistema durante el build,
+purgea `apt` (y sus librerías) en la etapa de runtime y corre con el usuario no root `app`. El
+healthcheck usa la propia JVM (`java` + `HealthCheck`), así que la imagen no necesita `curl`. `DockerImageHardeningTest` fija esos
 invariantes. **Pendiente de plataforma/CI:** no hay escaneo de dependencias (Trivy/Grype) ni SBOM en
 la tubería; se documenta como riesgo aceptado hasta que CI lo añada. Las dependencias con CVE ya
 están forzadas en `build.gradle.kts` (`lz4-java`, `snappy-java`) y los starters van por BOM de
