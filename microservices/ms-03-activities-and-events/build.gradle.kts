@@ -33,7 +33,7 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
     implementation("org.mapstruct:mapstruct:1.6.3")
     // Reporte PDF de planificacion; ya se usa en ms-01 con la misma version.
-    implementation("com.github.librepdf:openpdf:2.2.5")
+    implementation("com.github.librepdf:openpdf:3.0.5")
 
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
