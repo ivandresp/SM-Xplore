@@ -56,7 +56,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-mongodb")
     testImplementation("org.testcontainers:testcontainers-kafka")
-    testImplementation("com.networknt:json-schema-validator:1.5.9")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testCompileOnly("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testAnnotationProcessor("org.projectlombok:lombok")
