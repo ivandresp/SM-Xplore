@@ -107,14 +107,25 @@ else
 fi
 
 echo "== Metricas (Prometheus) =="
-for entry in "ms-01:$MS01_PORT" "ms-02:$MS02_PORT" "ms-03:$MS03_PORT" "ms-04:$MS04_PORT" "ms-05:$MS05_PORT"; do
+# Tras la auditoria final, ms-01 (perfil dev), ms-03 y ms-04 exponen /actuator/prometheus en
+# desarrollo; ms-02 y ms-05 lo exigen autenticado (MS02 y MS05-07), asi que 401/403 tambien
+# prueba que el servicio esta arriba y que el endpoint no quedo abierto.
+for entry in "ms-01:$MS01_PORT:200" "ms-02:$MS02_PORT:protegido" "ms-03:$MS03_PORT:200" "ms-04:$MS04_PORT:200" "ms-05:$MS05_PORT:protegido"; do
   label=$(printf '%s' "$entry" | cut -d: -f1)
   port=$(printf '%s' "$entry" | cut -d: -f2)
+  expected=$(printf '%s' "$entry" | cut -d: -f3)
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$HOST:$port/actuator/prometheus" || true)
-  if [ "$code" = "200" ]; then
-    pass "$label expone /actuator/prometheus"
+  if [ "$expected" = "200" ]; then
+    if [ "$code" = "200" ]; then
+      pass "$label expone /actuator/prometheus"
+    else
+      fail "$label /actuator/prometheus respondio $code (se espera 200)"
+    fi
   else
-    fail "$label /actuator/prometheus respondio $code (se espera 200)"
+    case "$code" in
+      401 | 403) pass "$label protege /actuator/prometheus (codigo $code)" ;;
+      *) fail "$label /actuator/prometheus respondio $code (se espera 401/403)" ;;
+    esac
   fi
 done
 
@@ -220,8 +231,10 @@ else
   fi
 
   # Turista real: registro publico y login, sin tocar usuarios de administrador.
+  # El telefono y el DNI son unicos por corrida: el stack de CI arranca limpio, pero en local
+  # el volumen persiste y un telefono fijo haria que el segundo smoke devuelva 409.
   tourist_email="smoke-$stamp@smxplore.local"
-  post_json "http://$HOST:$MS01_PORT/api/v1/auth/register/turista" "" "{\"fullName\":\"Smoke Turista $stamp\",\"email\":\"$tourist_email\",\"phone\":\"3001234567\",\"password\":\"SmokePass12345\",\"dniType\":\"CC\",\"dniNumber\":\"$stamp\",\"preferredLanguage\":\"es\",\"birthDate\":\"1990-01-01\",\"nationality\":\"CO\"}"
+  post_json "http://$HOST:$MS01_PORT/api/v1/auth/register/turista" "" "{\"fullName\":\"Smoke Turista $stamp\",\"email\":\"$tourist_email\",\"phone\":\"3$stamp\",\"password\":\"SmokePass12345\",\"dniType\":\"CC\",\"dniNumber\":\"$stamp\",\"preferredLanguage\":\"es\",\"birthDate\":\"1990-01-01\",\"nationality\":\"CO\"}"
   tourist_id=$(json_str "$RESP_BODY" id)
   if [ -n "$tourist_id" ]; then
     pass "ms-01 registro al turista ($tourist_id)"
@@ -237,14 +250,9 @@ else
     fail "login del turista fallo (HTTP $RESP_CODE): $RESP_BODY"
   fi
 
+  # MS03-13: para resenar hace falta una reserva CONFIRMED/COMPLETED del turista sobre el item,
+  # asi que primero se reserva y despues se resena.
   if [ -n "$tourist_token" ] && [ -n "$activity_id" ]; then
-    post_json "$base03/api/v1/reviews" "$tourist_token" "{\"itemType\":\"ACTIVITY\",\"itemId\":\"$activity_id\",\"rating\":5,\"comment\":\"resena del smoke\"}"
-    if [ "$RESP_CODE" = "201" ] || [ "$RESP_CODE" = "200" ]; then
-      pass "el turista publico una resena"
-    else
-      fail "la resena respondio $RESP_CODE: $RESP_BODY"
-    fi
-
     post_json "$base03/api/v1/reservations" "$tourist_token" "{\"touristId\":\"$tourist_id\",\"itemType\":\"ACTIVITY\",\"itemId\":\"$activity_id\",\"numberOfPeople\":1,\"paymentMethod\":\"CARD\",\"bookedFor\":\"$starts_at\"}"
     reservation_id=$(json_str "$RESP_BODY" id)
     if [ -n "$reservation_id" ]; then
@@ -254,6 +262,13 @@ else
         pass "GET de la reserva propia responde 200"
       else
         fail "GET de la reserva propia respondio $code"
+      fi
+
+      post_json "$base03/api/v1/reviews" "$tourist_token" "{\"itemType\":\"ACTIVITY\",\"itemId\":\"$activity_id\",\"rating\":5,\"comment\":\"resena del smoke\"}"
+      if [ "$RESP_CODE" = "201" ] || [ "$RESP_CODE" = "200" ]; then
+        pass "el turista publico una resena"
+      else
+        fail "la resena respondio $RESP_CODE: $RESP_BODY"
       fi
     else
       fail "la reserva respondio $RESP_CODE: $RESP_BODY"

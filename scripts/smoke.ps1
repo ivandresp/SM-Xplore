@@ -92,12 +92,27 @@ try {
 } catch { Fail "login/JWT fallo: $_" }
 
 Write-Host "== Metricas (Prometheus) =="
+# Tras la auditoria final, ms-01 (perfil dev), ms-03 y ms-04 exponen /actuator/prometheus en
+# desarrollo; ms-02 y ms-05 lo exigen autenticado (401/403), que tambien prueba que el servicio
+# esta arriba y que el endpoint no quedo abierto.
+$metricsExpectation = @{ "ms-01" = 200; "ms-02" = "protegido"; "ms-03" = 200; "ms-04" = 200; "ms-05" = "protegido" }
 foreach ($name in $ports.Keys) {
   $url = "http://" + $HostName + ":" + $ports[$name] + "/actuator/prometheus"
+  $expected = $metricsExpectation[$name]
   try {
     $response = Invoke-WebRequest -Uri $url -TimeoutSec 5 -UseBasicParsing
-    if ($response.StatusCode -eq 200) { Pass "$name expone /actuator/prometheus" } else { Fail "$name /actuator/prometheus respondio $($response.StatusCode)" }
-  } catch { Fail "$name /actuator/prometheus fallo: $_" }
+    if ($expected -eq 200) {
+      if ($response.StatusCode -eq 200) { Pass "$name expone /actuator/prometheus" } else { Fail "$name /actuator/prometheus respondio $($response.StatusCode)" }
+    } else { Fail "$name /actuator/prometheus respondio $($response.StatusCode) (se esperaba 401/403)" }
+  } catch {
+    $code = 0
+    if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+    if ($expected -ne 200 -and ($code -eq 401 -or $code -eq 403)) {
+      Pass "$name protege /actuator/prometheus (codigo $code)"
+    } else {
+      Fail "$name /actuator/prometheus fallo: $_"
+    }
+  }
 }
 
 Write-Host "== Flujo de negocio (catalogo -> actividad -> resena -> reserva) =="
@@ -160,9 +175,10 @@ if (-not $flowToken) {
     } catch { Fail "GET publico de la actividad fallo: $_" }
   }
 
-  # Turista real: registro publico y login.
+  # Turista real: registro publico y login. Telefono y DNI unicos por corrida: en local el
+  # volumen persiste y un telefono fijo haria que el segundo smoke devuelva 409.
   $touristEmail = "smoke-$stamp@smxplore.local"
-  $registered = Invoke-SmokePost ("http://" + $HostName + ":" + $ports["ms-01"] + "/api/v1/auth/register/turista") $null @{ fullName = "Smoke Turista $stamp"; email = $touristEmail; phone = "3001234567"; password = "SmokePass12345"; dniType = "CC"; dniNumber = "$stamp"; preferredLanguage = "es"; birthDate = "1990-01-01"; nationality = "CO" }
+  $registered = Invoke-SmokePost ("http://" + $HostName + ":" + $ports["ms-01"] + "/api/v1/auth/register/turista") $null @{ fullName = "Smoke Turista $stamp"; email = $touristEmail; phone = "3$stamp"; password = "SmokePass12345"; dniType = "CC"; dniNumber = "$stamp"; preferredLanguage = "es"; birthDate = "1990-01-01"; nationality = "CO" }
   $touristId = ""
   if ($registered.Status -eq 201 -or $registered.Status -eq 200) { $touristId = ($registered.Body | ConvertFrom-Json).id; Pass "ms-01 registro al turista ($touristId)" } else { Fail "ms-01 no registro al turista (HTTP $($registered.Status)): $($registered.Body)" }
 
@@ -170,10 +186,9 @@ if (-not $flowToken) {
   if ($touristLogin.Status -eq 200) { $touristToken = ($touristLogin.Body | ConvertFrom-Json).accessToken }
   if ($touristToken) { Pass "login del turista devuelve accessToken" } else { Fail "login del turista fallo (HTTP $($touristLogin.Status)): $($touristLogin.Body)" }
 
+  # MS03-13: para resenar hace falta una reserva CONFIRMED/COMPLETED del turista sobre el item,
+  # asi que primero se reserva y despues se resena.
   if ($touristToken -and $activityId) {
-    $review = Invoke-SmokePost ($base03 + "/api/v1/reviews") $touristToken @{ itemType = "ACTIVITY"; itemId = $activityId; rating = 5; comment = "resena del smoke" }
-    if ($review.Status -eq 201 -or $review.Status -eq 200) { Pass "el turista publico una resena" } else { Fail "la resena respondio $($review.Status): $($review.Body)" }
-
     $reservation = Invoke-SmokePost ($base03 + "/api/v1/reservations") $touristToken @{ touristId = $touristId; itemType = "ACTIVITY"; itemId = $activityId; numberOfPeople = 1; paymentMethod = "CARD"; bookedFor = $startsAt }
     if ($reservation.Status -eq 201 -or $reservation.Status -eq 200) {
       $reservationId = ($reservation.Body | ConvertFrom-Json).id
@@ -182,6 +197,9 @@ if (-not $flowToken) {
         $own = Invoke-WebRequest -Uri ($base03 + "/api/v1/reservations/" + $reservationId) -Headers @{ Authorization = "Bearer " + $touristToken } -TimeoutSec 5 -UseBasicParsing
         if ($own.StatusCode -eq 200) { Pass "GET de la reserva propia responde 200" } else { Fail "GET de la reserva propia respondio $($own.StatusCode)" }
       } catch { Fail "GET de la reserva propia fallo: $_" }
+
+      $review = Invoke-SmokePost ($base03 + "/api/v1/reviews") $touristToken @{ itemType = "ACTIVITY"; itemId = $activityId; rating = 5; comment = "resena del smoke" }
+      if ($review.Status -eq 201 -or $review.Status -eq 200) { Pass "el turista publico una resena" } else { Fail "la resena respondio $($review.Status): $($review.Body)" }
     } else { Fail "la reserva respondio $($reservation.Status): $($reservation.Body)" }
   }
 
