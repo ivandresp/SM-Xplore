@@ -272,7 +272,7 @@ services:
       - ms01_data:/app/.local
     healthcheck:
       <<: *app-healthcheck
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8081/actuator/health"]
 
   ms-02:
     build:
@@ -306,7 +306,7 @@ services:
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8080/actuator/health"]
 
   ms-03:
     build:
@@ -352,7 +352,7 @@ services:
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8082/actuator/health"]
 
   ms-04:
     build:
@@ -398,7 +398,7 @@ services:
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8080/actuator/health"]
 
   ms-05:
     build:
@@ -438,7 +438,7 @@ services:
       <<: *jwt-env
     healthcheck:
       <<: *app-healthcheck
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8080/actuator/health"]
 
   # Punto de entrada unico del stack (HTTP y HTTPS). Enruta /api/v1/** al
   # servicio dueno de cada prefijo y expone /svc/ms-0N/** como acceso 1:1.

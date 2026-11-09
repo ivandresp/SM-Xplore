@@ -85,7 +85,7 @@ services:
     networks:
       - smxplore-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8080/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
