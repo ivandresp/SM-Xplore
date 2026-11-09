@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.title="ms-01-users-and-anomalies" \
       org.opencontainers.image.source="https://github.com/ivandresp/SM-Xplore"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl apt \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system app \
     && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
