@@ -39,7 +39,7 @@ dependencies {
     // Dependencias transitivas con CVE corregible que detecta el escaneo Trivy del pipeline.
     // El cliente de Kafka arrastra compresión nativa: se fuerzan las versiones con los CVE cerrados.
     constraints {
-        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+        implementation("at.yawk.lz4:lz4-java:1.13.0") {
             because("CVE-2026-106451, ejecución de código por manejo inseguro de temporales")
         }
         implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
