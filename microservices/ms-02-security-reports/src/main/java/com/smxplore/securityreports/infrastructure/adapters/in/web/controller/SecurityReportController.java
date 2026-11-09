@@ -4,12 +4,14 @@ import com.smxplore.securityreports.domain.model.SecurityReportStatus;
 import com.smxplore.securityreports.domain.model.types.*;
 import com.smxplore.securityreports.domain.ports.usecases.*;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.ChangeReportContentRequest;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.NearbySecurityReportResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PhotosRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportRequest;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.SecurityReportResponse;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.CorrelationIdResolver;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import com.smxplore.securityreports.infrastructure.config.JwtProperties;
@@ -64,15 +66,16 @@ public class SecurityReportController {
     }
 
     @GetMapping("/nearby")
-    @Operation(summary = "List security reports near a coordinate, ordered by distance")
-    public Flux<SecurityReportResponse> findNearby(
+    @Operation(summary = "List anonymized security reports near a coordinate, ordered by distance; "
+            + "coordinates are rounded to three decimals and reporter, description and photos are never exposed")
+    public Flux<NearbySecurityReportResponse> findNearby(
             @RequestParam double latitude,
             @RequestParam double longitude,
             @RequestParam(defaultValue = "5") double radiusKm,
             @RequestParam(required = false) SecurityReportStatus status,
             @RequestParam(defaultValue = "20") int size) {
         var query = new NearbyReportsQuery(latitude, longitude, radiusKm, status, size);
-        return consultNearbyReportsUseCase.handle(query).map(mapper::toResponse);
+        return consultNearbyReportsUseCase.handle(query).map(mapper::toNearbyResponse);
     }
 
     @GetMapping("/{reportId}")
@@ -144,21 +147,27 @@ public class SecurityReportController {
     @Operation(summary = "Close a security report (marks it as reported)")
     public Mono<SecurityReportResponse> close(@PathVariable UUID reportId,
                                               @RequestHeader(value = "X-Correlation-Id", required = false)
-                                              String correlationId) {
-        return closeReportUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
+                                              String correlationId,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        return closeReportUseCase
+                .handle(reportId, jwtUserResolver.subjectId(jwt), correlationId(correlationId))
+                .map(mapper::toResponse);
     }
 
     @PostMapping("/{reportId}/solve")
     @Operation(summary = "Mark a security report as solved")
     public Mono<SecurityReportResponse> solve(@PathVariable UUID reportId,
                                               @RequestHeader(value = "X-Correlation-Id", required = false)
-                                              String correlationId) {
-        return markReportAsSolvedUseCase.handle(reportId, correlationId(correlationId)).map(mapper::toResponse);
-
+                                              String correlationId,
+                                              @AuthenticationPrincipal Jwt jwt) {
+        return markReportAsSolvedUseCase
+                .handle(reportId, jwtUserResolver.subjectId(jwt), correlationId(correlationId))
+                .map(mapper::toResponse);
     }
 
+    /** Acepta solo identificadores acotados; si el cliente envia basura se genera uno nuevo (MS02-08). */
     private static String correlationId(String header) {
-        return header == null || header.isBlank() ? UUID.randomUUID().toString() : header.trim();
+        return CorrelationIdResolver.resolve(header);
     }
 
     private boolean isAdminOrManager(Jwt jwt) {
@@ -183,8 +192,9 @@ public class SecurityReportController {
                 .doOnNext(report -> {
                     var authorId = report.getUser() == null ? null : report.getUser().id();
                     if (!requesterId.equals(authorId)) {
-                        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                                "Only the author of the report (or staff) can change it.");
+                        // MS02-10: mismo 404 que un reporte inexistente para no revelar su existencia.
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Security report not found.");
                     }
                 })
                 .then();

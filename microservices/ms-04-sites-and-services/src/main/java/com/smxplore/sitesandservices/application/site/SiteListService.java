@@ -19,6 +19,7 @@ public class SiteListService implements ListSitesUseCase {
     @Override
     public Mono<PageResult<Site>> handle(SiteFilter filter, Actor actor) {
         return access.requireSiteFilterScope(filter, actor)
+                .map(scoped -> access.requireSiteVisibility(scoped, actor))
                 .flatMap(siteRepository::findAll);
     }
 }

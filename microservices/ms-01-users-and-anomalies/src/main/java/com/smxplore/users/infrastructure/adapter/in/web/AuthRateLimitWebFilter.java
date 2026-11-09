@@ -3,7 +3,6 @@ package com.smxplore.users.infrastructure.adapter.in.web;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.smxplore.users.infrastructure.config.RateLimitProperties;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -24,24 +23,27 @@ import reactor.core.publisher.Mono;
 
 /**
  * Limita la cantidad de solicitudes por dirección IP sobre los endpoints sensibles de autenticación. Es la primera
- * barrera contra fuerza bruta distribuida por cuenta; el bloqueo por cuenta lo aplica {@code LoginProtection}.
+ * barrera contra fuerza bruta distribuida por cuenta; el cupo por cuenta y el bloqueo temporal los aplican
+ * {@code InMemoryAccountAttemptLimiter} y {@code LoginProtection}.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 15)
 public class AuthRateLimitWebFilter implements WebFilter {
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
-    private static final String UNKNOWN_CLIENT = "desconocido";
 
     private final RateLimitProperties properties;
+    private final ClientAddressResolver clientAddressResolver;
     private final Clock clock;
     private final Cache<String, Window> windows = Caffeine.newBuilder()
             .expireAfterAccess(WINDOW.multipliedBy(2))
             .maximumSize(10_000)
             .build();
 
-    public AuthRateLimitWebFilter(RateLimitProperties properties, Clock clock) {
+    public AuthRateLimitWebFilter(
+            RateLimitProperties properties, ClientAddressResolver clientAddressResolver, Clock clock) {
         this.properties = properties;
+        this.clientAddressResolver = clientAddressResolver;
         this.clock = clock;
     }
 
@@ -56,7 +58,7 @@ public class AuthRateLimitWebFilter implements WebFilter {
         }
 
         Instant now = clock.instant();
-        String key = bucket + "|" + clientAddress(exchange);
+        String key = bucket + "|" + clientAddressResolver.resolve(exchange);
         Window window = windows.get(key, ignored -> new Window(now));
         if (!window.tryAcquire(now, properties.requestsPerMinute())) {
             return reject(exchange, window.retryAfterSeconds(now));
@@ -83,17 +85,16 @@ public class AuthRateLimitWebFilter implements WebFilter {
         return switch (path) {
             case "/api/v1/auth/login" -> "login";
             case "/api/v1/auth/forgot-password" -> "forgot-password";
+            // MS01-04: el registro también devuelve 409 cuando el correo ya existe; se limita por IP para
+            // que no se pueda usar como oráculo de enumeración a alta velocidad.
+            case "/api/v1/auth/register/turista" -> "register-turista";
+            case "/api/v1/auth/register/prestadora" -> "register-prestadora";
             case "/api/v1/auth/reset-password" -> "reset-password";
             case "/api/v1/auth/mfa/verify" -> "mfa-verify";
+            // MS01-18: la verificación de correo consume un token de un solo uso; se limita por IP.
+            case "/api/v1/auth/verify-email" -> "verify-email";
             default -> null;
         };
-    }
-
-    private static String clientAddress(ServerWebExchange exchange) {
-        InetSocketAddress remoteAddress = exchange.getRequest().getRemoteAddress();
-        return remoteAddress == null || remoteAddress.getAddress() == null
-                ? UNKNOWN_CLIENT
-                : remoteAddress.getAddress().getHostAddress();
     }
 
     private static final class Window {

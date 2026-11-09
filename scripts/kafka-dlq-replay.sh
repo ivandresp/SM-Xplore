@@ -9,10 +9,23 @@
 #   --bootstrap-server <host:puerto>  Broker. Por defecto $KAFKA_BOOTSTRAP; si no,
 #                                     localhost:29092 en el host y localhost:9092
 #                                     cuando se ejecuta dentro del contenedor.
+#   --command-config <ruta>           client.properties con credenciales
+#                                     (SASL_SSL + SCRAM-SHA-512 en produccion).
+#                                     Por defecto $KAFKA_CLIENT_CONFIG. Con el
+#                                     broker de produccion (PLAT-01) es
+#                                     obligatorio: sin credenciales el broker
+#                                     rechaza la conexion. Genera el archivo con
+#                                     deploy/kafka/render-client-config.sh.
 #   --dlq <topico>                    Topico de descarte de origen (obligatorio).
 #   --target <topico>                 Topico destino. Si se omite se deduce
 #                                     quitando el sufijo .dlq o .DLT.
 #   --max <n>                         Re-publica como mucho n mensajes.
+#   --group <id>                      Grupo de consumidores con el que se lee la
+#                                     DLQ (por defecto $KAFKA_DLQ_GROUP_ID y, si
+#                                     no, kafka-dlq-replay). Fijarlo es necesario
+#                                     con autorizacion: el broker exige READ en
+#                                     ese grupo y no se puede adivinar un grupo
+#                                     aleatorio.
 #   --idle-timeout-ms <ms>            Tiempo de espera sin mensajes para cerrar
 #                                     el consumidor (por defecto 10000).
 #   --dry-run                         Consume y cuenta, pero no re-publica.
@@ -32,6 +45,12 @@
 #   - Solo usa utilidades de Kafka (kafka-console-consumer / kafka-console-producer);
 #     no requiere jq, python ni acceso al disco del broker.
 #
+# ACLs (broker de produccion con autorizacion, PLAT-01): el principal del
+# --command-config necesita READ en el topico DLQ, WRITE en el topico destino y
+# READ en el grupo de consumidores (--group, por defecto kafka-dlq-replay). Los
+# usuarios de los servicios no tienen esos permisos: usa un usuario operativo
+# dedicado (kafka-init crea `dlq-replay`), nunca el usuario de un servicio.
+#
 # Ejemplos:
 #   scripts/kafka-dlq-replay.sh --dlq reviews.review.changed.dlq --dry-run
 #   scripts/kafka-dlq-replay.sh --dlq catalog.site.changed.DLT --max 100
@@ -41,9 +60,12 @@
 set -euo pipefail
 
 BOOTSTRAP_SERVER="${KAFKA_BOOTSTRAP:-}"
+# client.properties con credenciales (SASL_SSL + SCRAM-SHA-512 en produccion).
+CLIENT_CONFIG="${KAFKA_CLIENT_CONFIG:-}"
 DLQ_TOPIC=""
 TARGET_TOPIC=""
 MAX_MESSAGES=""
+GROUP_ID="${KAFKA_DLQ_GROUP_ID:-kafka-dlq-replay}"
 IDLE_TIMEOUT_MS="${KAFKA_DLQ_IDLE_TIMEOUT_MS:-10000}"
 DRY_RUN="false"
 
@@ -52,7 +74,7 @@ DRY_RUN="false"
 KEY_SEPARATOR=$'\t'
 
 usage() {
-    sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    awk 'NR > 1 { if ($0 == "set -euo pipefail") exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
 fail() {
@@ -66,6 +88,10 @@ while [[ $# -gt 0 ]]; do
             BOOTSTRAP_SERVER="${2:?--bootstrap-server requiere un valor}"
             shift 2
             ;;
+        --command-config)
+            CLIENT_CONFIG="${2:?--command-config requiere una ruta}"
+            shift 2
+            ;;
         --dlq)
             DLQ_TOPIC="${2:?--dlq requiere un topico}"
             shift 2
@@ -76,6 +102,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --max)
             MAX_MESSAGES="${2:?--max requiere un entero}"
+            shift 2
+            ;;
+        --group)
+            GROUP_ID="${2:?--group requiere un id}"
             shift 2
             ;;
         --idle-timeout-ms)
@@ -148,18 +178,35 @@ if [[ -z "${BOOTSTRAP_SERVER}" ]]; then
     fi
 fi
 
+# Con docker exec el client.properties debe existir dentro del contenedor
+# (normalmente el montado por el compose); en el host se comprueba aqui.
+if [[ -n "${CLIENT_CONFIG}" ]]; then
+    if [[ "${IN_CONTAINER}" == "false" && ! -f "${CLIENT_CONFIG}" ]]; then
+        fail "no existe el --command-config: ${CLIENT_CONFIG}"
+    fi
+fi
+
 consumer_args=(--bootstrap-server "${BOOTSTRAP_SERVER}" --topic "${DLQ_TOPIC}"
+               --group "${GROUP_ID}"
                --from-beginning --timeout-ms "${IDLE_TIMEOUT_MS}"
                --property print.key=true --property print.value=true
                --property key.separator="${KEY_SEPARATOR}")
+if [[ -n "${CLIENT_CONFIG}" ]]; then
+    consumer_args+=(--command-config "${CLIENT_CONFIG}")
+fi
 if [[ -n "${MAX_MESSAGES}" ]]; then
     consumer_args+=(--max-messages "${MAX_MESSAGES}")
 fi
 
 producer_args=(--bootstrap-server "${BOOTSTRAP_SERVER}" --topic "${TARGET_TOPIC}"
                --property parse.key=true --property key.separator="${KEY_SEPARATOR}")
+if [[ -n "${CLIENT_CONFIG}" ]]; then
+    producer_args+=(--command-config "${CLIENT_CONFIG}")
+fi
 
 echo "Broker:      ${BOOTSTRAP_SERVER}"
+echo "Credenciales: ${CLIENT_CONFIG:-<sin client.properties>}"
+echo "Grupo:       ${GROUP_ID}"
 echo "DLQ origen:  ${DLQ_TOPIC}"
 echo "Destino:     ${TARGET_TOPIC}"
 echo "Limite:      $([[ -n "${MAX_MESSAGES}" ]] && echo "${MAX_MESSAGES} mensajes" || echo 'sin limite (hasta idle timeout)')"

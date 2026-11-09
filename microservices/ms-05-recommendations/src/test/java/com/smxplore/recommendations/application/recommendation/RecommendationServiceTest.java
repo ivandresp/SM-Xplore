@@ -176,6 +176,16 @@ class RecommendationServiceTest {
 
         assertThat(recommendation).isNotNull();
         assertThat(recommendation.touristId()).isEqualTo(OTHER_TOURIST);
+        assertThat(metrics.adminCrossTouristAccessCount()).isEqualTo(1);
+    }
+
+    @Test
+    void doesNotAuditTheQueryWhenTheTouristReadsItsOwnRecommendations() {
+        mockCandidates(TOURIST, null, null);
+
+        service.handle(request(TOURIST, 20)).block();
+
+        assertThat(metrics.adminCrossTouristAccessCount()).isZero();
     }
 
     @Test

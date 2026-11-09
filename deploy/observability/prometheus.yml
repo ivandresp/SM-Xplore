@@ -20,6 +20,15 @@
 #   - Si se ejecuta fuera del compose (por ejemplo en el host), cambia los
 #     targets y rule_files a rutas locales; esta configuracion es la de produccion.
 #
+# Metricas de los microservicios (fase BAJA de seguridad):
+#   - ms-01, ms-02, ms-03 y ms-05 ya NO exponen /actuator/metrics ni /actuator/prometheus
+#     sin credenciales (MS01-14, MS02-04, MS03-09, MS05-07). Este scrape solo funciona
+#     en esos servicios si se habilita el acceso de metricas por red interna o se
+#     configura un token de operacion. Hasta entonces Prometheus las vera con 401/403.
+#   - ms-04 mantiene publico el actuator dentro de la red de Compose.
+#   - El objetivo de estas alertas es el stack de produccion, que aun no se despliega;
+#     si se habilita, ver deploy/prod/README.md (seccion 12).
+#
 # Alertmanager no forma parte de esta entrega: las reglas se evaluan y se ven en
 # la pestana Alerts de Prometheus.
 

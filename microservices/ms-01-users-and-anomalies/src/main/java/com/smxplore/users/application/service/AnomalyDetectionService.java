@@ -12,7 +12,10 @@ import com.smxplore.users.domain.model.AnomalyStatus;
 import com.smxplore.users.domain.model.AnomalyThreshold;
 import com.smxplore.users.domain.model.AnomalyType;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumMap;
+import java.util.Map;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -21,7 +24,12 @@ import reactor.core.publisher.Mono;
  *
  * <p>Las señales se mantienen en memoria por instancia; el umbral y la anomalía resultante sí se persisten en
  * PostgreSQL. Para no inundar el panel, no se crea otra anomalía del mismo tipo mientras la anterior siga pendiente o
- * dentro de su ventana de observación.
+ * dentro de su ventana de observación, y además se aplica un enfriamiento mínimo (MS01-24) entre creaciones del mismo
+ * tipo.
+ *
+ * <p>MS01-24 (riesgo residual documentado): las señales son contadores globales por instancia, así que un atacante
+ * todavía puede provocar como máximo una anomalía pendiente por tipo y ventana de enfriamiento; la detección no bloquea
+ * tráfico por sí sola.
  */
 public final class AnomalyDetectionService implements DetectAnomaliesUseCase {
 
@@ -31,6 +39,8 @@ public final class AnomalyDetectionService implements DetectAnomaliesUseCase {
     private final RequestRateSignal requestRate;
     private final ServiceHealthSignal health;
     private final Clock clock;
+    private final Duration minInterval;
+    private final Map<AnomalyType, Instant> lastCreated = new EnumMap<>(AnomalyType.class);
 
     public AnomalyDetectionService(
             AnomalyRepository anomalies,
@@ -38,13 +48,15 @@ public final class AnomalyDetectionService implements DetectAnomaliesUseCase {
             FailedLoginSignal failedLogins,
             RequestRateSignal requestRate,
             ServiceHealthSignal health,
-            Clock clock) {
+            Clock clock,
+            Duration minInterval) {
         this.anomalies = anomalies;
         this.thresholds = thresholds;
         this.failedLogins = failedLogins;
         this.requestRate = requestRate;
         this.health = health;
         this.clock = clock;
+        this.minInterval = minInterval;
     }
 
     @Override
@@ -91,6 +103,9 @@ public final class AnomalyDetectionService implements DetectAnomaliesUseCase {
     }
 
     private Mono<Anomaly> recordIfNeeded(AnomalyThreshold threshold, String description, Instant now) {
+        if (isWithinCooldown(threshold.type(), now)) {
+            return Mono.empty();
+        }
         return anomalies
                 .findLatestByType(threshold.type())
                 .map(latest -> isRecent(latest, threshold, now))
@@ -99,8 +114,23 @@ public final class AnomalyDetectionService implements DetectAnomaliesUseCase {
                     if (recent) {
                         return Mono.<Anomaly>empty();
                     }
-                    return anomalies.save(Anomaly.detect(threshold.type(), threshold.severity(), description, now));
+                    return anomalies
+                            .save(Anomaly.detect(threshold.type(), threshold.severity(), description, now))
+                            .doOnNext(anomaly -> markCreated(threshold.type(), now));
                 });
+    }
+
+    /**
+     * MS01-24: limita la creación de anomalías del mismo tipo para evitar fatiga de alertas y que un atacante pueda
+     * inundar el panel incluso resolviendo la anomalía anterior.
+     */
+    private boolean isWithinCooldown(AnomalyType type, Instant now) {
+        Instant last = lastCreated.get(type);
+        return last != null && now.isBefore(last.plus(minInterval));
+    }
+
+    private synchronized void markCreated(AnomalyType type, Instant now) {
+        lastCreated.put(type, now);
     }
 
     private static boolean isRecent(Anomaly latest, AnomalyThreshold threshold, Instant now) {

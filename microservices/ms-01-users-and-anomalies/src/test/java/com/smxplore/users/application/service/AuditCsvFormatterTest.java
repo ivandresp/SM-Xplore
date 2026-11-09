@@ -36,6 +36,22 @@ class AuditCsvFormatterTest {
     }
 
     @Test
+    void neutralizesCellsThatCouldBeInterpretedAsFormulas() {
+        AuditEntry entry = AuditEntry.create(
+                UUID.randomUUID(),
+                "admin@test.local",
+                Role.ADMIN,
+                AuditAction.ANOMALIA_RESUELTA,
+                null,
+                Map.of("motivo", "=cmd|' /C calc'!A0"),
+                Instant.parse("2026-10-27T10:00:00Z"));
+
+        String csv = AuditCsvFormatter.format(List.of(entry));
+
+        assertThat(csv).contains("motivo='=cmd");
+    }
+
+    @Test
     void formatsEmptyReportWithHeaderOnly() {
         String csv = AuditCsvFormatter.format(List.of());
 

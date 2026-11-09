@@ -6,6 +6,7 @@ import com.smxplore.recommendations.domain.model.preference.Preference;
 import com.smxplore.recommendations.domain.model.preference.PreferenceSource;
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -17,11 +18,13 @@ import java.util.UUID;
 public class AddPreferenceService implements AddPreferenceUseCase {
 
     private final RecommendationGraphPort graphPort;
+    private final RecommendationQuotaPort quotaPort;
     private final Clock clock;
 
     @Override
     public Mono<Preference> handle(UUID touristId, UUID categoryId, String language) {
         validateCommand(touristId, categoryId);
+        quotaPort.checkPreference(touristId);
         Instant now = clock.instant();
         return addPreference(touristId, categoryId, language, now);
     }

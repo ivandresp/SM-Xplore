@@ -9,7 +9,10 @@ import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemTyp
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
+import com.smxplore.activitiesevents.domain.model.event.Event;
+import com.smxplore.activitiesevents.domain.model.event.EventStatus;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
@@ -37,6 +40,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 @WebFluxTest(controllers = ReservationController.class)
@@ -87,6 +92,9 @@ class ReservationControllerTest {
 
     @MockitoBean
     private EventRepositoryPort eventRepository;
+
+    @MockitoBean
+    private SiteCatalogPort siteCatalog;
 
     @MockitoBean
     private ConsultManagerReservationsUseCase consultManagerReservationsUseCase;
@@ -223,6 +231,36 @@ class ReservationControllerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$[0].notes").doesNotExist();
+    }
+
+    @Test
+    void eventItemListingUsesTheCurrentSiteManager() {
+        var itemId = UUID.randomUUID();
+        var managerId = UUID.randomUUID();
+        var siteId = UUID.randomUUID();
+        var startsAt = Instant.now().plusSeconds(3600);
+        var event = Event.builder()
+                .id(itemId)
+                .siteId(siteId)
+                .managerId(managerId)
+                .name("Kayak")
+                .category("Nautica")
+                .status(EventStatus.DRAFT)
+                .price(new BigDecimal("10000.00"))
+                .maxCapacity(5)
+                .startsAt(startsAt)
+                .endsAt(startsAt.plusSeconds(3600))
+                .build();
+        given(eventRepository.findById(itemId)).willReturn(Mono.just(event));
+        given(siteCatalog.findById(eq(siteId), anyString())).willReturn(Mono.just(
+                new SiteCatalogPort.SiteSnapshot(siteId, UUID.randomUUID(), "Bahia")));
+        clientFor(managerId, "DESTINATION_MANAGER").get()
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/reservations/by-item")
+                        .queryParam("itemType", "EVENT")
+                        .queryParam("itemId", itemId)
+                        .build())
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     private Reservation reservation() {

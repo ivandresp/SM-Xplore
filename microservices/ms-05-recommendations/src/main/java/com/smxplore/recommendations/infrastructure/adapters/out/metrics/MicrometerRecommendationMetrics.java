@@ -21,6 +21,7 @@ public class MicrometerRecommendationMetrics implements RecommendationMetricsPor
     static final String DIVERSITY_CATEGORIES = "recommendations.diversity.categories";
     static final String DIVERSITY_SITES = "recommendations.diversity.sites";
     static final String ITEMS = "recommendations.items";
+    static final String ADMIN_ACCESS = "recommendations.admin.access";
 
     private final Map<RecommendationSource, Counter> servedBySource = new EnumMap<>(RecommendationSource.class);
     private final DistributionSummary items;
@@ -28,6 +29,7 @@ public class MicrometerRecommendationMetrics implements RecommendationMetricsPor
     private final DistributionSummary sites;
     private Counter cacheHits;
     private Counter cacheMisses;
+    private Counter adminCrossTouristAccess;
 
     public MicrometerRecommendationMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -81,5 +83,15 @@ public class MicrometerRecommendationMetrics implements RecommendationMetricsPor
     public void diversity(int distinctCategories, int distinctSites) {
         categories.record(distinctCategories);
         sites.record(distinctSites);
+    }
+
+    @Override
+    public void adminCrossTouristAccess() {
+        if (adminCrossTouristAccess == null) {
+            adminCrossTouristAccess = Counter.builder(ADMIN_ACCESS)
+                    .description("Lecturas de recomendaciones de otro turista realizadas por un administrador")
+                    .register(registry);
+        }
+        adminCrossTouristAccess.increment();
     }
 }

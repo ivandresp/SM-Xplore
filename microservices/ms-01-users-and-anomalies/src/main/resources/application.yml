@@ -1,8 +1,6 @@
 spring:
   application:
     name: ms-01-users-and-anomalies
-  profiles:
-    default: dev
   r2dbc:
     url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/smxplore_users}
     username: ${DB_USERNAME:smxplore}
@@ -30,27 +28,34 @@ spring:
 server:
   port: ${SERVER_PORT:8081}
 
+# Configuración base fail-closed: la imagen que se despliega no trae valores de desarrollo.
+# Los valores cómodos para trabajar en local viven en application-dev.yml (perfil "dev").
 management:
   endpoints:
     web:
       exposure:
-        # metrics/prometheus para el scraping; en produccion deben aislarse por red.
-        include: health,info,metrics,prometheus
+        # Solo lo mínimo; métricas y prometheus se habilitan explícitamente por perfil.
+        include: health,info
 
 springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
   swagger-ui:
-    path: /swagger-ui.html
+    enabled: ${SPRINGDOC_ENABLED:false}
 
 app:
   security:
     jwt:
       issuer: ${JWT_ISSUER:sm-xplore-ms-01}
       audience: ${JWT_AUDIENCE:sm-xplore-services}
-      ttl: ${JWT_TTL:PT60M}
+      # MS01-23: TTL corto por defecto (30 min). No hay refresh token; la revocación por `ver` es inmediata solo en
+      # ms-01 y los demás servicios deben validar `ver` contra /api/v1/users/me/auth-version para acortar la ventana.
+      ttl: ${JWT_TTL:PT30M}
       private-key: ${JWT_PRIVATE_KEY:}
       public-key: ${JWT_PUBLIC_KEY:}
       key-store-path: ${JWT_KEY_STORE:.local/jwt/keys.pem}
       allow-generated-keys: ${JWT_ALLOW_GENERATED_KEYS:false}
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:false}
     password-reset:
       ttl: ${PASSWORD_RESET_TTL:PT30M}
     account-invitation:
@@ -58,32 +63,46 @@ app:
     rate-limit:
       enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
       requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:30}
+      account-max-attempts: ${AUTH_ACCOUNT_MAX_ATTEMPTS:10}
+      account-window: ${AUTH_ACCOUNT_WINDOW:PT15M}
+      # Proxies de confianza: solo desde estas redes se acepta X-Real-IP como IP del cliente.
+      trusted-proxies: ${AUTH_TRUSTED_PROXIES:127.0.0.1/32,::1/128,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
     lockout:
       enabled: ${LOGIN_LOCKOUT_ENABLED:true}
       max-attempts: ${LOGIN_LOCKOUT_MAX_ATTEMPTS:5}
       window: ${LOGIN_LOCKOUT_WINDOW:PT15M}
       duration: ${LOGIN_LOCKOUT_DURATION:PT15M}
     mfa:
-      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:false}
+      required-for-admins: ${MFA_REQUIRED_FOR_ADMINS:true}
       challenge-ttl: ${MFA_CHALLENGE_TTL:PT5M}
       issuer: ${MFA_ISSUER:SM-Xplore}
       secret-key: ${MFA_SECRET_KEY:}
     headers:
-      hsts-enabled: ${SECURITY_HSTS_ENABLED:false}
+      hsts-enabled: ${SECURITY_HSTS_ENABLED:true}
       hsts-max-age-days: ${SECURITY_HSTS_MAX_AGE_DAYS:365}
+    actuator:
+      # MS01-14: métricas y Prometheus requieren JWT; solo se publican sin autenticación si se activa esta bandera.
+      public-metrics: ${ACTUATOR_PUBLIC_METRICS:false}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
     reset-password-path: ${FRONTEND_RESET_PASSWORD_PATH:/reset-password}
+    # Ruta del frontend que confirma el correo (MS01-18).
+    verify-email-path: ${FRONTEND_VERIFY_EMAIL_PATH:/verificar-correo}
+  # Verificación de correo (MS01-18): activa por defecto para cerrar el registro a correos sin comprobar.
+  registration:
+    email-verification:
+      enabled: ${EMAIL_VERIFICATION_ENABLED:true}
+      token-ttl: ${EMAIL_VERIFICATION_TTL:PT24H}
   bootstrap-admin:
-    enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}
-    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@smxplore.local}
-    password: ${BOOTSTRAP_ADMIN_PASSWORD:ChangeMe123!}
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
     full-name: ${BOOTSTRAP_ADMIN_NAME:Administrador SM-Xplore}
   reviews:
     index-initialization:
-      enabled: ${REVIEW_INDEX_INIT:true}
+      enabled: ${REVIEW_INDEX_INIT:false}
     ai-filter:
       enabled: ${REVIEW_AI_ENABLED:false}
       base-url: ${LITTLELLM_URL:}
@@ -96,15 +115,27 @@ app:
       threshold: ${REVIEW_AI_THRESHOLD:0.7}
       temperature: ${REVIEW_AI_TEMPERATURE:0.0}
       action: ${REVIEW_AI_ACTION:PENDING_REVIEW}
-      fail-open: ${REVIEW_AI_FAIL_OPEN:true}
+      fail-open: ${REVIEW_AI_FAIL_OPEN:false}
       json-response-format: ${REVIEW_AI_JSON_RESPONSE_FORMAT:false}
+    # MS01-22: cuota por turista para reportar reseñas (además del límite por IP de /api/v1/auth/**).
+    report-quota:
+      max-per-window: ${REVIEW_REPORT_MAX_PER_WINDOW:20}
+      window: ${REVIEW_REPORT_WINDOW:PT24H}
   anomalies:
     detection:
       enabled: ${ANOMALY_DETECTION_ENABLED:true}
       interval-ms: ${ANOMALY_DETECTION_INTERVAL_MS:30000}
+      # MS01-24: enfriamiento mínimo entre anomalías del mismo tipo (mitiga fatiga de alertas).
+      min-interval: ${ANOMALY_MIN_INTERVAL:PT10M}
   internal:
-    # Clave compartida para /internal/** (P2-9). Vacía = endpoint deshabilitado (responde 503).
+    # Secreto maestro para firmar llamadas servicio-a-servicio (MS01-11). Vacío = endpoint deshabilitado (503).
     api-key: ${INTERNAL_API_KEY:}
+    # Lista blanca de servicios (vacía = se acepta cualquier servicio bien firmado).
+    allowed-services: ${INTERNAL_ALLOWED_SERVICES:}
+    # Tolerancia de reloj entre el emisor y este servicio para el timestamp de la firma.
+    max-clock-skew: ${INTERNAL_MAX_CLOCK_SKEW:PT5M}
+    # Límite de solicitudes por servicio y minuto (además del límite por IP).
+    rate-limit-per-minute: ${INTERNAL_RATE_LIMIT_PER_MINUTE:60}
   retention:
     enabled: ${RETENTION_ENABLED:true}
     auth-artifacts-days: ${RETENTION_AUTH_ARTIFACTS_DAYS:30}

@@ -2,6 +2,7 @@ package com.smxplore.recommendations.infrastructure.config;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.smxplore.recommendations.infrastructure.security.JwtIdentityResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -101,10 +102,26 @@ class AuthVersionValidatorTest {
         assertThat(validator.validate(jwt).block()).isSameAs(jwt);
     }
 
+    @Test
+    void acceptsATokenThatOnlyCarriesTheConfiguredUserIdClaim() throws IOException {
+        startServer(1, new AtomicInteger());
+        AuthVersionValidator validator = validator(properties(true, baseUrl()), false);
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .claim("userId", USER_ID.toString())
+                .claim("role", "TOURIST")
+                .claim("mfa", true)
+                .claim("ver", 1L)
+                .build();
+
+        assertThat(validator.validate(jwt).block()).isSameAs(jwt);
+    }
+
     private AuthVersionValidator validator(AuthVersionProperties properties, boolean requireAdminMfa) {
         JwtProperties jwtProperties = new JwtProperties();
         jwtProperties.setRoleClaim("role");
-        return new AuthVersionValidator(properties, jwtProperties, requireAdminMfa);
+        return new AuthVersionValidator(
+                properties, jwtProperties, new JwtIdentityResolver(jwtProperties), requireAdminMfa);
     }
 
     private AuthVersionProperties properties(boolean enabled, String baseUrl) {

@@ -168,7 +168,8 @@ class AdminUserFlowTest {
 
         HttpStatusCode blocked = changeStatus(adminToken, userId, "BLOQUEADO", "Incumplimiento de políticas");
         assertThat(blocked).isEqualTo(HttpStatus.NO_CONTENT);
-        assertThat(loginStatus("bruno.block@example.com", PASSWORD)).isEqualTo(HttpStatus.FORBIDDEN);
+        // MS01-04: el login de una cuenta bloqueada responde igual que unas credenciales incorrectas.
+        assertThat(loginStatus("bruno.block@example.com", PASSWORD)).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         assertThat(changeStatus(adminToken, userId, "SUSPENDIDO", null)).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(changeStatus(adminToken, userId, "ACTIVO", null)).isEqualTo(HttpStatus.NO_CONTENT);

@@ -12,11 +12,15 @@ import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.Usuario;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,9 +40,9 @@ import reactor.core.publisher.Mono;
  * Pruebas del endpoint interno contra la cadena de seguridad real, sin Docker: se levanta el contexto con un
  * repositorio de usuarios de prueba y el perfil {@code test} (Flyway y DataSource JDBC desactivados).
  *
- * <p>Comprueban que la ruta responde sin JWT cuando la clave compartida coincide, que sin clave o con una
- * clave distinta devuelve 403, que un identificador inexistente devuelve 404 y que el resto de rutas
- * {@code /internal/**} siguen cerradas (401).
+ * <p>MS01-11: la cabecera estática {@code X-Internal-Api-Key} se sustituyó por una firma HMAC por servicio. Se
+ * comprueba que sin firma o con firma inválida la ruta responde 403, que un identificador inexistente devuelve 404 y
+ * que el resto de rutas {@code /internal/**} siguen cerradas (401).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -46,11 +50,12 @@ import reactor.core.publisher.Mono;
         properties = {
             "spring.flyway.enabled=false",
             "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
-            "app.internal.api-key=clave-interna-de-prueba"
+            "app.internal.api-key=clave-maestra-de-prueba"
         })
 class InternalContactSecurityTest {
 
-    private static final String API_KEY = "clave-interna-de-prueba";
+    private static final String MASTER_KEY = "clave-maestra-de-prueba";
+    private static final String SERVICE = "ms-03-reservations";
     private static final UUID USER_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
@@ -66,8 +71,9 @@ class InternalContactSecurityTest {
     }
 
     @Test
-    void servesTheContactWithoutJwtWhenTheInternalKeyMatches() {
-        ResponseEntity<Map> response = request(contactPath(USER_ID), API_KEY);
+    void servesTheContactWithoutJwtWhenTheSignatureIsValid() {
+        String path = contactPath(USER_ID);
+        ResponseEntity<Map> response = request(path, SERVICE, MASTER_KEY);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody())
@@ -80,24 +86,28 @@ class InternalContactSecurityTest {
     }
 
     @Test
-    void rejectsRequestsWithoutTheInternalKey() {
-        ResponseEntity<Map> response = request(contactPath(USER_ID), null);
+    void rejectsRequestsWithoutSignature() {
+        ResponseEntity<Map> response = client.get()
+                .uri(contactPath(USER_ID))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response2) -> {})
+                .toEntity(Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).containsEntry("code", "INVALID_INTERNAL_API_KEY");
+        assertThat(response.getBody()).containsEntry("code", "INVALID_INTERNAL_SERVICE");
     }
 
     @Test
-    void rejectsRequestsWithAWrongInternalKey() {
-        ResponseEntity<Map> response = request(contactPath(USER_ID), "otra-clave");
+    void rejectsRequestsSignedWithTheWrongKey() {
+        ResponseEntity<Map> response = request(contactPath(USER_ID), SERVICE, "otra-clave");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).containsEntry("code", "INVALID_INTERNAL_API_KEY");
+        assertThat(response.getBody()).containsEntry("code", "INVALID_INTERNAL_SIGNATURE");
     }
 
     @Test
     void returnsNotFoundForAnUnknownUser() {
-        ResponseEntity<Map> response = request(contactPath(UUID.randomUUID()), API_KEY);
+        ResponseEntity<Map> response = request(contactPath(UUID.randomUUID()), SERVICE, MASTER_KEY);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).containsEntry("code", "USER_NOT_FOUND");
@@ -106,7 +116,7 @@ class InternalContactSecurityTest {
     @Test
     void keepsTheRestOfInternalRoutesClosed() {
         for (String path : List.of("/internal/users/" + USER_ID, "/internal/users/" + USER_ID + "/something-else")) {
-            ResponseEntity<Map> response = request(path, API_KEY);
+            ResponseEntity<Map> response = request(path, SERVICE, MASTER_KEY);
 
             assertThat(response.getStatusCode())
                     .as("La ruta %s no debe quedar abierta sin JWT", path)
@@ -115,17 +125,35 @@ class InternalContactSecurityTest {
         }
     }
 
-    private ResponseEntity<Map> request(String uri, String apiKey) {
+    private ResponseEntity<Map> request(String path, String service, String masterKey) {
+        long timestamp = Instant.now().getEpochSecond();
+        String signature = signature(masterKey, service, "GET", path, timestamp);
         return client.get()
-                .uri(uri)
+                .uri(path)
                 .headers(headers -> {
-                    if (apiKey != null) {
-                        headers.set(InternalContactController.API_KEY_HEADER, apiKey);
-                    }
+                    headers.set(InternalContactController.SERVICE_HEADER, service);
+                    headers.set(InternalContactController.TIMESTAMP_HEADER, String.valueOf(timestamp));
+                    headers.set(InternalContactController.SIGNATURE_HEADER, signature);
                 })
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, response) -> {})
                 .toEntity(Map.class);
+    }
+
+    private static String signature(String masterKey, String service, String method, String path, long timestamp) {
+        byte[] serviceKey = hmac(masterKey.getBytes(StandardCharsets.UTF_8), service.getBytes(StandardCharsets.UTF_8));
+        String signingString = service + "\n" + method + "\n" + path + "\n" + timestamp;
+        return HexFormat.of().formatHex(hmac(serviceKey, signingString.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static byte[] hmac(byte[] key, byte[] message) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            return mac.doFinal(message);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private static String contactPath(UUID userId) {
@@ -190,6 +218,11 @@ class InternalContactSecurityTest {
         @Override
         public Mono<Long> countActiveByRole(Role role) {
             return Mono.just(0L);
+        }
+
+        @Override
+        public Mono<Long> countAll() {
+            return Mono.just(current == null ? 0L : 1L);
         }
 
         @Override

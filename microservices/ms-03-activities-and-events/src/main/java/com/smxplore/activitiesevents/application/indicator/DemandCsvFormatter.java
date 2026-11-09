@@ -17,6 +17,13 @@ public final class DemandCsvFormatter {
 
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+    /**
+     * Prefijos que Excel y LibreOffice interpretan como formula en una celda. Los nombres del catalogo
+     * los escriben guias y gestoras, asi que un nombre como {@code =HYPERLINK(...)} se ejecutaria al
+     * abrir el informe; tambien se neutralizan tabulador y retorno para que no partan la celda.
+     */
+    private static final String FORMULA_PREFIXES = "=+-@\t\r";
+
     private DemandCsvFormatter() {
     }
 
@@ -143,10 +150,22 @@ public final class DemandCsvFormatter {
         if (value == null) {
             return "";
         }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
+        String cell = neutralizeFormula(value);
+        if (cell.contains(",") || cell.contains("\"") || cell.contains("\n")) {
+            return "\"" + cell.replace("\"", "\"\"") + "\"";
         }
-        return value;
+        return cell;
+    }
+
+    /**
+     * Antepone un apostrofo para que la hoja trate el contenido como texto: es el mecanismo que usan
+     * Excel y LibreOffice para forzar texto sin alterar el valor visible.
+     */
+    private static String neutralizeFormula(String value) {
+        if (value.isEmpty() || FORMULA_PREFIXES.indexOf(value.charAt(0)) < 0) {
+            return value;
+        }
+        return "'" + value;
     }
 
     private static String money(BigDecimal value) {

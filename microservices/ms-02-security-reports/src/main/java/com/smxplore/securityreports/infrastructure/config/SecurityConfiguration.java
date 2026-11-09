@@ -41,6 +41,14 @@ import java.util.List;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
 
+    /**
+     * Unico tramo publico del actuator: health e info. Las metricas y Prometheus ya no se exponen sin JWT
+     * (MS02-04); si se habilitan en local/dev, el filtro de seguridad exige token. Swagger UI queda publico pero
+     * deshabilitado por defecto fuera de local/dev.
+     */
+    public static final List<String> PUBLIC_ACTUATOR_PATHS =
+            List.of("/actuator/health", "/actuator/health/**", "/actuator/info");
+
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
                                                          CorsConfigurationSource corsConfigurationSource,
@@ -53,9 +61,8 @@ public class SecurityConfiguration {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
-                        // Public: CORS preflight, authentication, API docs and health
-                        .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
-                                "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        // Publico: CORS preflight, health/info y documentacion (deshabilitada por defecto)
+                        .pathMatchers(PUBLIC_ACTUATOR_PATHS.toArray(String[]::new))
                         .permitAll()
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**")
                         .permitAll()

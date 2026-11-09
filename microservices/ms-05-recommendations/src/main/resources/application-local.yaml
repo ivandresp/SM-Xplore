@@ -4,6 +4,24 @@ app:
     enabled: ${SEED_ENABLED:false}
   neo4j:
     initialize-schema: true
+  security:
+    auth-version:
+      # MS05-06: la relajacion solo existe aqui (desarrollo local sin ms-01 disponible).
+      enabled: false
+    # MS05-07: documentacion y metricas solo se abren en desarrollo local.
+    docs-public: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
 
 logging:
   level:

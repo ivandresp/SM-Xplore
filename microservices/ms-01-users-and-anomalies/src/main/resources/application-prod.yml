@@ -12,6 +12,9 @@ app:
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:false}
+    ai-filter:
+      # MS01-09: en producción, si el filtro de IA falla o responde algo inválido la reseña NO se publica.
+      fail-open: false
 
 springdoc:
   api-docs:
@@ -23,8 +26,9 @@ management:
   endpoints:
     web:
       exposure:
-        # En produccion solo el scrape: /actuator/metrics/{name} expone nombres y tags internos.
-        include: health,info,prometheus
+        # MS01-14: en producción solo health e info. Prometheus queda fuera hasta que exista un scrape autenticado;
+        # el gateway ya bloquea /actuator/** desde el exterior.
+        include: health,info
   endpoint:
     health:
       show-details: never
@@ -33,7 +37,8 @@ management:
 
 server:
   shutdown: graceful
-  forward-headers-strategy: framework
+  # No reescribir la IP del cliente a partir de cabeceras reenviadas: nginx es el único borde de confianza.
+  forward-headers-strategy: none
 
 spring:
   lifecycle:

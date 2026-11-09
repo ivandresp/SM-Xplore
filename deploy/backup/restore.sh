@@ -26,6 +26,18 @@
 # Variables de conexion: PG_USER, PG_PASSWORD, MONGO_REPLICA_SET, MONGO_TLS,
 # MONGO_CA_FILE, MONGO_ROOT_USER/PASSWORD, MONGO_OPLOG_REPLAY, NEO4J_DATABASE,
 # NEO4J_IMAGE.
+#
+# Backups cifrados (PLAT-07): los que genera backup.sh estan cifrados con age o
+# gpg. Para restaurarlos hay que aportar la clave privada:
+#   AGE_IDENTITY_FILE     identidad age (por defecto ~/.config/age/keys.txt).
+#   GPG_PASSPHRASE_FILE   passphrase gpg si la clave no usa agente.
+#   BACKUP_HMAC_KEY_FILE  clave HMAC para verificar la firma de los checksums.
+# El backup se descifra a un directorio temporal con permisos 0700 que se borra
+# al terminar. --skip-checksums exige ALLOW_UNVERIFIED=1.
+#
+# Procedencia (PLAT-18): el manifest del backup declara el proyecto Compose y el
+# host donde se tomo. Restaurar sobre otro proyecto aborta; si es intencionado,
+# exporta ALLOW_OTHER_PROJECT=1.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -57,6 +69,14 @@ MONGO_ROOT_PASSWORD="${MONGO_ROOT_PASSWORD:-}"
 MONGO_OPLOG_REPLAY="${MONGO_OPLOG_REPLAY:-true}"
 NEO4J_DATABASE="${NEO4J_DATABASE:-neo4j}"
 NEO4J_IMAGE="${NEO4J_IMAGE:-}"
+
+# PLAT-07: los backups vienen cifrados (age por defecto). Para restaurar hay que
+# descifrarlos a un directorio temporal que se borra al terminar.
+AGE_IDENTITY_FILE="${AGE_IDENTITY_FILE:-}"
+GPG_PASSPHRASE_FILE="${GPG_PASSPHRASE_FILE:-}"
+BACKUP_HMAC_KEY_FILE="${BACKUP_HMAC_KEY_FILE:-}"
+ALLOW_UNVERIFIED="${ALLOW_UNVERIFIED:-0}"
+WORK_DIR=""
 
 log() { printf '[restore] %s\n' "$*"; }
 warn() { printf '[restore][AVISO] %s\n' "$*" >&2; }
@@ -154,6 +174,24 @@ find_service_container() {
 PROJECT="$(detect_project)"
 log "proyecto Compose: ${PROJECT}"
 
+# --- Procedencia del backup (PLAT-18) ---------------------------------------
+# El manifest dice de que proyecto y host salio el backup. Restaurar el backup
+# de otro stack (p. ej. produccion sobre desarrollo) sobrescribe datos con un
+# esquema distinto sin avisar; exigimos coincidencia salvo override explicito.
+MANIFEST_PROJECT="$(sed -n 's/^compose_project=//p' "${BACKUP_DIR}/manifest.txt" | head -n 1)"
+MANIFEST_HOST="$(sed -n 's/^host=//p' "${BACKUP_DIR}/manifest.txt" | head -n 1)"
+CURRENT_HOST="$(hostname 2>/dev/null || echo desconocido)"
+if [[ -n "${MANIFEST_PROJECT}" && "${MANIFEST_PROJECT}" != "${PROJECT}" ]]; then
+  if [[ "${ALLOW_OTHER_PROJECT:-0}" = "1" ]]; then
+    warn "el backup es del proyecto '${MANIFEST_PROJECT}' y el stack activo es '${PROJECT}' (ALLOW_OTHER_PROJECT=1)"
+  else
+    die "el backup es del proyecto '${MANIFEST_PROJECT}' y el stack activo es '${PROJECT}'; exporta ALLOW_OTHER_PROJECT=1 solo si restauras a proposito en otro entorno"
+  fi
+fi
+if [[ -n "${MANIFEST_HOST}" && "${MANIFEST_HOST}" != "${CURRENT_HOST}" ]]; then
+  warn "el backup se tomo en el host '${MANIFEST_HOST}' y este host es '${CURRENT_HOST}'"
+fi
+
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-$(find_service_container postgres || true)}"
 MONGO_CONTAINER="${MONGO_CONTAINER:-$(find_service_container mongo1 mongo || true)}"
 NEO4J_CONTAINER="${NEO4J_CONTAINER:-$(find_service_container neo4j || true)}"
@@ -163,18 +201,82 @@ NEO4J_CONTAINER="${NEO4J_CONTAINER:-$(find_service_container neo4j || true)}"
 [[ -n "${NEO4J_CONTAINER}" ]] || die "no se encontro el contenedor de Neo4j"
 log "contenedores: postgres=${POSTGRES_CONTAINER} mongo=${MONGO_CONTAINER} neo4j=${NEO4J_CONTAINER}"
 
-# --- Checksums --------------------------------------------------------------
+# --- Checksums y firma (PLAT-07) --------------------------------------------
+if [[ "${CHECK_CHECKSUMS}" -eq 0 ]]; then
+  [[ "${ALLOW_UNVERIFIED}" = "1" ]] || die "--skip-checksums sobreescribe datos sin verificar integridad; exporta ALLOW_UNVERIFIED=1 solo si el backup se valido por otro medio"
+  warn "validacion de checksums omitida por --skip-checksums"
+fi
+
 if [[ "${CHECK_CHECKSUMS}" -eq 1 && -f "${BACKUP_DIR}/checksums.sha256" ]]; then
   log "validando checksums.sha256"
   if command -v sha256sum >/dev/null 2>&1; then
-    ( cd "${BACKUP_DIR}" && sha256sum -c checksums.sha256 --quiet ) || die "checksums invalidos; backup corrupto (usa --skip-checksums si sabes lo que haces)"
+    ( cd "${BACKUP_DIR}" && sha256sum -c checksums.sha256 --quiet ) || die "checksums invalidos; backup corrupto"
   elif command -v shasum >/dev/null 2>&1; then
     ( cd "${BACKUP_DIR}" && shasum -a 256 -c checksums.sha256 ) || die "checksums invalidos; backup corrupto"
   else
     warn "no hay sha256sum/shasum en el host; se omite la validacion de checksums"
   fi
+fi
+
+# La firma HMAC demuestra autenticidad: sin ella, quien pueda escribir en el
+# directorio puede reescribir dumps y recalcular los checksums.
+if [[ -f "${BACKUP_DIR}/checksums.sha256.hmac" ]]; then
+  if [[ -z "${BACKUP_HMAC_KEY_FILE}" ]]; then
+    warn "el backup esta firmado (checksums.sha256.hmac) pero no hay BACKUP_HMAC_KEY_FILE; no se puede verificar la firma"
+  else
+    command -v openssl >/dev/null 2>&1 || die "openssl no esta en PATH; es necesario para verificar la firma"
+    expected="$(tr -d ' \r\n' < "${BACKUP_DIR}/checksums.sha256.hmac")"
+    actual="$( cd "${BACKUP_DIR}" && openssl dgst -sha256 \
+      -hmac "$(cat "${BACKUP_HMAC_KEY_FILE}")" checksums.sha256 | sed 's/^.*= //' | tr -d ' \r\n' )"
+    [[ "${expected}" = "${actual}" ]] || die "firma HMAC invalida: el respaldo fue alterado o la clave no corresponde"
+    log "firma HMAC valida"
+  fi
+fi
+
+# --- Descifrado a un directorio temporal (PLAT-07) --------------------------
+ENC_FILES="$(find "${BACKUP_DIR}" -type f \( -name '*.age' -o -name '*.gpg' \) -print 2>/dev/null | head -n 1 || true)"
+if [[ -n "${ENC_FILES}" ]]; then
+  case "${ENC_FILES}" in
+    *.age)
+      command -v age >/dev/null 2>&1 || die "el backup esta cifrado con age y 'age' no esta en PATH"
+      [[ -n "${AGE_IDENTITY_FILE}" ]] || die "define AGE_IDENTITY_FILE con la identidad age (age-keygen -o ...) para descifrar"
+      [[ -r "${AGE_IDENTITY_FILE}" ]] || die "AGE_IDENTITY_FILE no es legible: ${AGE_IDENTITY_FILE}"
+      ;;
+    *.gpg)
+      command -v gpg >/dev/null 2>&1 || die "el backup esta cifrado con gpg y 'gpg' no esta en PATH"
+      ;;
+  esac
+
+  log "descifrando el backup a un directorio temporal"
+  WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smxplore-restore.XXXXXX")"
+  chmod 0700 "${WORK_DIR}"
+  while IFS= read -r -d '' f; do
+    rel="${f#"${BACKUP_DIR}"/}"
+    case "${rel}" in
+      *.age) out="${WORK_DIR}/${rel%.age}" ;;
+      *.gpg) out="${WORK_DIR}/${rel%.gpg}" ;;
+      *) continue ;;
+    esac
+    mkdir -p "$(dirname "${out}")"
+    case "${rel}" in
+      *.age)
+        age --decrypt --identity "${AGE_IDENTITY_FILE}" --output "${out}" "${f}" \
+          || die "no se pudo descifrar ${rel}"
+        ;;
+      *.gpg)
+        if [[ -n "${GPG_PASSPHRASE_FILE}" ]]; then
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "${GPG_PASSPHRASE_FILE}" \
+            --output "${out}" --decrypt "${f}" || die "no se pudo descifrar ${rel}"
+        else
+          gpg --batch --yes --output "${out}" --decrypt "${f}" || die "no se pudo descifrar ${rel}"
+        fi
+        ;;
+    esac
+  done < <(find "${BACKUP_DIR}" -type f \( -name '*.age' -o -name '*.gpg' \) -print0)
+  BACKUP_DIR="${WORK_DIR}"
+  log "backup descifrado en un directorio temporal (se borra al salir)"
 else
-  [[ "${CHECK_CHECKSUMS}" -eq 0 ]] && warn "validacion de checksums omitida por --skip-checksums"
+  log "backup sin cifrar (formato anterior a PLAT-07)"
 fi
 
 FAILURES=0
@@ -183,7 +285,10 @@ FAILURES=0
 pg_exec() { # args... ; ejecuta psql/pg_restore con PGPASSWORD si aplica
   local flags=(-i)
   if [[ -n "${PG_PASSWORD}" ]]; then
-    flags+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    # PLAT-11: la password se hereda del entorno del proceso (docker exec -e VAR),
+  # no se escribe en argv (`docker exec -e VAR=valor` queda visible en `ps`).
+  export PGPASSWORD="${PG_PASSWORD}"
+  flags+=(-e PGPASSWORD)
   fi
   docker exec "${flags[@]}" "${POSTGRES_CONTAINER}" "$@"
 }
@@ -226,29 +331,62 @@ restore_postgres() {
 }
 
 # --- MongoDB ----------------------------------------------------------------
+# PLAT-11: mismo criterio que backup.sh, las credenciales no van en argv.
+MONGO_CONFIG_PATH=""
+
+mongo_config_cleanup() {
+  if [[ -n "${MONGO_CONFIG_PATH}" ]]; then
+    docker exec "${MONGO_CONTAINER}" rm -f "${MONGO_CONFIG_PATH}" >/dev/null 2>&1 || true
+    MONGO_CONFIG_PATH=""
+  fi
+}
+
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+mongo_config_yaml() {
+  printf 'uri: %s\n' "$(yaml_quote "mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}")"
+  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
+    printf 'username: %s\n' "$(yaml_quote "${MONGO_ROOT_USER}")"
+    printf 'password: %s\n' "$(yaml_quote "${MONGO_ROOT_PASSWORD}")"
+    printf 'authenticationDatabase: %s\n' "$(yaml_quote "admin")"
+  fi
+  if [[ "${MONGO_TLS}" = "true" ]]; then
+    printf 'tls: true\n'
+    printf 'tlsCAFile: %s\n' "$(yaml_quote "${MONGO_CA_FILE}")"
+  fi
+}
+
 restore_mongo() {
   local archive="${BACKUP_DIR}/mongo/mongo.archive.gz"
   [[ -f "${archive}" && -s "${archive}" ]] || { warn "no hay mongo/mongo.archive.gz en el backup"; return 1; }
 
+  if [[ "${MONGO_TLS}" = "true" && -z "${MONGO_ROOT_PASSWORD}" ]]; then
+    die "MONGO_ROOT_PASSWORD es obligatorio con MONGO_TLS=true"
+  fi
+
   log "MongoDB: restaurando archivo (--drop) en el replica set ${MONGO_REPLICA_SET}"
-  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore
-    "--uri=mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}"
-    --archive --gzip --drop)
+  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore --archive --gzip --drop)
 
   if [[ "${MONGO_OPLOG_REPLAY}" = "true" ]]; then
     cmd+=(--oplogReplay)
   fi
-  if [[ "${MONGO_TLS}" = "true" ]]; then
-    [[ -n "${MONGO_ROOT_PASSWORD}" ]] || die "MONGO_ROOT_PASSWORD es obligatorio con MONGO_TLS=true"
-    cmd+=(--tls --tlsCAFile "${MONGO_CA_FILE}")
+
+  MONGO_CONFIG_PATH="/tmp/smxplore-mongorestore-$$.yaml"
+  if ! mongo_config_yaml | docker exec -i "${MONGO_CONTAINER}" \
+    sh -c 'umask 077; cat > "$1"' sh "${MONGO_CONFIG_PATH}"; then
+    warn "no se pudo escribir la configuracion temporal de mongorestore"
+    MONGO_CONFIG_PATH=""
+    return 1
   fi
-  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
-    cmd+=(--username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" --authenticationDatabase admin)
-  fi
+  cmd+=(--config "${MONGO_CONFIG_PATH}")
 
   if "${cmd[@]}" < "${archive}"; then
+    mongo_config_cleanup
     log "MongoDB: restauracion completada"
   else
+    mongo_config_cleanup
     warn "mongorestore devolvio errores"
     return 1
   fi
@@ -263,7 +401,13 @@ neo4j_restart() {
     NEO4J_STOPPED=0
   fi
 }
-trap neo4j_restart EXIT
+cleanup_work() {
+  if [[ -n "${WORK_DIR}" && -d "${WORK_DIR}" ]]; then
+    rm -rf -- "${WORK_DIR}"
+    WORK_DIR=""
+  fi
+}
+trap 'mongo_config_cleanup; neo4j_restart; cleanup_work' EXIT
 
 restore_neo4j() {
   local dump="${BACKUP_DIR}/neo4j/${NEO4J_DATABASE}.dump"

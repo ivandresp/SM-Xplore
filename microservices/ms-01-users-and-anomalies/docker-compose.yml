@@ -56,6 +56,8 @@ services:
       mailpit:
         condition: service_started
     environment:
+      # Perfil dev: genera las llaves JWT en el volumen y relaja las guardas de desarrollo.
+      SPRING_PROFILES_ACTIVE: dev
       R2DBC_URL: r2dbc:postgresql://postgres:5432/smxplore_users
       DB_URL: jdbc:postgresql://postgres:5432/smxplore_users
       DB_USERNAME: smxplore

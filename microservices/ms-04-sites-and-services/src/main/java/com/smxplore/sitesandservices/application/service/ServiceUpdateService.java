@@ -32,6 +32,7 @@ public class ServiceUpdateService implements UpdateServiceUseCase {
                 .flatMap(existing -> access.requireServiceOwner(existing, actor))
                 .flatMap(existing -> lookup.serviceContext(
                                 service.siteId(), service.categoryId(), service.zoneId())
+                        .flatMap(context -> access.requireServiceCatalogScope(context, actor))
                         .flatMap(context -> {
                             Service updated = existing.toBuilder()
                                     .siteId(context.site().siteId())

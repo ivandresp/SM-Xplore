@@ -5,7 +5,7 @@
   "occurredAt": "2026-10-26T02:00:00Z",
   "aggregateId": "33333333-3333-3333-3333-333333333301",
   "correlationId": "7d10a1b2-c3d4-4e5f-8a9b-0c1d2e3f4a5b",
-  "producer": "ms-03",
+  "producer": "ms-03-activities-and-events",
   "payload": {
     "activityId": "33333333-3333-3333-3333-333333333301",
     "name": "Snorkel en Playa Rosa",

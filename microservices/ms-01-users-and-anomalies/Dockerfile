@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 ## Imagen de ms-01: build multi-etapa con el Gradle Wrapper y runtime JRE sin privilegios.
 
-FROM eclipse-temurin:25-jdk-noble AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:95e350ad1eb738f943e141640f7e3d797e483359a3b33c3864255bfd1ad71f8a AS build
 
 WORKDIR /workspace
 ENV GRADLE_USER_HOME=/workspace/.gradle-home
@@ -12,33 +12,39 @@ COPY gradle ./gradle
 RUN chmod +x gradlew && ./gradlew --no-daemon --console=plain help
 
 COPY src ./src
+COPY healthcheck ./healthcheck
+RUN javac -d /workspace/healthcheck/classes /workspace/healthcheck/HealthCheck.java
 RUN ./gradlew --no-daemon --console=plain bootJar \
     && JAR="$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -print -quit)" \
     && cp "$JAR" /workspace/app.jar
 
-FROM eclipse-temurin:25-jre-noble AS runtime
+FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS runtime
 
 LABEL org.opencontainers.image.title="ms-01-users-and-anomalies" \
       org.opencontainers.image.description="Identidad, reseñas y anomalías de SM-Xplore" \
       org.opencontainers.image.source="https://github.com/ivandresp/SM-Xplore"
 
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system app \
-    && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
+RUN set -eux; \
+    dpkg --purge apt 2>/dev/null || true; \
+    dpkg --purge libapt-pkg6.0t64 2>/dev/null || true; \
+    dpkg --purge libapt-pkg7.0 2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /etc/apt /var/log/apt; \
+    groupadd --system app; \
+    useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 WORKDIR /app
+COPY --from=build /workspace/healthcheck/classes /app/healthcheck
 COPY --from=build --chown=app:app /workspace/app.jar /app/app.jar
 # El perfil dev genera las llaves JWT en .local/jwt; el directorio debe ser escribible por el usuario sin privilegios.
 RUN mkdir -p /app/.local/jwt && chown -R app:app /app
 
 USER app
 EXPOSE 8081
+# Perfil explícito: la imagen sin SPRING_PROFILES_ACTIVE no debe caer en valores de desarrollo.
+ENV SPRING_PROFILES_ACTIVE=prod
 
 # 75 % de la memoria del contenedor, acceso nativo para Netty y salida limpia ante OutOfMemoryError.
 ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:MaxRAMPercentage=75", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
-    CMD curl -fsS http://127.0.0.1:8081/actuator/health || exit 1
+    CMD ["java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8081/actuator/health"]

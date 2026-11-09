@@ -1,0 +1,27 @@
+# Perfil local/dev: unico lugar donde se relajan los valores por defecto seguros.
+# Se activa de forma explicita (SPRING_PROFILES_ACTIVE=local en docker-compose).
+app:
+  security:
+    jwt:
+      allow-insecure-jwks: ${JWT_ALLOW_INSECURE_JWKS:true}
+    auth-version:
+      enabled: ${AUTH_VERSION_ENABLED:false}
+      base-url: ${MS01_BASE_URL:}
+    mfa:
+      require-admin: ${MFA_REQUIRE_ADMIN:false}
+    photos:
+      # En local no hay CDN: se acepta cualquier host y http para probar la API.
+      allow-any-host: ${PHOTO_ALLOW_ANY_HOST:true}
+      allow-http: ${PHOTO_ALLOW_HTTP:true}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_EXPOSED_ENDPOINTS:health,info,metrics,prometheus}

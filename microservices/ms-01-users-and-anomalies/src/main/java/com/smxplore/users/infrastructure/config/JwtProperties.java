@@ -13,7 +13,8 @@ public record JwtProperties(
         String privateKey,
         String publicKey,
         Path keyStorePath,
-        boolean allowGeneratedKeys) {
+        boolean allowGeneratedKeys,
+        boolean allowInsecureJwks) {
 
     public JwtProperties {
         Objects.requireNonNull(issuer, "El emisor JWT es obligatorio");

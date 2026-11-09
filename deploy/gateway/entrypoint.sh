@@ -40,7 +40,14 @@ fi
 
 if [ "${TLS_SELF_SIGNED}" = "true" ]; then
     log "generando certificado autofirmado de desarrollo para CN=${TLS_CN}"
-    mkdir -p "${CERT_DIR}"
+    # PLAT-12: el contenedor corre como usuario nginx (sin privilegios); en
+    # desarrollo compose.yaml monta /etc/nginx/certs como tmpfs escribible.
+    mkdir -p "${CERT_DIR}" 2>/dev/null || true
+    if [ ! -w "${CERT_DIR}" ]; then
+        log "ERROR: ${CERT_DIR} no es escribible por el usuario $(id -u)."
+        log "       En desarrollo, monta /etc/nginx/certs como tmpfs (ver compose.yaml)."
+        exit 1
+    fi
     rm -f "${CERT_FILE}" "${KEY_FILE}"
     openssl req -x509 -nodes -newkey rsa:2048 -days "${TLS_DAYS}" -sha256 \
         -subj "/CN=${TLS_CN}" \

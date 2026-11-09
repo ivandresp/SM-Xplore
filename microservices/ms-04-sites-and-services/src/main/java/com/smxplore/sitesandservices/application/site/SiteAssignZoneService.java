@@ -29,6 +29,7 @@ public class SiteAssignZoneService implements AssignSiteZoneUseCase {
         return lookup.site(site.siteId())
                 .flatMap(existing -> access.requireSiteOwner(existing, actor))
                 .flatMap(existing -> lookup.zone(site.zoneId())
+                        .flatMap(zone -> access.requireZoneAssignment(zone, actor))
                         .flatMap(zone -> {
                             Site updated = existing.toBuilder()
                                     .zoneId(zone.zoneId())

@@ -80,8 +80,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 providerId, "SERVICE_PROVIDER", "");
         assertThat(providerReservations.total()).isEqualTo(1);
 
-        ReservationAvailabilityResponse availability = availability(
-                touristId, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse availability = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(availability.reservedPeople()).isEqualTo(2);
         assertThat(availability.remainingCapacity()).isEqualTo(18);
         assertThat(availability.available()).isTrue();
@@ -120,8 +120,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(cancelledByTourist.status().name()).isEqualTo("CANCELLED");
         assertThat(cancelledByTourist.cancellationReason()).isEqualTo("Cambio de planes");
 
-        ReservationAvailabilityResponse released = availability(
-                touristId, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse released = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(released.reservedPeople()).isZero();
         assertThat(released.remainingCapacity()).isEqualTo(20);
 
@@ -222,8 +222,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .expectBody()
                 .jsonPath("$.title").isEqualTo("Reservation conflict");
 
-        ReservationAvailabilityResponse full = availability(
-                touristId, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse full = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(full.reservedPeople()).isEqualTo(2);
         assertThat(full.remainingCapacity()).isEqualTo(1);
         assertThat(full.available()).isTrue();
@@ -234,8 +234,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 touristId, bookedFor, itemBody(service.serviceId(), 2));
         assertThat(replacement.status().name()).isEqualTo("CONFIRMED");
 
-        ReservationAvailabilityResponse after = availability(
-                touristId, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse after = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(after.reservedPeople()).isEqualTo(2);
     }
 
@@ -262,10 +262,10 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .expectStatus().isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.detail").value(detail ->
-                        assertThat(detail.toString()).contains("in the selected time slot"));
+                        assertThat(detail.toString()).contains("Not enough places left"));
 
-        ReservationAvailabilityResponse availability = availability(
-                secondTourist, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse availability = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(availability.remainingCapacity()).isZero();
         assertThat(availability.available()).isFalse();
     }
@@ -440,8 +440,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
         assertThat(replay.reservationId()).isEqualTo(first.reservationId());
         assertThat(outboxEvents(first.reservationId())).hasSize(1);
 
-        ReservationAvailabilityResponse availability = availability(
-                touristId, service.serviceId(), bookedFor, 1);
+        ReservationAvailabilityResponse availability = availabilityAs(
+                providerId, "SERVICE_PROVIDER", service.serviceId(), bookedFor, 1);
         assertThat(availability.reservedPeople()).isEqualTo(2);
 
         clientFor(touristId, "TOURIST")
@@ -632,6 +632,27 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .getResponseBody();
     }
 
+    private ReservationAvailabilityResponse availabilityAs(
+            UUID userId,
+            String role,
+            UUID serviceId,
+            Instant bookedFor,
+            int people
+    ) {
+        return clientFor(userId, role)
+                .get().uri(uriBuilder -> uriBuilder
+                        .path("/api/v1/reservations/availability")
+                        .queryParam("serviceId", serviceId)
+                        .queryParam("bookedFor", bookedFor)
+                        .queryParam("people", people)
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(ReservationAvailabilityResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
     private ReservationAvailabilityResponse availability(
             UUID userId,
             UUID serviceId,
@@ -747,8 +768,8 @@ class ReservationWebIntegrationTests extends AbstractMongoPostgresIntegrationTes
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {
-        return clientFor(managerId, "DESTINATION_MANAGER")
+    private CategoryResponse createCategory(UUID adminId) {
+        return clientFor(adminId, "ADMIN")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""

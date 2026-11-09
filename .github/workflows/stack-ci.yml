@@ -57,9 +57,12 @@ jobs:
       MONGO_ROOT_PASSWORD: mongo-root
       MONGO_APP_USER: reviews_app
       MONGO_APP_PASSWORD: reviews-app
+      # ms-05 exige NEO4J_PASSWORD en su compose desde el endurecimiento MS05-10
+      # (el valor solo se usa para interpolar; `config` no levanta contenedores).
+      NEO4J_PASSWORD: neo4j-ci
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Validar el compose raíz
         run: docker compose -f compose.yaml config --quiet
@@ -87,6 +90,50 @@ jobs:
       - name: Validar el compose de infraestructura
         run: docker compose -f infrastructure/compose.yaml config --quiet
 
+      - name: Validar invariantes del compose de produccion
+        run: |
+          set -euo pipefail
+          file=deploy/prod/compose.yaml
+          status=0
+
+          # PLAT-03: solo el gateway publica en todas las interfaces; el resto solo en 127.0.0.1.
+          if grep -nE '^\s+- "\$\{[A-Z0-9_]+:\?\}:[0-9]+"' "$file" | grep -v 'GATEWAY_'; then
+            echo "::error title=PLAT-03::hay puertos publicados fuera de 127.0.0.1 en $file"
+            status=1
+          fi
+          if ! grep -q '127.0.0.1:\${MS01_PORT:?}' "$file"; then
+            echo "::error title=PLAT-03::los servicios deben publicarse en 127.0.0.1"
+            status=1
+          fi
+
+          # PLAT-01: Kafka autenticado (SASL_SSL) y sin autocreacion de topics.
+          if grep -q 'INTERNAL:PLAINTEXT' "$file"; then
+            echo "::error title=PLAT-01::el listener INTERNAL de Kafka no puede ser PLAINTEXT"
+            status=1
+          fi
+          if ! grep -q 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:.*INTERNAL:SASL_SSL' "$file"; then
+            echo "::error title=PLAT-01::falta KAFKA_LISTENER_SECURITY_PROTOCOL_MAP con INTERNAL:SASL_SSL"
+            status=1
+          fi
+          if ! grep -q 'KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"' "$file"; then
+            echo "::error title=PLAT-01::KAFKA_AUTO_CREATE_TOPICS_ENABLE debe ser false en produccion"
+            status=1
+          fi
+
+          # PLAT-17: el administrador inicial no se crea solo.
+          if ! grep -q 'BOOTSTRAP_ADMIN_ENABLED: \${BOOTSTRAP_ADMIN_ENABLED:-false}' "$file"; then
+            echo "::error title=PLAT-17::BOOTSTRAP_ADMIN_ENABLED debe ser false por defecto"
+            status=1
+          fi
+
+          # PLAT-13/PLAT-14: sin etiquetas flotantes en produccion.
+          if grep -nE ':(latest|main|stable)(["@ ]|$)' deploy/prod/.env.prod.example; then
+            echo "::error title=PLAT-13::etiqueta flotante en deploy/prod/.env.prod.example"
+            status=1
+          fi
+
+          exit $status
+
       - name: Validar scripts/smoke.sh
         run: bash -n scripts/smoke.sh
 
@@ -105,6 +152,15 @@ jobs:
         run: |
           bash -n deploy/postgres/01-databases.sh
           bash -n deploy/mongo/init-replica.sh
+          bash -n deploy/mongo/init-replica-auth.sh
+          bash -n deploy/backup/backup.sh
+          bash -n deploy/backup/restore.sh
+          bash -n deploy/backup/verify-backup.sh
+          bash -n deploy/kafka/gen-tls.sh
+          bash -n deploy/kafka/create-acls.sh
+          bash -n deploy/kafka/render-client-config.sh
+          bash -n deploy/kafka/create-topics.sh
+          bash -n scripts/kafka-dlq-replay.sh
 
   stack:
     name: Stack completo y flujo de negocio
@@ -113,10 +169,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Configurar Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Construir las imágenes
         run: docker compose build
@@ -130,21 +186,30 @@ jobs:
           WAIT_SECONDS: 60
         run: bash scripts/smoke.sh
 
+      # PLAT-21: los logs se publican solo si el job falla y se filtran antes de subirlos.
+      # El smoke crea un admin, un turista y una reserva; los logs de ms-01 pueden
+      # contener cabeceras `Authorization`, correos de Mailpit y URLs de reset, así
+      # que se descartan las líneas con secretos y se recorta a las últimas 3000.
       - name: Estado del stack si algo falló
         if: failure()
         run: |
-          docker compose ps
           mkdir -p stack-logs
-          docker compose logs --no-color > stack-logs/compose.log || true
+          docker compose ps --format 'table {{.Name}}\t{{.Service}}\t{{.State}}\t{{.Health}}' \
+            > stack-logs/compose-ps.txt || true
+          docker compose logs --no-color --tail 5000 2>&1 \
+            | grep -viE 'password|passwd|token|authorization|cookie|set-cookie|secret|bearer|api[_-]?key|reset' \
+            > stack-logs/compose.log || true
+          echo "::warning title=Logs del stack::Los logs publicados estan filtrados (PLAT-21); si necesitas una traza concreta, reproduce el fallo en local con el stack completo."
 
       - name: Publicar los logs del stack si algo falló
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stack-logs
           path: stack-logs/
           if-no-files-found: ignore
-          retention-days: 7
+          # PLAT-21: retención corta; el artefacto contiene trazas del stack de pruebas.
+          retention-days: 3
 
       - name: Apagar el stack
         if: always()

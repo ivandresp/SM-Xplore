@@ -1,5 +1,6 @@
 package com.smxplore.recommendations.infrastructure.config;
 
+import com.smxplore.recommendations.infrastructure.security.JwtIdentityResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -28,6 +29,7 @@ public class AuthVersionValidator {
 
     private final AuthVersionProperties properties;
     private final JwtProperties jwtProperties;
+    private final JwtIdentityResolver identityResolver;
     private final boolean requireAdminMfa;
     private final WebClient webClient;
     private final Map<UUID, CachedVersion> cache = new ConcurrentHashMap<>();
@@ -35,10 +37,12 @@ public class AuthVersionValidator {
     public AuthVersionValidator(
             AuthVersionProperties properties,
             JwtProperties jwtProperties,
+            JwtIdentityResolver identityResolver,
             @Value("${app.security.mfa.require-admin:false}") boolean requireAdminMfa
     ) {
         this.properties = properties;
         this.jwtProperties = jwtProperties;
+        this.identityResolver = identityResolver;
         this.requireAdminMfa = requireAdminMfa;
         this.webClient = properties.isEnabled()
                 ? WebClient.builder().baseUrl(properties.getBaseUrl()).build()
@@ -78,7 +82,7 @@ public class AuthVersionValidator {
         if (!(versionClaim instanceof Number version)) {
             return Mono.error(new BadJwtException("Token must contain a numeric ver claim"));
         }
-        UUID userId = userId(jwt);
+        UUID userId = identityResolver.userIdOrNull(jwt);
         if (userId == null) {
             return Mono.error(new BadJwtException("Token must contain a user id"));
         }
@@ -149,21 +153,6 @@ public class AuthVersionValidator {
 
     private static Mono<Void> invalidSession() {
         return Mono.error(new BadJwtException("The session is no longer valid"));
-    }
-
-    private static UUID userId(Jwt jwt) {
-        String subject = jwt.getSubject();
-        if (subject == null || subject.isBlank()) {
-            subject = jwt.getClaimAsString("id");
-        }
-        if (subject == null || subject.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(subject);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 
     public record AuthVersionResponse(long authVersion) {

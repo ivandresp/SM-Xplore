@@ -74,6 +74,125 @@ class SecurityReportWebIntegrationTests {
                 .jsonPath("$.photosUrls[0]").isEqualTo("https://example.com/photo.jpg");
     }
 
+    /**
+     * MS02-10: un reporte ajeno responde 404, igual que uno inexistente (sin oraculo de existencia).
+     */
+    @Test
+    void hidesAnotherUsersReportWhenCommenting() {
+        var author = UUID.randomUUID();
+        var intruder = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario ajeno"}
+                        """)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void hidesAnotherUsersReportWhenReadingIt() {
+        var author = UUID.randomUUID();
+        var intruder = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/{reportId}", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .exchange()
+                .expectStatus().isNotFound();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/{reportId}", UUID.randomUUID())
+                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void allowsTheAuthorToCommentTheirOwnReport() {
+        var author = UUID.randomUUID();
+        var reportId = createReport(author);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(author, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario del autor"}
+                        """)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.content").isEqualTo("Comentario del autor");
+    }
+
+    @Test
+    void rejectsCommentsOnASolvedReport() {
+        var author = UUID.randomUUID();
+        var staff = UUID.randomUUID();
+        var reportId = createReport(author);
+        closeReport(staff, reportId);
+        solveReport(staff, reportId);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(author, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"content": "Comentario tardio"}
+                        """)
+                .exchange()
+                .expectStatus().isEqualTo(409);
+    }
+
+    @Test
+    void rejectsHtmlTagsInReportContent() {
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "<script>alert(1)</script>",
+                          "description": "Reporte con etiquetas"
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail").value(detail -> assertThat(String.valueOf(detail)).contains("HTML"));
+    }
+
+    @Test
+    void rejectsPhotoUrlsOutsideTheAllowlist() {
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "title": "Robo en la playa",
+                          "description": "Reporte con foto externa",
+                          "photosUrls": ["https://attacker.example/photo.jpg"]
+                        }
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void protectsActuatorMetricsFromAnonymousUsers() {
+        webTestClient.get()
+                .uri("/actuator/metrics")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
     @Test
     void rejectsListingAnotherUsersReports() {
         var requester = UUID.randomUUID();
@@ -120,21 +239,9 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
-    void findsReportsNearACoordinate() {
-        var userId = UUID.randomUUID();
-        webTestClient.post()
-                .uri("/api/v1/security-reports")
-                .header(HttpHeaders.AUTHORIZATION, bearer(userId, "TOURIST", "Nestor"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("""
-                        {
-                          "title": "Incidente cerca del parque",
-                          "description": "Reporte geolocalizado",
-                          "location": {"latitude": 10.391, "longitude": -75.479}
-                        }
-                        """)
-                .exchange()
-                .expectStatus().isCreated();
+    void findsReportsNearACoordinateWithAnonymizedProjection() {
+        var reporterId = UUID.randomUUID();
+        createLocatedReport(reporterId, 10.3916, -75.4786);
 
         webTestClient.get()
                 .uri("/api/v1/security-reports/nearby?latitude=10.392&longitude=-75.478&radiusKm=2")
@@ -142,9 +249,73 @@ class SecurityReportWebIntegrationTests {
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectHeader().valueEquals("Cache-Control", "no-store")
+                .expectHeader().valueEquals("Pragma", "no-cache")
                 .expectBody()
                 .jsonPath("$.length()").isEqualTo(1)
-                .jsonPath("$[0].title").isEqualTo("Incidente cerca del parque");
+                .jsonPath("$[0].title").isEqualTo("Incidente cerca del parque")
+                .jsonPath("$[0].status").isEqualTo("ONGOING")
+                .jsonPath("$[0].latitude").isEqualTo(10.392)
+                .jsonPath("$[0].longitude").isEqualTo(-75.479)
+                .jsonPath("$[0].user").doesNotExist()
+                .jsonPath("$[0].description").doesNotExist()
+                .jsonPath("$[0].photosUrls").doesNotExist()
+                .jsonPath("$[0].location").doesNotExist();
+    }
+
+    @Test
+    void returnsTheSameAnonymizedProjectionToTheReportAuthor() {
+        var reporterId = UUID.randomUUID();
+        createLocatedReport(reporterId, 10.3916, -75.4786);
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.3916&longitude=-75.4786&radiusKm=2")
+                .header(HttpHeaders.AUTHORIZATION, bearer(reporterId, "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(1)
+                .jsonPath("$[0].user").doesNotExist()
+                .jsonPath("$[0].description").doesNotExist()
+                .jsonPath("$[0].photosUrls").doesNotExist()
+                .jsonPath("$[0].latitude").isEqualTo(10.392)
+                .jsonPath("$[0].longitude").isEqualTo(-75.479);
+    }
+
+    @Test
+    void rejectsNearbyQueriesAboveTheRadiusLimit() {
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.0&longitude=-75.0&radiusKm=20.1")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(400);
+    }
+
+    @Test
+    void rejectsNearbyQueriesAboveTheSizeLimit() {
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.0&longitude=-75.0&size=51")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    /** MS02-11: NaN/Infinity en los parametros de /nearby se rechazan con 400 antes de llegar a geoNear. */
+    @Test
+    void rejectsNonFiniteNearbyCoordinates() {
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=NaN&longitude=-75.0&radiusKm=2")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/nearby?latitude=10.0&longitude=-75.0&radiusKm=Infinity")
+                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     @Test
@@ -203,6 +374,23 @@ class SecurityReportWebIntegrationTests {
                 .uri("/api/v1/security-reports/counts")
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    private void createLocatedReport(UUID reporterId, double latitude, double longitude) {
+        Map<String, Object> body = Map.of(
+                "title", "Incidente cerca del parque",
+                "description", "Reporte geolocalizado con datos personales del denunciante",
+                "location", Map.of("latitude", latitude, "longitude", longitude),
+                "photosUrls", List.of("https://example.com/photo.jpg")
+        );
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(reporterId, "TOURIST", "Nestor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus().isCreated();
     }
 
     private String createReport(UUID reporterId) {

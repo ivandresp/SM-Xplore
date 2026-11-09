@@ -5,6 +5,8 @@ import com.smxplore.securityreports.domain.model.event.DomainEvent;
 import com.smxplore.securityreports.domain.model.types.Location;
 import lombok.RequiredArgsConstructor;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -19,6 +21,11 @@ public class SecurityReportEventFactory {
     private final String producer;
     private final Clock clock;
 
+    /**
+     * MS02-09: el sobre v1 exige {@code reporterId} y {@code title}, asi que no se pueden quitar sin romper el
+     * contrato; lo que si se minimiza es la precision de la ubicacion (3 decimales, ~110 m) y la retencion del
+     * outbox. El resto de PII queda documentado como riesgo aceptado hasta que P3-9 revise el contrato.
+     */
     public DomainEvent reportChanged(SecurityReport report, String correlationId) {
         Location location = report.getLocation();
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -26,8 +33,8 @@ public class SecurityReportEventFactory {
         payload.put("reporterId", report.getUser().id().toString());
         payload.put("title", report.getTitle());
         payload.put("status", report.getStatus().name());
-        payload.put("latitude", location == null ? null : location.latitude());
-        payload.put("longitude", location == null ? null : location.longitude());
+        payload.put("latitude", location == null ? null : roundCoordinate(location.latitude()));
+        payload.put("longitude", location == null ? null : roundCoordinate(location.longitude()));
         payload.put("createdAt", report.getCreatedAt().toString());
         payload.put("updatedAt", report.getUpdatedAt().toString());
 
@@ -41,5 +48,12 @@ public class SecurityReportEventFactory {
                 producer,
                 payload
         );
+    }
+
+    private static Double roundCoordinate(Double value) {
+        if (value == null) {
+            return null;
+        }
+        return BigDecimal.valueOf(value).setScale(3, RoundingMode.HALF_UP).doubleValue();
     }
 }

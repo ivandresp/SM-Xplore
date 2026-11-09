@@ -1,0 +1,61 @@
+# client.properties.example - plantilla de conexion a Kafka con SASL/SCRAM + TLS
+#
+# PLAT-01: el broker de produccion (deploy/prod/compose.yaml) expone INTERNAL y
+# CONTROLLER como SASL_SSL con SCRAM-SHA-512 y autorizacion (StandardAuthorizer,
+# allow.everyone.if.no.acl.found=false). Este archivo documenta el formato que
+# esperan las utilidades de Kafka (`--command-config`) y los servicios Java
+# (variables SPRING_KAFKA_PROPERTIES_*, que se derivan igual).
+#
+# NO versiones credenciales reales: este archivo es la plantilla. En produccion
+# el client.properties se genera con:
+#
+#   deploy/kafka/render-client-config.sh --out /tmp/admin-client.properties
+#
+# a partir de las variables KAFKA_CLIENT_USERNAME / KAFKA_CLIENT_PASSWORD /
+# KAFKA_TRUSTSTORE_LOCATION / KAFKA_TRUSTSTORE_PASSWORD. El archivo resultante
+# se crea con permisos 0600 y no se imprime nunca.
+#
+# Rutas: dentro de los contenedores de Kafka el truststore se monta como
+# secreto en /etc/kafka/secrets/kafka.truststore.p12 (deploy/prod/compose.yaml).
+# Desde el host, genera el material TLS con deploy/kafka/gen-tls.sh y apunta a
+# deploy/kafka/certs/kafka.truststore.p12.
+#
+# Password: usa `openssl rand -hex 16` (solo [0-9a-f]). Los caracteres " \ ;
+# espacio y salto de linea no se permiten porque el password viaja dentro del
+# valor JAAS entre comillas dobles.
+
+# --- Conexion ---------------------------------------------------------------
+security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-512
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password="CAMBIA_ESTE_PASSWORD";
+
+# --- TLS --------------------------------------------------------------------
+ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12
+ssl.truststore.password=CAMBIA_ESTE_PASSWORD
+ssl.truststore.type=PKCS12
+
+# El certificado del broker lleva SAN DNS:kafka (y localhost/127.0.0.1), asi que
+# la validacion de hostname funciona con el nombre del servicio. No la
+# desactives en produccion.
+ssl.endpoint.identification.algorithm=https
+
+# --- Ejemplos de usuarios por servicio --------------------------------------
+# ms-02 (escribe security.report.changed):
+#   username="ms-02"
+# ms-03 (escribe activities.*, bookings.reservation.changed, reviews.review.changed
+#       y catalog.site.changed.DLT; lee catalog.site.changed con grupo
+#       ms-03-site-events):
+#   username="ms-03"
+# ms-04 (escribe catalog.*, bookings.reservation.changed, reviews.review.changed;
+#       lee bookings.reservation.changed con grupo ms-04-notifications):
+#   username="ms-04"
+# ms-05 (lee los 7 topics de catalogo/actividades/resenas con grupo
+#       ms-05-recommendations; escribe sus .dlq):
+#   username="ms-05"
+# Operacion (replay de DLQ):
+#   username="dlq-replay"
+# Observabilidad:
+#   username="kafka-exporter"
+#
+# Las ACLs que necesita cada uno las crea deploy/kafka/create-acls.sh (lo ejecuta
+# kafka-init). Ver deploy/prod/README.md, seccion "Kafka: SASL/SCRAM, TLS y ACLs".

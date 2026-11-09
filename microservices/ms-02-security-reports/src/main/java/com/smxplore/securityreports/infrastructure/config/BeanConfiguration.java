@@ -4,6 +4,7 @@ import com.smxplore.securityreports.application.*;
 import com.smxplore.securityreports.application.event.SecurityReportEventFactory;
 import com.smxplore.securityreports.application.support.TransactionalOutboxWriter;
 import com.smxplore.securityreports.domain.ports.out.OutboxPort;
+import com.smxplore.securityreports.domain.ports.out.PhotoUrlPolicyPort;
 import com.smxplore.securityreports.domain.ports.out.TransactionPort;
 import com.smxplore.securityreports.domain.ports.repository.CommentRepositoryPort;
 import com.smxplore.securityreports.domain.ports.repository.SecurityReportRepositoryPort;
@@ -33,9 +34,10 @@ public class BeanConfiguration {
     public ReportIncidentUseCasePort reportIncidentUseCase(
             SecurityReportRepositoryPort securityReportRepository,
             TransactionalOutboxWriter outboxWriter,
-            SecurityReportEventFactory eventFactory
+            SecurityReportEventFactory eventFactory,
+            PhotoUrlPolicyPort photoUrlPolicy
     ) {
-        return new ReportIncidentUseCase(securityReportRepository, outboxWriter, eventFactory);
+        return new ReportIncidentUseCase(securityReportRepository, outboxWriter, eventFactory, photoUrlPolicy);
     }
 
     @Bean
@@ -77,9 +79,10 @@ public class BeanConfiguration {
     public AddReportPhotosUseCasePort addReportPhotosUseCase(
             SecurityReportRepositoryPort securityReportRepository,
             TransactionalOutboxWriter outboxWriter,
-            SecurityReportEventFactory eventFactory
+            SecurityReportEventFactory eventFactory,
+            PhotoUrlPolicyPort photoUrlPolicy
     ) {
-        return new AddReportPhotosUseCase(securityReportRepository, outboxWriter, eventFactory);
+        return new AddReportPhotosUseCase(securityReportRepository, outboxWriter, eventFactory, photoUrlPolicy);
     }
 
     @Bean

@@ -1,5 +1,7 @@
 package com.smxplore.sitesandservices.application.service;
 
+import com.smxplore.sitesandservices.application.support.CatalogAccess;
+import com.smxplore.sitesandservices.domain.model.common.Actor;
 import com.smxplore.sitesandservices.domain.model.common.PageResult;
 import com.smxplore.sitesandservices.domain.model.service.Service;
 import com.smxplore.sitesandservices.domain.model.service.ServiceFilter;
@@ -12,9 +14,10 @@ import reactor.core.publisher.Mono;
 public class ServiceListService implements ListServicesUseCase {
 
     private final ServiceRepositoryPort serviceRepository;
+    private final CatalogAccess access;
 
     @Override
-    public Mono<PageResult<Service>> handle(ServiceFilter filter) {
-        return serviceRepository.findAll(filter);
+    public Mono<PageResult<Service>> handle(ServiceFilter filter, Actor actor) {
+        return serviceRepository.findAll(access.requireServiceVisibility(filter, actor));
     }
 }

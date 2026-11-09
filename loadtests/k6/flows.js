@@ -30,7 +30,9 @@ const AUTH_BASE_URL = __ENV.AUTH_BASE_URL || 'http://ms-01:8081';
 const BASE_URL = __ENV.BASE_URL || 'http://ms-03:8082';
 const SITES_BASE_URL = __ENV.SITES_BASE_URL || 'http://ms-04:8080';
 const ADMIN_USER = __ENV.ADMIN_USER || __ENV.USER || 'admin@smxplore.local';
-const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || __ENV.PASSWORD || 'ChangeMe123!';
+// PLAT-23: sin password por defecto. El lanzador exige ADMIN_PASSWORD y se valida antes de
+// hacer ninguna peticion; asi estas pruebas no se reutilizan contra un entorno con datos reales.
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || __ENV.PASSWORD || '';
 const PASSWORD_TOURIST = 'PerfTest12345';
 const MAX_PAGE_SIZE = 100;
 
@@ -225,7 +227,17 @@ function createVenueAndActivities(adminToken, stamp, count, startsAt, endsAt) {
   return created;
 }
 
+function requireAdminPassword() {
+  if (!ADMIN_PASSWORD) {
+    throw new Error(
+      'Falta ADMIN_PASSWORD: exporta la contrasena del administrador del stack local. ' +
+      'No hay valor por defecto (PLAT-23) ni se debe reutilizar una contrasena real.'
+    );
+  }
+}
+
 export function setup() {
+  requireAdminPassword();
   const stamp = Date.now();
   const adminToken = login(ADMIN_USER, ADMIN_PASSWORD, 'login_admin');
 

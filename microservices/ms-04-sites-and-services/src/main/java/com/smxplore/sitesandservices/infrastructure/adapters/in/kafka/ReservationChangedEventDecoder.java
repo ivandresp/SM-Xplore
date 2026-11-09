@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -21,6 +22,14 @@ public class ReservationChangedEventDecoder {
 
     public static final String EVENT_TYPE = "bookings.reservation.changed";
 
+    /** MS04-11: solo se aceptan eventos de productores conocidos y versiones soportadas. */
+    private static final Set<String> ALLOWED_PRODUCERS = Set.of(
+            "ms-03",
+            "ms-03-activities-and-events",
+            "ms-04"
+    );
+    private static final int MAX_ITEMS = 50;
+
     private final ObjectMapper objectMapper;
 
     public Optional<ReservationChangedMessage> decode(String json) {
@@ -28,6 +37,21 @@ public class ReservationChangedEventDecoder {
             JsonNode root = objectMapper.readTree(json);
             if (!EVENT_TYPE.equals(root.path("eventType").asString())) {
                 return Optional.empty();
+            }
+            String producer = root.path("producer").asStringOpt().orElse(null);
+            if (producer == null || producer.isBlank()) {
+                throw new InvalidNotificationEventException(
+                        "Booking event producer is required");
+            }
+            if (!ALLOWED_PRODUCERS.contains(producer)) {
+                throw new InvalidNotificationEventException(
+                        "Unexpected booking event producer: " + producer);
+            }
+            if (root.hasNonNull("eventVersion")
+                    && !isSupportedVersion(root.path("eventVersion").asInt(-1))) {
+                throw new InvalidNotificationEventException(
+                        "Unsupported booking event version: "
+                                + root.path("eventVersion").asString());
             }
             JsonNode payload = root.path("payload");
             UUID eventId = requiredUuid(root, "eventId");
@@ -39,6 +63,10 @@ public class ReservationChangedEventDecoder {
             if (!itemsNode.isArray()) {
                 throw new InvalidNotificationEventException(
                         "Booking event items must be an array");
+            }
+            if (itemsNode.size() > MAX_ITEMS) {
+                throw new InvalidNotificationEventException(
+                        "Booking event must not contain more than " + MAX_ITEMS + " items");
             }
             List<ReservationChangedMessage.Item> items = new ArrayList<>();
             for (JsonNode itemNode : itemsNode.values()) {
@@ -97,6 +125,10 @@ public class ReservationChangedEventDecoder {
 
     private UUID requiredUuid(JsonNode node, String field) {
         return UUID.fromString(requiredText(node, field));
+    }
+
+    private static boolean isSupportedVersion(int version) {
+        return version == 1 || version == 2;
     }
 
     private UUID optionalUuid(JsonNode node, String field) {

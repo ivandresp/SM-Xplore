@@ -1,5 +1,9 @@
 package com.smxplore.activitiesevents.infrastructure.outbox;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.smxplore.activitiesevents.domain.model.outbox.OutboxEvent;
 import com.smxplore.activitiesevents.domain.ports.repository.OutboxPort;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -8,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import reactor.core.publisher.Flux;
@@ -118,6 +123,25 @@ class OutboxRelayTest {
 
         assertThat(outbox.failed).isEmpty();
         assertThat(outbox.published).isEmpty();
+    }
+
+    @Test
+    void warnsWhenTheRelayIsDisabled() {
+        properties.setEnabled(false);
+        var logger = (Logger) LoggerFactory.getLogger(OutboxRelay.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            relay();
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("OUTBOX_ENABLED=false");
+        });
     }
 
     private OutboxRelay relay() {

@@ -198,8 +198,8 @@ una red o puerto privado.
 
 | Método | Ruta | Roles | Descripción |
 |---|---|---|---|
-| POST | `/api/v1/categories` | `DESTINATION_MANAGER`, `ADMIN` | Crear categoría |
-| PUT | `/api/v1/categories/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar categoría |
+| POST | `/api/v1/categories` | `ADMIN` | Crear categoría de la taxonomía global |
+| PUT | `/api/v1/categories/{id}` | `ADMIN` | Actualizar categoría de la taxonomía global |
 | GET | `/api/v1/categories` | autenticado | Listar/filtrar categorías |
 | POST | `/api/v1/zones` | `DESTINATION_MANAGER`, `ADMIN` | Crear zona |
 | PUT | `/api/v1/zones/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar zona |
@@ -209,11 +209,11 @@ una red o puerto privado.
 | PUT | `/api/v1/sites/{id}` | `DESTINATION_MANAGER`, `ADMIN` | Actualizar sitio |
 | PATCH | `/api/v1/sites/{id}/status` | `DESTINATION_MANAGER`, `ADMIN` | Cambiar estado |
 | PATCH | `/api/v1/sites/{id}/zone` | `DESTINATION_MANAGER`, `ADMIN` | Asignar zona |
-| GET | `/api/v1/sites` | autenticado | Listar/filtrar sitios |
+| GET | `/api/v1/sites` | público / autenticado | Listar sitios; el anónimo solo ve `PUBLISHED` |
 | POST | `/api/v1/services` | `SERVICE_PROVIDER`, `ADMIN` | Crear servicio |
 | PUT | `/api/v1/services/{id}` | `SERVICE_PROVIDER`, `ADMIN` | Actualizar servicio |
 | PATCH | `/api/v1/services/{id}/status` | `SERVICE_PROVIDER`, `ADMIN` | Cambiar estado |
-| GET | `/api/v1/services` | autenticado | Listar/filtrar servicios |
+| GET | `/api/v1/services` | público / autenticado | Listar servicios; el anónimo solo ve `PUBLISHED` |
 | POST | `/api/v1/reviews` | `TOURIST` | Crear reseña de sitio o servicio |
 | POST | `/api/v1/reviews/{id}/response` | `SERVICE_PROVIDER`, `DESTINATION_MANAGER`, `ADMIN` | Responder reseña |
 | PATCH | `/api/v1/reviews/{id}/status` | `ADMIN` | Moderar reseña |
@@ -242,7 +242,11 @@ Filtros disponibles:
 
 - Sitios: `categoryId`, `zoneId`, `status`, `search`, `managerId`, `page`, `size`.
   `managerId` exige `ADMIN` o la propia `DESTINATION_MANAGER`; cualquier otro valor devuelve `403`.
+  Las peticiones anónimas solo ven sitios `PUBLISHED`; la gestora dueña o el `ADMIN` pueden filtrar
+  por otros estados.
 - Servicios: `categoryId`, `zoneId`, `siteId`, `providerId`, `status`, `type`, `search`, `page`, `size`.
+  Las peticiones anónimas solo ven servicios `PUBLISHED`; la prestadora dueña o el `ADMIN` pueden
+  filtrar por otros estados.
 - Zonas: `status`, `type`, `search`, `page`, `size`.
 - Reseñas: `itemType`, `itemId`, `touristId`, `status`, `page`, `size`.
 - Reportes: `status`, `reviewId`, `page`, `size`.
@@ -351,6 +355,16 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - Las reglas de propiedad se validan en la capa de aplicación: una prestadora solo modifica sus
   servicios; una gestora solo modifica sus zonas/sitios; el `ADMIN` puede moderar.
+- La taxonomía de categorías es global: solo `ADMIN` crea y actualiza categorías (regla HTTP y
+  comprobación `requireTaxonomyAdmin` en la capa de aplicación). Antes de guardar se valida el
+  árbol completo: el padre debe existir, no puede haber ciclos y la profundidad máxima es 50.
+- El catálogo público (`GET`/`HEAD` de sitios y servicios) solo expone contenido `PUBLISHED`.
+  El detalle de un borrador o inactivo responde `404` salvo para su gestora/proveedor dueño o un
+  `ADMIN`, y los listados anónimos no pueden pedir otro estado.
+- Una prestadora solo puede vincular servicios a sitios `PUBLISHED`, de la zona indicada en el
+  servicio y administrados por el gestor de esa zona; si no, la operación responde `400`.
+- Una gestora solo puede crear o mover sus sitios a zonas que ella misma administra; el `ADMIN`
+  puede asignar cualquier zona y el resto recibe `403`.
 - Los indicadores de demanda se limitan por rol: prestadora a sus servicios y gestora a sus
   zonas/sitios.
 - En reservas, un turista solo crea, consulta y cancela las suyas. Como todos los ítems de una
@@ -358,8 +372,57 @@ peticiones se rechazan. En local/tests queda desactivada con `AUTH_VERSION_ENABL
   `ADMIN` puede gestionar cualquiera. Las reservas se confirman automáticamente; no existe una
   acción de aceptación manual.
 - Cada usuario solo ve y marca sus propias notificaciones; el `ADMIN` puede marcar cualquiera.
-- El reproceso de outbox está restringido a `ADMIN`.
+- El reproceso de outbox está restringido a `ADMIN`, exige `limit` entre 1 y 500, admite
+  `dryRun` para contar sin reencolar, limita a 5 peticiones cada 10 minutos por administrador y
+  deja auditoría con quién, cuándo, límite, modo y cuántos eventos se reencolaron.
+- Las lecturas públicas de reseñas no requieren token: un anónimo solo ve `PUBLISHED` y el
+  listado de reportes es solo de `ADMIN`. Responder una reseña exige que esté `PUBLISHED` y sin
+  respuesta previa; si no, responde `409` y no la sobrescribe.
+- La consulta de disponibilidad de reservas exige autenticación y solo la pueden hacer turistas
+  y personal operativo. El cupo detallado (capacidad, plazas reservadas y proveedor) se muestra
+  solo a `ADMIN`, gestoras y a la prestadora dueña; el turista recibe disponibilidad booleana.
+  Además hay un límite de 120 consultas por minuto por cuenta (`429`).
+- Cambiar el correo de contacto de notificaciones exige `confirm=true` en el cuerpo, es solo de
+  `ADMIN` y deja un registro en la colección Mongo `security_audit` con el correo anterior y el
+  nuevo. Sin verificación por correo del titular (mitigación proporcionada; riesgo residual).
+- El consumidor de `bookings.reservation.changed` solo acepta `producer` en
+  `{ms-03, ms-03-activities-and-events, ms-04}`, `eventVersion` 1 o 2 y como máximo 50 ítems; los
+  mensajes inválidos se publican en `NOTIFICATIONS_DLQ_TOPIC` sin efectos laterales.
+- Crear una reseña exige una reserva `COMPLETED` previa del servicio (o de algún servicio del
+  sitio reseñado), con `REVIEW_REQUIRE_COMPLETED_BOOKING=true` por defecto, y está limitado a 10
+  reseñas por hora y 20 reportes por hora por usuario (`429`). El filtro de IA es fail-closed:
+  `REVIEW_AI_FAIL_OPEN=false` por defecto, de modo que una caída del LLM rechaza la reseña.
+- El filtro de precio de servicios valida importes no negativos, `priceMin <= priceMax`, tope de
+  100 000 000 y un offset máximo de 10 000 (`400` con mensaje). Hay índices `status+price` y
+  `site.id+price` en `ServiceDocument`.
+- Los `IllegalArgumentException` no controlados responden `400` con un detalle genérico
+  ("The request contains an invalid value.") y el mensaje interno solo se registra en el log, para
+  no exponer detalles de conversiones o de implementación (MS04-13).
 - Swagger declara el esquema `bearerAuth` para enviar el JWT desde la UI.
+
+### Consistencia de snapshots de catálogo y servicios (MS04-14)
+
+Los servicios guardan snapshots de catálogo (`site.name`, `zone.name`, `zone.status`,
+`categoryName`) para no depender de ms-04 en cada lectura. Esos snapshots se refrescan al renombrar
+un sitio, al cambiar el nombre o el estado de una zona y al renombrar una categoría, mediante los
+flujos de actualización ya existentes.
+
+Riesgo aceptado (fase informativa): el cambio de estado de un sitio (`SiteChangeStatusService`) no
+propaga el estado a los snapshots de sus servicios y el listado público de servicios solo filtra por
+el estado del propio servicio (más la visibilidad por rol descrita arriba). Por tanto, un servicio
+`PUBLISHED` puede seguir apareciendo en `GET /api/v1/services` aunque su sitio pase a
+`DRAFT`/`INACTIVE` o su zona quede `INACTIVE`. El flujo de reservas sí vuelve a validar el sitio y la
+zona en el momento de reservar (`SITE_NOT_PUBLISHED`) y ms-05 debe validar la visibilidad del sitio
+antes de mostrar un servicio.
+
+Impacto bajo (inconsistencia de visibilidad y de snapshots; sin explotación directa). Se documenta en
+lugar de corregirse en esta fase porque la corrección requiere una decisión de producto (si los
+servicios deben desaparecer cuando su sitio se despublica y qué hacer con los ya existentes) y un
+backfill de MongoDB. Corrección recomendada para una fase posterior:
+
+1. Añadir `site.status` al snapshot del servicio y refrescarlo al cambiar el estado del sitio.
+2. Filtrar los listados públicos por `site.status = PUBLISHED` y `zone.status != INACTIVE`.
+3. Tratar los documentos antiguos sin `site.status` como visibles durante la transición.
 
 ## Kafka y contrato
 
@@ -403,6 +466,10 @@ Topics consumidos:
 - El consumidor acepta v1 y v2, procesa `SERVICE`, `ACTIVITY` y `EVENT`, usa `eventId` para IDs
   determinísticos de notificación (incluye rol e id del destinatario) y evita duplicados. Un grupo
   nuevo arranca en `latest`; los tests usan `earliest` para no depender del orden de arranque.
+- Antes de procesar se valida la procedencia: `producer` permitido, `eventVersion` soportada y
+  máximo 50 ítems. Un mensaje que no cumple se envía a `NOTIFICATIONS_DLQ_TOPIC`
+  (`kafka.dlq.bookings.reservation.changed` por defecto) sin crear notificaciones, y un fallo al
+  publicar en la DLQ se registra en el log sin reprocesar el mensaje.
 - El evento incluye `bookedFor`, `itemName`, `providerId`/`guideId`/`managerId` y `serviceName`
   como campos opcionales para permitir notificaciones sin consultar otros servicios. La v2 añade
   `NO_SHOW`.
@@ -414,7 +481,9 @@ Topics consumidos:
 - `OutboxRetentionJob` elimina eventos `PUBLISHED`/`FAILED` más antiguos que
   `app.outbox.retention-days` en PostgreSQL y MongoDB.
 - `POST /api/v1/admin/outbox/reprocess` resetea eventos `FAILED` a `PENDING`, con `attempts=0`,
-  en ambos outboxes. El relay los vuelve a intentar.
+  en ambos outboxes. Acepta `limit` (1..500, por defecto 100) y `dryRun=true` para contar sin
+  modificar. Está limitado por cuenta, deja auditoría en `security_audit` y emite la métrica
+  `outbox.reprocess.events{kind}`. El relay los vuelve a intentar.
 
 ### Métricas
 
@@ -424,6 +493,7 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 - `catalog_outbox_failed_total{event_type}`.
 - `booking_outbox_published_total{event_type}`.
 - `booking_outbox_failed_total{event_type}`.
+- `outbox.reprocess.events{kind=reservation|catalog}`.
 - Métricas estándar de Actuator, JVM, HTTP y Kafka.
 
 ## Configuración
@@ -466,7 +536,9 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 | `REVIEW_AI_THRESHOLD` | `0.7` | Score mínimo para retener una reseña |
 | `REVIEW_AI_TEMPERATURE` | `0.0` | Temperatura del modelo |
 | `REVIEW_AI_ACTION` | `PENDING_REVIEW` | Acción al marcar: `PENDING_REVIEW` o `HIDE` |
-| `REVIEW_AI_FAIL_OPEN` | `true` | Si el LLM falla, guarda la reseña visible |
+| `REVIEW_AI_FAIL_OPEN` | `false` | Si el LLM falla, rechaza la reseña (fail-closed). |
+| `REVIEW_REQUIRE_COMPLETED_BOOKING` | `true` | Exige una reserva `COMPLETED` del servicio para reseñar |
+| `NOTIFICATIONS_DLQ_TOPIC` | `kafka.dlq.bookings.reservation.changed` | Topic DLQ para eventos de reserva inválidos |
 | `REVIEW_AI_JSON_RESPONSE_FORMAT` | `false` | Envía `response_format=json_object` |
 | `OUTBOX_ENABLED` | `true` | Activa el relay |
 | `OUTBOX_PRODUCER` | `ms-04` | Campo `producer` del sobre |
@@ -523,11 +595,18 @@ En `/actuator/prometheus` (público; aislar por red en producción):
 ./gradlew clean test bootJar
 ```
 
-Resultado actual: **130 pruebas en 34 clases, 0 fallos; bootJar BUILD SUCCESSFUL**.
+Resultado actual de la selección sin Docker (aplicación, dominio, contrato y arquitectura):
+**125 pruebas en 28 clases, 0 fallos**. La suite completa con Testcontainers requiere Docker.
 
 La suite incluye `ArchitectureTest` (reglas del hexágono y nombres de puertos),
 `ReservationChangedEventDecoderContractTest` (destinatarios de notificación para reservas v1 y v2) y
 las pruebas de la alerta de cupo bajo (umbral, deduplicación y no repetición) y del canal push.
+
+Las regresiones de la fase BAJA viven en `application/security/`:
+`ReviewVisibilityServiceTest` (MS04-05), `ServiceFilterValidationTest` (MS04-06),
+`ReviewResponseConflictServiceTest` (MS04-07), `AvailabilityPrivacyServiceTest` (MS04-08),
+`NotificationContactAuditServiceTest` (MS04-09), `OutboxReprocessGuardServiceTest` (MS04-10),
+`ReservationEventProvenanceTest` (MS04-11) y `ReviewConsumptionProofServiceTest` (MS04-12).
 
 La suite usa Testcontainers con:
 
@@ -591,7 +670,9 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   (RF66) al proveedor y a la gestora del sitio: umbral `ceil(capacidad * threshold-percent / 100)`
   configurable con `app.notifications.low-capacity.*`, id determinista (replay idempotente) y
   entrega best-effort que nunca tumba la reserva.
-- La clave compartida del endpoint interno de contactos de ms-01 se pasa con `INTERNAL_API_KEY`.
+- El endpoint interno de contactos de ms-01 exige firma HMAC por servicio (MS01-11). La clave
+  maestra con la que se derivan las claves por servicio se pasa en ms-01 con `INTERNAL_API_KEY`;
+  hoy no hay ningún llamador dentro del repo, así que ms-04 no firma esas peticiones.
 - ms-04 es el **hub de notificaciones** del sistema (P3-4 firmada): ningún otro servicio envía
   correo ni push. El hub decide el destinatario con los ids que trae el evento
   (`bookings.reservation.changed` v1/v2) y entrega por los canales configurados:
@@ -612,8 +693,9 @@ La integración continua está en `.github/workflows/ms-04-ci.yml` y corre en lo
   `RECREACION`, todas `GENERAL`. Es idempotente (compara por nombre sin distinguir mayúsculas), no
   borra ni renombra nada y si Mongo no responde el servicio arranca igual (`CatalogSeedRunner`
   registra el aviso). En el stack local viene encendido.
-- Las categorías hijas (`parentId`, un nivel) y las de alcance específico las crea el
-  administrador por la API. La taxonomía es de ms-04 porque es el dueño del catálogo.
+- Solo el `ADMIN` puede crear o actualizar categorías. La semilla inicial la siembra el servicio
+  al arrancar (`CATALOG_SEED_ENABLED`) y el resto de la taxonomía, incluidas las hijas (`parentId`),
+  se gestiona por la API con rol `ADMIN`. La taxonomía es de ms-04 porque es el dueño del catálogo.
 - Las zonas llevan `type` libre y estado `ACTIVE|CONGESTED|INACTIVE`; la congestión se marca
   **manualmente**, no hay fuente automática en esta entrega.
 

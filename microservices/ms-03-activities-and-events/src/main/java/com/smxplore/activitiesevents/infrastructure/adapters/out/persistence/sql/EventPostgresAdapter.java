@@ -77,11 +77,11 @@ public class EventPostgresAdapter implements EventRepositoryPort {
         }
         if (hasText(filter.search())) {
             conditions.append(" AND translate(lower(name), 'áéíóúüñ', 'aeiouun')"
-                    + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%'");
+                    + " LIKE '%' || translate(lower(:search), 'áéíóúüñ', 'aeiouun') || '%' ESCAPE '\\'");
         }
         if (hasText(filter.category())) {
             conditions.append(" AND translate(lower(category), 'áéíóúüñ', 'aeiouun')"
-                    + " LIKE '%' || translate(lower(:category), 'áéíóúüñ', 'aeiouun') || '%'");
+                    + " LIKE '%' || translate(lower(:category), 'áéíóúüñ', 'aeiouun') || '%' ESCAPE '\\'");
         }
         if (filter.siteId() != null) {
             conditions.append(" AND sitio_id = :siteId");
@@ -125,6 +125,15 @@ public class EventPostgresAdapter implements EventRepositoryPort {
         return value != null && !value.isBlank();
     }
 
+    /**
+     * Neutraliza los comodines de LIKE: el patrón ya se arma con {@code '%' || ... || '%'} y las
+     * cláusulas usan {@code ESCAPE '\'}, así que un {@code %} o {@code _} del cliente se busca
+     * literalmente en vez de convertirse en comodín.
+     */
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     /** Orden por lista blanca: solo columnas conocidas, nunca texto del cliente. */
     private static String orderBy(String sort) {
         return switch (sort == null ? "" : sort) {
@@ -143,10 +152,10 @@ public class EventPostgresAdapter implements EventRepositoryPort {
             spec = spec.bind("status", filter.status().name());
         }
         if (hasText(filter.search())) {
-            spec = spec.bind("search", filter.search().trim());
+            spec = spec.bind("search", escapeLike(filter.search().trim()));
         }
         if (hasText(filter.category())) {
-            spec = spec.bind("category", filter.category().trim());
+            spec = spec.bind("category", escapeLike(filter.category().trim()));
         }
         if (filter.siteId() != null) {
             spec = spec.bind("siteId", filter.siteId());

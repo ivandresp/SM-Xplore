@@ -70,10 +70,14 @@ public class ActivityController {
     @Operation(summary = "Register an activity for a site")
     public Mono<ActivityResponse> register(@Valid @RequestBody ActivityRequest request,
                                            @AuthenticationPrincipal Jwt jwt) {
-        var activity = mapper.toDomain(request).toBuilder()
-                .guideId(resolveGuideId(jwt, request.guideId()))
-                .build();
-        return registerActivityUseCase.handle(activity).map(mapper::toResponse);
+        return accessGuard.requireCanCreate(request.siteId(), request.guideId(), jwt)
+                .then(Mono.defer(() -> {
+                    var activity = mapper.toDomain(request).toBuilder()
+                            .guideId(resolveGuideId(jwt, request.guideId()))
+                            .build();
+                    return registerActivityUseCase.handle(activity);
+                }))
+                .map(mapper::toResponse);
     }
 
     @GetMapping("/{activityId}")
@@ -103,9 +107,9 @@ public class ActivityController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
-        var filter = new ActivityFilter(search, resolveStatus(status, guideId, jwt), category, siteId, guideId,
+        PaginationLimits.validatePageSize(page, size);
+        var normalizedSearch = PaginationLimits.validateSearch(search);
+        var filter = new ActivityFilter(normalizedSearch, resolveStatus(status, guideId, jwt), category, siteId, guideId,
                 priceMin, priceMax, startsAfter, startsBefore, sort, page, size);
         return consultActivitiesUseCase.handle(filter)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
@@ -138,8 +142,7 @@ public class ActivityController {
     public Mono<PageResponse<ActivityResponse>> findByCategory(@RequestParam String category,
                                                                @RequestParam(defaultValue = "0") int page,
                                                                @RequestParam(defaultValue = "20") int size) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
+        PaginationLimits.validatePageSize(page, size);
         return findActivitiesByCategoryUseCase.handle(category, page, size)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
     }
@@ -149,8 +152,7 @@ public class ActivityController {
     public Mono<PageResponse<ActivityResponse>> findBySite(@PathVariable UUID siteId,
                                                            @RequestParam(defaultValue = "0") int page,
                                                            @RequestParam(defaultValue = "20") int size) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
+        PaginationLimits.validatePageSize(page, size);
         return findActivitiesBySiteUseCase.handle(siteId, page, size)
                 .map(result -> PageResponse.from(result, mapper::toResponse));
     }
@@ -199,7 +201,12 @@ public class ActivityController {
     public Mono<ActivityResponse> changeStatus(@PathVariable UUID activityId,
                                                @Valid @RequestBody ChangeActivityStatusRequest request,
                                                @AuthenticationPrincipal Jwt jwt) {
-        return accessGuard.requireCanManage(activityId, jwt)
+        // Publicar exige ademas que el sitio siga existiendo en ms-04: una actividad huerfana no
+        // puede salir al catalogo publico ni entrar en los indicadores del destino.
+        var guard = request.status() == ActivityStatus.PUBLISHED
+                ? accessGuard.requirePublishableSite(activityId, jwt)
+                : accessGuard.requireCanManage(activityId, jwt);
+        return guard
                 .then(Mono.defer(() -> changeActivityStatusUseCase.handle(activityId, request.status())))
                 .map(mapper::toResponse);
     }

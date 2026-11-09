@@ -8,6 +8,7 @@ import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
 import com.smxplore.recommendations.domain.model.reindex.CatalogExportPage;
+import com.smxplore.recommendations.infrastructure.adapters.in.kafka.EventConsumerProperties;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
 import com.smxplore.recommendations.infrastructure.config.ReindexProperties;
 import org.junit.jupiter.api.AfterEach;
@@ -20,7 +21,9 @@ import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,6 +44,7 @@ class CatalogExportClientTest {
     private volatile int responseStatus;
     private volatile String ms03ResponseBody;
     private volatile int ms03ResponseStatus;
+    private ReindexProperties properties;
     private CatalogExportClient client;
 
     @BeforeEach
@@ -73,7 +77,7 @@ class CatalogExportClientTest {
                 .bindNow();
 
         JsonMapper mapper = JsonMapper.builder().build();
-        ReindexProperties properties = new ReindexProperties();
+        properties = new ReindexProperties();
         properties.setCatalogBaseUrl("http://127.0.0.1:" + server.port());
         properties.setActivitiesBaseUrl("http://127.0.0.1:" + ms03Server.port());
         properties.setEventsBaseUrl("http://127.0.0.1:" + ms03Server.port());
@@ -81,7 +85,10 @@ class CatalogExportClientTest {
         client = new CatalogExportClient(
                 WebClient.builder(),
                 mapper,
-                new ProjectionEventDecoder(mapper),
+                new ProjectionEventDecoder(
+                        mapper,
+                        new EventConsumerProperties(),
+                        Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC)),
                 properties);
         client.init();
     }
@@ -272,7 +279,7 @@ class CatalogExportClientTest {
         assertThat(activity.activityId()).isEqualTo(activityId);
         assertThat(activity.categoryName()).isEqualTo("Deportes acuáticos");
         assertThat(activity.metadata().eventVersion()).isEqualTo(2);
-        assertThat(activity.metadata().producer()).isEqualTo("ms-03");
+        assertThat(activity.metadata().producer()).isEqualTo("ms-03-activities-and-events");
         assertThat(ms03RequestUris).hasSize(1);
         assertThat(ms03RequestUris.getFirst())
                 .contains("entity=ACTIVITIES", "page=0", "size=50", "updatedSince=");
@@ -307,6 +314,21 @@ class CatalogExportClientTest {
                         .hasMessageContaining("ms-03")
                         .hasMessageContaining("403"))
                 .verify();
+    }
+
+    /** MS05-03: the ADMIN bearer never leaves for a host outside the allowlist. */
+    @Test
+    void refusesToSendTheTokenToAHostOutsideTheAllowlist() {
+        properties.setAllowedHosts(List.of("internal.example"));
+
+        StepVerifier.create(client.fetch(TOKEN, CatalogEntity.SITES, 0, null))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(InvalidReindexException.class)
+                        .hasMessageContaining("host is not allowed"))
+                .verify();
+
+        assertThat(requestUris).isEmpty();
+        assertThat(authorizationHeaders).isEmpty();
     }
 
     private static String activityPage(UUID activityId, String eventVersion) {

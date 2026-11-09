@@ -83,8 +83,9 @@ public class ActivityUseCaseConfiguration {
     }
 
     @Bean
-    public ManageSlotsUseCasePort manageSlotsUseCase(ActivityRepositoryPort activityRepository) {
-        return new ManageSlotsUseCase(activityRepository);
+    public ManageSlotsUseCasePort manageSlotsUseCase(ActivityRepositoryPort activityRepository,
+                                                     ReservationRepositoryPort reservationRepository) {
+        return new ManageSlotsUseCase(activityRepository, reservationRepository);
     }
 
     @Bean

@@ -90,6 +90,14 @@ public class MongoServiceRepositoryAdapter implements ServiceRepositoryPort {
     }
 
     @Override
+    public Flux<UUID> findIdsBySiteId(UUID siteId) {
+        Query query = Query.query(Criteria.where("site.id").is(siteId.toString()));
+        query.fields().include("_id");
+        return mongoTemplate.find(query, ServiceDocument.class)
+                .map(document -> UUID.fromString(document.getId()));
+    }
+
+    @Override
     public Flux<Service> findByScope(
             UUID providerId,
             Collection<UUID> zoneIds,

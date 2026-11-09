@@ -104,11 +104,10 @@ public class CatalogWebMapper {
         );
     }
 
-    /** Public view: no AI assessment. */
+    /** Public view: no AI assessment and no tourist identifier. */
     public ReviewResponse toResponse(Review review) {
         return new ReviewResponse(
                 review.reviewId(),
-                review.touristId(),
                 review.touristName(),
                 review.itemType(),
                 review.itemId(),

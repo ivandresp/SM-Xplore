@@ -28,6 +28,7 @@ public final class CreateReviewService implements CreateReviewUseCase {
     private final UserRepository users;
     private final ReviewAiFilter aiFilter;
     private final ReviewAiPolicy aiPolicy;
+    private final EmailVerificationGuard emailVerificationGuard;
     private final Clock clock;
 
     public CreateReviewService(
@@ -35,11 +36,13 @@ public final class CreateReviewService implements CreateReviewUseCase {
             UserRepository users,
             ReviewAiFilter aiFilter,
             ReviewAiPolicy aiPolicy,
+            EmailVerificationGuard emailVerificationGuard,
             Clock clock) {
         this.reviews = reviews;
         this.users = users;
         this.aiFilter = aiFilter;
         this.aiPolicy = aiPolicy;
+        this.emailVerificationGuard = emailVerificationGuard;
         this.clock = clock;
     }
 
@@ -49,9 +52,11 @@ public final class CreateReviewService implements CreateReviewUseCase {
             return Mono.error(new ValidationException("El destino de la reseña es obligatorio"));
         }
 
-        return users.findById(command.targetId())
-                .switchIfEmpty(Mono.error(UserNotFoundException::new))
-                .flatMap(target -> createForTarget(touristId, target, command));
+        return emailVerificationGuard
+                .ensureVerified(touristId)
+                .then(Mono.defer(() -> users.findById(command.targetId())
+                        .switchIfEmpty(Mono.error(UserNotFoundException::new))
+                        .flatMap(target -> createForTarget(touristId, target, command))));
     }
 
     private Mono<ReviewView> createForTarget(UUID touristId, Usuario target, CreateReviewCommand command) {

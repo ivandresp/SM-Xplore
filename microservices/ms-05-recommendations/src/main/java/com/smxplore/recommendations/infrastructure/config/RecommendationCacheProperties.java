@@ -26,7 +26,11 @@ public class RecommendationCacheProperties {
     private Duration redisTtl = Duration.ofMinutes(1);
     private long localMaxSize = 1000;
     private String keyPrefix = "ms05:recommendations:";
-    private String versionKey = "ms05:graph:version";
+    /**
+     * Version key is namespaced under the service prefix so another workload sharing Redis cannot
+     * invalidate the recommendation cache by writing a generic key (MS05-05).
+     */
+    private String versionKey = "ms05:recommendations:graph:version";
 
     @PostConstruct
     public void validate() {

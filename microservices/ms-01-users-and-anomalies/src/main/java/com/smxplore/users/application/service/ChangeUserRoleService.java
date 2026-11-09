@@ -3,6 +3,7 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.ChangeUserRoleCommand;
 import com.smxplore.users.application.dto.UserView;
 import com.smxplore.users.application.port.in.ChangeUserRoleUseCase;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
@@ -25,13 +26,19 @@ public final class ChangeUserRoleService implements ChangeUserRoleUseCase {
 
     private final UserRepository users;
     private final AuditTrailRecorder audit;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
     public ChangeUserRoleService(
-            UserRepository users, AuditTrailRecorder audit, TransactionPort transactions, Clock clock) {
+            UserRepository users,
+            AuditTrailRecorder audit,
+            AuthVersionEvictor evictor,
+            TransactionPort transactions,
+            Clock clock) {
         this.users = users;
         this.audit = audit;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -84,6 +91,8 @@ public final class ChangeUserRoleService implements ChangeUserRoleUseCase {
                     .then(users.save(updated))
                     .then(audit.record(
                             actorId, AuditAction.ROL_CAMBIADO, target.id(), details(target.role(), newRole), now))
+                    // MS01-15: el cambio de rol incrementa authVersion y debe expulsar la sesión al instante.
+                    .then(evictor.evict(target.id()))
                     .thenReturn(updated);
         });
     }

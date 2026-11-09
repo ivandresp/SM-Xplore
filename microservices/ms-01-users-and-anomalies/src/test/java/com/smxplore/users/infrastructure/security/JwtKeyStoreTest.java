@@ -8,7 +8,10 @@ import com.smxplore.users.infrastructure.config.JwtProperties;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -82,9 +85,24 @@ class JwtKeyStoreTest {
                 .hasMessageContaining("no contiene ambas llaves PEM");
     }
 
+    @Test
+    void restrictsThePermissionsOfTheGeneratedKeyMaterial() throws Exception {
+        Assumptions.assumeTrue(
+                Files.getFileStore(tempDir).supportsFileAttributeView(PosixFileAttributeView.class),
+                "El sistema de archivos no soporta permisos POSIX");
+        Path keyStore = tempDir.resolve("jwt/keys.pem");
+
+        JwtKeyStore.load(properties(null, null, keyStore, true), true);
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(keyStore)))
+                .isEqualTo("rw-------");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(keyStore.getParent())))
+                .isEqualTo("rwx------");
+    }
+
     private static JwtProperties properties(
             String privateKey, String publicKey, Path keyStore, boolean allowGenerated) {
         return new JwtProperties(
-                ISSUER, AUDIENCE, Duration.ofMinutes(60), privateKey, publicKey, keyStore, allowGenerated);
+                ISSUER, AUDIENCE, Duration.ofMinutes(60), privateKey, publicKey, keyStore, allowGenerated, false);
     }
 }

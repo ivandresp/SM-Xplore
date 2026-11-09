@@ -108,7 +108,7 @@ services:
       SITE_EVENTS_GROUP: ${SITE_EVENTS_GROUP:-ms-03-site-snapshot}
       SITE_EVENTS_TIMEOUT: ${SITE_EVENTS_TIMEOUT:-PT10S}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q UP"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8082/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5

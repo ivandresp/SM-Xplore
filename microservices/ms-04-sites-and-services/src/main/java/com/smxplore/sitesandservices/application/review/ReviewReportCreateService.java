@@ -1,6 +1,7 @@
 package com.smxplore.sitesandservices.application.review;
 
 import com.smxplore.sitesandservices.application.support.CatalogLookup;
+import com.smxplore.sitesandservices.application.support.InMemoryRateLimiter;
 import com.smxplore.sitesandservices.domain.exception.DuplicateReviewReportException;
 import com.smxplore.sitesandservices.domain.exception.ForbiddenOperationException;
 import com.smxplore.sitesandservices.domain.exception.InvalidCatalogException;
@@ -15,19 +16,29 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
 @RequiredArgsConstructor
 public class ReviewReportCreateService implements ReportReviewUseCase {
 
+    private static final int REPORTS_PER_HOUR = 20;
+
     private final ReviewReportRepositoryPort reportRepository;
     private final CatalogLookup lookup;
     private final Clock clock;
+    private final InMemoryRateLimiter rateLimiter =
+            new InMemoryRateLimiter(REPORTS_PER_HOUR, Duration.ofHours(1));
 
     @Override
     public Mono<ReviewReport> handle(ReviewReport report, Actor actor) {
-        return lookup.review(report.reviewId())
+        if (actor == null) {
+            return Mono.error(new ForbiddenOperationException(
+                    "Authentication is required to report a review"));
+        }
+        return rateLimiter.acquire("review-report:" + actor.userId())
+                .then(lookup.review(report.reviewId()))
                 .flatMap(review -> ensureReportable(review, actor)
                         .then(Mono.defer(() -> create(report, review, actor))));
     }

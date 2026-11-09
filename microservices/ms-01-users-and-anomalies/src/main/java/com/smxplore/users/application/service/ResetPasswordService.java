@@ -2,12 +2,15 @@ package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.ResetPasswordCommand;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
+import com.smxplore.users.application.port.out.AccountAttemptLimiter;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.TokenHasher;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.InvalidPasswordResetTokenException;
+import com.smxplore.users.domain.model.Usuario;
 import com.smxplore.users.domain.policy.PasswordPolicy;
 import java.time.Clock;
 import java.time.Instant;
@@ -19,6 +22,9 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
     private final PasswordResetTokenRepository resetTokens;
     private final PasswordHasher passwordHasher;
     private final TokenHasher tokenHasher;
+    private final LoginProtection loginProtection;
+    private final AccountAttemptLimiter accountAttemptLimiter;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -27,12 +33,18 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
             TokenHasher tokenHasher,
+            LoginProtection loginProtection,
+            AccountAttemptLimiter accountAttemptLimiter,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.resetTokens = resetTokens;
         this.passwordHasher = passwordHasher;
         this.tokenHasher = tokenHasher;
+        this.loginProtection = loginProtection;
+        this.accountAttemptLimiter = accountAttemptLimiter;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -60,8 +72,23 @@ public final class ResetPasswordService implements ResetPasswordUseCase {
                                             user.changePassword(passwordHash, now);
                                             return users.save(user)
                                                     .then(resetTokens.save(token.markUsed(now)))
-                                                    .then(resetTokens.invalidateAllForUser(user.id(), now));
+                                                    .then(resetTokens.invalidateAllForUser(user.id(), now))
+                                                    // MS01-15: la contraseña cambió (authVersion++): invalidar la
+                                                    // versión cacheada para expulsar los tokens anteriores ya.
+                                                    .then(evictor.evict(user.id()))
+                                                    .then(clearLockout(user));
                                         })))))
                 .then();
+    }
+
+    /**
+     * MS01-05: restablecer la contraseña es el mecanismo de auto-desbloqueo. Se limpia el contador persistente de
+     * intentos fallidos y el límite por cuenta en memoria; sin esto, un atacante podía mantener la cuenta bloqueada
+     * indefinidamente aunque el titular cambiara la contraseña.
+     */
+    private Mono<Void> clearLockout(Usuario user) {
+        return loginProtection
+                .clear(user.email())
+                .then(accountAttemptLimiter.clear("login:" + user.email().value()));
     }
 }

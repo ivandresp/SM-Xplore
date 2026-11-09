@@ -88,11 +88,15 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, message.isBlank() ? "Request validation failed." : message, exchange);
     }
 
+    /**
+     * MS02-14: los errores de parseo no publican el detalle interno de Spring (clase, offset, causa);
+     * se responde un mensaje estable y el detalle queda en el log para diagnostico.
+     */
     @ExceptionHandler(ServerWebInputException.class)
     public ResponseEntity<ProblemDetail> handleServerWebInput(ServerWebInputException exception,
                                                                  ServerWebExchange exchange) {
-        var message = exception.getReason() == null ? "Malformed request." : exception.getReason();
-        return error(HttpStatus.BAD_REQUEST, message, exchange);
+        log.debug("Malformed request while processing {}", exchange.getRequest().getPath().value(), exception);
+        return error(HttpStatus.BAD_REQUEST, "Malformed request.", exchange);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
@@ -104,11 +108,12 @@ public class GlobalExceptionHandler {
         return error(status, message, exchange);
     }
 
+    /** MS02-14: un {@code IllegalArgumentException} puede venir de una capa interna; no se publica su mensaje. */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException exception,
                                                                   ServerWebExchange exchange) {
-        var message = exception.getMessage() == null ? "Invalid request parameter." : exception.getMessage();
-        return error(HttpStatus.BAD_REQUEST, message, exchange);
+        log.warn("Invalid argument while processing {}", exchange.getRequest().getPath().value(), exception);
+        return error(HttpStatus.BAD_REQUEST, "Invalid request parameter.", exchange);
     }
 
     @ExceptionHandler(DataAccessException.class)

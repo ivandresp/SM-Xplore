@@ -3,12 +3,14 @@ package com.smxplore.activitiesevents.infrastructure.adapters.in.web.controller;
 import com.smxplore.activitiesevents.application.reservations.ConsultManagerReservationsUseCase;
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
+import com.smxplore.activitiesevents.domain.model.event.Event;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationItemType;
 import com.smxplore.activitiesevents.domain.model.reservation.ReservationStatus;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
 import com.smxplore.activitiesevents.domain.ports.repository.ActivityRepositoryPort;
 import com.smxplore.activitiesevents.domain.ports.repository.EventRepositoryPort;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.CancelReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultOneReservationUseCasePort;
 import com.smxplore.activitiesevents.domain.ports.usecases.reservation.ConsultReservationsByGuideUseCasePort;
@@ -68,6 +70,7 @@ public class ReservationController {
     private final RegisterReservationNoShowUseCasePort registerReservationNoShowUseCase;
     private final ActivityRepositoryPort activityRepository;
     private final EventRepositoryPort eventRepository;
+    private final SiteCatalogPort siteCatalog;
     private final ReservationWebMapper mapper;
 
     @Value("${app.security.jwt.role-claim:role}")
@@ -110,8 +113,7 @@ public class ReservationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
-        PaginationLimits.validatePage(page);
-        PaginationLimits.validateSize(size);
+        PaginationLimits.validatePageSize(page, size);
 
         if (isAdmin(jwt)) {
             return consultReservationsByStatusUseCase.handle(status, page, size)
@@ -290,11 +292,28 @@ public class ReservationController {
                     .then();
             case EVENT -> eventRepository.findById(itemId)
                     .switchIfEmpty(Mono.error(new EventNotFoundException(itemId)))
-                    .filter(event -> isAdmin(jwt) || (event.getManagerId() != null
-                            && event.getManagerId().toString().equals(subject(jwt))))
-                    .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
-                            "You can only list reservations of your own events.")))
+                    .flatMap(event -> isAdmin(jwt)
+                            ? Mono.<Void>empty()
+                            : requireCurrentSiteManager(event, jwt))
                     .then();
         };
+    }
+
+    /**
+     * El {@code managerId} del evento es un snapshot; para listar sus reservas (con turista,
+     * importes y notas) se revalida contra ms-04 en caliente. Si ms-04 no responde se falla cerrado.
+     */
+    private Mono<Void> requireCurrentSiteManager(Event event, Jwt jwt) {
+        var denied = new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "You can only list reservations of your own events.");
+        return siteCatalog.findById(event.getSiteId(), jwt.getTokenValue())
+                .switchIfEmpty(Mono.error(denied))
+                .flatMap(site -> site.managerId() != null
+                        && site.managerId().toString().equals(subject(jwt))
+                        ? Mono.<Void>empty()
+                        : Mono.error(denied))
+                .onErrorMap(error -> error instanceof ResponseStatusException ? error
+                        : new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Cannot verify the event site right now.", error));
     }
 }

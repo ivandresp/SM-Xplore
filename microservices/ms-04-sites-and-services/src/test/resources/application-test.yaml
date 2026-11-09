@@ -3,6 +3,10 @@ app:
     enabled: false
   notifications:
     enabled: false
+  reviews:
+    # Las pruebas de integracion web crean reseñas sin recorrer el ciclo de reservas;
+    # el control MS04-12 se cubre con pruebas unitarias con el flag activo.
+    require-completed-booking: false
   security:
     jwt:
       public-key-location: classpath:keys/test-public.pem

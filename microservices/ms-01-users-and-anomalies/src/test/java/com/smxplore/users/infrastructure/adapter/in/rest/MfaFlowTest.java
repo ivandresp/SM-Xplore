@@ -79,7 +79,7 @@ class MfaFlowTest {
         Map<String, Object> status = get("/api/v1/users/me/mfa", accessToken);
         assertThat(status.get("enabled")).isEqualTo(false);
 
-        Map<String, Object> enrollment = post("/api/v1/users/me/mfa/enroll", Map.of(), accessToken);
+        Map<String, Object> enrollment = post("/api/v1/users/me/mfa/enroll", Map.of("password", PASSWORD), accessToken);
         String secret = (String) enrollment.get("secret");
         assertThat(secret).isNotBlank();
         assertThat((String) enrollment.get("otpauthUri")).startsWith("otpauth://totp/");
@@ -89,10 +89,12 @@ class MfaFlowTest {
 
         assertThat(postStatus(
                         "/api/v1/users/me/mfa/confirm",
-                        Map.of("code", totp.currentCode(secret, Instant.now())),
+                        Map.of("code", totp.currentCode(secret, Instant.now()), "password", PASSWORD),
                         accessToken))
                 .isEqualTo(HttpStatus.NO_CONTENT);
-        assertThat(get("/api/v1/users/me/mfa", accessToken).get("enabled")).isEqualTo(true);
+
+        // Confirmar revoca las sesiones abiertas (authVersion++): el token anterior deja de valer.
+        assertThat(getStatus("/api/v1/users/me/mfa", accessToken)).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         Map<String, Object> challenge = login();
         assertThat(challenge.get("mfaRequired")).isEqualTo(true);
@@ -106,6 +108,7 @@ class MfaFlowTest {
         String verifiedToken = (String) verified.get("accessToken");
         assertThat(verifiedToken).isNotBlank();
 
+        assertThat(get("/api/v1/users/me/mfa", verifiedToken).get("enabled")).isEqualTo(true);
         assertThat(get("/api/v1/users/me", verifiedToken).get("email")).isEqualTo(EMAIL);
 
         Map<String, Object> replayChallenge = login();
@@ -212,6 +215,13 @@ class MfaFlowTest {
         ResponseEntity<Map> response = spec.body(body).retrieve().toEntity(Map.class);
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         return response.getBody();
+    }
+
+    private HttpStatusCode getStatus(String uri, String token) {
+        return client.get()
+                .uri(uri)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange((request, response) -> response.getStatusCode());
     }
 
     private HttpStatusCode postStatus(String uri, Map<String, Object> body, String token) {

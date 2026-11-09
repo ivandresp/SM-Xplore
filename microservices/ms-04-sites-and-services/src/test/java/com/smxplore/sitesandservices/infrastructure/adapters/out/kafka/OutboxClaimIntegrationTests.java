@@ -3,6 +3,8 @@ package com.smxplore.sitesandservices.infrastructure.adapters.out.kafka;
 import com.smxplore.sitesandservices.AbstractMongoPostgresIntegrationTest;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
+import com.smxplore.sitesandservices.domain.model.common.Actor;
+import com.smxplore.sitesandservices.domain.model.common.UserRole;
 import com.smxplore.sitesandservices.domain.ports.in.CreateCategoryUseCase;
 import com.smxplore.sitesandservices.infrastructure.adapters.out.mongo.document.OutboxEventDocument;
 import com.smxplore.sitesandservices.infrastructure.config.OutboxProperties;
@@ -44,6 +46,7 @@ class OutboxClaimIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                                 .name("Categoría claim")
                                 .scope(CategoryScope.GENERAL)
                                 .build(),
+                        new Actor(UUID.randomUUID(), UserRole.ADMIN, "Admin"),
                         "catalog-claim-test")
                 .block();
         assertThat(category).isNotNull();

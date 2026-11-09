@@ -25,6 +25,7 @@ import com.smxplore.sitesandservices.application.review.ReviewReportResolveServi
 import com.smxplore.sitesandservices.application.review.ReviewReputationService;
 import com.smxplore.sitesandservices.application.review.ReviewRespondService;
 import com.smxplore.sitesandservices.application.reservation.ReservationAvailabilityService;
+import com.smxplore.sitesandservices.application.support.InMemoryRateLimiter;
 import com.smxplore.sitesandservices.application.reservation.ReservationChangeStatusService;
 import com.smxplore.sitesandservices.application.reservation.ReservationCompletionService;
 import com.smxplore.sitesandservices.application.reservation.ReservationCreateService;
@@ -105,6 +106,7 @@ import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationOutboxPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReservationTransactionPort;
+import com.smxplore.sitesandservices.domain.ports.out.SecurityAuditRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewAiFilter;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewReportRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.ReviewRepositoryPort;
@@ -116,6 +118,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
@@ -181,6 +184,7 @@ public class BeanConfiguration {
             SiteRepositoryPort siteRepository,
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
+            CatalogAccess access,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
             Clock clock
@@ -190,6 +194,7 @@ public class BeanConfiguration {
                 siteRepository,
                 serviceRepository,
                 lookup,
+                access,
                 outboxWriter,
                 eventFactory,
                 clock
@@ -202,6 +207,7 @@ public class BeanConfiguration {
             SiteRepositoryPort siteRepository,
             ServiceRepositoryPort serviceRepository,
             CatalogLookup lookup,
+            CatalogAccess access,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
             Clock clock
@@ -211,6 +217,7 @@ public class BeanConfiguration {
                 siteRepository,
                 serviceRepository,
                 lookup,
+                access,
                 outboxWriter,
                 eventFactory,
                 clock
@@ -373,8 +380,8 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public GetSiteUseCase getSiteUseCase(CatalogLookup lookup) {
-        return new SiteGetService(lookup);
+    public GetSiteUseCase getSiteUseCase(CatalogLookup lookup, CatalogAccess access) {
+        return new SiteGetService(lookup, access);
     }
 
     @Bean
@@ -440,13 +447,16 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public GetServiceUseCase getServiceUseCase(CatalogLookup lookup) {
-        return new ServiceGetService(lookup);
+    public GetServiceUseCase getServiceUseCase(CatalogLookup lookup, CatalogAccess access) {
+        return new ServiceGetService(lookup, access);
     }
 
     @Bean
-    public ListServicesUseCase listServicesUseCase(ServiceRepositoryPort serviceRepository) {
-        return new ServiceListService(serviceRepository);
+    public ListServicesUseCase listServicesUseCase(
+            ServiceRepositoryPort serviceRepository,
+            CatalogAccess access
+    ) {
+        return new ServiceListService(serviceRepository, access);
     }
 
     @Bean
@@ -463,7 +473,11 @@ public class BeanConfiguration {
             ReviewAiPolicy aiPolicy,
             TransactionalOutboxWriter outboxWriter,
             DomainEventFactory eventFactory,
-            Clock clock
+            Clock clock,
+            ReservationRepositoryPort reservationRepository,
+            ServiceRepositoryPort serviceRepository,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${app.reviews.require-completed-booking:true}") boolean requireCompletedBooking
     ) {
         return new ReviewCreateService(
                 reviewRepository,
@@ -473,7 +487,10 @@ public class BeanConfiguration {
                 aiPolicy,
                 outboxWriter,
                 eventFactory,
-                clock
+                clock,
+                reservationRepository,
+                serviceRepository,
+                requireCompletedBooking
         );
     }
 
@@ -658,10 +675,11 @@ public class BeanConfiguration {
     @Bean
     public NotificationContactService notificationContactService(
             NotificationContactRepositoryPort contactRepository,
+            SecurityAuditRepositoryPort auditRepository,
             CatalogAccess access,
             Clock clock
     ) {
-        return new NotificationContactService(contactRepository, access, clock);
+        return new NotificationContactService(contactRepository, auditRepository, access, clock);
     }
 
     @Bean
@@ -772,6 +790,7 @@ public class BeanConfiguration {
                 serviceRepository,
                 reservationRepository,
                 availabilityPolicy,
+                new InMemoryRateLimiter(120, Duration.ofMinutes(1)),
                 clock
         );
     }

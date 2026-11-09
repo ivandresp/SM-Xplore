@@ -11,15 +11,16 @@ public record Location(Double latitude, Double longitude) {
         validateLongitude(longitude);
     }
 
+    /** MS02-11: NaN e Infinity no son coordenadas validas; las comparaciones por si solas los dejaban pasar. */
     private void validateLatitude(Double latitude){
-        if (latitude < -90.0 || latitude > 90.0) {
-            throw new InvalidLocationParamsException("Latitude must be between -90 and 90.");
+        if (!Double.isFinite(latitude) || latitude < -90.0 || latitude > 90.0) {
+            throw new InvalidLocationParamsException("Latitude must be a finite number between -90 and 90.");
         }
     }
 
     private void validateLongitude(Double longitude){
-        if (longitude < -180.0 || longitude > 180.0) {
-            throw new InvalidLocationParamsException("Longitude must be between -180 and 180.");
+        if (!Double.isFinite(longitude) || longitude < -180.0 || longitude > 180.0) {
+            throw new InvalidLocationParamsException("Longitude must be a finite number between -180 and 180.");
         }
     }
 }

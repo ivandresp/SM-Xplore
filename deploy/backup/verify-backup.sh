@@ -9,6 +9,10 @@
 # Comprueba:
 #   - manifest.txt presente y con failures=0.
 #   - checksums.sha256 (si existe): todos los archivos coinciden.
+#   - PLAT-07: checksums.sha256.hmac si existe (BACKUP_HMAC_KEY_FILE).
+#   - PLAT-07: si los volcados estan cifrados (.age/.gpg) se descifran a un
+#     directorio temporal 0700 (AGE_IDENTITY_FILE o GPG_PASSPHRASE_FILE) para
+#     poder ejecutar las comprobaciones profundas.
 #   - PostgreSQL: cada .dump se lee con `pg_restore --list` (>= 1 entrada) y
 #     globals.sql es legible; avisa si no contiene CREATE ROLE.
 #   - MongoDB: mongo.archive.gz no vacio y `mongorestore --dryRun` lo abre y
@@ -40,6 +44,19 @@ MONGO_ROOT_USER="${MONGO_ROOT_USER:-root}"
 MONGO_ROOT_PASSWORD="${MONGO_ROOT_PASSWORD:-}"
 NEO4J_DATABASE="${NEO4J_DATABASE:-neo4j}"
 NEO4J_MIN_DUMP_BYTES="${NEO4J_MIN_DUMP_BYTES:-1024}"
+
+# PLAT-07: firma y cifrado. La verificacion profunda (pg_restore --list,
+# mongorestore --dryRun) necesita el contenido en claro, asi que si el backup
+# esta cifrado se descifra a un directorio temporal 0700 que se borra al salir.
+AGE_IDENTITY_FILE="${AGE_IDENTITY_FILE:-}"
+GPG_PASSPHRASE_FILE="${GPG_PASSPHRASE_FILE:-}"
+BACKUP_HMAC_KEY_FILE="${BACKUP_HMAC_KEY_FILE:-}"
+WORK_DIR=""
+
+# PLAT-11: comillas de un escalar YAML de una linea (comillas simples; '' escapa ').
+yaml_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
 
 log() { printf '[verify-backup] %s\n' "$*"; }
 warn() { printf '[verify-backup][AVISO] %s\n' "$*" >&2; }
@@ -119,6 +136,62 @@ else
   warn "no hay checksums.sha256; se omite la validacion criptografica"
 fi
 
+# PLAT-07: firma HMAC de los checksums (autenticidad, no solo integridad).
+if [[ -f "${BACKUP_DIR}/checksums.sha256.hmac" ]]; then
+  if [[ -z "${BACKUP_HMAC_KEY_FILE}" ]]; then
+    warn "backup firmado pero sin BACKUP_HMAC_KEY_FILE: no se puede verificar la firma"
+  else
+    expected="$(tr -d ' \r\n' < "${BACKUP_DIR}/checksums.sha256.hmac")"
+    actual="$( cd "${BACKUP_DIR}" && openssl dgst -sha256 \
+      -hmac "$(cat "${BACKUP_HMAC_KEY_FILE}")" checksums.sha256 | sed 's/^.*= //' | tr -d ' \r\n' )"
+    if [[ "${expected}" = "${actual}" ]]; then
+      log "firma HMAC: OK"
+    else
+      fail "firma HMAC invalida: el respaldo fue alterado o la clave no corresponde"
+    fi
+  fi
+else
+  warn "backup sin firma HMAC (checksums.sha256.hmac)"
+fi
+
+# --- Descifrado a un directorio temporal (PLAT-07) --------------------------
+FIRST_ENC="$(find "${BACKUP_DIR}" -type f \( -name '*.age' -o -name '*.gpg' \) -print 2>/dev/null | head -n 1 || true)"
+if [[ -n "${FIRST_ENC}" ]]; then
+  case "${FIRST_ENC}" in
+    *.age)
+      command -v age >/dev/null 2>&1 || die "el backup esta cifrado con age y 'age' no esta en PATH"
+      [[ -n "${AGE_IDENTITY_FILE}" ]] || die "define AGE_IDENTITY_FILE para descifrar y verificar el contenido"
+      [[ -r "${AGE_IDENTITY_FILE}" ]] || die "AGE_IDENTITY_FILE no es legible: ${AGE_IDENTITY_FILE}"
+      ;;
+    *.gpg) command -v gpg >/dev/null 2>&1 || die "el backup esta cifrado con gpg y 'gpg' no esta en PATH" ;;
+  esac
+
+  log "descifrando a un directorio temporal para la verificacion profunda"
+  WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smxplore-verify.XXXXXX")"
+  chmod 0700 "${WORK_DIR}"
+  trap '[[ -n "${WORK_DIR}" && -d "${WORK_DIR}" ]] && rm -rf -- "${WORK_DIR}"' EXIT
+  while IFS= read -r -d '' f; do
+    rel="${f#"${BACKUP_DIR}"/}"
+    case "${rel}" in
+      *.age) out="${WORK_DIR}/${rel%.age}" ;;
+      *.gpg) out="${WORK_DIR}/${rel%.gpg}" ;;
+      *) continue ;;
+    esac
+    mkdir -p "$(dirname "${out}")"
+    case "${rel}" in
+      *.age) age --decrypt --identity "${AGE_IDENTITY_FILE}" --output "${out}" "${f}" || die "no se pudo descifrar ${rel}" ;;
+      *.gpg)
+        if [[ -n "${GPG_PASSPHRASE_FILE}" ]]; then
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "${GPG_PASSPHRASE_FILE}" --output "${out}" --decrypt "${f}" || die "no se pudo descifrar ${rel}"
+        else
+          gpg --batch --yes --output "${out}" --decrypt "${f}" || die "no se pudo descifrar ${rel}"
+        fi
+        ;;
+    esac
+  done < <(find "${BACKUP_DIR}" -type f \( -name '*.age' -o -name '*.gpg' \) -print0)
+  BACKUP_DIR="${WORK_DIR}"
+fi
+
 # --- Descubrimiento de contenedores ----------------------------------------
 detect_project() {
   if [[ -n "${COMPOSE_PROJECT:-}" ]]; then
@@ -186,7 +259,10 @@ verify_postgres() {
 
   local flags=(-i)
   if [[ -n "${PG_PASSWORD}" ]]; then
-    flags+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    # PLAT-11: la password se hereda del entorno del proceso (docker exec -e VAR),
+  # no se escribe en argv (`docker exec -e VAR=valor` queda visible en `ps`).
+  export PGPASSWORD="${PG_PASSWORD}"
+  flags+=(-e PGPASSWORD)
   fi
 
   for dump in "${dumps[@]}"; do
@@ -209,19 +285,27 @@ verify_mongo() {
   [[ -n "${MONGO_CONTAINER}" ]] || { fail "MongoDB: no se encontro el contenedor"; return 0; }
 
   log "MongoDB: comprobando archivo con mongorestore --dryRun"
-  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore
-    "--uri=mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}"
-    --archive --gzip --dryRun)
-
-  if [[ "${MONGO_TLS}" = "true" ]]; then
-    cmd+=(--tls --tlsCAFile "${MONGO_CA_FILE}")
-  fi
-  if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
-    cmd+=(--username "${MONGO_ROOT_USER}" --password "${MONGO_ROOT_PASSWORD}" --authenticationDatabase admin)
-  fi
+  # PLAT-11: credenciales por archivo de configuracion (umask 077), no en argv.
+  local cmd=(docker exec -i "${MONGO_CONTAINER}" mongorestore --archive --gzip --dryRun)
+  local cfg="/tmp/smxplore-mongo-verify-$$.yaml"
+  {
+    printf 'uri: %s\n' "$(yaml_quote "mongodb://127.0.0.1:27017/?replicaSet=${MONGO_REPLICA_SET}")"
+    if [[ -n "${MONGO_ROOT_PASSWORD}" ]]; then
+      printf 'username: %s\n' "$(yaml_quote "${MONGO_ROOT_USER}")"
+      printf 'password: %s\n' "$(yaml_quote "${MONGO_ROOT_PASSWORD}")"
+      printf 'authenticationDatabase: %s\n' "$(yaml_quote "admin")"
+    fi
+    if [[ "${MONGO_TLS}" = "true" ]]; then
+      printf 'tls: true\n'
+      printf 'tlsCAFile: %s\n' "$(yaml_quote "${MONGO_CA_FILE}")"
+    fi
+  } | docker exec -i "${MONGO_CONTAINER}" sh -c 'umask 077; cat > "$1"' sh "${cfg}" \
+    || { fail "MongoDB: no se pudo escribir la configuracion temporal"; return 0; }
+  cmd+=(--config "${cfg}")
 
   local output
   if output="$("${cmd[@]}" < "${archive}" 2>&1)"; then
+    docker exec "${MONGO_CONTAINER}" rm -f "${cfg}" >/dev/null 2>&1 || true
     # mongorestore --dryRun enumera los namespaces que restauraria.
     if printf '%s' "${output}" | grep -qiE 'would restore|done'; then
       log "MongoDB: mongo.archive.gz OK (archivo interpretado por mongorestore)"
@@ -229,6 +313,7 @@ verify_mongo() {
       log "MongoDB: mongo.archive.gz OK (dryRun sin errores)"
     fi
   else
+    docker exec "${MONGO_CONTAINER}" rm -f "${cfg}" >/dev/null 2>&1 || true
     fail "MongoDB: mongorestore --dryRun fallo: ${output}"
   fi
 }

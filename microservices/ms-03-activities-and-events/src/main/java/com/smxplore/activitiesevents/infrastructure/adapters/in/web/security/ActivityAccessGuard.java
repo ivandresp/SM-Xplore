@@ -2,6 +2,7 @@ package com.smxplore.activitiesevents.infrastructure.adapters.in.web.security;
 
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
 import com.smxplore.activitiesevents.domain.model.user.UserRole;
+import com.smxplore.activitiesevents.domain.ports.repository.SiteCatalogPort;
 import com.smxplore.activitiesevents.domain.ports.usecases.activity.ViewActivityDetailsUseCasePort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -13,19 +14,25 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 /**
- * Ownership guard for activity writes: guides may only manage their own
- * activities; admins and destination managers may manage any activity.
- * The JWT role is read from the same configurable claim used by the security chain.
+ * Ownership guard for activity writes.
+ * <p>
+ * ADMIN puede con cualquier actividad; DESTINATION_MANAGER solo con las actividades de los sitios
+ * que gestiona (se resuelven contra ms-04 con el token del usuario); GUIDE solo con las suyas.
+ * Cualquier otro rol se rechaza. El rol se lee del mismo claim configurable que usa la cadena de
+ * seguridad.
  */
 @Component
 public class ActivityAccessGuard {
 
     private final ViewActivityDetailsUseCasePort viewActivityDetailsUseCase;
+    private final SiteCatalogPort siteCatalog;
     private final String roleClaim;
 
     public ActivityAccessGuard(ViewActivityDetailsUseCasePort viewActivityDetailsUseCase,
+                               SiteCatalogPort siteCatalog,
                                @Value("${app.security.jwt.role-claim:role}") String roleClaim) {
         this.viewActivityDetailsUseCase = viewActivityDetailsUseCase;
+        this.siteCatalog = siteCatalog;
         this.roleClaim = roleClaim;
     }
 
@@ -33,7 +40,7 @@ public class ActivityAccessGuard {
         return role(jwt) == UserRole.GUIDE;
     }
 
-    /** Admins and destination managers see the whole catalogue, published or not. */
+    /** Admins y gestoras pueden ver el catálogo completo, publicado o no. */
     public boolean isStaff(Jwt jwt) {
         return isStaffRole(role(jwt));
     }
@@ -43,7 +50,7 @@ public class ActivityAccessGuard {
         return role(jwt) == UserRole.ADMIN;
     }
 
-    /** Staff and the guide of record may read an activity in any state. */
+    /** Staff y el guía de la actividad pueden leerla en cualquier estado. */
     public boolean canViewUnpublished(Activity activity, Jwt jwt) {
         var role = role(jwt);
         if (role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER) {
@@ -56,19 +63,108 @@ public class ActivityAccessGuard {
                 && activity.getGuideId().toString().equals(jwt.getSubject());
     }
 
+    /**
+     * Autoriza una escritura sobre una actividad concreta: el gestor solo entra si el sitio de la
+     * actividad está entre los que gestiona en ms-04 (no se filtra la existencia de recursos ajenos:
+     * la actividad no existe → 404; existe pero es de otro → 403).
+     */
     public Mono<Void> requireCanManage(UUID activityId, Jwt jwt) {
         if (jwt == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required."));
+            return unauthorized();
         }
-        if (isStaff(jwt)) {
+        var role = role(jwt);
+        if (role == UserRole.ADMIN) {
             return Mono.empty();
+        }
+        if (role != UserRole.DESTINATION_MANAGER && role != UserRole.GUIDE) {
+            return forbid("Only an admin, the destination manager of the site or the guide of record"
+                    + " can manage an activity.");
         }
         return viewActivityDetailsUseCase.handle(activityId)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity not found")))
-                .flatMap(activity -> owns(activity, jwt)
-                        ? Mono.empty()
-                        : Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
-                                "Cannot manage another guide's activity")));
+                .flatMap(activity -> role == UserRole.DESTINATION_MANAGER
+                        ? requireManagesSite(activity.getSiteId(), jwt)
+                        : requireIsGuideOfRecord(activity, jwt));
+    }
+
+    /**
+     * Autoriza la creación de una actividad. El admin puede cualquier sitio; el gestor solo los
+     * suyos y, al no existir un directorio de usuarios en este servicio con el que verificar que un
+     * guía esté autorizado en el sitio, se rechaza cualquier {@code guideId} que venga en el body
+     * (fallar cerrado). El guía siempre se atribuye a sí mismo desde el token.
+     *
+     * <p>En los tres casos el sitio tiene que existir en ms-04: sin esa comprobación el catálogo del
+     * destino se podía llenar con actividades de un sitio inexistente o ajeno.
+     */
+    public Mono<Void> requireCanCreate(UUID siteId, UUID requestedGuideId, Jwt jwt) {
+        if (jwt == null) {
+            return unauthorized();
+        }
+        var role = role(jwt);
+        if (role == UserRole.ADMIN || role == UserRole.GUIDE) {
+            return requireSiteExists(siteId, jwt);
+        }
+        if (role != UserRole.DESTINATION_MANAGER) {
+            return forbid("Only an admin, a destination manager or a guide can create an activity.");
+        }
+        return requireManagesSite(siteId, jwt)
+                .then(requestedGuideId == null
+                        ? Mono.<Void>empty()
+                        : Mono.error(forbidden("A destination manager cannot assign a guide while creating an"
+                                + " activity: guide authorization on the site cannot be verified.")));
+    }
+
+    /**
+     * Autoriza publicar una actividad: además del permiso de gestión, el sitio tiene que seguir
+     * existiendo en ms-04. Consultar el sitio también para la gestora es deliberado: su lista de
+     * sitios puede venir de una respuesta en caché y publicar en un destino borrado no tiene sentido.
+     */
+    public Mono<Void> requirePublishableSite(UUID activityId, Jwt jwt) {
+        return requireCanManage(activityId, jwt)
+                .then(Mono.defer(() -> viewActivityDetailsUseCase.handle(activityId)))
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Activity not found")))
+                .flatMap(activity -> requireSiteExists(activity.getSiteId(), jwt));
+    }
+
+    /** El sitio debe existir en ms-04 (cualquier rol que publique). */
+    private Mono<Void> requireSiteExists(UUID siteId, Jwt jwt) {
+        if (siteId == null) {
+            return forbid("A site is required for the activity.");
+        }
+        return siteCatalog.findById(siteId, jwt.getTokenValue())
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Site " + siteId + " does not exist.")))
+                .then()
+                .onErrorMap(error -> error instanceof ResponseStatusException ? error
+                        : new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Cannot verify the site right now.", error));
+    }
+
+    private Mono<Void> requireIsGuideOfRecord(Activity activity, Jwt jwt) {
+        return owns(activity, jwt)
+                ? Mono.empty()
+                : Mono.error(forbidden("Cannot manage another guide's activity"));
+    }
+
+    /** El sitio debe estar entre los que ms-04 devuelve para el gestor del token. */
+    private Mono<Void> requireManagesSite(UUID siteId, Jwt jwt) {
+        if (siteId == null) {
+            return forbid("A site is required to manage an activity.");
+        }
+        var subject = subject(jwt);
+        if (subject == null) {
+            return forbid("Invalid token subject.");
+        }
+        return siteCatalog.findByManagerId(subject, jwt.getTokenValue())
+                .map(site -> site.siteId())
+                .filter(managedSiteId -> siteId.equals(managedSiteId))
+                .hasElements()
+                .flatMap(owns -> owns
+                        ? Mono.<Void>empty()
+                        : Mono.error(forbidden("Cannot manage an activity of another destination.")))
+                .onErrorMap(error -> error instanceof ResponseStatusException ? error
+                        : new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Cannot verify the site ownership right now.", error));
     }
 
     private boolean owns(Activity activity, Jwt jwt) {
@@ -83,8 +179,32 @@ public class ActivityAccessGuard {
         }
     }
 
+    private static UUID subject(Jwt jwt) {
+        var subject = jwt.getSubject();
+        if (subject == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(subject);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
     private static boolean isStaffRole(UserRole role) {
         return role == UserRole.ADMIN || role == UserRole.DESTINATION_MANAGER;
+    }
+
+    private static Mono<Void> unauthorized() {
+        return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required."));
+    }
+
+    private static Mono<Void> forbid(String message) {
+        return Mono.error(forbidden(message));
+    }
+
+    private static ResponseStatusException forbidden(String message) {
+        return new ResponseStatusException(HttpStatus.FORBIDDEN, message);
     }
 
     private UserRole role(Jwt jwt) {

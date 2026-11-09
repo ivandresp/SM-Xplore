@@ -64,7 +64,7 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
         assertThat(summary.reviewCount()).isEqualTo(1);
         assertThat(summary.averageRating()).isEqualTo(5.0);
 
-        PageResponse<CategoryResponse> categories = listCategories(touristId);
+        PageResponse<CategoryResponse> categories = listCategories(touristId, category.name());
         assertThat(categories.content())
                 .extracting(CategoryResponse::categoryId)
                 .contains(category.categoryId());
@@ -186,6 +186,33 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .expectStatus().isOk();
     }
 
+    /**
+     * Auditoria final 2026-11-08: el listado publico de resenas mostraba el touristId (un UUID
+     * estable de la persona) a cualquiera. Ahora solo expone el nombre y la vista administrativa
+     * conserva el identificador.
+     */
+    @Test
+    void publicReviewListingShowsTheAuthorNameButNotTheIdentifier() {
+        UUID managerId = UUID.randomUUID();
+        UUID touristId = UUID.randomUUID();
+        CategoryResponse category = createCategory(managerId);
+        ZoneResponse zone = createZone(managerId);
+        SiteResponse site = createSite(managerId, category.categoryId(), zone.zoneId());
+        createReview(touristId, site.siteId());
+
+        String json = webTestClient.get()
+                .uri("/api/v1/reviews?itemType=SITE&itemId=" + site.siteId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(json).isNotNull();
+        assertThat(json).contains("\"touristName\"");
+        assertThat(json).doesNotContain("\"touristId\"");
+    }
+
     @Test
     void filtersSitesByManagerForAdministrators() {
         UUID managerA = UUID.randomUUID();
@@ -264,12 +291,14 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .getResponseBody();
     }
 
-    private CategoryResponse createCategory(UUID managerId) {        return clientFor(managerId, "DESTINATION_MANAGER")
+    private CategoryResponse createCategory(UUID adminId) {
+        String categoryName = "Naturaleza " + UUID.randomUUID();
+        return clientFor(adminId, "ADMIN")
                 .post().uri("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"name":"Naturaleza","scope":"GENERAL","parentId":null}
-                        """)
+                        {"name":"%s","scope":"GENERAL","parentId":null}
+                        """.formatted(categoryName))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(CategoryResponse.class)
@@ -503,9 +532,14 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 .expectStatus().isOk();
     }
 
-    private PageResponse<CategoryResponse> listCategories(UUID touristId) {
+    private PageResponse<CategoryResponse> listCategories(UUID touristId, String search) {
         return clientFor(touristId, "TOURIST")
-                .get().uri("/api/v1/categories")
+                .get().uri(uriBuilder -> uriBuilder
+                        .path("/api/v1/categories")
+                        .queryParam("search", search)
+                        .queryParam("page", 0)
+                        .queryParam("size", 100)
+                        .build())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(new org.springframework.core.ParameterizedTypeReference<PageResponse<CategoryResponse>>() {
@@ -556,6 +590,79 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                 })
                 .returnResult()
                 .getResponseBody();
+    }
+
+    /**
+     * MS04-01: la taxonomia global es solo de ADMIN (regla HTTP + defensa en profundidad)
+     * y el arbol de categorias no admite ciclos ni padres inexistentes.
+     */
+    @Test
+    void categoryTaxonomyIsAdminOnlyAndRejectsCycles() {
+        UUID adminId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+
+        clientFor(managerId, "DESTINATION_MANAGER")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Taxonomía gestora","scope":"GENERAL","parentId":null}
+                        """)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        UUID parentId = createCategory(adminId).categoryId();
+        UUID childId = createChildCategory(adminId, parentId);
+
+        clientFor(adminId, "ADMIN")
+                .put().uri("/api/v1/categories/" + childId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Naturaleza actualizada","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isOk();
+
+        clientFor(managerId, "DESTINATION_MANAGER")
+                .put().uri("/api/v1/categories/" + childId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Intento de gestora","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        clientFor(adminId, "ADMIN")
+                .put().uri("/api/v1/categories/" + parentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Naturaleza","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(childId))
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        clientFor(adminId, "ADMIN")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Huérfana","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    private UUID createChildCategory(UUID adminId, UUID parentId) {
+        return clientFor(adminId, "ADMIN")
+                .post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Playas","scope":"GENERAL","parentId":"%s"}
+                        """.formatted(parentId))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(CategoryResponse.class)
+                .returnResult()
+                .getResponseBody()
+                .categoryId();
     }
 
     private WebTestClient clientFor(UUID userId, String role) {

@@ -7,6 +7,7 @@ import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventItemChangedEvent;
 import com.smxplore.recommendations.domain.model.event.EventTopics;
 import com.smxplore.recommendations.domain.model.event.ProjectedEvent;
+import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,8 +26,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProjectionEventDecoderTest {
 
+    /**
+     * Fixed clock after every contract fixture date, so the future-skew guard (MS05-01) does
+     * not reject the examples and the regression tests can use timestamps relative to it.
+     */
+    private static final Instant NOW = Instant.parse("2027-01-01T00:00:00Z");
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ProjectionEventDecoder decoder = new ProjectionEventDecoder(objectMapper);
+    private final EventConsumerProperties properties = new EventConsumerProperties();
+    private final ProjectionEventDecoder decoder = new ProjectionEventDecoder(
+            objectMapper, properties, Clock.fixed(NOW, ZoneOffset.UTC));
     private final Path contractsDirectory =
             Path.of(System.getProperty("contracts.dir", "../../contracts/events"));
 
@@ -245,18 +256,142 @@ class ProjectionEventDecoderTest {
     }
 
     private String envelope(String eventType, UUID aggregateId, int eventVersion, String payload) {
+        return envelope(eventType, aggregateId, eventVersion, "ms-04",
+                "2026-11-02T15:00:00Z", payload);
+    }
+
+    private String envelope(String eventType, UUID aggregateId, int eventVersion, String producer,
+                            String occurredAt, String payload) {
         return """
                 {
                   "eventId": "%s",
                   "eventType": "%s",
                   "eventVersion": %d,
-                  "occurredAt": "2026-11-02T15:00:00Z",
+                  "occurredAt": "%s",
                   "aggregateId": "%s",
                   "correlationId": "test-correlation",
-                  "producer": "ms-04",
+                  "producer": "%s",
                   "payload": {%s}
                 }
-                """.formatted(UUID.randomUUID(), eventType, eventVersion, aggregateId, payload);
+                """.formatted(UUID.randomUUID(), eventType, eventVersion, occurredAt, aggregateId,
+                producer, payload);
+    }
+
+    /** MS05-01: an event must be attributed to the producer that owns the topic. */
+    @Test
+    void rejectsAProducerThatDoesNotMatchTheTopic() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1, "ms-03",
+                "2026-11-02T15:00:00Z", sitePayload(siteId, "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("producer");
+    }
+
+    /** MS05-01: a future occurredAt would poison the freshness comparison of the graph. */
+    @Test
+    void rejectsAnOccurredAtInTheFuture() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1, "ms-04",
+                "2027-01-01T00:10:00Z", sitePayload(siteId, "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("occurredAt");
+    }
+
+    /** MS05-01: a future updatedAt would freeze the entity against every later event. */
+    @Test
+    void rejectsAnUpdatedAtInTheFuture() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1,
+                sitePayload(siteId, "2030-01-01T00:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("updatedAt");
+    }
+
+    /** The skew tolerance keeps clock drift and in-flight events working. */
+    @Test
+    void acceptsTimestampsWithinTheConfiguredSkew() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1, "ms-04",
+                "2027-01-01T00:02:00Z", sitePayload(siteId, "2027-01-01T00:02:00Z"));
+
+        ProjectedEvent event = decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json);
+
+        assertThat(event).isInstanceOf(SiteChangedEvent.class);
+    }
+
+    /** MS05-09: an unbounded payload text must never become a graph property or a reason. */
+    @Test
+    void rejectsAnOverlongTextInThePayload() {
+        UUID siteId = UUID.randomUUID();
+        String json = envelope(EventTopics.CATALOG_SITE_CHANGED, siteId, 1, "ms-04",
+                "2026-11-02T15:00:00Z",
+                sitePayload(siteId, "x".repeat(201), "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.CATALOG_SITE_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("name must be at most 200 characters");
+    }
+
+    /** reviews.review.changed has two legitimate publishers: ms-03 and ms-04. */
+    @Test
+    void acceptsBothLegitimateProducersOfReviews() {
+        UUID reviewId = UUID.randomUUID();
+        String payload = reviewPayload(reviewId, "2026-11-02T15:00:00Z");
+
+        for (String producer : new String[] {"ms-03-activities-and-events", "ms-04"}) {
+            String json = envelope(EventTopics.REVIEWS_REVIEW_CHANGED, reviewId, 1, producer,
+                    "2026-11-02T15:00:00Z", payload);
+
+            ProjectedEvent event = decoder.decode(EventTopics.REVIEWS_REVIEW_CHANGED, null, json);
+
+            assertThat(event).isInstanceOf(ReviewChangedEvent.class);
+        }
+    }
+
+    /** A publisher outside the two legitimate ones is still rejected. */
+    @Test
+    void rejectsAnUnknownProducerOfReviews() {
+        UUID reviewId = UUID.randomUUID();
+        String json = envelope(EventTopics.REVIEWS_REVIEW_CHANGED, reviewId, 1, "ms-02",
+                "2026-11-02T15:00:00Z", reviewPayload(reviewId, "2026-11-02T15:00:00Z"));
+
+        assertThatThrownBy(() -> decoder.decode(EventTopics.REVIEWS_REVIEW_CHANGED, null, json))
+                .isInstanceOf(InvalidEventException.class)
+                .hasMessageContaining("producer");
+    }
+
+    private String reviewPayload(UUID reviewId, String updatedAt) {
+        return """
+                "reviewId": "%s",
+                "touristId": "%s",
+                "itemType": "ACTIVITY",
+                "itemId": "%s",
+                "rating": 5,
+                "status": "PUBLISHED",
+                "updatedAt": "%s"
+                """.formatted(reviewId, UUID.randomUUID(), UUID.randomUUID(), updatedAt);
+    }
+
+    private String sitePayload(UUID siteId, String updatedAt) {
+        return sitePayload(siteId, "Playa Cristal", updatedAt);
+    }
+
+    private String sitePayload(UUID siteId, String name, String updatedAt) {
+        return """
+                "siteId": "%s",
+                "name": "%s",
+                "categoryId": "%s",
+                "latitude": 11.31,
+                "longitude": -74.17,
+                "status": "PUBLISHED",
+                "updatedAt": "%s"
+                """.formatted(siteId, name, UUID.randomUUID(), updatedAt);
     }
 
     private Path examplePath(String topic) {

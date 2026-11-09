@@ -17,4 +17,10 @@ public interface RecommendationMetricsPort {
     void cacheMiss();
 
     void diversity(int distinctCategories, int distinctSites);
+
+    /**
+     * An administrator read the recommendations of a different tourist (MS05-13). Counted so the
+     * support capability is observable and can be alerted on.
+     */
+    void adminCrossTouristAccess();
 }

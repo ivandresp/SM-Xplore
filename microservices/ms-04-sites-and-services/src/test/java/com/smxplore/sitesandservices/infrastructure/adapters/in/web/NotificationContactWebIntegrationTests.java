@@ -38,7 +38,7 @@ class NotificationContactWebIntegrationTests extends AbstractMongoPostgresIntegr
                 .put().uri("/api/v1/admin/notification-contacts/" + recipientId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"email":"tourist@example.com"}
+                        {"email":"tourist@example.com","confirm":true}
                         """)
                 .exchange()
                 .expectStatus().isOk()
@@ -55,7 +55,7 @@ class NotificationContactWebIntegrationTests extends AbstractMongoPostgresIntegr
                 .put().uri("/api/v1/admin/notification-contacts/" + recipientId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"email":"  tourist+updated@example.com  "}
+                        {"email":"  tourist+updated@example.com  ","confirm":true}
                         """)
                 .exchange()
                 .expectStatus().isOk()
@@ -81,7 +81,7 @@ class NotificationContactWebIntegrationTests extends AbstractMongoPostgresIntegr
                 .put().uri("/api/v1/admin/notification-contacts/" + recipientId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"email":"tourist@example.com"}
+                        {"email":"tourist@example.com","confirm":true}
                         """)
                 .exchange()
                 .expectStatus().isForbidden();

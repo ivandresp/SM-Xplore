@@ -4,7 +4,9 @@ import com.smxplore.recommendations.domain.exception.InvalidRequestException;
 import com.smxplore.recommendations.domain.exception.ItemNotFoundException;
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
 import com.smxplore.recommendations.domain.ports.in.RegisterViewUseCase;
+import com.smxplore.recommendations.domain.ports.out.InteractionDeduplicationPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -16,11 +18,18 @@ import java.util.UUID;
 public class RegisterViewService implements RegisterViewUseCase {
 
     private final RecommendationGraphPort graphPort;
+    private final InteractionDeduplicationPort deduplicationPort;
+    private final RecommendationQuotaPort quotaPort;
     private final Clock clock;
 
     @Override
     public Mono<Void> handle(UUID touristId, ItemType itemType, UUID itemId, String language) {
         validateCommand(touristId, itemType, itemId);
+        quotaPort.checkView(touristId);
+        if (deduplicationPort.isDuplicate(touristId, itemType, itemId)) {
+            // MS05-04: repeated views inside the dedupe window are a no-op, not an error.
+            return Mono.empty();
+        }
         Instant now = clock.instant();
         return registerView(touristId, itemType, itemId, language, now);
     }

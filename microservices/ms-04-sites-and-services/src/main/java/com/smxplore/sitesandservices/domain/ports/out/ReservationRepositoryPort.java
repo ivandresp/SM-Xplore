@@ -8,6 +8,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface ReservationRepositoryPort {
@@ -35,4 +36,10 @@ public interface ReservationRepositoryPort {
     Flux<UUID> findCompletable(Instant cutoff, int limit);
 
     Mono<Boolean> updateStatus(Reservation reservation, ReservationStatus expectedStatus);
+
+    /**
+     * MS04-12: indica si el turista tiene alguna reserva COMPLETED que incluya alguno de los
+     * servicios indicados. Se usa como prueba de consumo antes de aceptar una reseña.
+     */
+    Mono<Boolean> existsCompletedBooking(UUID touristId, Collection<UUID> serviceIds);
 }

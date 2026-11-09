@@ -9,6 +9,16 @@ app:
       user-id-claim: userId
       role-claim: role
       name-claim: name
+    # El perfil test relaja explicitamente estos controles; no dependen de que falte el perfil prod.
+    auth-version:
+      enabled: false
+    mfa:
+      require-admin: false
+    photos:
+      # MS02-07: en tests se valida la allowlist real; solo se permite el host de los fixtures.
+      allowed-hosts: example.com
+      allow-any-host: false
+      allow-http: false
 
 spring:
   data:

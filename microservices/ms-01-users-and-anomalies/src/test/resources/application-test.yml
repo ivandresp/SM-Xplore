@@ -24,12 +24,21 @@ app:
       required-for-admins: false
       challenge-ttl: PT5M
       issuer: SM-Xplore
+    headers:
+      hsts-enabled: false
   cors:
     allowed-origins:
       - http://localhost:5173
   frontend:
     base-url: http://localhost:5173
     reset-password-path: /reset-password
+    verify-email-path: /verificar-correo
+  # MS01-18: en pruebas se desactiva la verificación de correo para no exigir Mailpit en cada suite;
+  # las pruebas del flujo lo activan con @TestPropertySource.
+  registration:
+    email-verification:
+      enabled: false
+      token-ttl: PT24H
   reviews:
     index-initialization:
       enabled: false

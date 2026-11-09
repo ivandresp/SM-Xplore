@@ -84,11 +84,12 @@ class MfaEnforcementFlowTest {
 
         assertThat(get("/api/v1/users/me", pendingToken).status()).isEqualTo(HttpStatus.OK);
 
-        Map<String, Object> enrollment = post("/api/v1/users/me/mfa/enroll", Map.of(), pendingToken);
+        Map<String, Object> enrollment =
+                post("/api/v1/users/me/mfa/enroll", Map.of("password", "ChangeMe123!"), pendingToken);
         String secret = (String) enrollment.get("secret");
         assertThat(postStatus(
                         "/api/v1/users/me/mfa/confirm",
-                        Map.of("code", totp.currentCode(secret, Instant.now())),
+                        Map.of("code", totp.currentCode(secret, Instant.now()), "password", "ChangeMe123!"),
                         pendingToken))
                 .isEqualTo(HttpStatus.NO_CONTENT);
 

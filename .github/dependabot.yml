@@ -1,6 +1,15 @@
-## Actualizaciones automáticas de dependencias para ms-01.
+## Actualizaciones automaticas de dependencias (PLAT-20).
+##
+## Cubre los cinco servicios (Gradle y su imagen base Docker), el gateway, las
+## imagenes de los compose y las acciones del repo. Los grupos agrupan Spring y
+## Testcontainers para no abrir veinte PRs por semana.
+##
+## Nota: los servicios son builds Gradle independientes (no hay multi-proyecto),
+## por eso hay una entrada por directorio; si algun dia se adopta un build raiz,
+## basta con dejar una sola entrada de `gradle` en "/".
 version: 2
 updates:
+  # --- Gradle (uno por servicio) ---------------------------------------------
   - package-ecosystem: "gradle"
     directory: "/microservices/ms-01-users-and-anomalies"
     schedule:
@@ -15,14 +24,125 @@ updates:
         patterns:
           - "org.testcontainers*"
 
-  - package-ecosystem: "github-actions"
+  - package-ecosystem: "gradle"
+    directory: "/microservices/ms-02-security-reports"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+      testcontainers:
+        patterns:
+          - "org.testcontainers*"
+
+  - package-ecosystem: "gradle"
+    directory: "/microservices/ms-03-activities-and-events"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+      testcontainers:
+        patterns:
+          - "org.testcontainers*"
+
+  - package-ecosystem: "gradle"
+    directory: "/microservices/ms-04-sites-and-services"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+      testcontainers:
+        patterns:
+          - "org.testcontainers*"
+
+  - package-ecosystem: "gradle"
+    directory: "/microservices/ms-05-recommendations"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+      testcontainers:
+        patterns:
+          - "org.testcontainers*"
+
+  # --- Imagenes base de los Dockerfiles de servicio --------------------------
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-01-users-and-anomalies"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-02-security-reports"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-03-activities-and-events"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-04-sites-and-services"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/microservices/ms-05-recommendations"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # --- Gateway ---------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/deploy/gateway"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # --- Imagenes de los compose (dev, infra y produccion) ---------------------
+  # Los tags viven en `image: ${VAR:-tag}`; Dependabot actualiza el tag por
+  # defecto. En produccion, `deploy/prod/images.env` (digests) se pinea con
+  # `deploy/prod/pin-images.sh`, no con Dependabot (PLAT-13).
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
 
   - package-ecosystem: "docker"
-    directory: "/microservices/ms-01-users-and-anomalies"
+    directory: "/infrastructure"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/deploy/prod"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # --- Acciones de GitHub ----------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"

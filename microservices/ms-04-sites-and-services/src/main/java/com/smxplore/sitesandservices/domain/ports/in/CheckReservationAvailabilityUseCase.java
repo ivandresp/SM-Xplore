@@ -1,5 +1,6 @@
 package com.smxplore.sitesandservices.domain.ports.in;
 
+import com.smxplore.sitesandservices.domain.model.common.Actor;
 import com.smxplore.sitesandservices.domain.model.reservation.ReservationAvailability;
 import reactor.core.publisher.Mono;
 
@@ -8,5 +9,5 @@ import java.util.UUID;
 
 public interface CheckReservationAvailabilityUseCase {
 
-    Mono<ReservationAvailability> handle(UUID serviceId, Instant bookedFor, int people);
+    Mono<ReservationAvailability> handle(UUID serviceId, Instant bookedFor, int people, Actor actor);
 }

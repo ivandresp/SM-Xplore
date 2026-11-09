@@ -51,6 +51,15 @@ public class MongoIndexInitializer {
                         .createIndex(new Index().on("site.id", Sort.Direction.ASC)),
                 mongoTemplate.indexOps(ServiceDocument.class)
                         .createIndex(new Index().on("provider.id", Sort.Direction.ASC)),
+                // MS04-06: listados publicados por rango de precio.
+                mongoTemplate.indexOps(ServiceDocument.class)
+                        .createIndex(new Index()
+                                .on("status", Sort.Direction.ASC)
+                                .on("price", Sort.Direction.ASC)),
+                mongoTemplate.indexOps(ServiceDocument.class)
+                        .createIndex(new Index()
+                                .on("site.id", Sort.Direction.ASC)
+                                .on("price", Sort.Direction.ASC)),
                 mongoTemplate.indexOps(ServiceDocument.class)
                         .createIndex(new Index().on("updatedAt", Sort.Direction.DESC)),
                 mongoTemplate.indexOps(ReviewDocument.class)

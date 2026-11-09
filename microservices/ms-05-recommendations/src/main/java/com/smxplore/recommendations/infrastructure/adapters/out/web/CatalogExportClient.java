@@ -21,6 +21,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,7 +45,7 @@ public class CatalogExportClient implements CatalogExportPort {
 
     static final String CORRELATION_ID = "ms-05-reindex";
     static final String PRODUCER_MS04 = "ms-04";
-    static final String PRODUCER_MS03 = "ms-03";
+    static final String PRODUCER_MS03 = "ms-03-activities-and-events";
     /** Version assumed when ms-04 does not send {@code eventVersion} (older builds). */
     static final int LEGACY_EVENT_VERSION = 1;
     /** ms-03 only publishes v2 activities/events, so its export is always v2. */
@@ -58,18 +59,30 @@ public class CatalogExportClient implements CatalogExportPort {
     private final ReindexProperties properties;
 
     private Map<CatalogEntity, WebClient> clients;
+    private Map<CatalogEntity, String> baseUrls;
 
     @PostConstruct
     public void init() {
         Duration timeout = properties.getTimeout();
         HttpClient httpClient = HttpClient.create().responseTimeout(timeout);
         Map<CatalogEntity, WebClient> byEntity = new EnumMap<>(CatalogEntity.class);
-        byEntity.put(CatalogEntity.CATEGORIES, buildClient(httpClient, properties.getCatalogBaseUrl()));
-        byEntity.put(CatalogEntity.SITES, buildClient(httpClient, properties.getCatalogBaseUrl()));
-        byEntity.put(CatalogEntity.SERVICES, buildClient(httpClient, properties.getCatalogBaseUrl()));
-        byEntity.put(CatalogEntity.ACTIVITIES, buildClient(httpClient, properties.getActivitiesBaseUrl()));
-        byEntity.put(CatalogEntity.EVENTS, buildClient(httpClient, properties.getEventsBaseUrl()));
+        Map<CatalogEntity, String> urls = new EnumMap<>(CatalogEntity.class);
+        put(byEntity, urls, httpClient, CatalogEntity.CATEGORIES, properties.getCatalogBaseUrl());
+        put(byEntity, urls, httpClient, CatalogEntity.SITES, properties.getCatalogBaseUrl());
+        put(byEntity, urls, httpClient, CatalogEntity.SERVICES, properties.getCatalogBaseUrl());
+        put(byEntity, urls, httpClient, CatalogEntity.ACTIVITIES, properties.getActivitiesBaseUrl());
+        put(byEntity, urls, httpClient, CatalogEntity.EVENTS, properties.getEventsBaseUrl());
         this.clients = byEntity;
+        this.baseUrls = urls;
+    }
+
+    private void put(Map<CatalogEntity, WebClient> clientsByEntity,
+                     Map<CatalogEntity, String> urlsByEntity,
+                     HttpClient httpClient,
+                     CatalogEntity entity,
+                     String baseUrl) {
+        clientsByEntity.put(entity, buildClient(httpClient, baseUrl));
+        urlsByEntity.put(entity, baseUrl);
     }
 
     private WebClient buildClient(HttpClient httpClient, String baseUrl) {
@@ -94,6 +107,14 @@ public class CatalogExportClient implements CatalogExportPort {
         if (client == null) {
             return Mono.error(new InvalidReindexException("entity is not supported: " + entity));
         }
+        String baseUrl = baseUrls.get(entity);
+        String host = hostOf(baseUrl);
+        if (host == null || !properties.isAllowedHost(host)) {
+            // MS05-03: never send the administrator bearer to a host outside the allowlist,
+            // even if the environment changed after startup.
+            return Mono.error(new InvalidReindexException(
+                    "catalog export host is not allowed: " + host + " (entity " + entity + ")"));
+        }
         return client.get()
                 .uri(builder -> {
                     builder.path(EXPORT_PATH)
@@ -117,6 +138,21 @@ public class CatalogExportClient implements CatalogExportPort {
                     return response.bodyToMono(String.class)
                             .map(body -> decodePage(entity, body));
                 });
+    }
+
+    /**
+     * Host of a configured base URL, or {@code null} when it cannot be parsed. The allowlist
+     * check runs on every request so a runtime change of the property cannot leak the token.
+     */
+    private static String hostOf(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return null;
+        }
+        try {
+            return URI.create(baseUrl).getHost();
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private RuntimeException statusError(CatalogEntity entity, HttpStatusCode status, String body) {

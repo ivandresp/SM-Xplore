@@ -2,6 +2,7 @@ package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
+import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
@@ -23,13 +24,19 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
 
     private final UserRepository users;
     private final AuditTrailRecorder audit;
+    private final AuthVersionEvictor evictor;
     private final TransactionPort transactions;
     private final Clock clock;
 
     public ChangeUserStatusService(
-            UserRepository users, AuditTrailRecorder audit, TransactionPort transactions, Clock clock) {
+            UserRepository users,
+            AuditTrailRecorder audit,
+            AuthVersionEvictor evictor,
+            TransactionPort transactions,
+            Clock clock) {
         this.users = users;
         this.audit = audit;
+        this.evictor = evictor;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -74,6 +81,8 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
             return users.save(target)
                     .then(audit.record(
                             actorId, AuditAction.ESTADO_CAMBIADO, target.id(), details(previousStatus, command), now))
+                    // MS01-15: bloquear o suspender incrementa authVersion y debe cerrar la sesión al instante.
+                    .then(evictor.evict(target.id()))
                     .thenReturn(target);
         });
     }

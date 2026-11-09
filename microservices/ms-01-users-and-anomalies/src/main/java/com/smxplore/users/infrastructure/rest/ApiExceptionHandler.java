@@ -8,6 +8,7 @@ import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
+import com.smxplore.users.domain.exception.InvalidEmailVerificationTokenException;
 import com.smxplore.users.domain.exception.InvalidMfaChallengeException;
 import com.smxplore.users.domain.exception.InvalidMfaCodeException;
 import com.smxplore.users.domain.exception.InvalidPasswordResetTokenException;
@@ -15,6 +16,7 @@ import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
+import com.smxplore.users.domain.exception.ReportQuotaExceededException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.ReviewNotFoundException;
@@ -68,12 +70,32 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage());
     }
 
+    /**
+     * MS01-04: el bloqueo por intentos fallidos responde exactamente igual que una contraseña incorrecta (401
+     * genérico, sin {@code retryAfterSeconds}). Antes devolvía 429 {@code TOO_MANY_ATTEMPTS}, lo que permitía a un
+     * atacante distinguir un correo registrado de uno inexistente (oráculo de existencia de cuentas).
+     */
     @ExceptionHandler(TooManyLoginAttemptsException.class)
     public ResponseEntity<ProblemDetail> handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
+        return problem(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Correo electrónico o contraseña incorrectos");
+    }
+
+    @ExceptionHandler(InvalidEmailVerificationTokenException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidEmailVerificationToken(
+            InvalidEmailVerificationTokenException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_EMAIL_VERIFICATION_TOKEN", exception.getMessage());
+    }
+
+    /**
+     * MS01-22: la cuota de reportes de reseñas responde 429 con {@code Retry-After} para que el cliente sepa cuándo
+     * puede volver a reportar.
+     */
+    @ExceptionHandler(ReportQuotaExceededException.class)
+    public ResponseEntity<ProblemDetail> handleReportQuota(ReportQuotaExceededException exception) {
         long retryAfterSeconds = Math.max(1, exception.retryAfter().toSeconds());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
-        problem.setTitle("Too Many Requests");
-        problem.setProperty("code", "TOO_MANY_ATTEMPTS");
+        problem.setTitle(HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
+        problem.setProperty("code", "REPORT_LIMIT_EXCEEDED");
         problem.setProperty("retryAfterSeconds", retryAfterSeconds);
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))

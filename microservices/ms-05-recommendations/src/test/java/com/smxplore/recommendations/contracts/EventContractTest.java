@@ -18,6 +18,7 @@ import com.smxplore.recommendations.domain.model.event.ReviewChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ServiceChangedEvent;
 import com.smxplore.recommendations.domain.model.event.SiteChangedEvent;
 import com.smxplore.recommendations.domain.model.event.ZoneChangedEvent;
+import com.smxplore.recommendations.infrastructure.adapters.in.kafka.EventConsumerProperties;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,6 +26,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +46,10 @@ class EventContractTest {
     private final ObjectMapper schemaMapper = new ObjectMapper();
     private final tools.jackson.databind.ObjectMapper eventMapper =
             new tools.jackson.databind.ObjectMapper();
-    private final ProjectionEventDecoder decoder = new ProjectionEventDecoder(eventMapper);
+    private final ProjectionEventDecoder decoder = new ProjectionEventDecoder(
+            eventMapper,
+            new EventConsumerProperties(),
+            Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC));
     private final Path contractsDirectory =
             Path.of(System.getProperty("contracts.dir", "../../contracts/events"));
 

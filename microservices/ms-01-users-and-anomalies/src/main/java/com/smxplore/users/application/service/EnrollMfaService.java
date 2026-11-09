@@ -3,11 +3,13 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.MfaEnrollmentView;
 import com.smxplore.users.application.port.in.EnrollMfaUseCase;
 import com.smxplore.users.application.port.out.MfaRepository;
+import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
-import com.smxplore.users.application.port.out.TokenHasher;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.TotpAuthenticator;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
+import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
 import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.model.MfaEnrollment;
@@ -24,41 +26,52 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
     private static final int RECOVERY_CODE_COUNT = 10;
 
     private final UserRepository users;
+    private final PasswordHasher passwordHasher;
     private final MfaRepository mfa;
     private final TotpAuthenticator totp;
     private final RecoveryCodeGenerator recoveryCodeGenerator;
-    private final TokenHasher tokenHasher;
+    private final RecoveryCodeHasher recoveryCodeHasher;
     private final TransactionPort transactions;
     private final Clock clock;
     private final String issuerName;
 
     public EnrollMfaService(
             UserRepository users,
+            PasswordHasher passwordHasher,
             MfaRepository mfa,
             TotpAuthenticator totp,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             TransactionPort transactions,
             Clock clock,
             String issuerName) {
         this.users = users;
+        this.passwordHasher = passwordHasher;
         this.mfa = mfa;
         this.totp = totp;
         this.recoveryCodeGenerator = recoveryCodeGenerator;
-        this.tokenHasher = tokenHasher;
+        this.recoveryCodeHasher = recoveryCodeHasher;
         this.transactions = transactions;
         this.clock = clock;
         this.issuerName = issuerName;
     }
 
     @Override
-    public Mono<MfaEnrollmentView> enroll(UUID userId) {
+    public Mono<MfaEnrollmentView> enroll(UUID userId, String password) {
         return users.findById(userId)
                 .switchIfEmpty(Mono.error(UserNotFoundException::new))
-                .flatMap(user -> mfa.findByUserId(userId)
-                        .filter(MfaEnrollment::enabled)
-                        .flatMap(existing -> Mono.<MfaEnrollmentView>error(new MfaAlreadyEnabledException()))
-                        .switchIfEmpty(Mono.defer(() -> create(user))));
+                .flatMap(user -> passwordHasher
+                        .matches(password, user.passwordHash())
+                        .flatMap(matches -> Boolean.TRUE.equals(matches)
+                                ? enrollFor(user)
+                                : Mono.<MfaEnrollmentView>error(new InvalidCurrentPasswordException())));
+    }
+
+    private Mono<MfaEnrollmentView> enrollFor(Usuario user) {
+        return mfa.findByUserId(user.id())
+                .filter(MfaEnrollment::enabled)
+                .flatMap(existing -> Mono.<MfaEnrollmentView>error(new MfaAlreadyEnabledException()))
+                .switchIfEmpty(Mono.defer(() -> create(user)));
     }
 
     private Mono<MfaEnrollmentView> create(Usuario user) {
@@ -67,8 +80,9 @@ public final class EnrollMfaService implements EnrollMfaUseCase {
         List<String> recoveryCodes = IntStream.range(0, RECOVERY_CODE_COUNT)
                 .mapToObj(index -> recoveryCodeGenerator.generate())
                 .toList();
+        // MS01-07: hash con sal por código en lugar del SHA-256 sin sal.
         List<String> hashes = recoveryCodes.stream()
-                .map(code -> tokenHasher.hash(MfaCodeVerifier.recoveryForm(code)))
+                .map(code -> recoveryCodeHasher.hash(MfaCodeVerifier.recoveryForm(code)))
                 .toList();
         MfaEnrollment enrollment = MfaEnrollment.pending(user.id(), secret, now);
 

@@ -1,7 +1,7 @@
 package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.PageResult;
-import com.smxplore.users.application.dto.ReviewView;
+import com.smxplore.users.application.dto.PublicReviewView;
 import com.smxplore.users.application.port.in.ListReviewsUseCase;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.domain.exception.ValidationException;
@@ -20,7 +20,7 @@ public final class ListReviewsService implements ListReviewsUseCase {
     }
 
     @Override
-    public Mono<PageResult<ReviewView>> list(ReviewTargetType targetType, UUID targetId, int page, int size) {
+    public Mono<PageResult<PublicReviewView>> list(ReviewTargetType targetType, UUID targetId, int page, int size) {
         if (targetType == null || targetId == null) {
             return Mono.error(new ValidationException("El destino de la reseña es obligatorio"));
         }
@@ -33,7 +33,7 @@ public final class ListReviewsService implements ListReviewsUseCase {
 
         return reviews.findVisible(targetType, targetId, page, size)
                 .map(result -> PageResult.of(
-                        result.content().stream().map(ReviewView::from).toList(),
+                        result.content().stream().map(PublicReviewView::from).toList(),
                         result.page(),
                         result.size(),
                         result.totalElements()));

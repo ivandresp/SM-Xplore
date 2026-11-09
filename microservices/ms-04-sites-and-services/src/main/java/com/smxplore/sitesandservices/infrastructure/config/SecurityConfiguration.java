@@ -65,9 +65,15 @@ public class SecurityConfiguration {
                         // El catalogo es lectura publica: el turista lo consulta antes de registrarse.
                         .pathMatchers(HttpMethod.GET, PUBLIC_CATALOG_PATHS).permitAll()
                         .pathMatchers(HttpMethod.HEAD, PUBLIC_CATALOG_PATHS).permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/categories", "/api/v1/zones", "/api/v1/sites")
+                        // La taxonomia global de categorias es solo de ADMIN (MS04-01): una gestora no
+                        // puede renombrar categorias compartidas ni disparar snapshots masivos.
+                        .pathMatchers(HttpMethod.POST, "/api/v1/categories")
+                        .hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.PUT, "/api/v1/categories/**")
+                        .hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/zones", "/api/v1/sites")
                         .hasAnyRole("DESTINATION_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/api/v1/categories/**", "/api/v1/zones/**", "/api/v1/sites/**")
+                        .pathMatchers(HttpMethod.PUT, "/api/v1/zones/**", "/api/v1/sites/**")
                         .hasAnyRole("DESTINATION_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/zones/**", "/api/v1/sites/**")
                         .hasAnyRole("DESTINATION_MANAGER", "ADMIN")

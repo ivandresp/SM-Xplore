@@ -55,4 +55,13 @@ class MicrometerRecommendationMetricsTest {
         assertThat(registry.find("recommendations.served").counters()).isEmpty();
         assertThat(registry.get("recommendations.items").summary().count()).isZero();
     }
+
+    @Test
+    void countsAdminReadsOfAnotherTourist() {
+        // MS05-13: the support capability must be observable.
+        metrics.adminCrossTouristAccess();
+        metrics.adminCrossTouristAccess();
+
+        assertThat(registry.get("recommendations.admin.access").counter().count()).isEqualTo(2.0);
+    }
 }

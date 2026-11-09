@@ -51,4 +51,7 @@ public class SecurityReportDocument {
 
     @Version
     private Long version;
+
+    /** Embedded audit trail of the last close/solve transition (MS02-15). */
+    private StatusChangeDocument statusChange;
 }

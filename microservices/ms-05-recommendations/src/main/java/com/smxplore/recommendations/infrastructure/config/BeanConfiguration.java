@@ -22,12 +22,16 @@ import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.out.CatalogExportPort;
 import com.smxplore.recommendations.domain.ports.out.EventProjectionPort;
 import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
+import com.smxplore.recommendations.domain.ports.out.InteractionDeduplicationPort;
 import com.smxplore.recommendations.domain.ports.out.ProcessedEventRetentionPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationMetricsPort;
+import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
 import com.smxplore.recommendations.infrastructure.adapters.in.kafka.ProjectionEventDecoder;
 import com.smxplore.recommendations.infrastructure.adapters.out.metrics.MicrometerRecommendationMetrics;
+import com.smxplore.recommendations.infrastructure.adapters.out.quota.InMemoryInteractionDeduplicationAdapter;
+import com.smxplore.recommendations.infrastructure.adapters.out.quota.InMemoryRecommendationQuotaAdapter;
 import com.smxplore.recommendations.infrastructure.adapters.out.redis.RedisGraphVersionAdapter;
 import com.smxplore.recommendations.infrastructure.adapters.out.redis.RedisRecommendationCacheAdapter;
 import com.smxplore.recommendations.infrastructure.adapters.out.web.CatalogExportClient;
@@ -105,6 +109,21 @@ public class BeanConfiguration {
     }
 
     @Bean
+    public RecommendationQuotaPort recommendationQuotaPort(
+            RecommendationQuotaProperties properties,
+            Clock clock
+    ) {
+        return new InMemoryRecommendationQuotaAdapter(properties, clock);
+    }
+
+    @Bean
+    public InteractionDeduplicationPort interactionDeduplicationPort(
+            RecommendationQuotaProperties properties
+    ) {
+        return new InMemoryInteractionDeduplicationAdapter(properties);
+    }
+
+    @Bean
     public GetRecommendationsUseCase getRecommendationsUseCase(
             RecommendationGraphPort graphPort,
             RecommendationScorer scorer,
@@ -120,13 +139,20 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public AddPreferenceUseCase addPreferenceUseCase(RecommendationGraphPort graphPort, Clock clock) {
-        return new AddPreferenceService(graphPort, clock);
+    public AddPreferenceUseCase addPreferenceUseCase(
+            RecommendationGraphPort graphPort,
+            RecommendationQuotaPort quotaPort,
+            Clock clock
+    ) {
+        return new AddPreferenceService(graphPort, quotaPort, clock);
     }
 
     @Bean
-    public RemovePreferenceUseCase removePreferenceUseCase(RecommendationGraphPort graphPort) {
-        return new RemovePreferenceService(graphPort);
+    public RemovePreferenceUseCase removePreferenceUseCase(
+            RecommendationGraphPort graphPort,
+            RecommendationQuotaPort quotaPort
+    ) {
+        return new RemovePreferenceService(graphPort, quotaPort);
     }
 
     @Bean
@@ -135,8 +161,13 @@ public class BeanConfiguration {
     }
 
     @Bean
-    public RegisterViewUseCase registerViewUseCase(RecommendationGraphPort graphPort, Clock clock) {
-        return new RegisterViewService(graphPort, clock);
+    public RegisterViewUseCase registerViewUseCase(
+            RecommendationGraphPort graphPort,
+            InteractionDeduplicationPort deduplicationPort,
+            RecommendationQuotaPort quotaPort,
+            Clock clock
+    ) {
+        return new RegisterViewService(graphPort, deduplicationPort, quotaPort, clock);
     }
 
     @Bean
@@ -167,9 +198,13 @@ public class BeanConfiguration {
     public ReindexCatalogUseCase reindexCatalogUseCase(
             CatalogExportPort catalogExportPort,
             HandleProjectionEventUseCase handleProjectionEventUseCase,
-            ReindexProperties reindexProperties
+            ReindexProperties reindexProperties,
+            Clock clock
     ) {
         return new ReindexService(catalogExportPort, handleProjectionEventUseCase,
-                reindexProperties.getMaxPages());
+                reindexProperties.getMaxPages(),
+                reindexProperties.getMaxEventsPerRequest(),
+                reindexProperties.getMinInterval(),
+                clock);
     }
 }

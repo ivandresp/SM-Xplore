@@ -23,16 +23,38 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class ProjectionEventDecoder {
 
+    /**
+     * Maximum length of the free text fields persisted in the graph (MS05-09). A producer can
+     * publish a syntactically valid payload with an arbitrarily long string; without this bound
+     * those values inflate node properties, the cache and the recommendation reasons.
+     */
+    private static final Map<String, Integer> MAX_TEXT_LENGTHS = Map.of(
+            "eventType", 60,
+            "producer", 100,
+            "correlationId", 100,
+            "name", 200,
+            "description", 2000,
+            "type", 50,
+            "category", 200,
+            "status", 50,
+            "language", 35
+    );
+
     private final ObjectMapper objectMapper;
+    private final EventConsumerProperties properties;
+    private final Clock clock;
 
     public ProjectedEvent decode(String topic, String key, String json) {
         JsonNode root = parse(json);
@@ -59,7 +81,9 @@ public class ProjectionEventDecoder {
             throw new InvalidEventException("Kafka key must be the aggregateId");
         }
 
-        return switch (topic) {
+        validateProducer(metadata);
+
+        ProjectedEvent event = switch (topic) {
             case EventTopics.CATALOG_CATEGORY_CHANGED -> decodeCategory(metadata, payload);
             case EventTopics.CATALOG_ZONE_CHANGED -> decodeZone(metadata, payload);
             case EventTopics.CATALOG_SITE_CHANGED -> decodeSite(metadata, payload);
@@ -69,6 +93,39 @@ public class ProjectionEventDecoder {
             case EventTopics.REVIEWS_REVIEW_CHANGED -> decodeReview(metadata, payload);
             default -> throw new InvalidEventException("Unsupported eventType: " + metadata.eventType());
         };
+        validateTimestamps(event);
+        return event;
+    }
+
+    /**
+     * Rejects events attributed to a producer that does not publish the topic (MS05-01).
+     * reviews.review.changed has two legitimate publishers (ms-03 for activities/events and
+     * ms-04 for sites/services), so the check accepts the whole set. The field is
+     * self-declared, so this only catches publisher mistakes and first-line forgery; the
+     * broker still has to add authentication and ACLs.
+     */
+    private void validateProducer(EventMetadata metadata) {
+        Set<String> expected = EventTopics.expectedProducers(metadata.eventType());
+        if (!expected.isEmpty() && !expected.contains(metadata.producer())) {
+            throw new InvalidEventException(
+                    "producer " + metadata.producer() + " is not an expected producer "
+                            + expected + " for " + metadata.eventType());
+        }
+    }
+
+    /**
+     * Rejects events whose {@code occurredAt} or {@code updatedAt} is further in the future
+     * than the configured skew (MS05-01). A future timestamp would make the freshness query
+     * discard every legitimate later event, freezing the projected entity.
+     */
+    private void validateTimestamps(ProjectedEvent event) {
+        Instant limit = clock.instant().plus(properties.getMaxFutureSkew());
+        if (event.metadata().occurredAt().isAfter(limit)) {
+            throw new InvalidEventException("occurredAt must not be in the future");
+        }
+        if (event.updatedAt().isAfter(limit)) {
+            throw new InvalidEventException("updatedAt must not be in the future");
+        }
     }
 
     private ProjectedEvent decodeCategory(EventMetadata metadata, JsonNode payload) {
@@ -278,7 +335,9 @@ public class ProjectionEventDecoder {
         if (node == null || !node.isString() || node.asString().isBlank()) {
             throw new InvalidEventException(field + " is required");
         }
-        return node.asString();
+        String value = node.asString();
+        checkTextLength(field, value);
+        return value;
     }
 
     private UUID requiredUuid(JsonNode parent, String field) {
@@ -314,7 +373,18 @@ public class ProjectionEventDecoder {
             throw new InvalidEventException(field + " must be a string or null");
         }
         String value = node.asString();
-        return value.isBlank() ? null : value;
+        if (value.isBlank()) {
+            return null;
+        }
+        checkTextLength(field, value);
+        return value;
+    }
+
+    private static void checkTextLength(String field, String value) {
+        Integer maxLength = MAX_TEXT_LENGTHS.get(field);
+        if (maxLength != null && value.length() > maxLength) {
+            throw new InvalidEventException(field + " must be at most " + maxLength + " characters");
+        }
     }
 
     private int requiredInt(JsonNode parent, String field) {

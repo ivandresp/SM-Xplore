@@ -3,13 +3,13 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.LoginCommand;
 import com.smxplore.users.application.dto.LoginResult;
 import com.smxplore.users.application.port.in.LoginUseCase;
+import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.TokenIssuer;
 import com.smxplore.users.application.port.out.UserRepository;
-import com.smxplore.users.domain.exception.AccountNotActiveException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.model.Email;
 import com.smxplore.users.domain.model.MfaEnrollment;
@@ -28,6 +28,7 @@ public final class LoginService implements LoginUseCase {
     private final TokenIssuer tokenIssuer;
     private final FailedLoginSignal failedLogins;
     private final LoginProtection protection;
+    private final AccountAttemptLimiter accountAttemptLimiter;
     private final MfaRepository mfa;
     private final MfaChallengeIssuer challengeIssuer;
     private final Clock clock;
@@ -43,6 +44,7 @@ public final class LoginService implements LoginUseCase {
             TokenIssuer tokenIssuer,
             FailedLoginSignal failedLogins,
             LoginProtection protection,
+            AccountAttemptLimiter accountAttemptLimiter,
             MfaRepository mfa,
             MfaChallengeIssuer challengeIssuer,
             Clock clock) {
@@ -51,6 +53,7 @@ public final class LoginService implements LoginUseCase {
         this.tokenIssuer = tokenIssuer;
         this.failedLogins = failedLogins;
         this.protection = protection;
+        this.accountAttemptLimiter = accountAttemptLimiter;
         this.mfa = mfa;
         this.challengeIssuer = challengeIssuer;
         this.clock = clock;
@@ -61,11 +64,14 @@ public final class LoginService implements LoginUseCase {
     @Override
     public Mono<LoginResult> login(LoginCommand command) {
         Email email = new Email(command.email());
+        String accountKey = accountKey(email);
         return protection
                 .ensureNotLocked(email)
+                .then(accountAttemptLimiter.ensureAllowed(accountKey))
                 .then(Mono.defer(() -> users.findByEmail(email)))
                 .switchIfEmpty(Mono.defer(() -> passwordHasher
                         .matches(command.rawPassword(), dummyPasswordHash)
+                        .then(accountAttemptLimiter.recordFailure(accountKey))
                         .then(failedLogins.record())
                         .then(Mono.<Usuario>error(InvalidCredentialsException::new))))
                 .flatMap(user -> passwordHasher
@@ -74,18 +80,30 @@ public final class LoginService implements LoginUseCase {
                             if (!matches) {
                                 return protection
                                         .registerFailure(email)
+                                        .then(accountAttemptLimiter.recordFailure(accountKey))
                                         .then(failedLogins.record())
                                         .then(Mono.<Usuario>error(new InvalidCredentialsException()));
                             }
                             if (!user.isActive()) {
+                                // MS01-04: una cuenta inactiva responde igual que una contraseña incorrecta.
+                                // Antes se lanzaba AccountNotActiveException (403), lo que permitía distinguir
+                                // cuentas existentes bloqueadas o suspendidas de correos inexistentes.
                                 return protection
                                         .clear(email)
+                                        .then(accountAttemptLimiter.clear(accountKey))
                                         .then(failedLogins.record())
-                                        .then(Mono.<Usuario>error(new AccountNotActiveException()));
+                                        .then(Mono.<Usuario>error(new InvalidCredentialsException()));
                             }
-                            return protection.clear(email).thenReturn(user);
+                            return protection
+                                    .clear(email)
+                                    .then(accountAttemptLimiter.clear(accountKey))
+                                    .thenReturn(user);
                         }))
                 .flatMap(this::authenticated);
+    }
+
+    private static String accountKey(Email email) {
+        return "login:" + email.value();
     }
 
     private Mono<LoginResult> authenticated(Usuario user) {

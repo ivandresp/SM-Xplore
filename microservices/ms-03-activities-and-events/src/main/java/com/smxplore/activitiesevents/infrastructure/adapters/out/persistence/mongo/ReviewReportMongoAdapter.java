@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -53,6 +54,14 @@ public class ReviewReportMongoAdapter implements ReviewReportRepositoryPort {
     @Override
     public Mono<Boolean> existsByReviewAndReporter(UUID reviewId, UUID reporterId) {
         return repository.existsByReviewAndReporter(reviewId, reporterId);
+    }
+
+    @Override
+    public Mono<Long> countByReporterSince(UUID reporterId, Instant since) {
+        if (reporterId == null || since == null) {
+            return Mono.just(0L);
+        }
+        return repository.countByReporterIdAndCreatedAtGreaterThanEqual(reporterId, since);
     }
 
     private ReviewReportDocument toDocument(ReviewReport report) {

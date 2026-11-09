@@ -20,6 +20,12 @@ public class EventConsumerProperties {
     private double backoffMultiplier = 2.0;
     private int concurrency = 1;
     private String dlqSuffix = ".dlq";
+    /**
+     * Clock tolerance for {@code occurredAt} and {@code updatedAt}. Events dated further in
+     * the future are rejected before projection, so a forged event cannot freeze an entity
+     * by writing an {@code updatedAt} that newer legitimate events can never beat (MS05-01).
+     */
+    private Duration maxFutureSkew = Duration.ofMinutes(5);
 
     @PostConstruct
     public void validate() {
@@ -28,6 +34,17 @@ public class EventConsumerProperties {
         validateDurations();
         validateBackoffMultiplier();
         validateDlqSuffix();
+        validateMaxFutureSkew();
+    }
+
+    private void validateMaxFutureSkew() {
+        if (isNullOrNegativeOrZero(maxFutureSkew)) {
+            throw new IllegalStateException("app.events.consumer.max-future-skew must be positive");
+        }
+        if (maxFutureSkew.compareTo(Duration.ofHours(1)) > 0) {
+            throw new IllegalStateException(
+                    "app.events.consumer.max-future-skew must be at most 1 hour");
+        }
     }
 
     private void validateMaxRetries() {

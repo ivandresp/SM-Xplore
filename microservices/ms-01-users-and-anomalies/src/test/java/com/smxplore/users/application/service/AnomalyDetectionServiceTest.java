@@ -82,14 +82,18 @@ class AnomalyDetectionServiceTest {
                 threshold(AnomalyType.SUSPICIOUS_ACCESS, 3, 300, AnomalySeverity.HIGH, true));
         failedLogins.set(3);
 
-        StepVerifier.create(service().detect()).expectNext(1).verifyComplete();
+        AnomalyDetectionService detection = service();
+        StepVerifier.create(detection.detect()).expectNext(1).verifyComplete();
         Anomaly first = anomalies.saved.getFirst();
         first.resolve(ADMIN_ID, "Atendida", clock.instant());
         anomalies.save(first).block();
 
-        StepVerifier.create(service().detect()).expectNext(0).verifyComplete();
+        StepVerifier.create(detection.detect()).expectNext(0).verifyComplete();
         clock.advance(Duration.ofSeconds(301));
-        StepVerifier.create(service().detect()).expectNext(1).verifyComplete();
+        // MS01-24: aunque la ventana de observación ya pasó, el enfriamiento de 10 minutos impide recrear la anomalía.
+        StepVerifier.create(detection.detect()).expectNext(0).verifyComplete();
+        clock.advance(Duration.ofSeconds(300));
+        StepVerifier.create(detection.detect()).expectNext(1).verifyComplete();
 
         assertThat(anomalies.saved).hasSize(2);
         assertThat(anomalies.saved.getLast().status()).isEqualTo(AnomalyStatus.DETECTED);
@@ -169,7 +173,8 @@ class AnomalyDetectionServiceTest {
                 failedLoginSignal,
                 requestRateSignal,
                 healthSignal,
-                clock);
+                clock,
+                Duration.ofMinutes(10));
     }
 
     private static AnomalyThreshold threshold(

@@ -2,6 +2,7 @@ package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationRequest;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
+import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.RecommendationResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.mapper.RecommendationWebMapper;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.security.AuthenticatedUser;
@@ -28,6 +29,7 @@ public class RecommendationController {
     private final GetRecommendationsUseCase getRecommendationsUseCase;
     private final RecommendationWebMapper mapper;
     private final JwtUserResolver jwtUserResolver;
+    private final RecommendationQuotaPort quotaPort;
 
     @GetMapping
     @Operation(summary = "Get recommendations. TOURIST uses the JWT subject; ADMIN may pass touristId.")
@@ -40,6 +42,7 @@ public class RecommendationController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         AuthenticatedUser requester = jwtUserResolver.resolve(jwt);
+        quotaPort.check(requester.touristId());
         RecommendationRequest request = RecommendationRequest.builder()
                 .requesterId(requester.touristId())
                 .admin(requester.isAdmin())

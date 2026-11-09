@@ -2,6 +2,10 @@ app:
   recommendations:
     cache:
       enabled: false
+    # The per-user quota is unit tested in isolation; disabling it keeps the web tests
+    # from sharing a budget across test methods.
+    quota:
+      enabled: false
   neo4j:
     initialize-schema: true
   seed:
@@ -10,6 +14,10 @@ app:
     consumer:
       enabled: false
   security:
+    # MS05-06: los tests no llaman a ms-01; la revocacion se desactiva de forma explicita.
+    auth-version:
+      enabled: false
+    docs-public: false
     jwt:
       public-key-location: classpath:keys/test-public.pem
       issuer: https://ms-05.local

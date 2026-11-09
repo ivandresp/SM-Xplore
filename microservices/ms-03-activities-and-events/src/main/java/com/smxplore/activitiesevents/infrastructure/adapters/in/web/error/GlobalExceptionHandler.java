@@ -1,6 +1,7 @@
 package com.smxplore.activitiesevents.infrastructure.adapters.in.web.error;
 
 import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.activity.ActivityReservationConflictException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityCapacityException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityNameException;
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityPriceException;
@@ -9,6 +10,8 @@ import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityS
 import com.smxplore.activitiesevents.domain.exceptions.activity.InvalidActivityStatusTransitionException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.CatalogExportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogExportException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.InvalidCatalogFilterException;
+import com.smxplore.activitiesevents.domain.exceptions.catalog.SiteCatalogUnavailableException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventNotFoundException;
 import com.smxplore.activitiesevents.domain.exceptions.event.EventSiteAccessDeniedException;
 import com.smxplore.activitiesevents.domain.exceptions.event.InvalidEventCapacityException;
@@ -38,8 +41,11 @@ import com.smxplore.activitiesevents.domain.exceptions.review.ReviewAlreadyRespo
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewFilterUnavailableException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewModerationNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewNotFoundException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportLimitExceededException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewReportNotAllowedException;
 import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseNotAllowedException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewResponseUnavailableException;
+import com.smxplore.activitiesevents.domain.exceptions.review.ReviewWithoutReservationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DuplicateKeyException;
@@ -74,14 +80,15 @@ public class GlobalExceptionHandler {
             TooManyActiveReservationsException.class,
             ReviewAlreadyExistsException.class,
             ReviewAlreadyReportedException.class,
-            ReviewAlreadyRespondedException.class})
+            ReviewAlreadyRespondedException.class,
+            ActivityReservationConflictException.class})
     public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.CONFLICT, exception.getMessage(), exchange);
     }
 
     @ExceptionHandler({ReviewResponseNotAllowedException.class, ReviewReportNotAllowedException.class,
             ReviewModerationNotAllowedException.class, DemandAccessDeniedException.class,
-            CatalogExportNotAllowedException.class})
+            CatalogExportNotAllowedException.class, ReviewWithoutReservationException.class})
     public ResponseEntity<ProblemDetail> handleReviewForbidden(RuntimeException exception,
                                                                ServerWebExchange exchange) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage(), exchange);
@@ -91,6 +98,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleReviewFilterUnavailable(
             ReviewFilterUnavailableException exception, ServerWebExchange exchange) {
         return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(ReviewResponseUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleReviewResponseUnavailable(
+            ReviewResponseUnavailableException exception, ServerWebExchange exchange) {
+        // Fail closed: sin poder verificar al gestor en ms-04 no se permite responder.
+        return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange,
+                "REVIEW_RESPONSE_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(SiteCatalogUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleSiteCatalogUnavailable(
+            SiteCatalogUnavailableException exception, ServerWebExchange exchange) {
+        // ms-04 devolvio mas paginas de las acotadas: se corta la lectura en vez de encadenar
+        // peticiones sin fin. Sin un catalogo fiable no se asume la propiedad de ningun sitio.
+        return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exchange,
+                "SITE_CATALOG_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(ReviewReportLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleReviewReportLimit(
+            ReviewReportLimitExceededException exception, ServerWebExchange exchange) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), exchange,
+                "REVIEW_REPORT_LIMIT_REACHED");
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
@@ -124,6 +155,13 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ProblemDetail> handleBadRequest(RuntimeException exception, ServerWebExchange exchange) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange);
+    }
+
+    @ExceptionHandler(InvalidCatalogFilterException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCatalogFilter(InvalidCatalogFilterException exception,
+                                                                    ServerWebExchange exchange) {
+        // Mismo código estable que un query param que no convierte: el cliente sabe que debe corregir el filtro.
+        return build(HttpStatus.BAD_REQUEST, exception.getMessage(), exchange, "INVALID_FILTER");
     }
 
     @ExceptionHandler(EventSiteAccessDeniedException.class)

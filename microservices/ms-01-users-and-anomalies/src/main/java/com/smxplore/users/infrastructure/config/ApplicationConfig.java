@@ -1,5 +1,6 @@
 package com.smxplore.users.infrastructure.config;
 
+import com.smxplore.users.application.dto.EmailVerificationPolicy;
 import com.smxplore.users.application.port.in.AdminResetPasswordUseCase;
 import com.smxplore.users.application.port.in.BootstrapAdminUseCase;
 import com.smxplore.users.application.port.in.ChangeOwnPasswordUseCase;
@@ -42,27 +43,37 @@ import com.smxplore.users.application.port.in.ResolveAnomalyUseCase;
 import com.smxplore.users.application.port.in.RespondReviewUseCase;
 import com.smxplore.users.application.port.in.ReviewProviderUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
+import com.smxplore.users.application.port.in.SendEmailVerificationUseCase;
 import com.smxplore.users.application.port.in.UpdateAnomalyThresholdUseCase;
 import com.smxplore.users.application.port.in.UpdateProfileUseCase;
+import com.smxplore.users.application.port.in.VerifyEmailUseCase;
 import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
+import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
+import com.smxplore.users.application.port.out.AccountLockedNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
 import com.smxplore.users.application.port.out.AuditPdfRenderer;
 import com.smxplore.users.application.port.out.AuthVersionEvictor;
+import com.smxplore.users.application.port.out.EmailVerificationNotifier;
+import com.smxplore.users.application.port.out.EmailVerificationRepository;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
+import com.smxplore.users.application.port.out.MfaChallengeRepository;
 import com.smxplore.users.application.port.out.MfaChallengeVerifier;
+import com.smxplore.users.application.port.out.MfaEnabledNotifier;
 import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
+import com.smxplore.users.application.port.out.RecoveryCodeHasher;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewAiFilter;
+import com.smxplore.users.application.port.out.ReviewReportQuota;
 import com.smxplore.users.application.port.out.ReviewRepository;
 import com.smxplore.users.application.port.out.ServiceHealthSignal;
 import com.smxplore.users.application.port.out.SystemAvailabilityProbe;
@@ -86,6 +97,7 @@ import com.smxplore.users.application.service.CreateReviewService;
 import com.smxplore.users.application.service.DataRetentionService;
 import com.smxplore.users.application.service.DeleteUserService;
 import com.smxplore.users.application.service.DisableMfaService;
+import com.smxplore.users.application.service.EmailVerificationGuard;
 import com.smxplore.users.application.service.EnrollMfaService;
 import com.smxplore.users.application.service.ExportAuditEntriesService;
 import com.smxplore.users.application.service.ForgotPasswordService;
@@ -118,16 +130,21 @@ import com.smxplore.users.application.service.ResolveAnomalyService;
 import com.smxplore.users.application.service.RespondReviewService;
 import com.smxplore.users.application.service.ReviewProviderService;
 import com.smxplore.users.application.service.SearchUsersService;
+import com.smxplore.users.application.service.SendEmailVerificationService;
 import com.smxplore.users.application.service.UpdateAnomalyThresholdService;
 import com.smxplore.users.application.service.UpdateProfileService;
+import com.smxplore.users.application.service.VerifyEmailService;
 import com.smxplore.users.application.service.VerifyMfaLoginService;
 import com.smxplore.users.domain.policy.AccountInvitationPolicy;
 import com.smxplore.users.domain.policy.LoginLockoutPolicy;
 import com.smxplore.users.domain.policy.PasswordResetPolicy;
 import com.smxplore.users.domain.policy.ReviewAiPolicy;
+import com.smxplore.users.infrastructure.adapter.in.web.ClientAddressResolver;
+import com.smxplore.users.infrastructure.adapter.out.security.InMemoryAccountAttemptLimiter;
 import com.smxplore.users.infrastructure.security.ProductionSecurityValidator;
 import java.time.Clock;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -145,25 +162,120 @@ public class ApplicationConfig {
     }
 
     @Bean
+    public EmailVerificationPolicy emailVerificationPolicy(EmailVerificationProperties properties) {
+        return new EmailVerificationPolicy(properties.enabled(), properties.tokenTtl());
+    }
+
+    @Bean
     public RegisterTouristUseCase registerTouristUseCase(
-            UserRepository users, PasswordHasher passwordHasher, TransactionPort transactions, Clock clock) {
-        return new RegisterTouristService(users, passwordHasher, transactions, clock);
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            PasswordResetTokenRepository resetTokens,
+            TokenGenerator tokenGenerator,
+            TokenHasher tokenHasher,
+            EmailVerificationNotifier emailVerificationNotifier,
+            EmailVerificationPolicy verification,
+            TransactionPort transactions,
+            Clock clock) {
+        return new RegisterTouristService(
+                users,
+                passwordHasher,
+                resetTokens,
+                tokenGenerator,
+                tokenHasher,
+                emailVerificationNotifier,
+                verification,
+                transactions,
+                clock);
     }
 
     @Bean
     public RegisterProviderUseCase registerProviderUseCase(
-            UserRepository users, PasswordHasher passwordHasher, TransactionPort transactions, Clock clock) {
-        return new RegisterProviderService(users, passwordHasher, transactions, clock);
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            PasswordResetTokenRepository resetTokens,
+            TokenGenerator tokenGenerator,
+            TokenHasher tokenHasher,
+            EmailVerificationNotifier emailVerificationNotifier,
+            EmailVerificationPolicy verification,
+            TransactionPort transactions,
+            Clock clock) {
+        return new RegisterProviderService(
+                users,
+                passwordHasher,
+                resetTokens,
+                tokenGenerator,
+                tokenHasher,
+                emailVerificationNotifier,
+                verification,
+                transactions,
+                clock);
+    }
+
+    @Bean
+    public VerifyEmailUseCase verifyEmailUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            EmailVerificationRepository verifications,
+            TokenHasher tokenHasher,
+            AuditTrailRecorder auditTrailRecorder,
+            TransactionPort transactions,
+            Clock clock) {
+        return new VerifyEmailService(
+                users, resetTokens, verifications, tokenHasher, auditTrailRecorder, transactions, clock);
+    }
+
+    @Bean
+    public SendEmailVerificationUseCase sendEmailVerificationUseCase(
+            UserRepository users,
+            PasswordResetTokenRepository resetTokens,
+            EmailVerificationRepository verifications,
+            TokenGenerator tokenGenerator,
+            TokenHasher tokenHasher,
+            EmailVerificationNotifier emailVerificationNotifier,
+            EmailVerificationPolicy verification,
+            TransactionPort transactions,
+            Clock clock) {
+        return new SendEmailVerificationService(
+                users,
+                resetTokens,
+                verifications,
+                tokenGenerator,
+                tokenHasher,
+                emailVerificationNotifier,
+                verification,
+                transactions,
+                clock);
+    }
+
+    @Bean
+    public EmailVerificationGuard emailVerificationGuard(
+            EmailVerificationRepository verifications, EmailVerificationPolicy verification) {
+        return new EmailVerificationGuard(verifications, verification);
     }
 
     @Bean
     public LoginProtection loginProtection(
-            LoginAttemptRepository loginAttempts, LockoutProperties properties, Clock clock) {
+            LoginAttemptRepository loginAttempts,
+            LockoutProperties properties,
+            AccountLockedNotifier accountLockedNotifier,
+            Clock clock) {
         return new LoginProtection(
                 loginAttempts,
                 new LoginLockoutPolicy(properties.maxAttempts(), properties.window(), properties.duration()),
+                accountLockedNotifier,
                 properties.enabled(),
                 clock);
+    }
+
+    @Bean
+    public ClientAddressResolver clientAddressResolver(ClientAddressProperties properties) {
+        return new ClientAddressResolver(properties);
+    }
+
+    @Bean
+    public AccountAttemptLimiter accountAttemptLimiter(RateLimitProperties properties, Clock clock) {
+        return new InMemoryAccountAttemptLimiter(properties, clock);
     }
 
     @Bean
@@ -173,40 +285,62 @@ public class ApplicationConfig {
             TokenIssuer tokenIssuer,
             FailedLoginSignal failedLogins,
             LoginProtection protection,
+            AccountAttemptLimiter accountAttemptLimiter,
             MfaRepository mfa,
             MfaChallengeIssuer challengeIssuer,
             Clock clock) {
         return new LoginService(
-                users, passwordHasher, tokenIssuer, failedLogins, protection, mfa, challengeIssuer, clock);
+                users,
+                passwordHasher,
+                tokenIssuer,
+                failedLogins,
+                protection,
+                accountAttemptLimiter,
+                mfa,
+                challengeIssuer,
+                clock);
     }
 
     @Bean
-    public MfaCodeVerifier mfaCodeVerifier(MfaRepository mfa, TotpAuthenticator totp, TokenHasher tokenHasher) {
-        return new MfaCodeVerifier(mfa, totp, tokenHasher);
+    public MfaCodeVerifier mfaCodeVerifier(MfaRepository mfa, TotpAuthenticator totp) {
+        return new MfaCodeVerifier(mfa, totp);
     }
 
     @Bean
     public EnrollMfaUseCase enrollMfaUseCase(
             UserRepository users,
+            PasswordHasher passwordHasher,
             MfaRepository mfa,
             TotpAuthenticator totp,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             TransactionPort transactions,
             Clock clock,
             MfaProperties properties) {
         return new EnrollMfaService(
-                users, mfa, totp, recoveryCodeGenerator, tokenHasher, transactions, clock, properties.issuer());
+                users,
+                passwordHasher,
+                mfa,
+                totp,
+                recoveryCodeGenerator,
+                recoveryCodeHasher,
+                transactions,
+                clock,
+                properties.issuer());
     }
 
     @Bean
     public ConfirmMfaUseCase confirmMfaUseCase(
+            UserRepository users,
+            PasswordHasher passwordHasher,
             MfaRepository mfa,
             TotpAuthenticator totp,
             TransactionPort transactions,
             AuditTrailRecorder audit,
+            MfaEnabledNotifier notifier,
+            AuthVersionEvictor evictor,
             Clock clock) {
-        return new ConfirmMfaService(mfa, totp, transactions, audit, clock);
+        return new ConfirmMfaService(users, passwordHasher, mfa, totp, transactions, audit, notifier, evictor, clock);
     }
 
     @Bean
@@ -226,10 +360,13 @@ public class ApplicationConfig {
             UserRepository users,
             MfaRepository mfa,
             MfaChallengeVerifier challengeVerifier,
+            MfaChallengeRepository challenges,
             MfaCodeVerifier codeVerifier,
+            AccountAttemptLimiter accountAttemptLimiter,
             TokenIssuer tokenIssuer,
             Clock clock) {
-        return new VerifyMfaLoginService(users, mfa, challengeVerifier, codeVerifier, tokenIssuer, clock);
+        return new VerifyMfaLoginService(
+                users, mfa, challengeVerifier, challenges, codeVerifier, accountAttemptLimiter, tokenIssuer, clock);
     }
 
     @Bean
@@ -238,7 +375,7 @@ public class ApplicationConfig {
             MfaRepository mfa,
             PasswordHasher passwordHasher,
             RecoveryCodeGenerator recoveryCodeGenerator,
-            TokenHasher tokenHasher,
+            RecoveryCodeHasher recoveryCodeHasher,
             MfaCodeVerifier codeVerifier,
             TransactionPort transactions,
             AuditTrailRecorder audit,
@@ -248,7 +385,7 @@ public class ApplicationConfig {
                 mfa,
                 passwordHasher,
                 recoveryCodeGenerator,
-                tokenHasher,
+                recoveryCodeHasher,
                 codeVerifier,
                 transactions,
                 audit,
@@ -262,8 +399,13 @@ public class ApplicationConfig {
 
     @Bean
     public ProductionSecurityValidator productionSecurityValidator(
-            JwtProperties jwt, BootstrapAdminProperties bootstrapAdmin, CorsProperties cors, MfaProperties mfa) {
-        return new ProductionSecurityValidator(jwt, bootstrapAdmin, cors, mfa);
+            JwtProperties jwt,
+            BootstrapAdminProperties bootstrapAdmin,
+            CorsProperties cors,
+            MfaProperties mfa,
+            SecurityHeadersProperties headers,
+            InternalApiProperties internal) {
+        return new ProductionSecurityValidator(jwt, bootstrapAdmin, cors, mfa, headers, internal);
     }
 
     @Bean
@@ -306,9 +448,21 @@ public class ApplicationConfig {
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
             TokenHasher tokenHasher,
+            LoginProtection loginProtection,
+            AccountAttemptLimiter accountAttemptLimiter,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
-        return new ResetPasswordService(users, resetTokens, passwordHasher, tokenHasher, transactions, clock);
+        return new ResetPasswordService(
+                users,
+                resetTokens,
+                passwordHasher,
+                tokenHasher,
+                loginProtection,
+                accountAttemptLimiter,
+                evictor,
+                transactions,
+                clock);
     }
 
     @Bean
@@ -326,9 +480,10 @@ public class ApplicationConfig {
             UserRepository users,
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
-        return new ChangeOwnPasswordService(users, resetTokens, passwordHasher, transactions, clock);
+        return new ChangeOwnPasswordService(users, resetTokens, passwordHasher, evictor, transactions, clock);
     }
 
     @Bean
@@ -390,14 +545,22 @@ public class ApplicationConfig {
 
     @Bean
     public ChangeUserStatusUseCase changeUserStatusUseCase(
-            UserRepository users, AuditTrailRecorder auditTrailRecorder, TransactionPort transactions, Clock clock) {
-        return new ChangeUserStatusService(users, auditTrailRecorder, transactions, clock);
+            UserRepository users,
+            AuditTrailRecorder auditTrailRecorder,
+            AuthVersionEvictor evictor,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ChangeUserStatusService(users, auditTrailRecorder, evictor, transactions, clock);
     }
 
     @Bean
     public ChangeUserRoleUseCase changeUserRoleUseCase(
-            UserRepository users, AuditTrailRecorder auditTrailRecorder, TransactionPort transactions, Clock clock) {
-        return new ChangeUserRoleService(users, auditTrailRecorder, transactions, clock);
+            UserRepository users,
+            AuditTrailRecorder auditTrailRecorder,
+            AuthVersionEvictor evictor,
+            TransactionPort transactions,
+            Clock clock) {
+        return new ChangeUserRoleService(users, auditTrailRecorder, evictor, transactions, clock);
     }
 
     @Bean
@@ -406,9 +569,11 @@ public class ApplicationConfig {
             PasswordResetTokenRepository resetTokens,
             PasswordHasher passwordHasher,
             AuditTrailRecorder auditTrailRecorder,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
-        return new DeleteUserService(users, resetTokens, passwordHasher, auditTrailRecorder, transactions, clock);
+        return new DeleteUserService(
+                users, resetTokens, passwordHasher, auditTrailRecorder, evictor, transactions, clock);
     }
 
     @Bean
@@ -416,9 +581,11 @@ public class ApplicationConfig {
             UserRepository users,
             AuditTrailRecorder auditTrailRecorder,
             ProviderReviewNotifier providerReviewNotifier,
+            AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
-        return new ReviewProviderService(users, auditTrailRecorder, providerReviewNotifier, transactions, clock);
+        return new ReviewProviderService(
+                users, auditTrailRecorder, providerReviewNotifier, evictor, transactions, clock);
     }
 
     @Bean
@@ -471,8 +638,12 @@ public class ApplicationConfig {
 
     @Bean
     public BootstrapAdminUseCase bootstrapAdminUseCase(
-            UserRepository users, PasswordHasher passwordHasher, TransactionPort transactions, Clock clock) {
-        return new BootstrapAdminService(users, passwordHasher, transactions, clock);
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            TransactionPort transactions,
+            AuditTrailRecorder audit,
+            Clock clock) {
+        return new BootstrapAdminService(users, passwordHasher, transactions, audit, clock);
     }
 
     @Bean
@@ -486,8 +657,9 @@ public class ApplicationConfig {
             UserRepository users,
             ReviewAiFilter aiFilter,
             ReviewAiPolicy aiPolicy,
+            EmailVerificationGuard emailVerificationGuard,
             Clock clock) {
-        return new CreateReviewService(reviews, users, aiFilter, aiPolicy, clock);
+        return new CreateReviewService(reviews, users, aiFilter, aiPolicy, emailVerificationGuard, clock);
     }
 
     @Bean
@@ -506,8 +678,8 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public ReportReviewUseCase reportReviewUseCase(ReviewRepository reviews, Clock clock) {
-        return new ReportReviewService(reviews, clock);
+    public ReportReviewUseCase reportReviewUseCase(ReviewRepository reviews, ReviewReportQuota quota, Clock clock) {
+        return new ReportReviewService(reviews, quota, clock);
     }
 
     @Bean
@@ -576,7 +748,9 @@ public class ApplicationConfig {
             FailedLoginSignal failedLogins,
             RequestRateSignal requestRate,
             ServiceHealthSignal health,
-            Clock clock) {
-        return new AnomalyDetectionService(anomalies, thresholds, failedLogins, requestRate, health, clock);
+            Clock clock,
+            @Value("${app.anomalies.detection.min-interval:PT10M}") Duration minInterval) {
+        return new AnomalyDetectionService(
+                anomalies, thresholds, failedLogins, requestRate, health, clock, minInterval);
     }
 }

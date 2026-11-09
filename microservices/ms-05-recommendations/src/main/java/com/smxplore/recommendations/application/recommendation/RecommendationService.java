@@ -21,6 +21,7 @@ import com.smxplore.recommendations.domain.ports.out.RecommendationMetricsPort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationCachePort;
 import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 import java.time.Clock;
@@ -34,6 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @RequiredArgsConstructor
 public class RecommendationService implements GetRecommendationsUseCase {
 
@@ -125,6 +127,9 @@ public class RecommendationService implements GetRecommendationsUseCase {
         if (!request.admin()) {
             throw new ForbiddenOperationException("Only ADMIN can query recommendations for another tourist.");
         }
+        log.info("audit: admin {} read recommendations for tourist {}",
+                request.requesterId(), request.requestedTouristId());
+        metrics.adminCrossTouristAccess();
         return request.requestedTouristId();
     }
 

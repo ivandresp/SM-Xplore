@@ -7,6 +7,12 @@ app:
       enabled: true
     mfa:
       require-admin: true
+    photos:
+      allow-http: false
+      allow-any-host: false
+    headers:
+      # MS02-12: produccion va detras de TLS, asi que el servicio refuerza HSTS.
+      hsts: true
 
 springdoc:
   api-docs:
@@ -15,6 +21,10 @@ springdoc:
     enabled: false
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
   endpoint:
     health:
       show-details: never
