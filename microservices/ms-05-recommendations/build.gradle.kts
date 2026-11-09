@@ -28,7 +28,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.2.0")
     implementation("org.mapstruct:mapstruct:1.6.3")
 
     compileOnly("org.projectlombok:lombok")
