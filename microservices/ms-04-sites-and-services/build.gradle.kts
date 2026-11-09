@@ -62,7 +62,7 @@ dependencies {
     // Dependencias transitivas con CVE corregible que detecta el escaneo de Trivy del pipeline.
     // Los drivers de PostgreSQL arrastran SCRAM y el cliente de Kafka arrastra lz4 y snappy.
     constraints {
-        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+        implementation("at.yawk.lz4:lz4-java:1.13.0") {
             because("CVE-2026-106451, ejecución de código por manejo inseguro de temporales")
         }
         implementation("com.ongres.scram:scram-client:3.3") {
