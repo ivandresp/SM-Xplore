@@ -37,7 +37,7 @@ dependencies {
 
     constraints {
         // El cliente de Kafka arrastra compresion nativa; se fuerzan las versiones con los CVE cerrados.
-        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+        implementation("at.yawk.lz4:lz4-java:1.13.0") {
             because("CVE-2026-106451: ejecucion arbitraria de codigo en lz4-java 1.11.2")
         }
         implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
