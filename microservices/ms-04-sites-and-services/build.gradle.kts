@@ -65,7 +65,7 @@ dependencies {
         implementation("at.yawk.lz4:lz4-java:1.11.4") {
             because("CVE-2026-106451, ejecución de código por manejo inseguro de temporales")
         }
-        implementation("com.ongres.scram:scram-client:3.3") {
+        implementation("com.ongres.scram:scram-client:3.4") {
             because("CVE-2026-53712, degradación de autenticación por man-in-the-middle")
         }
         implementation("com.ongres.scram:scram-common:3.3") {
