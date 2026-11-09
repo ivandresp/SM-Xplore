@@ -186,6 +186,9 @@ jobs:
 
       - name: Levantar Neo4j
         working-directory: ${{ env.SERVICE_DIR }}
+        # El compose del servicio exige NEO4J_PASSWORD desde el endurecimiento MS05-10.
+        env:
+          NEO4J_PASSWORD: change-me
         run: docker compose up -d --wait --wait-timeout 240 neo4j
 
       - name: Arrancar el servicio
@@ -227,7 +230,10 @@ jobs:
       - name: Apagar el stack
         if: always()
         working-directory: ${{ env.SERVICE_DIR }}
+        # El compose del servicio exige NEO4J_PASSWORD; el de infraestructura vive en la raíz.
+        env:
+          NEO4J_PASSWORD: change-me
         run: |
           docker rm -f ms-05 || true
           docker compose down -v --remove-orphans || true
-          docker compose -f infrastructure/compose.yaml down -v --remove-orphans || true
+          docker compose -f "$GITHUB_WORKSPACE/infrastructure/compose.yaml" down -v --remove-orphans || true
