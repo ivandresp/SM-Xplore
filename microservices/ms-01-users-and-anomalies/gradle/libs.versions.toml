@@ -4,7 +4,7 @@ springdoc = "3.2.0"
 archunit = "1.5.1"
 palantir-java-format = "2.102.0"
 openpdf = "2.2.5"
-scram = "3.3"
+scram = "3.4"
 
 [libraries]
 spring-boot-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux" }
@@ -36,4 +36,4 @@ testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-jun
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
-spotless = { id = "com.diffplug.spotless", version = "8.10.4" }
+spotless = { id = "com.diffplug.spotless", version = "8.11.0" }
