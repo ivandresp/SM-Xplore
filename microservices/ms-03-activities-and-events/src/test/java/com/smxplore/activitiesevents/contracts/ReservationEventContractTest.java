@@ -2,11 +2,13 @@ package com.smxplore.activitiesevents.contracts;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.activitiesevents.application.outbox.ReservationEventFactory;
 import com.smxplore.activitiesevents.domain.model.reservation.PaymentMethod;
 import com.smxplore.activitiesevents.domain.model.reservation.Reservation;
@@ -42,7 +44,7 @@ class ReservationEventContractTest {
         JsonNode example = mapper.readTree(Files.readString(
                 CONTRACTS.resolve("examples").resolve(EVENT_TYPE + ".v2.example.json")));
 
-        Set<com.networknt.schema.ValidationMessage> errors = schema().validate(example);
+        List<Error> errors = schema().validate(example.toString(), InputFormat.JSON);
 
         assertThat(errors).isEmpty();
     }
@@ -67,7 +69,7 @@ class ReservationEventContractTest {
 
         assertThat(event).isNotNull();
         JsonNode envelope = mapper.readTree(event.payload());
-        Set<com.networknt.schema.ValidationMessage> errors = schema().validate(envelope);
+        List<Error> errors = schema().validate(envelope.toString(), InputFormat.JSON);
 
         assertThat(errors).isEmpty();
         assertThat(envelope.at("/payload/status").asText()).isEqualTo("NO_SHOW");
@@ -75,7 +77,7 @@ class ReservationEventContractTest {
                 .isEqualTo(reservation.getProviderId().toString());
     }
 
-    private JsonSchema schema() throws Exception {
+    private Schema schema() throws Exception {
         Map<String, String> schemas = new LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(CONTRACTS)) {
             List<Path> files = paths
@@ -86,13 +88,14 @@ class ReservationEventContractTest {
                 schemas.put(BASE_IRI + path.getFileName(), Files.readString(path));
             }
         }
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemas)));
+        SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemas)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
         String fileName = EVENT_TYPE + ".v2.json";
-        return factory.getSchema(
-                SchemaLocation.of(BASE_IRI + fileName),
-                mapper.readTree(Files.readString(CONTRACTS.resolve(fileName))),
-                SchemaValidatorsConfig.builder().formatAssertionsEnabled(true).build());
+        return registry.getSchema(SchemaLocation.of(BASE_IRI + fileName));
     }
 }
