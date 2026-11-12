@@ -26,13 +26,14 @@ public class RegistrationRepositoryAdapter implements RegistrationRepository {
             FROM users u
             LEFT JOIN guide_profiles g ON g.user_id = u.id
             LEFT JOIN provider_profiles p ON p.user_id = u.id
+            LEFT JOIN destination_manager_profiles d ON d.user_id = u.id
             """;
 
     private static final String FILTERS = """
-            WHERE u.role IN ('GUIDE', 'SERVICE_PROVIDER')
+            WHERE u.role IN ('GUIDE', 'SERVICE_PROVIDER', 'DESTINATION_MANAGER')
               AND (CAST(:role AS text) IS NULL OR u.role = :role)
               AND (CAST(:status AS text) IS NULL
-                   OR COALESCE(g.registration_status, p.registration_status) = :status)
+                   OR COALESCE(g.registration_status, p.registration_status, d.registration_status) = :status)
             """;
 
     private static final String SELECT_PAGE =
@@ -42,9 +43,9 @@ public class RegistrationRepositoryAdapter implements RegistrationRepository {
                    u.full_name AS full_name,
                    u.email AS email,
                    g.license AS license,
-                   p.nit AS nit,
+                   COALESCE(p.nit, d.nit) AS nit,
                    u.signed_up_at AS signed_up_at,
-                   COALESCE(g.registration_status, p.registration_status) AS registration_status
+                   COALESCE(g.registration_status, p.registration_status, d.registration_status) AS registration_status
             """ + FROM_AND_JOINS + FILTERS + " ORDER BY u.signed_up_at ASC, u.id ASC LIMIT :limit OFFSET :offset";
 
     private static final String COUNT = "SELECT count(*) AS total " + FROM_AND_JOINS + FILTERS;

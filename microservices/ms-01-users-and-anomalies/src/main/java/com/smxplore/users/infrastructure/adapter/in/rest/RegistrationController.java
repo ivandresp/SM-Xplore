@@ -5,6 +5,7 @@ import com.smxplore.users.application.dto.RegistrationSearchCriteria;
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.in.ListRegistrationsUseCase;
 import com.smxplore.users.application.port.in.ReviewRegistrationUseCase;
+import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
@@ -47,11 +48,18 @@ public class RegistrationController {
 
     @GetMapping
     public Mono<RegistrationPage> search(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) RegistrationStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return listRegistrations.search(new RegistrationSearchCriteria(parseRole(role), status, page, size));
+        Role requestedRole = parseRole(role);
+        // Las altas de gestoras solo las consulta un administrador: son las únicas que ninguna gestora puede
+        // revisar, así que listarlas en la cola de trabajo de las gestoras sería exponer datos sin poder decidir.
+        if (requestedRole == Role.DESTINATION_MANAGER && !"ADMIN".equals(jwt.getClaimAsString("role"))) {
+            throw new ForbiddenOperationException("Solo un administrador puede consultar las altas de gestoras");
+        }
+        return listRegistrations.search(new RegistrationSearchCriteria(requestedRole, status, page, size));
     }
 
     @PostMapping("/{id}/review")

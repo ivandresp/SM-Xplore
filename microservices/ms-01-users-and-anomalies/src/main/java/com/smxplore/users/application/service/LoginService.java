@@ -15,9 +15,11 @@ import com.smxplore.users.domain.exception.AccountRegistrationRejectedException;
 import com.smxplore.users.domain.exception.DomainException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.model.Email;
+import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.MfaEnrollment;
 import com.smxplore.users.domain.model.PasswordHash;
+import com.smxplore.users.domain.model.RegistrationReviewable;
 import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Usuario;
 import java.time.Clock;
@@ -99,16 +101,18 @@ public final class LoginService implements LoginUseCase {
                                         .then(failedLogins.record())
                                         .then(Mono.<Usuario>error(new InvalidCredentialsException()));
                             }
-                            if (user instanceof Guia guide
-                                    && guide.registrationStatus() != RegistrationStatus.APROBADO) {
-                                // MS01-B8: el alta de un guía no opera hasta que una gestora la apruebe. La rama se
-                                // evalúa DESPUÉS de verificar la contraseña, así que no revela a un desconocido si
-                                // el correo está registrado; y no cuenta como intento fallido, porque la
-                                // contraseña era correcta.
-                                return protection
-                                        .clear(email)
-                                        .then(accountAttemptLimiter.clear(accountKey))
-                                        .then(Mono.<Usuario>error(reviewError(guide.registrationStatus())));
+                            if (user instanceof Guia || user instanceof GestoraDestinos) {
+                                RegistrationReviewable reviewable = (RegistrationReviewable) user;
+                                if (reviewable.registrationStatus() != RegistrationStatus.APROBADO) {
+                                    // MS01-B8: el alta de un guía o de una gestora no opera hasta que se apruebe
+                                    // (la gestora la revisa un administrador). La rama se evalúa DESPUÉS de verificar
+                                    // la contraseña, así que no revela a un desconocido si el correo está registrado;
+                                    // y no cuenta como intento fallido, porque la contraseña era correcta.
+                                    return protection
+                                            .clear(email)
+                                            .then(accountAttemptLimiter.clear(accountKey))
+                                            .then(Mono.<Usuario>error(reviewError(reviewable.registrationStatus())));
+                                }
                             }
                             return protection
                                     .clear(email)

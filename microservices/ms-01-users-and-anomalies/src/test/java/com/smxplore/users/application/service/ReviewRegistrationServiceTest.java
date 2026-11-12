@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.domain.exception.FieldValidationException;
+import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.AuditAction;
 import com.smxplore.users.domain.model.Email;
+import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.RegistrationStatus;
@@ -180,6 +182,46 @@ class ReviewRegistrationServiceTest {
                 .verify();
     }
 
+    @Test
+    void onlyAnAdminCanReviewTheRegistrationOfAGestora() {
+        GestoraDestinos pending = gestora("gina.gestora@example.com");
+        Usuario anotherManager = com.smxplore.users.domain.model.GestoraDestinos.register(
+                UUID.fromString("55555555-5555-5555-5555-555555555555"),
+                "Otra Gestora",
+                new Email("otra.gestora@example.com"),
+                "3009999999",
+                new PasswordHash("hash"),
+                "900000000-1",
+                LocalDate.of(2020, 1, 15),
+                NOW);
+        users.seed(pending).seed(anotherManager);
+
+        StepVerifier.create(service()
+                        .review(
+                                anotherManager.id(),
+                                pending.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.APROBADO, null)))
+                .expectError(ForbiddenOperationException.class)
+                .verify();
+
+        assertThat(pending.registrationStatus()).isEqualTo(RegistrationStatus.PENDIENTE);
+        assertThat(decisions).isEmpty();
+
+        users.seed(admin());
+
+        StepVerifier.create(service()
+                        .review(
+                                ADMIN_ID,
+                                pending.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.APROBADO, null)))
+                .verifyComplete();
+
+        assertThat(pending.registrationStatus()).isEqualTo(RegistrationStatus.APROBADO);
+        assertThat(auditLog.saved())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.GESTORA_APROBADA));
+    }
+
     private ReviewRegistrationService service() {
         return new ReviewRegistrationService(
                 users,
@@ -201,6 +243,18 @@ class ReviewRegistrationServiceTest {
                 "9876543210",
                 "LIC-001",
                 null,
+                NOW);
+    }
+
+    private static GestoraDestinos gestora(String email) {
+        return GestoraDestinos.requestRegistration(
+                UUID.fromString("66666666-6666-6666-6666-666666666666"),
+                "Gina Gestora",
+                new Email(email),
+                "3008888888",
+                new PasswordHash("hash"),
+                "900000000-9",
+                LocalDate.of(2024, 2, 1),
                 NOW);
     }
 
