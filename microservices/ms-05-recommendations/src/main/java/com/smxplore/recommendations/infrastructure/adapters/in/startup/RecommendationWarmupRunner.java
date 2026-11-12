@@ -80,8 +80,13 @@ public class RecommendationWarmupRunner implements ApplicationRunner {
                                         .single())).singleOrEmpty(),
                         session -> Mono.from(session.close()))
                 .flatMap(total -> graphPort
-                        .findFallbackCandidates(WARMUP_TOURIST, null, null, fallbackLimit(), clock.instant())
-                        .then(Mono.just(total)))
+                        .findCandidatesForTourist(WARMUP_TOURIST, null, null, fallbackLimit(), clock.instant())
+                        .then()
+                        .then(graphPort
+                                .findFallbackCandidates(
+                                        WARMUP_TOURIST, null, null, fallbackLimit(), clock.instant())
+                                .then())
+                        .thenReturn(total))
                 .switchIfEmpty(Mono.just(0L));
     }
 
