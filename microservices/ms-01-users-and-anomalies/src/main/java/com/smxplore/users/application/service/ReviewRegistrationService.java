@@ -6,6 +6,7 @@ import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
+import com.smxplore.users.domain.exception.FieldValidationException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.RegistrationNotFoundException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
@@ -65,6 +66,7 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
     private Mono<Void> review(
             UUID actorId, UUID targetId, ReviewRegistrationCommand command, boolean registrationScope) {
         RegistrationStatus decision = requireDecision(command.decision());
+        requireReasonForRejection(decision, command.reason());
 
         return transactions
                 .execute(Mono.defer(() -> users.findById(targetId)
@@ -106,6 +108,18 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
             throw new ValidationException("La decisión debe ser APROBADO o RECHAZADO");
         }
         return decision;
+    }
+
+    /**
+     * Una baja sin motivo deja al titular sin saber qué corregir y contradice el flujo aprobado, así que el motivo es
+     * obligatorio al rechazar (el correo de rechazo lo incluye).
+     */
+    private static void requireReasonForRejection(RegistrationStatus decision, String reason) {
+        if (decision == RegistrationStatus.RECHAZADO && (reason == null || reason.isBlank())) {
+            throw new FieldValidationException(
+                    "El motivo es obligatorio al rechazar un alta",
+                    Map.of("reason", "El motivo es obligatorio al rechazar un alta"));
+        }
     }
 
     private static AuditAction actionFor(Usuario target, RegistrationStatus decision) {

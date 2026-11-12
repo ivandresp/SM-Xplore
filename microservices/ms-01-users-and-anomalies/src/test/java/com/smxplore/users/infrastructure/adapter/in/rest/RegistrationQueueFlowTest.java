@@ -106,8 +106,9 @@ class RegistrationQueueFlowTest {
 
         assertThat(entries(registrations(gestoraToken, "?role=GUIDE&status=PENDIENTE")))
                 .noneSatisfy(registration -> assertThat(registration.get("id")).isEqualTo(guideId));
-        assertThat(entries(registrations(gestoraToken, "?role=GUIDE&status=APROBADO")))
-                .anySatisfy(registration -> assertThat(registration.get("id")).isEqualTo(guideId));
+        // La cola no es un directorio: las altas aprobadas solo se consultan en /admin/users como ADMIN.
+        assertThat(status(gestoraToken, "/api/v1/registrations?role=GUIDE&status=APROBADO"))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -149,6 +150,43 @@ class RegistrationQueueFlowTest {
 
         assertThat(status(touristToken, "/api/v1/registrations?role=GUIDE")).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(reviewStatus(touristToken, guideId, "APROBADO", null)).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void rejectingWithoutAReasonIsRejected() {
+        String guideId = registerGuide("Gina Sin Motivo", "gina.sinmotivo@example.com", "LIC-COLA-4");
+        String gestoraToken = gestora("gestora.cola5@example.com");
+
+        ResponseEntity<Map> response = client.post()
+                .uri("/api/v1/registrations/" + guideId + "/review")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + gestoraToken)
+                .body(Map.of("decision", "RECHAZADO"))
+                .retrieve()
+                .onStatus(status -> status.value() == HttpStatus.BAD_REQUEST.value(), (request, result) -> {})
+                .toEntity(Map.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).containsEntry("code", "VALIDATION_ERROR");
+        assertThat(((Map<?, ?>) response.getBody().get("errors")).containsKey("reason"))
+                .isTrue();
+    }
+
+    @Test
+    void aRejectedGuideCanBeApprovedAgainFromTheQueue() {
+        String guideId = registerGuide("Gina Reconsiderada", "gina.reconsiderada@example.com", "LIC-COLA-5");
+        String gestoraToken = gestora("gestora.cola6@example.com");
+
+        assertThat(reviewStatus(gestoraToken, guideId, "RECHAZADO", "Licencia ilegible"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(loginStatus("gina.reconsiderada@example.com", PASSWORD)).isEqualTo(HttpStatus.FORBIDDEN);
+
+        // Camino de recuperacion documentado: la gestora ve las rechazadas y puede volver a aprobarlas.
+        assertThat(entries(registrations(gestoraToken, "?role=GUIDE&status=RECHAZADO")))
+                .anySatisfy(registration -> assertThat(registration.get("id")).isEqualTo(guideId));
+
+        assertThat(reviewStatus(gestoraToken, guideId, "APROBADO", "Licencia corregida"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(loginStatus("gina.reconsiderada@example.com", PASSWORD)).isEqualTo(HttpStatus.OK);
     }
 
     @Test

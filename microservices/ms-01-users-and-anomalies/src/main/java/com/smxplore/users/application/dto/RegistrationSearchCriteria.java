@@ -5,7 +5,8 @@ import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 
 /**
- * Filtros de la cola de solicitudes. Solo se pueden pedir los roles que pasan por revisión.
+ * Filtros de la cola de solicitudes. Solo se pueden pedir los roles que pasan por revisión y solo los estados que
+ * todavía requieren una decisión.
  */
 public record RegistrationSearchCriteria(Role role, RegistrationStatus status, int page, int size) {
 
@@ -22,7 +23,12 @@ public record RegistrationSearchCriteria(Role role, RegistrationStatus status, i
         if (role != null && role != Role.GUIDE && role != Role.SERVICE_PROVIDER) {
             throw new ValidationException("El rol debe ser GUIDE o SERVICE_PROVIDER");
         }
-        // La pantalla es una cola de revisión: por omisión solo interesan las altas pendientes.
+        // La cola es de trabajo, no un directorio: los altas ya aprobadas exponen nombre, correo, licencia y NIT de
+        // toda la plataforma, así que solo se consultan aquí las que aún esperan decisión. El listado de aprobadas
+        // sigue viviendo en /api/v1/admin/users, que es solo de ADMIN.
+        if (status == RegistrationStatus.APROBADO) {
+            throw new ValidationException("La cola no consulta altas APROBADAS; usa /api/v1/admin/users como ADMIN");
+        }
         status = status == null ? DEFAULT_STATUS : status;
     }
 }

@@ -67,7 +67,10 @@ public class EmailRegistrationReviewNotifier implements RegistrationReviewNotifi
                     : "Tu registro como prestadora de servicios en SM-Xplore fue aprobado. Ya puedes publicar tu oferta turística.";
         }
         return guide
-                ? "Tu solicitud de registro como guía en SM-Xplore fue rechazada, así que la cuenta no podrá iniciar sesión."
-                : "Tu registro como prestadora de servicios en SM-Xplore fue rechazado.";
+                ? "Tu solicitud de registro como guía en SM-Xplore fue rechazada, así que la cuenta no puede iniciar "
+                        + "sesión mientras siga rechazada. Si crees que es un error, pide a una gestora que revise la "
+                        + "solicitud de nuevo."
+                : "Tu registro como prestadora de servicios en SM-Xplore fue rechazado, así que tu perfil no se "
+                        + "publica en el catálogo. La cuenta sigue existiendo y puedes entrar para corregir tus datos.";
     }
 }

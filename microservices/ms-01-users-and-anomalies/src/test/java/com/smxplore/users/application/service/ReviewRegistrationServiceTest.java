@@ -1,9 +1,11 @@
 package com.smxplore.users.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
+import com.smxplore.users.domain.exception.FieldValidationException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.AuditAction;
@@ -85,6 +87,26 @@ class ReviewRegistrationServiceTest {
         assertThat(auditLog.saved())
                 .singleElement()
                 .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.GUIA_RECHAZADA));
+    }
+
+    @Test
+    void rejectingWithoutAReasonIsAFieldValidationError() {
+        Guia guide = guide();
+        users.seed(guide).seed(admin());
+
+        // La regla se valida al construir el caso de uso, igual que la decision obligatoria: es un error de la
+        // peticion, no un fallo del flujo reactivo.
+        assertThatThrownBy(() -> service()
+                        .review(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, "  ")))
+                .isInstanceOf(FieldValidationException.class)
+                .satisfies(validation -> assertThat(((FieldValidationException) validation).fieldErrors())
+                        .containsKey("reason"));
+
+        assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.PENDIENTE);
+        assertThat(decisions).isEmpty();
     }
 
     @Test
