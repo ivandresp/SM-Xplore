@@ -1,5 +1,7 @@
 package com.smxplore.sitesandservices.application.catalog;
 
+import com.smxplore.sitesandservices.application.event.DomainEventFactory;
+import com.smxplore.sitesandservices.application.support.TransactionalOutboxWriter;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryFilter;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
@@ -41,7 +43,12 @@ public class CatalogSeedService {
             "BIENESTAR",
             "RECREACION");
 
+    /** Correlacion de los eventos que publica la semilla al grafo de recomendaciones (MS05). */
+    private static final String SEED_CORRELATION_ID = "catalog-seed";
+
     private final CategoryRepositoryPort categoryRepository;
+    private final TransactionalOutboxWriter outboxWriter;
+    private final DomainEventFactory eventFactory;
     private final Clock clock;
 
     /**
@@ -54,7 +61,10 @@ public class CatalogSeedService {
         return existingCategoryNames()
                 .flatMap(existing -> Flux.fromIterable(BASE_CATEGORIES)
                         .filter(name -> !existing.contains(name))
-                        .concatMap(name -> categoryRepository.save(newCategory(name, now)))
+                        .concatMap(name -> outboxWriter.save(
+                                categoryRepository.save(newCategory(name, now)),
+                                eventFactory::categoryChanged,
+                                SEED_CORRELATION_ID))
                         .count()
                         .map(Long::intValue));
     }

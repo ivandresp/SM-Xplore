@@ -1,10 +1,15 @@
 package com.smxplore.sitesandservices.application.catalog;
 
+import com.smxplore.sitesandservices.application.event.DomainEventFactory;
+import com.smxplore.sitesandservices.application.support.TransactionalOutboxWriter;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryFilter;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
 import com.smxplore.sitesandservices.domain.model.common.PageResult;
+import com.smxplore.sitesandservices.domain.model.event.DomainEvent;
 import com.smxplore.sitesandservices.domain.ports.out.CategoryRepositoryPort;
+import com.smxplore.sitesandservices.domain.ports.out.OutboxPort;
+import com.smxplore.sitesandservices.domain.ports.out.TransactionPort;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -24,6 +29,19 @@ class CatalogSeedServiceTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final RecordingCategoryRepository repository = new RecordingCategoryRepository();
+    private final List<DomainEvent> published = new ArrayList<>();
+    private final TransactionPort passthrough = new TransactionPort() {
+        @Override
+        public <T> Mono<T> execute(Mono<T> work) {
+            return work;
+        }
+    };
+    private final OutboxPort outbox = event -> {
+        published.add(event);
+        return Mono.empty();
+    };
+    private final TransactionalOutboxWriter outboxWriter = new TransactionalOutboxWriter(passthrough, outbox);
+    private final DomainEventFactory eventFactory = new DomainEventFactory("ms-04-sites-and-services", CLOCK);
 
     @Test
     void createsEveryBaseCategoryWhenTheCatalogIsEmpty() {
@@ -40,6 +58,9 @@ class CatalogSeedServiceTest {
             assertThat(category.scope()).isEqualTo(CategoryScope.GENERAL);
             assertThat(category.updatedAt()).isEqualTo(NOW);
         });
+        // La semilla tambien publica en el outbox para que el grafo (ms-05) proyecte las categorias.
+        assertThat(published).extracting(DomainEvent::eventType).containsOnly("catalog.category.changed");
+        assertThat(published).extracting(DomainEvent::correlationId).containsOnly("catalog-seed");
     }
 
     @Test
@@ -82,7 +103,7 @@ class CatalogSeedServiceTest {
     }
 
     private CatalogSeedService service() {
-        return new CatalogSeedService(repository, CLOCK);
+        return new CatalogSeedService(repository, outboxWriter, eventFactory, CLOCK);
     }
 
     private static final class RecordingCategoryRepository implements CategoryRepositoryPort {
