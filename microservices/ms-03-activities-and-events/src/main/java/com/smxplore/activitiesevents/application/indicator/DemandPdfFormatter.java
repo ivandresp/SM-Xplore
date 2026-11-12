@@ -1,15 +1,15 @@
 package com.smxplore.activitiesevents.application.indicator;
 
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import org.openpdf.text.Document;
+import org.openpdf.text.DocumentException;
+import org.openpdf.text.Element;
+import org.openpdf.text.Font;
+import org.openpdf.text.PageSize;
+import org.openpdf.text.Paragraph;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.pdf.PdfPCell;
+import org.openpdf.text.pdf.PdfPTable;
+import org.openpdf.text.pdf.PdfWriter;
 import com.smxplore.activitiesevents.domain.model.indicator.ActivityDemand;
 import com.smxplore.activitiesevents.domain.model.indicator.DemandIndicators;
 import com.smxplore.activitiesevents.domain.model.indicator.EventDemand;
@@ -50,17 +50,17 @@ public final class DemandPdfFormatter {
             document.add(new Paragraph("Indicadores de demanda - SM-Xplore", TITLE));
             document.add(new Paragraph("Desde " + DATE_TIME.format(indicators.from().atZone(zone))
                     + " hasta " + DATE_TIME.format(indicators.to().atZone(zone))
-                    + " · alcance " + indicators.scope()
-                    + (indicators.partial() ? " · servicios de ms-04 no disponibles" : ""), SUBTITLE));
+                    + " Â· alcance " + indicators.scope()
+                    + (indicators.partial() ? " Â· servicios de ms-04 no disponibles" : ""), SUBTITLE));
             document.add(new Paragraph("Resumen", SECTION));
             document.add(new Paragraph("Reservas: " + indicators.summary().reservations()
-                    + " · Personas: " + indicators.summary().people()
-                    + " · Ingresos: " + indicators.summary().revenue().toPlainString()
-                    + " · Canceladas: " + indicators.summary().cancelledReservations()
-                    + " · Completadas: " + indicators.summary().completedReservations()
-                    + " · Turistas unicos: " + indicators.summary().uniqueTourists()
-                    + " · Cancelacion: " + percent(indicators.summary().cancellationRate())
-                    + " · Promedio por reserva: "
+                    + " Â· Personas: " + indicators.summary().people()
+                    + " Â· Ingresos: " + indicators.summary().revenue().toPlainString()
+                    + " Â· Canceladas: " + indicators.summary().cancelledReservations()
+                    + " Â· Completadas: " + indicators.summary().completedReservations()
+                    + " Â· Turistas unicos: " + indicators.summary().uniqueTourists()
+                    + " Â· Cancelacion: " + percent(indicators.summary().cancellationRate())
+                    + " Â· Promedio por reserva: "
                     + decimal(indicators.summary().averagePeoplePerReservation()), CELL));
             document.add(new Paragraph("Comparacion: reservas "
                     + decimal(indicators.comparison().reservationsChange()) + "%, personas "
