@@ -127,6 +127,6 @@ class RedisRecommendationCacheAdapterTest {
                         .build())
                 .build();
         return new Recommendation(touristId, Instant.parse("2026-11-03T15:00:00Z"),
-                RecommendationSource.AFFINITY, List.of(item));
+                RecommendationSource.AFFINITY, List.of(item), 0, 20, 1, 1, false);
     }
 }

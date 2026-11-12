@@ -1,5 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.out.neo4j;
 
+import com.smxplore.recommendations.domain.exception.CategoryNotFoundException;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.geo.GeoLocation;
 import com.smxplore.recommendations.domain.model.catalog.ItemType;
@@ -10,13 +11,17 @@ import com.smxplore.recommendations.domain.ports.out.RecommendationGraphPort;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.reactivestreams.ReactiveSession;
+import org.neo4j.driver.reactivestreams.ReactiveTransactionContext;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -65,6 +70,63 @@ public class Neo4jRecommendationAdapter implements RecommendationGraphPort {
         params.put("language", language);
         params.put("now", now.toString());
         return writeReturningBoolean(Neo4jQueries.UPSERT_PREFERENCE, params);
+    }
+
+    @Override
+    public Mono<List<Preference>> replacePreferences(
+            UUID touristId,
+            List<UUID> categoryIds,
+            String language,
+            Instant now
+    ) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("touristId", touristId.toString());
+        params.put("categoryIds", categoryIds.stream().map(UUID::toString).toList());
+        params.put("language", language);
+        params.put("now", now.toString());
+        return Mono.usingWhen(
+                Mono.fromSupplier(() -> driver.session(ReactiveSession.class)),
+                session -> Flux.from(session.executeWrite(tx ->
+                        Flux.from(tx.run(Neo4jQueries.VALIDATE_CATEGORIES, params))
+                                .flatMap(result -> Flux.from(result.records()))
+                                .map(record -> record.get("categoryId").asString())
+                                .collectList()
+                                .flatMap(found -> rejectUnknownCategories(categoryIds, found)
+                                        .then(Mono.defer(() -> replacePreferencesInTransaction(
+                                                tx, params, categoryIds))))
+                )).singleOrEmpty(),
+                session -> Mono.from(session.close())
+        );
+    }
+
+    private Mono<Void> rejectUnknownCategories(List<UUID> requested, List<String> foundIds) {
+        Set<String> existing = new HashSet<>(foundIds);
+        for (UUID categoryId : requested) {
+            if (!existing.contains(categoryId.toString())) {
+                return Mono.error(() -> new CategoryNotFoundException(categoryId));
+            }
+        }
+        return Mono.empty();
+    }
+
+    private Mono<List<Preference>> replacePreferencesInTransaction(
+            ReactiveTransactionContext tx,
+            Map<String, Object> params,
+            List<UUID> categoryIds
+    ) {
+        Mono<Void> delete = Flux.from(tx.run(Neo4jQueries.DELETE_EXPLICIT_PREFERENCES, params))
+                .flatMap(result -> Flux.from(result.consume()))
+                .then();
+        Mono<Void> merge = categoryIds.isEmpty()
+                ? Mono.empty()
+                : Flux.from(tx.run(Neo4jQueries.MERGE_EXPLICIT_PREFERENCES, params))
+                        .flatMap(result -> Flux.from(result.consume()))
+                        .then();
+        return delete.then(merge)
+                .thenMany(Flux.from(tx.run(Neo4jQueries.FIND_PREFERENCES, params))
+                        .flatMap(result -> Flux.from(result.records()))
+                        .map(Neo4jRecordMapper::mapPreference))
+                .collectList();
     }
 
     @Override

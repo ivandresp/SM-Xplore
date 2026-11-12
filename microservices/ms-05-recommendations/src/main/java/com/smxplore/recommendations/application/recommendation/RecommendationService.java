@@ -104,19 +104,30 @@ public class RecommendationService implements GetRecommendationsUseCase {
                 query.siteId(),
                 location == null ? null : location.latitude(),
                 location == null ? null : location.longitude(),
-                query.limit()
+                query.limit(),
+                query.page(),
+                query.size(),
+                query.categoryId(),
+                query.itemType(),
+                query.minRating()
         );
     }
 
     private RecommendationQuery buildQuery(RecommendationRequest request) {
         validateRequest(request);
+        int size = request.size() == null ? request.limit() : request.size();
         RecommendationQuery query = new RecommendationQuery(
                 resolveTouristId(request),
                 request.siteId(),
                 buildLocation(request),
-                request.limit()
+                request.limit(),
+                request.page(),
+                size,
+                request.categoryId(),
+                request.itemType(),
+                request.minRating()
         );
-        validatePolicyLimit(query);
+        validatePolicyLimits(query);
         return query;
     }
 
@@ -145,9 +156,14 @@ public class RecommendationService implements GetRecommendationsUseCase {
                 .findCandidatesForTourist(query.touristId(), query.siteId(), query.location(),
                         policy.candidateLimit(), now)
                 .collectList()
+                .map(candidates -> filterCandidates(candidates, query))
                 .flatMap(affinity -> addFallbackIfNeeded(query, affinity, now));
     }
 
+    /**
+     * MS05-11: filters narrow the affinity pool before scoring, so a category/type/rating filter
+     * also decides whether the fallback query is worth running.
+     */
     private Mono<List<RecommendationCandidate>> addFallbackIfNeeded(
             RecommendationQuery query,
             List<RecommendationCandidate> affinity,
@@ -160,7 +176,26 @@ public class RecommendationService implements GetRecommendationsUseCase {
                 .findFallbackCandidates(query.touristId(), query.siteId(), query.location(),
                         policy.candidateLimit(), now)
                 .collectList()
-                .map(fallback -> mergeCandidates(affinity, fallback));
+                .map(fallback -> mergeCandidates(affinity, filterCandidates(fallback, query)));
+    }
+
+    private List<RecommendationCandidate> filterCandidates(
+            List<RecommendationCandidate> candidates,
+            RecommendationQuery query
+    ) {
+        return candidates.stream()
+                .filter(candidate -> matchesFilters(candidate, query))
+                .toList();
+    }
+
+    private boolean matchesFilters(RecommendationCandidate candidate, RecommendationQuery query) {
+        if (query.categoryId() != null && !query.categoryId().equals(candidate.categoryId())) {
+            return false;
+        }
+        if (query.itemType() != null && query.itemType() != candidate.itemType()) {
+            return false;
+        }
+        return query.minRating() == null || candidate.ratingAvg() >= query.minRating();
     }
 
     private List<RecommendationCandidate> mergeCandidates(
@@ -182,11 +217,24 @@ public class RecommendationService implements GetRecommendationsUseCase {
         List<ScoredCandidate> scored = scoreCandidates(candidates, context, now);
         List<ScoredCandidate> selected = diversitySelector.select(scored, query.limit());
 
+        int total = selected.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / query.size());
+        long offset = (long) query.page() * query.size();
+        int from = (int) Math.min(offset, total);
+        int to = (int) Math.min(offset + query.size(), total);
+        List<ScoredCandidate> pageItems = selected.subList(from, to);
+        boolean hasNext = ((long) query.page() + 1) * query.size() < total;
+
         return new Recommendation(
                 query.touristId(),
                 now,
-                determineSource(query, selected),
-                toItems(selected)
+                determineSource(query, pageItems),
+                toItems(pageItems),
+                query.page(),
+                query.size(),
+                total,
+                totalPages,
+                hasNext
         );
     }
 
@@ -291,9 +339,12 @@ public class RecommendationService implements GetRecommendationsUseCase {
         request.validate();
     }
 
-    private void validatePolicyLimit(RecommendationQuery query) {
+    private void validatePolicyLimits(RecommendationQuery query) {
         if (query.limit() > policy.maxLimit()) {
             throw new InvalidLimitException("limit must be between 1 and " + policy.maxLimit());
+        }
+        if (query.size() > policy.maxLimit()) {
+            throw new InvalidLimitException("size must be between 1 and " + policy.maxLimit());
         }
     }
 

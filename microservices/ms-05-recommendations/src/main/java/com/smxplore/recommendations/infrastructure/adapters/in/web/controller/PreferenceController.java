@@ -3,6 +3,8 @@ package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 import com.smxplore.recommendations.domain.ports.in.AddPreferenceUseCase;
 import com.smxplore.recommendations.domain.ports.in.ConsultPreferencesUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.in.ReplacePreferencesUseCase;
+import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceBatchRequest;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceRequest;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.dto.PreferenceResponse;
 import com.smxplore.recommendations.infrastructure.adapters.in.web.language.RequestLanguageResolver;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +42,7 @@ public class PreferenceController {
     private final AddPreferenceUseCase addPreferenceUseCase;
     private final RemovePreferenceUseCase removePreferenceUseCase;
     private final ConsultPreferencesUseCase consultPreferencesUseCase;
+    private final ReplacePreferencesUseCase replacePreferencesUseCase;
     private final RecommendationWebMapper mapper;
     private final JwtUserResolver jwtUserResolver;
     private final RequestLanguageResolver languageResolver;
@@ -61,6 +65,20 @@ public class PreferenceController {
         AuthenticatedUser user = jwtUserResolver.resolve(jwt);
         String language = languageResolver.resolve(acceptLanguage);
         return addPreferenceUseCase.handle(user.touristId(), request.categoryId(), language)
+                .map(mapper::toPreferenceResponse);
+    }
+
+    @PutMapping
+    @Operation(summary = "Replace every explicit preference of the tourist with this set")
+    public Flux<PreferenceResponse> replacePreferences(
+            @RequestBody PreferenceBatchRequest request,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        AuthenticatedUser user = jwtUserResolver.resolve(jwt);
+        String language = languageResolver.resolve(acceptLanguage);
+        return replacePreferencesUseCase.handle(user.touristId(), request.categoryIds(), language)
+                .flatMapMany(Flux::fromIterable)
                 .map(mapper::toPreferenceResponse);
     }
 

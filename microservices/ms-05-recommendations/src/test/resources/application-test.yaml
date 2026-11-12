@@ -8,6 +8,10 @@ app:
       enabled: false
   neo4j:
     initialize-schema: true
+  warmup:
+    # MS05-11: el warmup se prueba con propiedades unitarias; en integracion solo retrasaria
+    # el arranque del contexto.
+    enabled: false
   seed:
     enabled: true
   events:

@@ -7,14 +7,17 @@ import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.FieldValidationException;
+import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.RegistrationNotFoundException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.AuditAction;
+import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.RegistrationReviewable;
 import com.smxplore.users.domain.model.RegistrationStatus;
+import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Usuario;
 import java.time.Clock;
 import java.time.Instant;
@@ -72,8 +75,27 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
                 .execute(Mono.defer(() -> users.findById(targetId)
                         .switchIfEmpty(Mono.error(
                                 registrationScope ? new RegistrationNotFoundException() : new UserNotFoundException()))
-                        .flatMap(target -> applyDecision(actorId, target, decision, command, registrationScope))))
+                        .flatMap(target -> ensureActorMayReview(actorId, target, registrationScope)
+                                .flatMap(reviewed ->
+                                        applyDecision(actorId, reviewed, decision, command, registrationScope)))))
                 .flatMap(target -> notifier.notify(target, decision, command.reason()));
+    }
+
+    /**
+     * El alta de una gestora la revisa un administrador, no otra gestora: si no, cualquier gestora podría aprobar
+     * gestoras y la cola de altas se convertiría en un mecanismo de escalada de privilegios.
+     */
+    private Mono<Usuario> ensureActorMayReview(UUID actorId, Usuario target, boolean registrationScope) {
+        if (!(target instanceof GestoraDestinos)) {
+            return Mono.just(target);
+        }
+        return users.findById(actorId)
+                .switchIfEmpty(Mono.error(
+                        registrationScope ? new RegistrationNotFoundException() : new UserNotFoundException()))
+                .flatMap(actor -> actor.role() == Role.ADMIN
+                        ? Mono.just(target)
+                        : Mono.error(new ForbiddenOperationException(
+                                "Solo un administrador puede revisar el alta de una gestora de destinos")));
     }
 
     private Mono<Usuario> applyDecision(
@@ -132,10 +154,19 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
     }
 
     private static AuditAction actionFor(Usuario target, RegistrationStatus decision) {
-        boolean guide = target instanceof Guia;
         return switch (decision) {
-            case APROBADO -> guide ? AuditAction.GUIA_APROBADA : AuditAction.PRESTADORA_APROBADA;
-            case RECHAZADO -> guide ? AuditAction.GUIA_RECHAZADA : AuditAction.PRESTADORA_RECHAZADA;
+            case APROBADO ->
+                target instanceof Guia
+                        ? AuditAction.GUIA_APROBADA
+                        : target instanceof GestoraDestinos
+                                ? AuditAction.GESTORA_APROBADA
+                                : AuditAction.PRESTADORA_APROBADA;
+            case RECHAZADO ->
+                target instanceof Guia
+                        ? AuditAction.GUIA_RECHAZADA
+                        : target instanceof GestoraDestinos
+                                ? AuditAction.GESTORA_RECHAZADA
+                                : AuditAction.PRESTADORA_RECHAZADA;
             case PENDIENTE -> throw new ValidationException("La decisión debe ser APROBADO o RECHAZADO");
         };
     }

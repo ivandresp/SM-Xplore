@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
@@ -87,6 +88,18 @@ class SecurityAuthorizationTest {
                 .exchange()
                 .expectStatus().isOk();
         client.get().uri("/api/v1/preferences")
+                .header(HttpHeaders.AUTHORIZATION, bearer("ADMIN"))
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void keepsAdministratorsOutOfTouristOnlyBulkPreferenceReplacement() {
+        client.put().uri("/api/v1/preferences")
+                .header(HttpHeaders.AUTHORIZATION, bearer("TOURIST"))
+                .exchange()
+                .expectStatus().isOk();
+        client.put().uri("/api/v1/preferences")
                 .header(HttpHeaders.AUTHORIZATION, bearer("ADMIN"))
                 .exchange()
                 .expectStatus().isForbidden();
@@ -211,6 +224,11 @@ class SecurityAuthorizationTest {
 
         @PostMapping("/api/v1/preferences")
         Mono<Map<String, Object>> addPreference() {
+            return Mono.just(Map.of("ok", true));
+        }
+
+        @PutMapping("/api/v1/preferences")
+        Mono<Map<String, Object>> replacePreferences() {
             return Mono.just(Map.of("ok", true));
         }
 

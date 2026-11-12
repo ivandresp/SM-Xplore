@@ -41,6 +41,24 @@ class PhotoUrlPolicyAdapterTests {
     }
 
     @Test
+    void acceptsCloudinaryUploadsWhenCloudinaryIsAllowlisted() {
+        var policy = policy(List.of("res.cloudinary.com"));
+
+        assertThatCode(() -> policy.validate(
+                        "https://res.cloudinary.com/mospyo3n/image/upload/v1700000000/reports/abc.jpg"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsLookalikeCloudinaryHosts() {
+        var policy = policy(List.of("res.cloudinary.com"));
+
+        assertThatThrownBy(() -> policy.validate("https://res.cloudinary.com.evil.example/a.jpg"))
+                .isInstanceOf(InvalidReportRequestException.class)
+                .hasMessageContaining("not allowed");
+    }
+
+    @Test
     void rejectsEveryUrlWhenNoAllowlistIsConfigured() {
         var policy = policy(List.of());
 

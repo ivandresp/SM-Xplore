@@ -20,8 +20,8 @@ public record RegistrationSearchCriteria(Role role, RegistrationStatus status, i
         if (size < 1 || size > MAX_SIZE) {
             throw new ValidationException("El tamaño de página debe estar entre 1 y " + MAX_SIZE);
         }
-        if (role != null && role != Role.GUIDE && role != Role.SERVICE_PROVIDER) {
-            throw new ValidationException("El rol debe ser GUIDE o SERVICE_PROVIDER");
+        if (role != null && role != Role.GUIDE && role != Role.SERVICE_PROVIDER && role != Role.DESTINATION_MANAGER) {
+            throw new ValidationException("El rol debe ser GUIDE, SERVICE_PROVIDER o DESTINATION_MANAGER");
         }
         // La cola es de trabajo, no un directorio: los altas ya aprobadas exponen nombre, correo, licencia y NIT de
         // toda la plataforma, así que solo se consultan aquí las que aún esperan decisión. El listado de aprobadas

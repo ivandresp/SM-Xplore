@@ -36,6 +36,7 @@ import com.smxplore.users.application.port.in.LoginUseCase;
 import com.smxplore.users.application.port.in.LogoutUseCase;
 import com.smxplore.users.application.port.in.ModerateReviewUseCase;
 import com.smxplore.users.application.port.in.RegenerateRecoveryCodesUseCase;
+import com.smxplore.users.application.port.in.RegisterGestoraUseCase;
 import com.smxplore.users.application.port.in.RegisterGuideUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
@@ -61,6 +62,7 @@ import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.EmailVerificationNotifier;
 import com.smxplore.users.application.port.out.EmailVerificationRepository;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
+import com.smxplore.users.application.port.out.GestoraRegistrationReceivedNotifier;
 import com.smxplore.users.application.port.out.GuideRegistrationReceivedNotifier;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
@@ -127,6 +129,7 @@ import com.smxplore.users.application.service.LogoutService;
 import com.smxplore.users.application.service.MfaCodeVerifier;
 import com.smxplore.users.application.service.ModerateReviewService;
 import com.smxplore.users.application.service.RegenerateRecoveryCodesService;
+import com.smxplore.users.application.service.RegisterGestoraService;
 import com.smxplore.users.application.service.RegisterGuideService;
 import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
@@ -607,6 +610,17 @@ public class ApplicationConfig {
             TransactionPort transactions,
             Clock clock) {
         return new RegisterGuideService(users, passwordHasher, guideRegistrationReceivedNotifier, transactions, clock);
+    }
+
+    @Bean
+    public RegisterGestoraUseCase registerGestoraUseCase(
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            GestoraRegistrationReceivedNotifier gestoraRegistrationReceivedNotifier,
+            TransactionPort transactions,
+            Clock clock) {
+        return new RegisterGestoraService(
+                users, passwordHasher, gestoraRegistrationReceivedNotifier, transactions, clock);
     }
 
     @Bean

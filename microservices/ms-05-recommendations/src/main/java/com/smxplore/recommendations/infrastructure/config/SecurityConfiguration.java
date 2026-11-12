@@ -51,6 +51,7 @@ public class SecurityConfiguration {
                     exchanges.pathMatchers(HttpMethod.GET, "/api/v1/recommendations").hasAnyRole("TOURIST", "ADMIN");
                     exchanges.pathMatchers(HttpMethod.GET, "/api/v1/preferences").hasRole("TOURIST");
                     exchanges.pathMatchers(HttpMethod.POST, "/api/v1/preferences").hasRole("TOURIST");
+                    exchanges.pathMatchers(HttpMethod.PUT, "/api/v1/preferences").hasRole("TOURIST");
                     exchanges.pathMatchers(HttpMethod.DELETE, "/api/v1/preferences/**").hasRole("TOURIST");
                     exchanges.pathMatchers(HttpMethod.POST, "/api/v1/interactions/view/**").hasRole("TOURIST");
                     exchanges.pathMatchers("/internal/admin/**").hasRole("ADMIN");

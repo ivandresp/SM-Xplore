@@ -54,6 +54,7 @@ class RecommendationServiceTest {
     private RecommendationGraphPort graphPort;
 
     private final RecordingMetrics metrics = new RecordingMetrics();
+    private final RecordingCache cache = new RecordingCache();
 
 
     private RecommendationService service;
@@ -66,7 +67,7 @@ class RecommendationServiceTest {
                 new RecommendationScorer(policy),
                 new DiversitySelector(policy),
                 policy,
-                new RecordingCache(),
+                cache,
                 new FixedGraphVersion(1L),
                 metrics,
                 Clock.fixed(NOW, ZoneOffset.UTC)
@@ -213,6 +214,127 @@ class RecommendationServiceTest {
                 .isInstanceOf(InvalidLimitException.class);
     }
 
+    @Test
+    void rejectsSizeAbovePolicyMaximum() {
+        RecommendationRequest request = RecommendationRequest.builder()
+                .requesterId(TOURIST)
+                .limit(20)
+                .size(100)
+                .build();
+        request.validate();
+
+        assertThatThrownBy(() -> service.handle(request))
+                .isInstanceOf(InvalidLimitException.class);
+    }
+
+    @Test
+    void filtersCandidatesByCategoryBeforeScoring() {
+        UUID categoryA = UUID.randomUUID();
+        RecommendationCandidate wanted = candidate(UUID.randomUUID(), categoryA, SITE_A,
+                CandidateOrigin.AFFINITY, 2.0);
+        RecommendationCandidate otherCategory = candidate(UUID.randomUUID(), CATEGORY_B, SITE_B,
+                CandidateOrigin.AFFINITY, 1.0);
+        RecommendationCandidate fallbackOfAnotherCategory = candidate(UUID.randomUUID(), CATEGORY_B,
+                SITE_B, CandidateOrigin.FALLBACK, 0.0);
+        when(graphPort.findCandidatesForTourist(eq(TOURIST), isNull(), isNull(), anyInt(),
+                any(Instant.class))).thenReturn(Flux.just(otherCategory, wanted));
+        when(graphPort.findFallbackCandidates(eq(TOURIST), isNull(), isNull(), anyInt(),
+                any(Instant.class))).thenReturn(Flux.just(fallbackOfAnotherCategory));
+
+        RecommendationRequest request = RecommendationRequest.builder()
+                .requesterId(TOURIST)
+                .limit(5)
+                .categoryId(categoryA)
+                .build();
+        request.validate();
+
+        Recommendation recommendation = service.handle(request).block();
+
+        assertThat(recommendation).isNotNull();
+        assertThat(recommendation.items()).hasSize(1);
+        assertThat(recommendation.items().getFirst().categoryId()).isEqualTo(categoryA);
+        assertThat(recommendation.total()).isEqualTo(1);
+    }
+
+    @Test
+    void filtersCandidatesByItemTypeAndMinimumRating() {
+        RecommendationCandidate event = candidate(UUID.randomUUID(), CATEGORY_A, SITE_A,
+                CandidateOrigin.AFFINITY, 2.0, ItemType.EVENT, 4.8);
+        RecommendationCandidate site = candidate(UUID.randomUUID(), CATEGORY_B, SITE_B,
+                CandidateOrigin.AFFINITY, 1.5, ItemType.SITE, 4.2);
+        RecommendationCandidate lowRatedSite = candidate(UUID.randomUUID(), CATEGORY_B, SITE_B,
+                CandidateOrigin.AFFINITY, 1.0, ItemType.SITE, 3.0);
+        mockCandidates(TOURIST, null, event, site, lowRatedSite);
+
+        RecommendationRequest request = RecommendationRequest.builder()
+                .requesterId(TOURIST)
+                .limit(10)
+                .itemType(ItemType.SITE)
+                .minRating(4.0)
+                .build();
+        request.validate();
+
+        Recommendation recommendation = service.handle(request).block();
+
+        assertThat(recommendation).isNotNull();
+        assertThat(recommendation.items()).hasSize(1);
+        assertThat(recommendation.items().getFirst().itemType()).isEqualTo(ItemType.SITE);
+        assertThat(recommendation.items().getFirst().itemId()).isEqualTo(site.itemId());
+    }
+
+    @Test
+    void paginatesTheDiversifiedListAndReportsThePaginationMetadata() {
+        java.util.List<RecommendationCandidate> candidates = java.util.stream.IntStream.range(0, 5)
+                .mapToObj(ignored -> candidate(UUID.randomUUID(), UUID.randomUUID(),
+                        UUID.randomUUID(), CandidateOrigin.AFFINITY, 1.0))
+                .toList();
+        when(graphPort.findCandidatesForTourist(eq(TOURIST), isNull(), isNull(), anyInt(),
+                any(Instant.class))).thenReturn(Flux.fromIterable(candidates));
+
+        Recommendation firstPage = service.handle(request(TOURIST, 5, 1, 2)).block();
+
+        assertThat(firstPage).isNotNull();
+        assertThat(firstPage.page()).isEqualTo(1);
+        assertThat(firstPage.size()).isEqualTo(2);
+        assertThat(firstPage.total()).isEqualTo(5);
+        assertThat(firstPage.totalPages()).isEqualTo(3);
+        assertThat(firstPage.hasNext()).isTrue();
+        assertThat(firstPage.items()).hasSize(2);
+    }
+
+    @Test
+    void returnsAnEmptyPageBeyondTheLastPage() {
+        java.util.List<RecommendationCandidate> candidates = java.util.stream.IntStream.range(0, 3)
+                .mapToObj(ignored -> candidate(UUID.randomUUID(), UUID.randomUUID(),
+                        UUID.randomUUID(), CandidateOrigin.AFFINITY, 1.0))
+                .toList();
+        when(graphPort.findCandidatesForTourist(eq(TOURIST), isNull(), isNull(), anyInt(),
+                any(Instant.class))).thenReturn(Flux.fromIterable(candidates));
+
+        Recommendation beyond = service.handle(request(TOURIST, 3, 2, 2)).block();
+
+        assertThat(beyond).isNotNull();
+        assertThat(beyond.items()).isEmpty();
+        assertThat(beyond.total()).isEqualTo(3);
+        assertThat(beyond.totalPages()).isEqualTo(2);
+        assertThat(beyond.hasNext()).isFalse();
+    }
+
+    @Test
+    void servesDifferentCacheEntriesForDifferentPagesAndFilters() {
+        RecommendationCandidate first = candidate(UUID.randomUUID(), CATEGORY_A, SITE_A,
+                CandidateOrigin.AFFINITY, 2.0, ItemType.EVENT, 4.8);
+        RecommendationCandidate second = candidate(UUID.randomUUID(), CATEGORY_B, SITE_B,
+                CandidateOrigin.FALLBACK, 0.0, ItemType.SITE, 4.2);
+        mockCandidates(TOURIST, null, first, second);
+
+        service.handle(request(TOURIST, 2, 0, 2)).block();
+        service.handle(request(TOURIST, 2, 1, 2)).block();
+        service.handle(request(TOURIST, 2, 0, 1)).block();
+
+        assertThat(cache.entries).hasSize(3);
+    }
+
     private void mockCandidates(
             UUID touristId,
             GeoLocation location,
@@ -236,9 +358,15 @@ class RecommendationServiceTest {
     }
 
     private static RecommendationRequest request(UUID touristId, int limit) {
+        return request(touristId, limit, 0, null);
+    }
+
+    private static RecommendationRequest request(UUID touristId, int limit, int page, Integer size) {
         RecommendationRequest request = RecommendationRequest.builder()
                 .requesterId(touristId)
                 .limit(limit)
+                .page(page)
+                .size(size)
                 .build();
         request.validate();
         return request;
@@ -251,8 +379,20 @@ class RecommendationServiceTest {
             CandidateOrigin origin,
             double affinity
     ) {
+        return candidate(itemId, categoryId, siteId, origin, affinity, ItemType.EVENT, 4.6);
+    }
+
+    private static RecommendationCandidate candidate(
+            UUID itemId,
+            UUID categoryId,
+            UUID siteId,
+            CandidateOrigin origin,
+            double affinity,
+            ItemType itemType,
+            double ratingAvg
+    ) {
         RecommendationCandidate candidate = RecommendationCandidate.builder()
-                .itemType(ItemType.EVENT)
+                .itemType(itemType)
                 .itemId(itemId)
                 .name("Item " + itemId)
                 .categoryId(categoryId)
@@ -261,7 +401,7 @@ class RecommendationServiceTest {
                 .latitude(10.3910)
                 .longitude(-75.4790)
                 .updatedAt(NOW.minusSeconds(3600))
-                .ratingAvg(4.6)
+                .ratingAvg(ratingAvg)
                 .ratingCount(100)
                 .affinity(affinity)
                 .origin(origin)

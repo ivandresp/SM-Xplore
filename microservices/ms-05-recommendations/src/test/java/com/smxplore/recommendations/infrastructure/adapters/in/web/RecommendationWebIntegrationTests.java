@@ -314,6 +314,274 @@ class RecommendationWebIntegrationTests extends AbstractNeo4jIntegrationTest {
                 .expectStatus().isNotFound();
     }
 
+    @Test
+    void filtersByCategory() {
+        RecommendationResponse unfiltered = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=50")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(unfiltered).isNotNull();
+        assertThat(unfiltered.items()).isNotEmpty();
+        UUID categoryId = unfiltered.items().getFirst().categoryId();
+
+        RecommendationResponse filtered = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=50&categoryId=" + categoryId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(filtered).isNotNull();
+        assertThat(filtered.items()).isNotEmpty();
+        assertThat(filtered.items())
+                .allSatisfy(item -> assertThat(item.categoryId()).isEqualTo(categoryId));
+        assertThat(filtered.total()).isGreaterThanOrEqualTo(filtered.items().size());
+    }
+
+    @Test
+    void filtersByItemType() {
+        RecommendationResponse unfiltered = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=50")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(unfiltered).isNotNull();
+        ItemType itemType = unfiltered.items().getFirst().itemType();
+
+        RecommendationResponse filtered = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=50&itemType=" + itemType)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(filtered).isNotNull();
+        assertThat(filtered.items()).isNotEmpty();
+        assertThat(filtered.items())
+                .allSatisfy(item -> assertThat(item.itemType()).isEqualTo(itemType));
+    }
+
+    @Test
+    void acceptsMinRatingAndRejectsValuesOutsideTheCatalogRange() {
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=20&minRating=4.0")
+                .exchange()
+                .expectStatus().isOk();
+
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=20&minRating=5.5")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void paginatesTheDiversifiedRecommendations() {
+        RecommendationResponse firstPage = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=6&page=0&size=3")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(firstPage).isNotNull();
+        assertThat(firstPage.page()).isZero();
+        assertThat(firstPage.size()).isEqualTo(3);
+        assertThat(firstPage.total()).isBetween(0, 6);
+        assertThat(firstPage.totalPages())
+                .isEqualTo(firstPage.total() == 0 ? 0 : (int) Math.ceil(firstPage.total() / 3.0));
+        assertThat(firstPage.items()).hasSizeLessThanOrEqualTo(3);
+
+        if (firstPage.hasNext()) {
+            RecommendationResponse secondPage = clientFor(TestSeedData.ANA, "TOURIST")
+                    .get().uri("/api/v1/recommendations?limit=6&page=1&size=3")
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody(RecommendationResponse.class)
+                    .returnResult()
+                    .getResponseBody();
+
+            assertThat(secondPage).isNotNull();
+            assertThat(secondPage.page()).isEqualTo(1);
+            assertThat(secondPage.items())
+                    .extracting(RecommendationItemResponse::itemId)
+                    .doesNotContainAnyElementsOf(firstPage.items().stream()
+                            .map(RecommendationItemResponse::itemId)
+                            .toList());
+        }
+    }
+
+    @Test
+    void pageBeyondTheLastPageIsEmpty() {
+        RecommendationResponse response = clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?limit=6&page=99&size=3")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(RecommendationResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.page()).isEqualTo(99);
+        assertThat(response.items()).isEmpty();
+        assertThat(response.hasNext()).isFalse();
+    }
+
+    @Test
+    void invalidPaginationIsRejected() {
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?page=-1")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?size=0")
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .get().uri("/api/v1/recommendations?itemType=NO_EXISTE")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void replacesExplicitPreferencesInBulk() {
+        UUID tourist = UUID.randomUUID();
+
+        clientFor(tourist, "TOURIST")
+                .post().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryId":"%s"}
+                        """.formatted(TestSeedData.CULTURA))
+                .exchange()
+                .expectStatus().isCreated();
+
+        List<PreferenceResponse> replaced = clientFor(tourist, "TOURIST")
+                .put().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryIds":["%s","%s"]}
+                        """.formatted(TestSeedData.MUSICA, TestSeedData.GASTRONOMIA))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(replaced).isNotNull();
+        assertThat(replaced)
+                .extracting(PreferenceResponse::categoryId)
+                .containsExactlyInAnyOrder(TestSeedData.MUSICA, TestSeedData.GASTRONOMIA);
+
+        List<PreferenceResponse> listed = clientFor(tourist, "TOURIST")
+                .get().uri("/api/v1/preferences")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(listed).isNotNull();
+        assertThat(listed)
+                .extracting(PreferenceResponse::categoryId)
+                .containsExactlyInAnyOrder(TestSeedData.MUSICA, TestSeedData.GASTRONOMIA);
+    }
+
+    @Test
+    void emptyBulkReplacementClearsTheExplicitPreferences() {
+        UUID tourist = UUID.randomUUID();
+
+        clientFor(tourist, "TOURIST")
+                .post().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryId":"%s"}
+                        """.formatted(TestSeedData.CULTURA))
+                .exchange()
+                .expectStatus().isCreated();
+
+        clientFor(tourist, "TOURIST")
+                .put().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryIds":[]}
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .hasSize(0);
+
+        clientFor(tourist, "TOURIST")
+                .get().uri("/api/v1/preferences")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .hasSize(0);
+    }
+
+    @Test
+    void unknownCategoryInBulkReplacementRollsBackTheWholeSet() {
+        UUID tourist = UUID.randomUUID();
+
+        clientFor(tourist, "TOURIST")
+                .post().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryId":"%s"}
+                        """.formatted(TestSeedData.CULTURA))
+                .exchange()
+                .expectStatus().isCreated();
+
+        clientFor(tourist, "TOURIST")
+                .put().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryIds":["%s","%s"]}
+                        """.formatted(TestSeedData.MUSICA, UUID.randomUUID()))
+                .exchange()
+                .expectStatus().isNotFound();
+
+        List<PreferenceResponse> listed = clientFor(tourist, "TOURIST")
+                .get().uri("/api/v1/preferences")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(PreferenceResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(listed).isNotNull();
+        assertThat(listed)
+                .extracting(PreferenceResponse::categoryId)
+                .containsExactly(TestSeedData.CULTURA);
+    }
+
+    @Test
+    void bulkReplacementRequiresAuthenticationAndCategoryIds() {
+        webTestClient.put().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"categoryIds":[]}
+                        """)
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        clientFor(TestSeedData.ANA, "TOURIST")
+                .put().uri("/api/v1/preferences")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
     private WebTestClient clientFor(UUID touristId, String role) {
         return webTestClient.mutate()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + bearer(touristId, role))

@@ -82,6 +82,34 @@ public record Neo4jQueries() {
             DELETE g
             """;
 
+    /**
+     * MS05-11: every requested category must exist before the replacement deletes any edge.
+     * The adapter rejects the transaction when the returned ids do not cover the request.
+     */
+    static final String VALIDATE_CATEGORIES = """
+            MATCH (c:Categoria)
+            WHERE c.categoriaId IN $categoryIds
+            RETURN c.categoriaId AS categoryId
+            """;
+
+    static final String DELETE_EXPLICIT_PREFERENCES = """
+            MATCH (:TuristaProfile {touristId: $touristId})-[g:LE_GUSTA]->(:Categoria)
+            WHERE coalesce(g.source, 'EXPLICIT') = 'EXPLICIT'
+            DELETE g
+            """;
+
+    static final String MERGE_EXPLICIT_PREFERENCES = """
+            MERGE (t:TuristaProfile {touristId: $touristId})
+            ON CREATE SET t.language = $language, t.updatedAt = datetime($now)
+            ON MATCH SET t.language = coalesce($language, t.language), t.updatedAt = datetime($now)
+            WITH t
+            UNWIND $categoryIds AS categoryId
+            MATCH (c:Categoria {categoriaId: categoryId})
+            MERGE (t)-[g:LE_GUSTA]->(c)
+            SET g.weight = 1.0, g.source = 'EXPLICIT', g.updatedAt = datetime($now)
+            RETURN c.categoriaId AS categoryId
+            """;
+
     static final String FIND_PREFERENCES = """
             MATCH (t:TuristaProfile {touristId: $touristId})-[p:LE_GUSTA]->(c:Categoria)
             RETURN t.touristId AS touristId,

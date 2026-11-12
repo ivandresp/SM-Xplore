@@ -155,6 +155,13 @@ class RecommendationCacheTest {
         }
 
         @Override
+        public Mono<java.util.List<Preference>> replacePreferences(
+                UUID touristId, java.util.List<UUID> categoryIds, String language, Instant now
+        ) {
+            return Mono.just(java.util.List.of());
+        }
+
+        @Override
         public Mono<Void> deletePreference(UUID touristId, UUID categoryId) {
             return Mono.empty();
         }

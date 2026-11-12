@@ -105,7 +105,8 @@ final class UserPersistenceMapper {
                 toInstant(user.updatedAt()),
                 toInstant(user.deletedAt()),
                 profile.get("nit", String.class),
-                profile.get("start_operation_date", LocalDate.class));
+                profile.get("start_operation_date", LocalDate.class),
+                RegistrationStatus.valueOf(profile.get("registration_status", String.class)));
     }
 
     Admin toAdmin(UserRecord user, Row profile) {
