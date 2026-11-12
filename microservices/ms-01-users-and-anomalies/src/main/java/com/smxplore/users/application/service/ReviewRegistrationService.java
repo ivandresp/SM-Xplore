@@ -7,6 +7,7 @@ import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
+import com.smxplore.users.domain.exception.RegistrationNotFoundException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.AuditAction;
@@ -26,6 +27,8 @@ import reactor.core.publisher.Mono;
  * estados, la misma auditoría, la misma revocación de sesiones y el mismo aviso por correo.
  */
 public final class ReviewRegistrationService implements ReviewRegistrationUseCase {
+
+    private static final String NOT_REVIEWABLE = "Solo los guías y las prestadoras de servicios pueden revisarse";
 
     private final UserRepository users;
     private final AuditTrailRecorder audit;
@@ -51,20 +54,35 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
 
     @Override
     public Mono<Void> review(UUID actorId, UUID targetUserId, ReviewRegistrationCommand command) {
+        return review(actorId, targetUserId, command, false);
+    }
+
+    @Override
+    public Mono<Void> reviewRegistration(UUID actorId, UUID registrationId, ReviewRegistrationCommand command) {
+        return review(actorId, registrationId, command, true);
+    }
+
+    private Mono<Void> review(
+            UUID actorId, UUID targetId, ReviewRegistrationCommand command, boolean registrationScope) {
         RegistrationStatus decision = requireDecision(command.decision());
 
         return transactions
-                .execute(Mono.defer(() -> users.findById(targetUserId)
-                        .switchIfEmpty(Mono.error(UserNotFoundException::new))
-                        .flatMap(target -> reviewTarget(actorId, target, decision, command))))
+                .execute(Mono.defer(() -> users.findById(targetId)
+                        .switchIfEmpty(Mono.error(
+                                registrationScope ? new RegistrationNotFoundException() : new UserNotFoundException()))
+                        .flatMap(target -> applyDecision(actorId, target, decision, command, registrationScope))))
                 .flatMap(target -> notifier.notify(target, decision, command.reason()));
     }
 
-    private Mono<Usuario> reviewTarget(
-            UUID actorId, Usuario target, RegistrationStatus decision, ReviewRegistrationCommand command) {
+    private Mono<Usuario> applyDecision(
+            UUID actorId,
+            Usuario target,
+            RegistrationStatus decision,
+            ReviewRegistrationCommand command,
+            boolean registrationScope) {
         if (!(target instanceof RegistrationReviewable reviewable)) {
             return Mono.error(
-                    new ValidationException("Solo los guías y las prestadoras de servicios pueden revisarse"));
+                    registrationScope ? new RegistrationNotFoundException() : new ValidationException(NOT_REVIEWABLE));
         }
         if (reviewable.registrationStatus() == decision) {
             return Mono.error(

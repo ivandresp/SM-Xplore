@@ -18,6 +18,7 @@ import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
+import com.smxplore.users.domain.exception.RegistrationNotFoundException;
 import com.smxplore.users.domain.exception.ReportQuotaExceededException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
@@ -123,6 +124,15 @@ public class ApiExceptionHandler {
      * MS01-B8: un guía sin aprobar no entra, pero solo se llega aquí después de verificar la contraseña; por eso el
      * código puede ser específico sin convertirse en un oráculo de existencia de cuentas.
      */
+    /**
+     * MS01-B8: en la cola de solicitudes el id designa un alta; si no existe (o es de un perfil que no se revisa) la
+     * respuesta es 404, sin confirmar si la cuenta existe.
+     */
+    @ExceptionHandler(RegistrationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationNotFound(RegistrationNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "REGISTRATION_NOT_FOUND", exception.getMessage());
+    }
+
     @ExceptionHandler(AccountPendingReviewException.class)
     public ResponseEntity<ProblemDetail> handleAccountPendingReview(AccountPendingReviewException exception) {
         return problem(HttpStatus.FORBIDDEN, "ACCOUNT_PENDING_REVIEW", exception.getMessage());

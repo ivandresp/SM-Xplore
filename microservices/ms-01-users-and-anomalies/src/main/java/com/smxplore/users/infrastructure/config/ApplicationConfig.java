@@ -29,6 +29,7 @@ import com.smxplore.users.application.port.in.ListAiFlaggedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListAnomaliesUseCase;
 import com.smxplore.users.application.port.in.ListAnomalyThresholdsUseCase;
 import com.smxplore.users.application.port.in.ListAuditEntriesUseCase;
+import com.smxplore.users.application.port.in.ListRegistrationsUseCase;
 import com.smxplore.users.application.port.in.ListReportedReviewsUseCase;
 import com.smxplore.users.application.port.in.ListReviewsUseCase;
 import com.smxplore.users.application.port.in.LoginUseCase;
@@ -72,6 +73,7 @@ import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
 import com.smxplore.users.application.port.out.RecoveryCodeHasher;
+import com.smxplore.users.application.port.out.RegistrationRepository;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewAiFilter;
@@ -116,6 +118,7 @@ import com.smxplore.users.application.service.ListAiFlaggedReviewsService;
 import com.smxplore.users.application.service.ListAnomaliesService;
 import com.smxplore.users.application.service.ListAnomalyThresholdsService;
 import com.smxplore.users.application.service.ListAuditEntriesService;
+import com.smxplore.users.application.service.ListRegistrationsService;
 import com.smxplore.users.application.service.ListReportedReviewsService;
 import com.smxplore.users.application.service.ListReviewsService;
 import com.smxplore.users.application.service.LoginProtection;
@@ -529,6 +532,11 @@ public class ApplicationConfig {
     @Bean
     public GetSystemAvailabilityUseCase getSystemAvailabilityUseCase(SystemAvailabilityProbe probe, Clock clock) {
         return new GetSystemAvailabilityService(probe, clock);
+    }
+
+    @Bean
+    public ListRegistrationsUseCase listRegistrationsUseCase(RegistrationRepository registrations) {
+        return new ListRegistrationsService(registrations);
     }
 
     @Bean
