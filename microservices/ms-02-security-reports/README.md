@@ -68,7 +68,7 @@ El servicio solo acepta RS256. En local/tests se puede usar `JWT_PUBLIC_KEY_LOCA
 | `MS01_BASE_URL` | `http://ms-01:8081` | Base para consultar la versión de autenticación del usuario. |
 | `MFA_REQUIRE_ADMIN` | `true` | Exige `mfa=true` a los administradores (fuera de local/test). |
 | `JWT_ALLOW_INSECURE_JWKS` | `false` | Solo local/dev: acepta JWKS por HTTP no loopback. |
-| `PHOTO_ALLOWED_HOSTS` | vacío | Allowlist de hosts para `photosUrls` (admite `*.dominio`). Obligatoria fuera de local/test. |
+| `PHOTO_ALLOWED_HOSTS` | vacío (stack local: `res.cloudinary.com`) | Allowlist de hosts para `photosUrls` (admite `*.dominio`). Obligatoria fuera de local/test. |
 | `PHOTO_ALLOW_HTTP` / `PHOTO_ALLOW_ANY_HOST` | `false` / `false` | Relajaciones solo para local/test. |
 | `MANAGEMENT_EXPOSED_ENDPOINTS` | `health,info` | Endpoints de actuator expuestos; fuera de local/test no puede incluir métricas. |
 | `MONGO_AUTO_INDEX_CREATION` | `false` | Crea índices al arrancar. En Docker Compose se activa; en producción se recomienda gestionarlos con migraciones. |
@@ -229,6 +229,22 @@ en las rutas `/api/`, además de `X-Content-Type-Options`, `X-Frame-Options`, `R
 `*.dominio`). Un host desconocido, `http://` o un esquema distinto se rechazan con `400`. El servicio no sube
 archivos: guarda URLs que luego carga el navegador, por eso la allowlist evita el seguimiento de la IP del staff y
 el contenido mixto.
+
+#### Subida de fotos desde el frontend (Cloudinary)
+
+El formulario de reportes puede subir un archivo en lugar de pedir una URL: el frontend lo envía al preset
+*unsigned* de Cloudinary y luego manda a `POST /api/v1/security-reports/{reportId}/photos` la URL resultante
+(`https://res.cloudinary.com/<cloud>/image/upload/...`). El backend **no recibe binarios** ni proxies de imágenes:
+solo valida y guarda la URL.
+
+- En el stack local, `compose.yaml` define `PHOTO_ALLOWED_HOSTS=res.cloudinary.com` por defecto para que esas URLs
+  se acepten; en producción la variable es obligatoria (`${PHOTO_ALLOWED_HOSTS:?}`) y `JwtProductionGuard` impide
+  arrancar sin ella. El perfil `local` ya no abre la allowlist por defecto: `PHOTO_ALLOW_ANY_HOST` queda en `false`
+  también en desarrollo, así que un host desconocido se rechaza igual que en producción.
+- Si se usa otro proveedor (S3, Supabase Storage, servidor propio), agrega su host a la lista separado por comas;
+  no se admiten hosts con puerto ni esquemas distintos de `https`.
+- Sigue aplicando el límite de escrituras (`WRITE_RATE_LIMIT_PER_MINUTE`) y la validación de que el reporte
+  pertenezca al usuario.
 
 ### Correlation id (MS02-08)
 

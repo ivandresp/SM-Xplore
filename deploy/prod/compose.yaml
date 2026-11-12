@@ -560,6 +560,8 @@ services:
       # HSTS del propio servicio (application.yaml: app.security.headers.hsts).
       # El gateway tambien lo envia; se deja explicito para no depender del perfil.
       HSTS_ENABLED: ${HSTS_ENABLED:-true}
+      # MS02-07: fuera de local/test la allowlist es obligatoria (JwtProductionGuard).
+      PHOTO_ALLOWED_HOSTS: ${PHOTO_ALLOWED_HOSTS:?}
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
       # PLAT-01: Kafka de producción exige SASL_SSL + SCRAM-SHA-512. Spring Boot
