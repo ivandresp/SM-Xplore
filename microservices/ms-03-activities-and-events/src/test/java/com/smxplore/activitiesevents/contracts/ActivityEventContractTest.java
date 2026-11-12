@@ -2,12 +2,13 @@ package com.smxplore.activitiesevents.contracts;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.activitiesevents.application.outbox.ActivityChangedEventFactory;
 import com.smxplore.activitiesevents.application.outbox.EventChangedEventFactory;
 import com.smxplore.activitiesevents.domain.model.activity.Activity;
@@ -105,19 +106,19 @@ class ActivityEventContractTest {
         assertThat(envelope.get("payload").get("status").asText()).isEqualTo("POSTPONED");
     }
 
-    private Set<ValidationMessage> validate(String eventType, String exampleFile) throws Exception {
+    private List<Error> validate(String eventType, String exampleFile) throws Exception {
         return validate(eventType, exampleFile, null);
     }
 
-    private Set<ValidationMessage> validate(String eventType, String exampleFile, JsonNode payload)
+    private List<Error> validate(String eventType, String exampleFile, JsonNode payload)
             throws Exception {
         JsonNode node = payload != null
                 ? payload
                 : mapper.readTree(Files.readString(CONTRACTS.resolve("examples").resolve(exampleFile)));
-        return schema(eventType).validate(node);
+        return schema(eventType).validate(node.toString(), InputFormat.JSON);
     }
 
-    private JsonSchema schema(String eventType) throws Exception {
+    private Schema schema(String eventType) throws Exception {
         Map<String, String> schemas = new LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(CONTRACTS)) {
             List<Path> files = paths
@@ -131,13 +132,14 @@ class ActivityEventContractTest {
                 schemas.put(BASE_IRI + path.getFileName(), Files.readString(path));
             }
         }
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemas)));
+        SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemas)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
         String fileName = eventType + ".v2.json";
-        return factory.getSchema(
-                SchemaLocation.of(BASE_IRI + fileName),
-                mapper.readTree(Files.readString(CONTRACTS.resolve(fileName))),
-                SchemaValidatorsConfig.builder().formatAssertionsEnabled(true).build());
+        return registry.getSchema(SchemaLocation.of(BASE_IRI + fileName));
     }
 }

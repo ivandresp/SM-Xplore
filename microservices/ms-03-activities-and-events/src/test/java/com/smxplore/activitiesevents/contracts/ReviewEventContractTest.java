@@ -2,12 +2,13 @@ package com.smxplore.activitiesevents.contracts;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.activitiesevents.application.outbox.ReviewEventFactory;
 import com.smxplore.activitiesevents.domain.model.review.Review;
 import com.smxplore.activitiesevents.domain.model.review.ReviewItemType;
@@ -41,11 +42,11 @@ class ReviewEventContractTest {
 
     @Test
     void exampleMatchesTheContract() throws Exception {
-        JsonSchema schema = schema(EVENT_TYPE);
+        Schema schema = schema(EVENT_TYPE);
         JsonNode example = mapper.readTree(Files.readString(
                 CONTRACTS.resolve("examples").resolve(EVENT_TYPE + ".v1.example.json")));
 
-        Set<ValidationMessage> errors = schema.validate(example);
+        List<Error> errors = schema.validate(example.toString(), InputFormat.JSON);
 
         assertThat(errors).isEmpty();
     }
@@ -65,14 +66,14 @@ class ReviewEventContractTest {
         JsonNode envelope = mapper.readTree(event.payload());
 
         // The outbox stores the whole v1 envelope, so the contract validates the envelope too.
-        Set<ValidationMessage> errors = schema(EVENT_TYPE).validate(envelope);
+        List<Error> errors = schema(EVENT_TYPE).validate(envelope.toString(), InputFormat.JSON);
 
         assertThat(errors).isEmpty();
         assertThat(envelope.get("payload").get("status").asText()).isEqualTo("PUBLISHED");
         assertThat(envelope.get("aggregateId").asText()).isEqualTo(review.getId().toString());
     }
 
-    private JsonSchema schema(String eventType) throws Exception {
+    private Schema schema(String eventType) throws Exception {
         Map<String, String> schemas = new LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(CONTRACTS)) {
             List<Path> files = paths
@@ -83,13 +84,14 @@ class ReviewEventContractTest {
                 schemas.put(BASE_IRI + path.getFileName(), Files.readString(path));
             }
         }
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemas)));
+        SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemas)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
         String fileName = eventType + ".v1.json";
-        return factory.getSchema(
-                SchemaLocation.of(BASE_IRI + fileName),
-                mapper.readTree(Files.readString(CONTRACTS.resolve(fileName))),
-                SchemaValidatorsConfig.builder().formatAssertionsEnabled(true).build());
+        return registry.getSchema(SchemaLocation.of(BASE_IRI + fileName));
     }
 }

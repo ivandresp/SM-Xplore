@@ -28,7 +28,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.2.0")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
 
@@ -52,7 +52,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-mongodb")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.awaitility:awaitility")
-    testImplementation("com.networknt:json-schema-validator:1.5.9")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testImplementation(libs.archunit.junit5)
 
     testCompileOnly("org.projectlombok:lombok")
@@ -62,16 +62,16 @@ dependencies {
     // Dependencias transitivas con CVE corregible que detecta el escaneo de Trivy del pipeline.
     // Los drivers de PostgreSQL arrastran SCRAM y el cliente de Kafka arrastra lz4 y snappy.
     constraints {
-        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+        implementation("at.yawk.lz4:lz4-java:1.13.0") {
             because("CVE-2026-106451, ejecución de código por manejo inseguro de temporales")
         }
-        implementation("com.ongres.scram:scram-client:3.3") {
+        implementation("com.ongres.scram:scram-client:3.4") {
             because("CVE-2026-53712, degradación de autenticación por man-in-the-middle")
         }
         implementation("com.ongres.scram:scram-common:3.3") {
             because("CVE-2026-53712, degradación de autenticación por man-in-the-middle")
         }
-        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+        implementation("org.xerial.snappy:snappy-java:1.1.10.12") {
             because("CVE-2026-108106 y CVE-2026-93451, desbordamiento de búfer y denegación de servicio")
         }
     }

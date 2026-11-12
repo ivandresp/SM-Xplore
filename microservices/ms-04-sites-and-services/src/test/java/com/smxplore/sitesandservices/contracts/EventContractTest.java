@@ -2,12 +2,13 @@ package com.smxplore.sitesandservices.contracts;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.sitesandservices.application.event.DomainEventFactory;
 import com.smxplore.sitesandservices.domain.model.catalog.Category;
 import com.smxplore.sitesandservices.domain.model.catalog.CategoryScope;
@@ -68,7 +69,7 @@ class EventContractTest {
 
     @Test
     void generatedEventsMatchTheirJsonSchemas() throws Exception {
-        Map<String, JsonSchema> schemas = schemas();
+        Map<String, Schema> schemas = schemas();
         Map<String, DomainEvent> events = Map.of(
                 "catalog.category.changed", factory.categoryChanged(category(), "corr-1"),
                 "catalog.zone.changed", factory.zoneChanged(zone(), "corr-6"),
@@ -80,7 +81,7 @@ class EventContractTest {
 
         for (Map.Entry<String, DomainEvent> entry : events.entrySet()) {
             JsonNode json = readJson(serializer.serialize(entry.getValue()));
-            Set<ValidationMessage> errors = schemas.get(entry.getKey()).validate(json);
+            List<Error> errors = schemas.get(entry.getKey()).validate(json.toString(), InputFormat.JSON);
             assertThat(errors)
                     .as("Contract violations for %s", entry.getKey())
                     .isEmpty();
@@ -101,7 +102,7 @@ class EventContractTest {
 
         DomainEvent event = factory.reviewChanged(review, "corr-7");
         JsonNode json = readJson(serializer.serialize(event));
-        Set<ValidationMessage> errors = schemas().get("reviews.review.changed").validate(json);
+        List<Error> errors = schemas().get("reviews.review.changed").validate(json.toString(), InputFormat.JSON);
 
         assertThat(errors).as("Contract violations for reviews.review.changed with response").isEmpty();
         assertThat(json.at("/payload/response/text").asText()).isEqualTo("Gracias por visitarnos");
@@ -131,7 +132,7 @@ class EventContractTest {
         );
     }
 
-    private Map<String, JsonSchema> schemas() throws Exception {
+    private Map<String, Schema> schemas() throws Exception {
         Map<String, String> schemaTexts = new java.util.LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
             List<Path> files = paths
@@ -145,20 +146,17 @@ class EventContractTest {
                 schemaTexts.put(BASE_IRI + path.getFileName(), Files.readString(path));
             }
         }
-        JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemaTexts)));
-        SchemaValidatorsConfig config = SchemaValidatorsConfig.builder()
-                .formatAssertionsEnabled(true)
-                .build();
-        Map<String, JsonSchema> schemas = new java.util.LinkedHashMap<>();
+        SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemaTexts)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
+        Map<String, Schema> schemas = new java.util.LinkedHashMap<>();
         for (String eventType : EVENT_VERSIONS.keySet()) {
             String fileName = eventType + ".v" + EVENT_VERSIONS.get(eventType) + ".json";
-            schemas.put(eventType, schemaFactory.getSchema(
-                    SchemaLocation.of(BASE_IRI + fileName),
-                    schemaMapper.readTree(Files.readString(contractsDirectory.resolve(fileName))),
-                    config
-            ));
+            schemas.put(eventType, registry.getSchema(SchemaLocation.of(BASE_IRI + fileName)));
         }
         return schemas;
     }

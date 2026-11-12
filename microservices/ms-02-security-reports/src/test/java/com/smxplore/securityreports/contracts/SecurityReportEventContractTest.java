@@ -2,12 +2,13 @@ package com.smxplore.securityreports.contracts;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.securityreports.application.event.SecurityReportEventFactory;
 import com.smxplore.securityreports.domain.model.SecurityReport;
 import com.smxplore.securityreports.domain.model.types.Location;
@@ -42,11 +43,11 @@ class SecurityReportEventContractTest {
 
     @Test
     void exampleMatchesTheContract() throws Exception {
-        JsonSchema schema = schema(EVENT_TYPE);
+        Schema schema = schema(EVENT_TYPE);
         JsonNode example = schemaMapper.readTree(Files.readString(
                 CONTRACTS.resolve("examples").resolve(EVENT_TYPE + ".v1.example.json")));
 
-        Set<ValidationMessage> errors = schema.validate(example);
+        List<Error> errors = schema.validate(example.toString(), InputFormat.JSON);
 
         assertThat(errors).isEmpty();
     }
@@ -69,7 +70,7 @@ class SecurityReportEventContractTest {
         var serializer = new DomainEventJsonSerializer(eventMapper);
         String json = serializer.serialize(factory.reportChanged(report, "correlation-1"));
 
-        Set<ValidationMessage> errors = schema(EVENT_TYPE).validate(schemaMapper.readTree(json));
+        List<Error> errors = schema(EVENT_TYPE).validate(json, InputFormat.JSON);
 
         assertThat(errors).isEmpty();
         assertThat(eventMapper.readTree(json).get("eventType").asString()).isEqualTo(EVENT_TYPE);
@@ -78,7 +79,7 @@ class SecurityReportEventContractTest {
                 .isEqualTo(report.getId().toString());
     }
 
-    private JsonSchema schema(String eventType) throws Exception {
+    private Schema schema(String eventType) throws Exception {
         Map<String, String> schemas = new LinkedHashMap<>();
         try (Stream<Path> paths = Files.list(CONTRACTS)) {
             List<Path> files = paths
@@ -89,13 +90,14 @@ class SecurityReportEventContractTest {
                 schemas.put(BASE_IRI + path.getFileName(), Files.readString(path));
             }
         }
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemas)));
+        SchemaRegistry registry = SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemas)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
         String fileName = eventType + ".v1.json";
-        return factory.getSchema(
-                SchemaLocation.of(BASE_IRI + fileName),
-                schemaMapper.readTree(Files.readString(CONTRACTS.resolve(fileName))),
-                SchemaValidatorsConfig.builder().formatAssertionsEnabled(true).build());
+        return registry.getSchema(SchemaLocation.of(BASE_IRI + fileName));
     }
 }

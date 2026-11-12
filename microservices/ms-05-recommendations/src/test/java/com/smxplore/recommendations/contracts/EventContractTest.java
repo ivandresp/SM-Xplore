@@ -3,12 +3,13 @@ package com.smxplore.recommendations.contracts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.Error;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
-import com.networknt.schema.SchemaValidatorsConfig;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.smxplore.recommendations.domain.exception.InvalidEventException;
 import com.smxplore.recommendations.domain.model.event.ActivityChangedEvent;
 import com.smxplore.recommendations.domain.model.event.CategoryChangedEvent;
@@ -55,13 +56,7 @@ class EventContractTest {
 
     @Test
     void everySchemaHasAValidExample() throws Exception {
-        Map<String, String> schemaTexts = schemaTexts();
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemaTexts)));
-        SchemaValidatorsConfig config = SchemaValidatorsConfig.builder()
-                .formatAssertionsEnabled(true)
-                .build();
+        SchemaRegistry registry = schemaRegistry();
 
         List<Path> schemas;
         try (Stream<Path> paths = Files.list(contractsDirectory)) {
@@ -82,11 +77,8 @@ class EventContractTest {
                     .as("Missing example for %s", fileName)
                     .exists();
 
-            JsonNode schemaNode = schemaMapper.readTree(Files.readString(schemaPath));
-            JsonSchema schema = factory.getSchema(
-                    SchemaLocation.of(BASE_IRI + fileName), schemaNode, config);
-            Set<ValidationMessage> errors = schema.validate(
-                    schemaMapper.readTree(Files.readString(examplePath)));
+            Schema schema = registry.getSchema(SchemaLocation.of(BASE_IRI + fileName));
+            List<Error> errors = schema.validate(Files.readString(examplePath), InputFormat.JSON);
 
             assertThat(errors)
                     .as("Contract violations in %s", examplePath.getFileName())
@@ -157,21 +149,25 @@ class EventContractTest {
 
     @Test
     void schemaRejectsAnEventWithAMissingRequiredField() throws Exception {
-        Map<String, String> schemaTexts = schemaTexts();
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(
-                SpecVersion.VersionFlag.V202012,
-                builder -> builder.schemaLoaders(loaders -> loaders.schemas(schemaTexts)));
         String fileName = EventTopics.CATALOG_SITE_CHANGED + ".v1.json";
-        JsonSchema schema = factory.getSchema(
-                SchemaLocation.of(BASE_IRI + fileName),
-                schemaMapper.readTree(Files.readString(contractsDirectory.resolve(fileName))),
-                SchemaValidatorsConfig.builder().formatAssertionsEnabled(true).build());
+        Schema schema = schemaRegistry().getSchema(SchemaLocation.of(BASE_IRI + fileName));
 
         ObjectNode invalid = (ObjectNode) schemaMapper.readTree(
                 Files.readString(examplePath(EventTopics.CATALOG_SITE_CHANGED)));
         ((ObjectNode) invalid.get("payload")).remove("name");
 
-        assertThat(schema.validate(invalid)).isNotEmpty();
+        assertThat(schema.validate(invalid.toString(), InputFormat.JSON)).isNotEmpty();
+    }
+
+    private SchemaRegistry schemaRegistry() throws Exception {
+        Map<String, String> schemas = schemaTexts();
+        return SchemaRegistry.withDefaultDialect(
+                SpecificationVersion.DRAFT_2020_12,
+                builder -> builder
+                        .schemas(schemas)
+                        .schemaRegistryConfig(SchemaRegistryConfig.builder()
+                                .formatAssertionsEnabled(true)
+                                .build()));
     }
 
     private Map<String, String> schemaTexts() throws Exception {
