@@ -96,7 +96,8 @@ public final class UserAnonymizer {
                         now,
                         now,
                         suffix,
-                        null);
+                        null,
+                        manager.registrationStatus());
             case Admin admin ->
                 Admin.rehydrate(
                         current.id(),

@@ -130,7 +130,8 @@ public final class RoleMigration {
                     now,
                     current.deletedAt(),
                     require(data.nit(), "El NIT es obligatorio para una gestora de destinos"),
-                    data.startOperationDate());
+                    data.startOperationDate(),
+                    RegistrationStatus.APROBADO);
         }
     }
 
