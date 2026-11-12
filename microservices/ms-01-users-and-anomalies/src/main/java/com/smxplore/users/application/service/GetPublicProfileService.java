@@ -5,7 +5,7 @@ import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Usuario;
 import java.util.UUID;
@@ -32,6 +32,6 @@ public final class GetPublicProfileService implements GetPublicProfileUseCase {
             return true;
         }
         return user instanceof PrestadoraServicios provider
-                && provider.registrationStatus() == ProviderRegistrationStatus.APROBADO;
+                && provider.registrationStatus() == RegistrationStatus.APROBADO;
     }
 }

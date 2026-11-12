@@ -5,7 +5,7 @@ import com.smxplore.users.domain.model.Admin;
 import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.RoleProfileData;
 import com.smxplore.users.domain.model.Turista;
@@ -84,6 +84,9 @@ public final class RoleMigration {
                     require(data.dniType(), "El tipo de documento es obligatorio para un guía"),
                     require(data.dniNumber(), "El número de documento es obligatorio para un guía"),
                     require(data.license(), "La licencia es obligatoria para un guía"),
+                    // Un administrador está cambiando el rol: el alta nace aprobada porque el actor es la
+                    // autoridad que aprobaría la solicitud.
+                    RegistrationStatus.APROBADO,
                     data.startOperationDate());
         }
     }
@@ -104,7 +107,7 @@ public final class RoleMigration {
                     current.deletedAt(),
                     require(data.nit(), "El NIT es obligatorio para una prestadora de servicios"),
                     data.businessType(),
-                    ProviderRegistrationStatus.PENDIENTE,
+                    RegistrationStatus.PENDIENTE,
                     data.latitude(),
                     data.longitude(),
                     data.websiteUrl(),

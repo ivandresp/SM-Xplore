@@ -1,6 +1,8 @@
 package com.smxplore.users.infrastructure.rest;
 
 import com.smxplore.users.domain.exception.AccountNotActiveException;
+import com.smxplore.users.domain.exception.AccountPendingReviewException;
+import com.smxplore.users.domain.exception.AccountRegistrationRejectedException;
 import com.smxplore.users.domain.exception.AnomalyAlreadyResolvedException;
 import com.smxplore.users.domain.exception.AnomalyNotFoundException;
 import com.smxplore.users.domain.exception.DuplicateReviewException;
@@ -115,6 +117,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidStatusTransitionException.class)
     public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidStatusTransitionException exception) {
         return problem(HttpStatus.CONFLICT, "INVALID_STATUS_TRANSITION", exception.getMessage());
+    }
+
+    /**
+     * MS01-B8: un guía sin aprobar no entra, pero solo se llega aquí después de verificar la contraseña; por eso el
+     * código puede ser específico sin convertirse en un oráculo de existencia de cuentas.
+     */
+    @ExceptionHandler(AccountPendingReviewException.class)
+    public ResponseEntity<ProblemDetail> handleAccountPendingReview(AccountPendingReviewException exception) {
+        return problem(HttpStatus.FORBIDDEN, "ACCOUNT_PENDING_REVIEW", exception.getMessage());
+    }
+
+    @ExceptionHandler(AccountRegistrationRejectedException.class)
+    public ResponseEntity<ProblemDetail> handleAccountRegistrationRejected(
+            AccountRegistrationRejectedException exception) {
+        return problem(HttpStatus.FORBIDDEN, "ACCOUNT_REGISTRATION_REJECTED", exception.getMessage());
     }
 
     @ExceptionHandler(AccountNotActiveException.class)

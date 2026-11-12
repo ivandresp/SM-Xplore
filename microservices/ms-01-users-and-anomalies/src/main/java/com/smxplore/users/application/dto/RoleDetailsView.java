@@ -27,7 +27,12 @@ public sealed interface RoleDetailsView
                         tourist.birthDate(),
                         tourist.nationality());
             case Guia guide ->
-                new Guide(guide.dniType(), guide.dniNumber(), guide.license(), guide.startOperationDate());
+                new Guide(
+                        guide.dniType(),
+                        guide.dniNumber(),
+                        guide.license(),
+                        guide.registrationStatus().name(),
+                        guide.startOperationDate());
             case PrestadoraServicios provider ->
                 new Provider(
                         provider.nit(),
@@ -45,7 +50,8 @@ public sealed interface RoleDetailsView
     record Tourist(String dniType, String dniNumber, String preferredLanguage, LocalDate birthDate, String nationality)
             implements RoleDetailsView {}
 
-    record Guide(String dniType, String dniNumber, String license, LocalDate startOperationDate)
+    record Guide(
+            String dniType, String dniNumber, String license, String registrationStatus, LocalDate startOperationDate)
             implements RoleDetailsView {}
 
     record Provider(

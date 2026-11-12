@@ -35,13 +35,14 @@ import com.smxplore.users.application.port.in.LoginUseCase;
 import com.smxplore.users.application.port.in.LogoutUseCase;
 import com.smxplore.users.application.port.in.ModerateReviewUseCase;
 import com.smxplore.users.application.port.in.RegenerateRecoveryCodesUseCase;
+import com.smxplore.users.application.port.in.RegisterGuideUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
 import com.smxplore.users.application.port.in.ReportReviewUseCase;
 import com.smxplore.users.application.port.in.ResetPasswordUseCase;
 import com.smxplore.users.application.port.in.ResolveAnomalyUseCase;
 import com.smxplore.users.application.port.in.RespondReviewUseCase;
-import com.smxplore.users.application.port.in.ReviewProviderUseCase;
+import com.smxplore.users.application.port.in.ReviewRegistrationUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.application.port.in.SendEmailVerificationUseCase;
 import com.smxplore.users.application.port.in.UpdateAnomalyThresholdUseCase;
@@ -59,6 +60,7 @@ import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.EmailVerificationNotifier;
 import com.smxplore.users.application.port.out.EmailVerificationRepository;
 import com.smxplore.users.application.port.out.FailedLoginSignal;
+import com.smxplore.users.application.port.out.GuideRegistrationReceivedNotifier;
 import com.smxplore.users.application.port.out.LoginAttemptRepository;
 import com.smxplore.users.application.port.out.MfaChallengeIssuer;
 import com.smxplore.users.application.port.out.MfaChallengeRepository;
@@ -68,9 +70,9 @@ import com.smxplore.users.application.port.out.MfaRepository;
 import com.smxplore.users.application.port.out.PasswordHasher;
 import com.smxplore.users.application.port.out.PasswordResetNotifier;
 import com.smxplore.users.application.port.out.PasswordResetTokenRepository;
-import com.smxplore.users.application.port.out.ProviderReviewNotifier;
 import com.smxplore.users.application.port.out.RecoveryCodeGenerator;
 import com.smxplore.users.application.port.out.RecoveryCodeHasher;
+import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
 import com.smxplore.users.application.port.out.RequestRateSignal;
 import com.smxplore.users.application.port.out.ReviewAiFilter;
 import com.smxplore.users.application.port.out.ReviewReportQuota;
@@ -122,13 +124,14 @@ import com.smxplore.users.application.service.LogoutService;
 import com.smxplore.users.application.service.MfaCodeVerifier;
 import com.smxplore.users.application.service.ModerateReviewService;
 import com.smxplore.users.application.service.RegenerateRecoveryCodesService;
+import com.smxplore.users.application.service.RegisterGuideService;
 import com.smxplore.users.application.service.RegisterProviderService;
 import com.smxplore.users.application.service.RegisterTouristService;
 import com.smxplore.users.application.service.ReportReviewService;
 import com.smxplore.users.application.service.ResetPasswordService;
 import com.smxplore.users.application.service.ResolveAnomalyService;
 import com.smxplore.users.application.service.RespondReviewService;
-import com.smxplore.users.application.service.ReviewProviderService;
+import com.smxplore.users.application.service.ReviewRegistrationService;
 import com.smxplore.users.application.service.SearchUsersService;
 import com.smxplore.users.application.service.SendEmailVerificationService;
 import com.smxplore.users.application.service.UpdateAnomalyThresholdService;
@@ -577,15 +580,25 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public ReviewProviderUseCase reviewProviderUseCase(
+    public ReviewRegistrationUseCase reviewRegistrationUseCase(
             UserRepository users,
             AuditTrailRecorder auditTrailRecorder,
-            ProviderReviewNotifier providerReviewNotifier,
+            RegistrationReviewNotifier registrationReviewNotifier,
             AuthVersionEvictor evictor,
             TransactionPort transactions,
             Clock clock) {
-        return new ReviewProviderService(
-                users, auditTrailRecorder, providerReviewNotifier, evictor, transactions, clock);
+        return new ReviewRegistrationService(
+                users, auditTrailRecorder, registrationReviewNotifier, evictor, transactions, clock);
+    }
+
+    @Bean
+    public RegisterGuideUseCase registerGuideUseCase(
+            UserRepository users,
+            PasswordHasher passwordHasher,
+            GuideRegistrationReceivedNotifier guideRegistrationReceivedNotifier,
+            TransactionPort transactions,
+            Clock clock) {
+        return new RegisterGuideService(users, passwordHasher, guideRegistrationReceivedNotifier, transactions, clock);
     }
 
     @Bean

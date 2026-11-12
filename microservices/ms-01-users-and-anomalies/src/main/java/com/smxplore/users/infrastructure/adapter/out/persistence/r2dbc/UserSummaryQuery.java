@@ -3,7 +3,7 @@ package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.UserSearchCriteria;
 import com.smxplore.users.application.dto.UserSummaryView;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.UserStatus;
 import java.util.List;
 import java.util.Locale;
@@ -123,7 +123,7 @@ final class UserSummaryQuery {
                 row.get("email", String.class),
                 row.get("role", String.class),
                 UserStatus.valueOf(row.get("status", String.class)),
-                providerStatus == null ? null : ProviderRegistrationStatus.valueOf(providerStatus),
+                providerStatus == null ? null : RegistrationStatus.valueOf(providerStatus),
                 UserPersistenceMapper.toInstant(row.get("signed_up_at", java.time.OffsetDateTime.class)));
     }
 

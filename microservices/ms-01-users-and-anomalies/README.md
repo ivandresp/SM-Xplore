@@ -163,7 +163,7 @@ faltan, el servicio falla al arrancar en lugar de emitir tokens con una llave ef
 
 ## Protección de acceso
 
-- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password`, `/mfa/verify` y los dos registros (`/register/turista`, `/register/prestadora`). Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
+- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password`, `/mfa/verify` y los registros (`/register/turista`, `/register/prestadora`, `/register/guia`). Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
 - **Límite por cuenta**: además del límite por IP, `InMemoryAccountAttemptLimiter` cuenta los fallos por correo en `/auth/login` y por usuario en `/auth/mfa/verify` (`AUTH_ACCOUNT_MAX_ATTEMPTS`, 10 en `AUTH_ACCOUNT_WINDOW`, `PT15M`). Rotar direcciones no evita el cupo de la cuenta y el bloqueo por cuenta no revela si la cuenta existe.
 - **Respuesta uniforme ante fallos de acceso (MS01-04)**: un correo inexistente, una contraseña incorrecta, una cuenta inactiva y una cuenta bloqueada responden todos `401` con `code=INVALID_CREDENTIALS` y el mismo mensaje, sin `retryAfterSeconds` ni códigos que distingan el caso. Así, comparar respuestas ya no sirve para enumerar cuentas. En el registro, `EMAIL_ALREADY_EXISTS` (`409`) sí confirma la existencia del correo: es un riesgo aceptado y documentado porque el registro público necesita dar una respuesta útil; lo mitiga el límite por IP añadido a los dos endpoints de registro. Si se quiere cerrar por completo, el registro debe responder `202` genérico y confirmar por correo.
 - **Bloqueo por cuenta (MS01-05)**: tras `LOGIN_LOCKOUT_MAX_ATTEMPTS` fallos consecutivos dentro de la ventana, la cuenta queda bloqueada durante `LOGIN_LOCKOUT_DURATION`; el estado se guarda en `login_attempts` para sobrevivir reinicios y compartirse entre instancias. Un inicio de sesión exitoso limpia el contador. Al bloquearse se envía un correo de aviso (`EmailAccountLockedNotifier`) y el usuario puede desbloquearse restableciendo la contraseña, porque `ResetPasswordService` limpia el contador persistente y el límite por cuenta. El bloqueo sigue siendo un vector de denegación de servicio para un atacante que conozca el correo; se acepta y se mitiga con la notificación y el autodesbloqueo (un captcha o un desafío progresivo lo cerrarían del todo).
@@ -285,6 +285,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | --- | --- | --- |
 | POST | `/api/v1/auth/register/turista` | Público |
 | POST | `/api/v1/auth/register/prestadora` | Público, queda `PENDIENTE` |
+| POST | `/api/v1/auth/register/guia` | Público, queda `PENDIENTE` y sin acceso hasta que una gestora la apruebe |
 | POST | `/api/v1/auth/login` | Público |
 | POST | `/api/v1/auth/forgot-password` | Público |
 | POST | `/api/v1/auth/reset-password` | Público |
@@ -316,6 +317,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | PATCH | `/api/v1/admin/users/{id}/role` | ADMIN, migra el perfil al nuevo rol |
 | DELETE | `/api/v1/admin/users/{id}` | ADMIN, baja definitiva con anonimización |
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
+| POST | `/api/v1/admin/users/{id}/guide-review` | ADMIN, aprueba o rechaza el alta de un guía |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
 | GET | `/api/v1/admin/audit-logs/export` | ADMIN, reporte CSV de auditoría |

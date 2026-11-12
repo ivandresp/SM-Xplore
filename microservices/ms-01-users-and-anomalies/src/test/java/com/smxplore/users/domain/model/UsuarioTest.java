@@ -40,7 +40,7 @@ class UsuarioTest {
 
         assertThat(user).isInstanceOf(Usuario.class);
         assertThat(user.role()).isEqualTo(Role.SERVICE_PROVIDER);
-        assertThat(user.registrationStatus()).isEqualTo(ProviderRegistrationStatus.PENDIENTE);
+        assertThat(user.registrationStatus()).isEqualTo(RegistrationStatus.PENDIENTE);
     }
 
     @Test

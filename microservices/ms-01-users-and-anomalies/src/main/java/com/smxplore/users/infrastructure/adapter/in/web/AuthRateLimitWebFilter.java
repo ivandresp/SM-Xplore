@@ -89,6 +89,8 @@ public class AuthRateLimitWebFilter implements WebFilter {
             // que no se pueda usar como oráculo de enumeración a alta velocidad.
             case "/api/v1/auth/register/turista" -> "register-turista";
             case "/api/v1/auth/register/prestadora" -> "register-prestadora";
+            // MS01-B8: mismo criterio para el alta pública de guías.
+            case "/api/v1/auth/register/guia" -> "register-guia";
             case "/api/v1/auth/reset-password" -> "reset-password";
             case "/api/v1/auth/mfa/verify" -> "mfa-verify";
             // MS01-18: la verificación de correo consume un token de un solo uso; se limita por IP.

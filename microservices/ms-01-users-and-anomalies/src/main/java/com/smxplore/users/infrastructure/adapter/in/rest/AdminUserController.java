@@ -4,7 +4,7 @@ import com.smxplore.users.application.dto.ChangeUserRoleCommand;
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.application.dto.CreateInternalUserCommand;
 import com.smxplore.users.application.dto.PageResult;
-import com.smxplore.users.application.dto.ReviewProviderCommand;
+import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.dto.SortOrder;
 import com.smxplore.users.application.dto.UserSearchCriteria;
 import com.smxplore.users.application.dto.UserSummaryView;
@@ -15,16 +15,16 @@ import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.application.port.in.CreateInternalUserUseCase;
 import com.smxplore.users.application.port.in.DeleteUserUseCase;
 import com.smxplore.users.application.port.in.GetUserDetailUseCase;
-import com.smxplore.users.application.port.in.ReviewProviderUseCase;
+import com.smxplore.users.application.port.in.ReviewRegistrationUseCase;
 import com.smxplore.users.application.port.in.SearchUsersUseCase;
 import com.smxplore.users.domain.exception.ValidationException;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.UserStatus;
 import com.smxplore.users.infrastructure.adapter.in.dto.ChangeUserRoleRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.ChangeUserStatusRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.CreateInternalUserRequest;
-import com.smxplore.users.infrastructure.adapter.in.dto.ProviderReviewRequest;
+import com.smxplore.users.infrastructure.adapter.in.dto.RegistrationReviewRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -55,7 +55,7 @@ public class AdminUserController {
     private final ChangeUserStatusUseCase changeUserStatus;
     private final ChangeUserRoleUseCase changeUserRole;
     private final DeleteUserUseCase deleteUser;
-    private final ReviewProviderUseCase reviewProvider;
+    private final ReviewRegistrationUseCase reviewRegistration;
     private final CreateInternalUserUseCase createInternalUser;
     private final AdminResetPasswordUseCase adminResetPassword;
 
@@ -65,7 +65,7 @@ public class AdminUserController {
             ChangeUserStatusUseCase changeUserStatus,
             ChangeUserRoleUseCase changeUserRole,
             DeleteUserUseCase deleteUser,
-            ReviewProviderUseCase reviewProvider,
+            ReviewRegistrationUseCase reviewRegistration,
             CreateInternalUserUseCase createInternalUser,
             AdminResetPasswordUseCase adminResetPassword) {
         this.searchUsers = searchUsers;
@@ -73,7 +73,7 @@ public class AdminUserController {
         this.changeUserStatus = changeUserStatus;
         this.changeUserRole = changeUserRole;
         this.deleteUser = deleteUser;
-        this.reviewProvider = reviewProvider;
+        this.reviewRegistration = reviewRegistration;
         this.createInternalUser = createInternalUser;
         this.adminResetPassword = adminResetPassword;
     }
@@ -83,7 +83,7 @@ public class AdminUserController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) UserStatus status,
-            @RequestParam(required = false) ProviderRegistrationStatus providerStatus,
+            @RequestParam(required = false) RegistrationStatus providerStatus,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(defaultValue = "0") int page,
@@ -169,8 +169,23 @@ public class AdminUserController {
     public Mono<Void> reviewProvider(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
-            @Valid @RequestBody ProviderReviewRequest request) {
-        return reviewProvider.review(actorId(jwt), id, new ReviewProviderCommand(request.decision(), request.reason()));
+            @Valid @RequestBody RegistrationReviewRequest request) {
+        return reviewRegistration.review(
+                actorId(jwt), id, new ReviewRegistrationCommand(request.decision(), request.reason()));
+    }
+
+    /**
+     * MS01-B8: una gestora aprueba o rechaza el alta de un guía. Reutiliza el mismo caso de uso y la misma máquina de
+     * estados que la revisión de prestadoras; solo cambia la ruta pública y la acción auditada.
+     */
+    @PostMapping("/{id}/guide-review")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> reviewGuide(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID id,
+            @Valid @RequestBody RegistrationReviewRequest request) {
+        return reviewRegistration.review(
+                actorId(jwt), id, new ReviewRegistrationCommand(request.decision(), request.reason()));
     }
 
     @PostMapping("/{id}/password-reset")

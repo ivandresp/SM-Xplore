@@ -1,7 +1,7 @@
 package com.smxplore.users.application.dto;
 
 import com.smxplore.users.domain.exception.ValidationException;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.UserStatus;
 import java.util.Set;
@@ -10,7 +10,7 @@ public record UserSearchCriteria(
         String q,
         Role role,
         UserStatus status,
-        ProviderRegistrationStatus providerStatus,
+        RegistrationStatus providerStatus,
         String sortBy,
         SortOrder sortOrder,
         int page,

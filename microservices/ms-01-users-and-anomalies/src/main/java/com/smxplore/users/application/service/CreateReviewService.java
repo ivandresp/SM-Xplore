@@ -12,7 +12,7 @@ import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Review;
 import com.smxplore.users.domain.model.ReviewTargetType;
 import com.smxplore.users.domain.model.Role;
@@ -105,7 +105,7 @@ public final class CreateReviewService implements CreateReviewUseCase {
         }
         if (!(target instanceof PrestadoraServicios provider)
                 || target.role() != Role.SERVICE_PROVIDER
-                || provider.registrationStatus() != ProviderRegistrationStatus.APROBADO) {
+                || provider.registrationStatus() != RegistrationStatus.APROBADO) {
             throw new ValidationException("El destino indicado no es una prestadora aprobada");
         }
     }
