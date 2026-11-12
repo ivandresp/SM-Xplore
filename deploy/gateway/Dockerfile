@@ -11,7 +11,7 @@
 # en /tmp; los puertos publicados del host no cambian (8088/8443). En produccion
 # (deploy/prod/compose.yaml) se usa la misma imagen unprivileged con los
 # certificados inyectados como secretos: no hay que generar nada.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 # Solo para el certificado autofirmado de desarrollo (TLS_SELF_SIGNED=true).
 USER root
