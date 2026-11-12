@@ -101,6 +101,8 @@ public class SecurityConfig {
                             .permitAll()
                             .pathMatchers("/api/v1/admin/**")
                             .hasRole("ADMIN")
+                            .pathMatchers("/api/v1/manager/**")
+                            .hasAnyRole("DESTINATION_MANAGER", "ADMIN")
                             .pathMatchers(HttpMethod.OPTIONS, "/**")
                             .permitAll()
                             .anyExchange()

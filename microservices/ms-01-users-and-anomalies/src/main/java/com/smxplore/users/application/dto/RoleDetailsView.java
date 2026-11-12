@@ -27,7 +27,12 @@ public sealed interface RoleDetailsView
                         tourist.birthDate(),
                         tourist.nationality());
             case Guia guide ->
-                new Guide(guide.dniType(), guide.dniNumber(), guide.license(), guide.startOperationDate());
+                new Guide(
+                        guide.dniType(),
+                        guide.dniNumber(),
+                        guide.license(),
+                        guide.registrationStatus().name(),
+                        guide.startOperationDate());
             case PrestadoraServicios provider ->
                 new Provider(
                         provider.nit(),
@@ -37,7 +42,9 @@ public sealed interface RoleDetailsView
                         provider.latitude(),
                         provider.longitude(),
                         provider.startOperationDate());
-            case GestoraDestinos manager -> new DestinationManager(manager.nit(), manager.startOperationDate());
+            case GestoraDestinos manager ->
+                new DestinationManager(
+                        manager.nit(), manager.registrationStatus().name(), manager.startOperationDate());
             case Admin admin -> new Administrator(admin.dniType(), admin.dniNumber(), admin.lastAccessDate());
         };
     }
@@ -45,7 +52,8 @@ public sealed interface RoleDetailsView
     record Tourist(String dniType, String dniNumber, String preferredLanguage, LocalDate birthDate, String nationality)
             implements RoleDetailsView {}
 
-    record Guide(String dniType, String dniNumber, String license, LocalDate startOperationDate)
+    record Guide(
+            String dniType, String dniNumber, String license, String registrationStatus, LocalDate startOperationDate)
             implements RoleDetailsView {}
 
     record Provider(
@@ -58,7 +66,8 @@ public sealed interface RoleDetailsView
             LocalDate startOperationDate)
             implements RoleDetailsView {}
 
-    record DestinationManager(String nit, LocalDate startOperationDate) implements RoleDetailsView {}
+    record DestinationManager(String nit, String registrationStatus, LocalDate startOperationDate)
+            implements RoleDetailsView {}
 
     record Administrator(String dniType, String dniNumber, Instant lastAccessDate) implements RoleDetailsView {}
 }

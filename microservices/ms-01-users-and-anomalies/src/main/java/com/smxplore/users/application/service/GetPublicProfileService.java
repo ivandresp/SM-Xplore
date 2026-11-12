@@ -4,9 +4,10 @@ import com.smxplore.users.application.dto.PublicProfileView;
 import com.smxplore.users.application.port.in.GetPublicProfileUseCase;
 import com.smxplore.users.application.port.out.UserRepository;
 import com.smxplore.users.domain.exception.UserNotFoundException;
+import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PrestadoraServicios;
 import com.smxplore.users.domain.model.ProviderRegistrationStatus;
-import com.smxplore.users.domain.model.Role;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Usuario;
 import java.util.UUID;
 import reactor.core.publisher.Mono;
@@ -28,8 +29,8 @@ public final class GetPublicProfileService implements GetPublicProfileUseCase {
     }
 
     private static boolean isPublicRole(Usuario user) {
-        if (user.role() == Role.GUIDE) {
-            return true;
+        if (user instanceof Guia guide) {
+            return guide.registrationStatus() == RegistrationStatus.APROBADO;
         }
         return user instanceof PrestadoraServicios provider
                 && provider.registrationStatus() == ProviderRegistrationStatus.APROBADO;
