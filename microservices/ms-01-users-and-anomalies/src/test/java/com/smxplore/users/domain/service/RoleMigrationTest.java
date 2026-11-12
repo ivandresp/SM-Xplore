@@ -7,7 +7,7 @@ import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.Email;
 import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.RoleProfileData;
 import com.smxplore.users.domain.model.Turista;
@@ -35,7 +35,7 @@ class RoleMigrationTest {
         assertThat(provider.authVersion()).isEqualTo(tourist.authVersion() + 1);
         assertThat(provider.nit()).isEqualTo("900123456");
         assertThat(provider.websiteUrl()).isEqualTo("https://prestadora.example.com");
-        assertThat(provider.registrationStatus()).isEqualTo(ProviderRegistrationStatus.PENDIENTE);
+        assertThat(provider.registrationStatus()).isEqualTo(RegistrationStatus.PENDIENTE);
     }
 
     @Test

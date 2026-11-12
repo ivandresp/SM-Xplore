@@ -71,12 +71,14 @@ public class UserRepositoryAdapter implements UserRepository {
             """;
 
     private static final String UPSERT_GUIDE = """
-            INSERT INTO guide_profiles (user_id, dni_type, dni_number, license, start_operation_date)
-            VALUES (:userId, :dniType, :dniNumber, :license, :startOperationDate)
+            INSERT INTO guide_profiles (user_id, dni_type, dni_number, license, registration_status,
+                                        start_operation_date)
+            VALUES (:userId, :dniType, :dniNumber, :license, :registrationStatus, :startOperationDate)
             ON CONFLICT (user_id) DO UPDATE
             SET dni_type = EXCLUDED.dni_type,
                 dni_number = EXCLUDED.dni_number,
                 license = EXCLUDED.license,
+                registration_status = EXCLUDED.registration_status,
                 start_operation_date = EXCLUDED.start_operation_date
             """;
 
@@ -325,7 +327,8 @@ public class UserRepositoryAdapter implements UserRepository {
                 .bind("userId", user.id())
                 .bind("dniType", user.dniType())
                 .bind("dniNumber", user.dniNumber())
-                .bind("license", user.license());
+                .bind("license", user.license())
+                .bind("registrationStatus", user.registrationStatus().name());
         spec = bindNullable(spec, "startOperationDate", user.startOperationDate(), LocalDate.class);
         return spec.fetch().rowsUpdated().then();
     }

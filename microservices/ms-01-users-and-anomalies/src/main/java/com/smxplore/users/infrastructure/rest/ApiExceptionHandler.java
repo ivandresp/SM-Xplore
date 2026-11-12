@@ -1,10 +1,13 @@
 package com.smxplore.users.infrastructure.rest;
 
 import com.smxplore.users.domain.exception.AccountNotActiveException;
+import com.smxplore.users.domain.exception.AccountPendingReviewException;
+import com.smxplore.users.domain.exception.AccountRegistrationRejectedException;
 import com.smxplore.users.domain.exception.AnomalyAlreadyResolvedException;
 import com.smxplore.users.domain.exception.AnomalyNotFoundException;
 import com.smxplore.users.domain.exception.DuplicateReviewException;
 import com.smxplore.users.domain.exception.EmailAlreadyExistsException;
+import com.smxplore.users.domain.exception.FieldValidationException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidCredentialsException;
 import com.smxplore.users.domain.exception.InvalidCurrentPasswordException;
@@ -16,6 +19,7 @@ import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.MfaAlreadyEnabledException;
 import com.smxplore.users.domain.exception.MfaNotEnabledException;
 import com.smxplore.users.domain.exception.ProfileMismatchException;
+import com.smxplore.users.domain.exception.RegistrationNotFoundException;
 import com.smxplore.users.domain.exception.ReportQuotaExceededException;
 import com.smxplore.users.domain.exception.ReviewAlreadyReportedException;
 import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
@@ -117,6 +121,30 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.CONFLICT, "INVALID_STATUS_TRANSITION", exception.getMessage());
     }
 
+    /**
+     * MS01-B8: un guía sin aprobar no entra, pero solo se llega aquí después de verificar la contraseña; por eso el
+     * código puede ser específico sin convertirse en un oráculo de existencia de cuentas.
+     */
+    /**
+     * MS01-B8: en la cola de solicitudes el id designa un alta; si no existe (o es de un perfil que no se revisa) la
+     * respuesta es 404, sin confirmar si la cuenta existe.
+     */
+    @ExceptionHandler(RegistrationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationNotFound(RegistrationNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "REGISTRATION_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(AccountPendingReviewException.class)
+    public ResponseEntity<ProblemDetail> handleAccountPendingReview(AccountPendingReviewException exception) {
+        return problem(HttpStatus.FORBIDDEN, "ACCOUNT_PENDING_REVIEW", exception.getMessage());
+    }
+
+    @ExceptionHandler(AccountRegistrationRejectedException.class)
+    public ResponseEntity<ProblemDetail> handleAccountRegistrationRejected(
+            AccountRegistrationRejectedException exception) {
+        return problem(HttpStatus.FORBIDDEN, "ACCOUNT_REGISTRATION_REJECTED", exception.getMessage());
+    }
+
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ProblemDetail> handleAccountNotActive(AccountNotActiveException exception) {
         return problem(HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", exception.getMessage());
@@ -187,6 +215,15 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "INVALID_MFA_CHALLENGE", exception.getMessage());
     }
 
+    /**
+     * MS01-B8: reglas de negocio que se incumplen en un campo (por ejemplo, rechazar un alta sin motivo). Devuelve
+     * el mismo cuerpo que la validación de Bean Validation para que el cliente pinte el error junto al campo.
+     */
+    @ExceptionHandler(FieldValidationException.class)
+    public ResponseEntity<ProblemDetail> handleFieldValidation(FieldValidationException exception) {
+        return validationErrors(exception.getMessage(), exception.fieldErrors());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleBeanValidation(MethodArgumentNotValidException exception) {
         return validationErrors(exception.getBindingResult());
@@ -250,6 +287,14 @@ public class ApiExceptionHandler {
         detail.setTitle("Bad Request");
         detail.setProperty("code", "VALIDATION_ERROR");
         detail.setProperty("errors", errors);
+        return ResponseEntity.badRequest().body(detail);
+    }
+
+    private static ResponseEntity<ProblemDetail> validationErrors(String detailText, Map<String, String> errors) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detailText);
+        detail.setTitle("Bad Request");
+        detail.setProperty("code", "VALIDATION_ERROR");
+        detail.setProperty("errors", new LinkedHashMap<>(errors));
         return ResponseEntity.badRequest().body(detail);
     }
 

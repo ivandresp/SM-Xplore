@@ -12,7 +12,7 @@ import com.smxplore.users.domain.exception.ReviewFilterUnavailableException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationReviewable;
 import com.smxplore.users.domain.model.Review;
 import com.smxplore.users.domain.model.ReviewTargetType;
 import com.smxplore.users.domain.model.Role;
@@ -101,11 +101,15 @@ public final class CreateReviewService implements CreateReviewUseCase {
             if (target.role() != Role.GUIDE) {
                 throw new ValidationException("El destino indicado no es un guía turístico");
             }
+            // MS01-B8: un alta sin aprobar no es reseñable, igual que no tiene perfil público.
+            if (!RegistrationReviewable.isApproved(target)) {
+                throw new ValidationException("El destino indicado no es un guía aprobado");
+            }
             return;
         }
         if (!(target instanceof PrestadoraServicios provider)
                 || target.role() != Role.SERVICE_PROVIDER
-                || provider.registrationStatus() != ProviderRegistrationStatus.APROBADO) {
+                || !RegistrationReviewable.isApproved(provider)) {
             throw new ValidationException("El destino indicado no es una prestadora aprobada");
         }
     }

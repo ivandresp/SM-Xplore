@@ -7,13 +7,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public final class PrestadoraServicios extends Usuario {
+public final class PrestadoraServicios extends Usuario implements RegistrationReviewable {
 
     private static final int MAX_WEBSITE_LENGTH = 255;
 
     private final String nit;
     private String businessType;
-    private ProviderRegistrationStatus registrationStatus;
+    private RegistrationStatus registrationStatus;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private String websiteUrl;
@@ -32,7 +32,7 @@ public final class PrestadoraServicios extends Usuario {
             Instant deletedAt,
             String nit,
             String businessType,
-            ProviderRegistrationStatus registrationStatus,
+            RegistrationStatus registrationStatus,
             BigDecimal latitude,
             BigDecimal longitude,
             String websiteUrl,
@@ -40,8 +40,7 @@ public final class PrestadoraServicios extends Usuario {
         super(id, fullName, email, phone, passwordHash, status, authVersion, signedUpAt, updatedAt, deletedAt);
         this.nit = nit;
         this.businessType = normalize(businessType);
-        this.registrationStatus =
-                registrationStatus == null ? ProviderRegistrationStatus.PENDIENTE : registrationStatus;
+        this.registrationStatus = registrationStatus == null ? RegistrationStatus.PENDIENTE : registrationStatus;
         validateCoordinates(latitude, longitude);
         this.latitude = latitude;
         this.longitude = longitude;
@@ -75,7 +74,7 @@ public final class PrestadoraServicios extends Usuario {
                 null,
                 nit,
                 businessType,
-                ProviderRegistrationStatus.PENDIENTE,
+                RegistrationStatus.PENDIENTE,
                 latitude,
                 longitude,
                 websiteUrl,
@@ -95,7 +94,7 @@ public final class PrestadoraServicios extends Usuario {
             Instant deletedAt,
             String nit,
             String businessType,
-            ProviderRegistrationStatus registrationStatus,
+            RegistrationStatus registrationStatus,
             BigDecimal latitude,
             BigDecimal longitude,
             String websiteUrl,
@@ -136,7 +135,8 @@ public final class PrestadoraServicios extends Usuario {
         markUpdated(now);
     }
 
-    public void changeRegistrationStatus(ProviderRegistrationStatus newStatus, Instant now) {
+    @Override
+    public void changeRegistrationStatus(RegistrationStatus newStatus, Instant now) {
         this.registrationStatus = newStatus;
         incrementAuthVersion();
         markUpdated(now);
@@ -155,7 +155,8 @@ public final class PrestadoraServicios extends Usuario {
         return businessType;
     }
 
-    public ProviderRegistrationStatus registrationStatus() {
+    @Override
+    public RegistrationStatus registrationStatus() {
         return registrationStatus;
     }
 

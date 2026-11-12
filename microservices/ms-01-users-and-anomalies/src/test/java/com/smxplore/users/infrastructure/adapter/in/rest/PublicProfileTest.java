@@ -98,6 +98,34 @@ class PublicProfileTest {
     }
 
     @Test
+    void pendingAndRejectedGuidesAreNotPublic() {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        String pendingGuideId =
+                registerGuide("Guia Pendiente Publico", "guia.pendiente.publico@example.com", "LIC-PUB-PEND");
+        String rejectedGuideId =
+                registerGuide("Guia Rechazado Publico", "guia.rechazado.publico@example.com", "LIC-PUB-RECH");
+        assertThat(reviewGuide(adminToken, rejectedGuideId, "RECHAZADO", "Licencia no verificable"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+
+        // Un alta sin aprobar no puede aparecer en el catalogo publico: expondria nombre y licencia de alguien
+        // que la gestora todavia no ha admitido (o que rechazo).
+        assertThat(publicStatus(pendingGuideId)).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(publicStatus(rejectedGuideId)).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void anApprovedGuideIsPublic() {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        String guideId = registerGuide("Guia Aprobado Publico", "guia.aprobado.publico@example.com", "LIC-PUB-APROB");
+        assertThat(reviewGuide(adminToken, guideId, "APROBADO", null)).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<Map> response = publicProfile(guideId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(profile(response).get("license")).isEqualTo("LIC-PUB-APROB");
+    }
+
+    @Test
     void updatesAndClearsTheOptionalProviderWebsite() {
         registerProvider("Prestadora Web", "prestadora.web@example.com", "903555888-9", "3008880004");
         String token = login("prestadora.web@example.com", PASSWORD);
@@ -139,6 +167,36 @@ class PublicProfileTest {
                 .toEntity(Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return String.valueOf(response.getBody().get("id"));
+    }
+
+    private String registerGuide(String fullName, String email, String license) {
+        ResponseEntity<Map> response = client.post()
+                .uri("/api/v1/auth/register/guia")
+                .body(Map.of(
+                        "fullName", fullName,
+                        "email", email,
+                        "phone", "300999" + Math.abs(email.hashCode() % 10000),
+                        "password", PASSWORD,
+                        "dniType", "CC",
+                        "dniNumber", "77" + Math.abs(email.hashCode()),
+                        "license", license))
+                .retrieve()
+                .toEntity(Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return String.valueOf(response.getBody().get("id"));
+    }
+
+    private HttpStatusCode reviewGuide(String token, String userId, String decision, String reason) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("decision", decision);
+        if (reason != null) {
+            body.put("reason", reason);
+        }
+        return client.post()
+                .uri("/api/v1/admin/users/" + userId + "/guide-review")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(body)
+                .exchange((request, response) -> response.getStatusCode());
     }
 
     private String registerTourist(String email, String dniNumber, String phone) {
