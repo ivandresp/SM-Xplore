@@ -62,7 +62,8 @@ public final class UserAnonymizer {
                         "ANON",
                         suffix,
                         "ANON-" + current.id(),
-                        null);
+                        null,
+                        guide.registrationStatus());
             case PrestadoraServicios provider ->
                 PrestadoraServicios.rehydrate(
                         current.id(),
@@ -95,7 +96,8 @@ public final class UserAnonymizer {
                         now,
                         now,
                         suffix,
-                        null);
+                        null,
+                        manager.registrationStatus());
             case Admin admin ->
                 Admin.rehydrate(
                         current.id(),

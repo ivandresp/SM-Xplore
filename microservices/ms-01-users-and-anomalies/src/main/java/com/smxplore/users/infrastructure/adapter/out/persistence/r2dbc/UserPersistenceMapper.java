@@ -7,6 +7,7 @@ import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.PrestadoraServicios;
 import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.UserStatus;
 import io.r2dbc.spi.Row;
@@ -67,7 +68,8 @@ final class UserPersistenceMapper {
                 profile.get("dni_type", String.class),
                 profile.get("dni_number", String.class),
                 profile.get("license", String.class),
-                profile.get("start_operation_date", LocalDate.class));
+                profile.get("start_operation_date", LocalDate.class),
+                RegistrationStatus.valueOf(profile.get("registration_status", String.class)));
     }
 
     PrestadoraServicios toProvider(UserRecord user, Row profile) {
@@ -104,7 +106,8 @@ final class UserPersistenceMapper {
                 toInstant(user.updatedAt()),
                 toInstant(user.deletedAt()),
                 profile.get("nit", String.class),
-                profile.get("start_operation_date", LocalDate.class));
+                profile.get("start_operation_date", LocalDate.class),
+                RegistrationStatus.valueOf(profile.get("registration_status", String.class)));
     }
 
     Admin toAdmin(UserRecord user, Row profile) {
