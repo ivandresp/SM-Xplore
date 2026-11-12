@@ -163,7 +163,7 @@ ms-03 y ms-04), no se expone por nombre corto: se usa el namespace `/svc/ms-0N/.
 | `/api/v1/auth/**` | ms-01 | registro, login, MFA, recuperación de contraseña |
 | `/api/v1/users/**` | ms-01 | perfil, contraseña, sesiones, MFA del usuario |
 | `/api/v1/public/**` | ms-01 | perfil público y resumen público de reseñas |
-| `/api/v1/manager/**` | ms-01 | gestoras de destino: listado y aprobación del registro de guías |
+| `/api/v1/registrations` | ms-01 | cola de altas (guías y prestadoras) que revisa la gestora de destinos o un admin |
 | `/api/v1/admin/users/**` | ms-01 | administración de cuentas |
 | `/api/v1/admin/anomalies`, `/admin/anomaly-thresholds`, `/admin/audit-logs`, `/admin/monitoring` | ms-01 | observabilidad y auditoría |
 | `/api/v1/admin/reviews/reported` | ms-01 | cola de reseñas reportadas |

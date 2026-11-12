@@ -1,7 +1,6 @@
 package com.smxplore.users.infrastructure.adapter.out.email;
 
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
-import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Usuario;
@@ -13,6 +12,11 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+/**
+ * Avisa al titular del alta revisable (guía o prestadora de servicios) de la decisión de la gestora.
+ *
+ * <p>El envío nunca rompe la revisión: si el SMTP falla se registra el error y la decisión ya quedó guardada.
+ */
 @Component
 public class EmailRegistrationReviewNotifier implements RegistrationReviewNotifier {
 
@@ -25,17 +29,17 @@ public class EmailRegistrationReviewNotifier implements RegistrationReviewNotifi
     }
 
     @Override
-    public Mono<Void> notify(Usuario user, RegistrationStatus decision, String reason) {
-        return Mono.fromRunnable(() -> sendReview(user, decision, reason))
+    public Mono<Void> notify(Usuario target, RegistrationStatus decision, String reason) {
+        return Mono.fromRunnable(() -> sendReview(target, decision, reason))
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
     }
 
-    private void sendReview(Usuario user, RegistrationStatus decision, String reason) {
+    private void sendReview(Usuario target, RegistrationStatus decision, String reason) {
         boolean approved = decision == RegistrationStatus.APROBADO;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom("no-reply@smxplore.local");
-        message.setTo(user.email().value());
+        message.setTo(target.email().value());
         message.setSubject((approved ? "Registro aprobado" : "Registro rechazado") + " - SM-Xplore");
         message.setText("""
                 Hola %s,
@@ -43,30 +47,30 @@ public class EmailRegistrationReviewNotifier implements RegistrationReviewNotifi
                 %s
 
                 %s
-                """.formatted(user.fullName(), bodyFor(user, approved), reasonText(reason)));
+                """.formatted(
+                        target.fullName(),
+                        decisionText(target, approved),
+                        reason == null || reason.isBlank() ? "" : "Motivo: " + reason.trim()));
 
         try {
             mailSender.send(message);
         } catch (RuntimeException exception) {
-            LOGGER.error("No se pudo enviar el correo de revisión del registro {}", user.id(), exception);
+            LOGGER.error("No se pudo enviar el correo de revisión del alta de {}", target.id(), exception);
         }
     }
 
-    private static String bodyFor(Usuario user, boolean approved) {
-        return switch (user) {
-            case Guia guide ->
-                approved
-                        ? "Tu registro como guía en SM-Xplore fue aprobado. Ya puedes recibir solicitudes de turistas."
-                        : "Tu registro como guía en SM-Xplore fue rechazado.";
-            case GestoraDestinos gestora ->
-                approved
-                        ? "Tu registro como gestora de destinos en SM-Xplore fue aprobado. Ya puedes revisar las guías."
-                        : "Tu registro como gestora de destinos en SM-Xplore fue rechazado.";
-            default -> approved ? "Tu registro en SM-Xplore fue aprobado." : "Tu registro en SM-Xplore fue rechazado.";
-        };
-    }
-
-    private static String reasonText(String reason) {
-        return reason == null || reason.isBlank() ? "" : "Motivo: " + reason.trim();
+    private static String decisionText(Usuario target, boolean approved) {
+        boolean guide = target instanceof Guia;
+        if (approved) {
+            return guide
+                    ? "Tu registro como guía en SM-Xplore fue aprobado. Ya puedes iniciar sesión y ofrecer tus servicios."
+                    : "Tu registro como prestadora de servicios en SM-Xplore fue aprobado. Ya puedes publicar tu oferta turística.";
+        }
+        return guide
+                ? "Tu solicitud de registro como guía en SM-Xplore fue rechazada, así que la cuenta no puede iniciar "
+                        + "sesión mientras siga rechazada. Si crees que es un error, pide a una gestora que revise la "
+                        + "solicitud de nuevo."
+                : "Tu registro como prestadora de servicios en SM-Xplore fue rechazado, así que tu perfil no se "
+                        + "publica en el catálogo. La cuenta sigue existiendo y puedes entrar para corregir tus datos.";
     }
 }

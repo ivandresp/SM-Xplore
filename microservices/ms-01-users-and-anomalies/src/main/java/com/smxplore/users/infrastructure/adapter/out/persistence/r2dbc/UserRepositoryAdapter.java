@@ -71,15 +71,15 @@ public class UserRepositoryAdapter implements UserRepository {
             """;
 
     private static final String UPSERT_GUIDE = """
-            INSERT INTO guide_profiles (user_id, dni_type, dni_number, license, start_operation_date,
-                                        registration_status)
-            VALUES (:userId, :dniType, :dniNumber, :license, :startOperationDate, :registrationStatus)
+            INSERT INTO guide_profiles (user_id, dni_type, dni_number, license, registration_status,
+                                        start_operation_date)
+            VALUES (:userId, :dniType, :dniNumber, :license, :registrationStatus, :startOperationDate)
             ON CONFLICT (user_id) DO UPDATE
             SET dni_type = EXCLUDED.dni_type,
                 dni_number = EXCLUDED.dni_number,
                 license = EXCLUDED.license,
-                start_operation_date = EXCLUDED.start_operation_date,
-                registration_status = EXCLUDED.registration_status
+                registration_status = EXCLUDED.registration_status,
+                start_operation_date = EXCLUDED.start_operation_date
             """;
 
     private static final String UPSERT_PROVIDER = """
@@ -98,12 +98,11 @@ public class UserRepositoryAdapter implements UserRepository {
             """;
 
     private static final String UPSERT_DESTINATION_MANAGER = """
-            INSERT INTO destination_manager_profiles (user_id, nit, start_operation_date, registration_status)
-            VALUES (:userId, :nit, :startOperationDate, :registrationStatus)
+            INSERT INTO destination_manager_profiles (user_id, nit, start_operation_date)
+            VALUES (:userId, :nit, :startOperationDate)
             ON CONFLICT (user_id) DO UPDATE
             SET nit = EXCLUDED.nit,
-                start_operation_date = EXCLUDED.start_operation_date,
-                registration_status = EXCLUDED.registration_status
+                start_operation_date = EXCLUDED.start_operation_date
             """;
 
     private static final String UPSERT_ADMIN = """
@@ -352,8 +351,7 @@ public class UserRepositoryAdapter implements UserRepository {
         GenericExecuteSpec spec = databaseClient
                 .sql(UPSERT_DESTINATION_MANAGER)
                 .bind("userId", user.id())
-                .bind("nit", user.nit())
-                .bind("registrationStatus", user.registrationStatus().name());
+                .bind("nit", user.nit());
         spec = bindNullable(spec, "startOperationDate", user.startOperationDate(), LocalDate.class);
         return spec.fetch().rowsUpdated().then();
     }

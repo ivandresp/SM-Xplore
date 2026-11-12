@@ -560,8 +560,9 @@ services:
       # HSTS del propio servicio (application.yaml: app.security.headers.hsts).
       # El gateway tambien lo envia; se deja explicito para no depender del perfil.
       HSTS_ENABLED: ${HSTS_ENABLED:-true}
-      # MS02-07: fuera de local/test la allowlist es obligatoria (JwtProductionGuard).
-      PHOTO_ALLOWED_HOSTS: ${PHOTO_ALLOWED_HOSTS:?}
+      # Fotos de reportes: el front sube a Cloudinary. Sin allowlist el arranque prod falla
+      # (JwtProductionGuard) y el alta con foto responde 400 (PhotoUrlPolicyAdapter).
+      PHOTO_ALLOWED_HOSTS: ${PHOTO_ALLOWED_HOSTS:-res.cloudinary.com}
       OUTBOX_ENABLED: "true"
       OUTBOX_PRODUCER: ms-02
       # PLAT-01: Kafka de producción exige SASL_SSL + SCRAM-SHA-512. Spring Boot

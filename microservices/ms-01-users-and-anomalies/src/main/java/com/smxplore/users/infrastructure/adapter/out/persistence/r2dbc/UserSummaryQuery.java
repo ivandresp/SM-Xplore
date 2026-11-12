@@ -3,7 +3,6 @@ package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 import com.smxplore.users.application.dto.PageResult;
 import com.smxplore.users.application.dto.UserSearchCriteria;
 import com.smxplore.users.application.dto.UserSummaryView;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
 import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.UserStatus;
 import java.util.List;
@@ -29,7 +28,6 @@ final class UserSummaryQuery {
                    u.role AS role,
                    u.status AS status,
                    p.registration_status AS provider_status,
-                   COALESCE(g.registration_status, d.registration_status) AS registration_status,
                    u.signed_up_at AS signed_up_at
             """;
 
@@ -54,8 +52,6 @@ final class UserSummaryQuery {
               AND (CAST(:role AS text) IS NULL OR u.role = :role)
               AND (CAST(:status AS text) IS NULL OR u.status = :status)
               AND (CAST(:providerStatus AS text) IS NULL OR p.registration_status = :providerStatus)
-              AND (CAST(:registrationStatus AS text) IS NULL
-                   OR COALESCE(g.registration_status, d.registration_status, p.registration_status) = :registrationStatus)
             """;
 
     private static final Map<String, String> SORT_COLUMNS = Map.of(
@@ -110,33 +106,24 @@ final class UserSummaryQuery {
                 "status",
                 criteria.status() == null ? null : criteria.status().name(),
                 String.class);
-        spec = bindNullable(
+        return bindNullable(
                 spec,
                 "providerStatus",
                 criteria.providerStatus() == null
                         ? null
                         : criteria.providerStatus().name(),
                 String.class);
-        return bindNullable(
-                spec,
-                "registrationStatus",
-                criteria.registrationStatus() == null
-                        ? null
-                        : criteria.registrationStatus().name(),
-                String.class);
     }
 
     private static UserSummaryView toView(io.r2dbc.spi.Row row) {
         String providerStatus = row.get("provider_status", String.class);
-        String registrationStatus = row.get("registration_status", String.class);
         return new UserSummaryView(
                 row.get("id", UUID.class),
                 row.get("full_name", String.class),
                 row.get("email", String.class),
                 row.get("role", String.class),
                 UserStatus.valueOf(row.get("status", String.class)),
-                providerStatus == null ? null : ProviderRegistrationStatus.valueOf(providerStatus),
-                registrationStatus == null ? null : RegistrationStatus.valueOf(registrationStatus),
+                providerStatus == null ? null : RegistrationStatus.valueOf(providerStatus),
                 UserPersistenceMapper.toInstant(row.get("signed_up_at", java.time.OffsetDateTime.class)));
     }
 

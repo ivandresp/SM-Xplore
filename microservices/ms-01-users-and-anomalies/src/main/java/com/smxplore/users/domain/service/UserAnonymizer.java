@@ -6,7 +6,7 @@ import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.PrestadoraServicios;
-import com.smxplore.users.domain.model.ProviderRegistrationStatus;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.UserStatus;
 import com.smxplore.users.domain.model.Usuario;
@@ -62,8 +62,8 @@ public final class UserAnonymizer {
                         "ANON",
                         suffix,
                         "ANON-" + current.id(),
-                        null,
-                        guide.registrationStatus());
+                        RegistrationStatus.RECHAZADO,
+                        null);
             case PrestadoraServicios provider ->
                 PrestadoraServicios.rehydrate(
                         current.id(),
@@ -78,7 +78,7 @@ public final class UserAnonymizer {
                         now,
                         suffix,
                         null,
-                        ProviderRegistrationStatus.RECHAZADO,
+                        RegistrationStatus.RECHAZADO,
                         null,
                         null,
                         null,
@@ -96,8 +96,7 @@ public final class UserAnonymizer {
                         now,
                         now,
                         suffix,
-                        null,
-                        manager.registrationStatus());
+                        null);
             case Admin admin ->
                 Admin.rehydrate(
                         current.id(),

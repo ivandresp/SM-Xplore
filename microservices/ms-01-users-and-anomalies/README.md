@@ -163,7 +163,7 @@ faltan, el servicio falla al arrancar en lugar de emitir tokens con una llave ef
 
 ## Protección de acceso
 
-- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password`, `/mfa/verify` y los dos registros (`/register/turista`, `/register/prestadora`). Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
+- **Límite por IP**: `AuthRateLimitWebFilter` aplica una ventana fija de un minuto sobre `/api/v1/auth/login`, `/forgot-password`, `/reset-password`, `/mfa/verify` y los registros (`/register/turista`, `/register/prestadora`, `/register/guia`). Al superar `AUTH_RATE_LIMIT_PER_MINUTE` responde `429` con `Retry-After` y `code=RATE_LIMIT_EXCEEDED`. La IP del cliente se resuelve con `ClientAddressResolver`: solo si la conexión llega desde una red de `AUTH_TRUSTED_PROXIES` (el gateway) se acepta `X-Real-IP`; `X-Forwarded-For` nunca se lee, así que un cliente no puede elegir su propia IP.
 - **Límite por cuenta**: además del límite por IP, `InMemoryAccountAttemptLimiter` cuenta los fallos por correo en `/auth/login` y por usuario en `/auth/mfa/verify` (`AUTH_ACCOUNT_MAX_ATTEMPTS`, 10 en `AUTH_ACCOUNT_WINDOW`, `PT15M`). Rotar direcciones no evita el cupo de la cuenta y el bloqueo por cuenta no revela si la cuenta existe.
 - **Respuesta uniforme ante fallos de acceso (MS01-04)**: un correo inexistente, una contraseña incorrecta, una cuenta inactiva y una cuenta bloqueada responden todos `401` con `code=INVALID_CREDENTIALS` y el mismo mensaje, sin `retryAfterSeconds` ni códigos que distingan el caso. Así, comparar respuestas ya no sirve para enumerar cuentas. En el registro, `EMAIL_ALREADY_EXISTS` (`409`) sí confirma la existencia del correo: es un riesgo aceptado y documentado porque el registro público necesita dar una respuesta útil; lo mitiga el límite por IP añadido a los dos endpoints de registro. Si se quiere cerrar por completo, el registro debe responder `202` genérico y confirmar por correo.
 - **Bloqueo por cuenta (MS01-05)**: tras `LOGIN_LOCKOUT_MAX_ATTEMPTS` fallos consecutivos dentro de la ventana, la cuenta queda bloqueada durante `LOGIN_LOCKOUT_DURATION`; el estado se guarda en `login_attempts` para sobrevivir reinicios y compartirse entre instancias. Un inicio de sesión exitoso limpia el contador. Al bloquearse se envía un correo de aviso (`EmailAccountLockedNotifier`) y el usuario puede desbloquearse restableciendo la contraseña, porque `ResetPasswordService` limpia el contador persistente y el límite por cuenta. El bloqueo sigue siendo un vector de denegación de servicio para un atacante que conozca el correo; se acepta y se mitiga con la notificación y el autodesbloqueo (un captcha o un desafío progresivo lo cerrarían del todo).
@@ -285,8 +285,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | --- | --- | --- |
 | POST | `/api/v1/auth/register/turista` | Público |
 | POST | `/api/v1/auth/register/prestadora` | Público, queda `PENDIENTE` |
-| POST | `/api/v1/auth/register/guia` | Público, queda `PENDIENTE` |
-| POST | `/api/v1/auth/register/gestora` | Público, queda `PENDIENTE` |
+| POST | `/api/v1/auth/register/guia` | Público, queda `PENDIENTE` y sin acceso hasta que una gestora la apruebe |
 | POST | `/api/v1/auth/login` | Público |
 | POST | `/api/v1/auth/forgot-password` | Público |
 | POST | `/api/v1/auth/reset-password` | Público |
@@ -318,9 +317,9 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | PATCH | `/api/v1/admin/users/{id}/role` | ADMIN, migra el perfil al nuevo rol |
 | DELETE | `/api/v1/admin/users/{id}` | ADMIN, baja definitiva con anonimización |
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
-| POST | `/api/v1/admin/users/{id}/gestora-review` | ADMIN, aprueba o rechaza una gestora |
-| GET | `/api/v1/manager/guides` | GESTORA o ADMIN, lista guías por estado de registro |
-| POST | `/api/v1/manager/guides/{id}/review` | GESTORA o ADMIN, aprueba o rechaza una guía |
+| POST | `/api/v1/admin/users/{id}/guide-review` | ADMIN, aprueba o rechaza el alta de un guía |
+| GET | `/api/v1/registrations` | ADMIN o GESTORA_DESTINOS, cola de altas `PENDIENTE`/`RECHAZADO` (guías y prestadoras) |
+| POST | `/api/v1/registrations/{id}/review` | ADMIN o GESTORA_DESTINOS, aprueba o rechaza un alta; el motivo es obligatorio al rechazar y `APROBADO` es terminal (revocar = estado de usuario) |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
 | GET | `/api/v1/admin/audit-logs/export` | ADMIN, reporte CSV de auditoría |
@@ -348,31 +347,6 @@ campo se devuelve en el perfil administrativo y en el perfil público de la pres
 
 - `PATCH /api/v1/admin/users/{id}/role` recibe el nuevo `role` y los datos exigidos por ese rol (`dniType`/`dniNumber` para turista o guía, `license` para guía, `nit` para prestadora o gestora, etc.). Migra la fila de perfil, conserva la identidad de la cuenta e invalida los JWT anteriores incrementando `authVersion`.
 - `DELETE /api/v1/admin/users/{id}` aplica una baja lógica: deja la cuenta en estado `ELIMINADO`, reemplaza nombre, correo, teléfono, documento/NIT, licencia y contraseña por valores anónimos, invalida tokens de recuperación y conserva el registro para trazabilidad. No permite eliminar la propia cuenta ni al último administrador activo.
-
-### Registro y aprobación de guías y gestoras
-
-El auto-registro público de guías (`POST /api/v1/auth/register/guia`) y de gestoras de destinos
-(`POST /api/v1/auth/register/gestora`) sigue el mismo flujo que el de prestadoras: valida la contraseña con
-`PasswordPolicy`, exige correo único, guarda el hash y envía (si la verificación de correo está activa) el enlace
-de verificación. La cuenta nace `ACTIVO` y el perfil de guía o gestora nace con `registration_status=PENDIENTE`.
-
-La aprobación es independiente del acceso: una cuenta `PENDIENTE` puede iniciar sesión mientras espera la revisión.
-El estado se devuelve en `profile.registrationStatus` de `UserView`, en `registrationStatus` del listado
-administrativo (`GET /api/v1/admin/users`, filtro `registrationStatus`) y en el listado de guías de la gestora.
-
-- Una gestora (`DESTINATION_MANAGER`) o un administrador lista las guías con
-  `GET /api/v1/manager/guides?status=PENDIENTE&page=0&size=20` (si se omite, `status` es `PENDIENTE`) y decide con
-  `POST /api/v1/manager/guides/{id}/review` (`{"decision": "APROBADO"|"RECHAZADO", "reason": "..."}`). El motivo del
-  rechazo es opcional y la decisión queda auditada como `GUIA_APROBADA` o `GUIA_RECHAZADA`.
-- Un administrador revisa gestoras con `POST /api/v1/admin/users/{id}/gestora-review` (auditoría
-  `GESTORA_APROBADA` o `GESTORA_RECHAZADA`) y las localiza con
-  `GET /api/v1/admin/users?role=DESTINATION_MANAGER&registrationStatus=PENDIENTE`.
-- Solo se revisan cuentas del rol correspondiente; repetir la decisión vigente responde `409 INVALID_STATUS_TRANSITION`.
-  Cada cambio incrementa `authVersion` (los JWT anteriores dejan de valer) y envía un correo de notificación al usuario.
-- Las guías dadas de alta por un administrador, o las que llegan a `GUIDE` mediante cambio de rol, nacen `APROBADO`.
-  La migración `V13__guide_and_manager_registration_status.sql` marca `APROBADO` los perfiles existentes para no
-  romper cuentas previas.
-- `GET /api/v1/public/users/{id}` solo expone guías `APROBADO`, igual que exige prestadoras aprobadas.
 
 ### Reseñas
 

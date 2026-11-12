@@ -5,9 +5,9 @@ import com.smxplore.users.domain.model.Usuario;
 import reactor.core.publisher.Mono;
 
 /**
- * Notifica al guía o a la gestora de destinos la decisión tomada sobre su registro.
+ * Avisa por correo al titular de un alta revisable cuando una gestora aprueba o rechaza su solicitud.
  */
 public interface RegistrationReviewNotifier {
 
-    Mono<Void> notify(Usuario user, RegistrationStatus decision, String reason);
+    Mono<Void> notify(Usuario target, RegistrationStatus decision, String reason);
 }

@@ -11,7 +11,7 @@ class UserSearchCriteriaTest {
 
     @Test
     void normalizesBlankQueryAndDefaultSorting() {
-        UserSearchCriteria criteria = new UserSearchCriteria("  ", null, null, null, null, null, null, 0, 20);
+        UserSearchCriteria criteria = new UserSearchCriteria("  ", null, null, null, null, null, 0, 20);
 
         assertThat(criteria.q()).isNull();
         assertThat(criteria.sortBy()).isEqualTo(UserSearchCriteria.DEFAULT_SORT);
@@ -21,7 +21,7 @@ class UserSearchCriteriaTest {
     @Test
     void keepsTheRequestedFilters() {
         UserSearchCriteria criteria =
-                new UserSearchCriteria(" 1234 ", Role.GUIDE, null, null, null, "fullName", SortOrder.ASC, 2, 10);
+                new UserSearchCriteria(" 1234 ", Role.GUIDE, null, null, "fullName", SortOrder.ASC, 2, 10);
 
         assertThat(criteria.q()).isEqualTo("1234");
         assertThat(criteria.role()).isEqualTo(Role.GUIDE);
@@ -31,23 +31,23 @@ class UserSearchCriteriaTest {
 
     @Test
     void rejectsAnUnknownSortField() {
-        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, null, "password", null, 0, 20))
+        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, "password", null, 0, 20))
                 .isInstanceOf(ValidationException.class)
                 .hasMessageContaining("ordenamiento");
     }
 
     @Test
     void rejectsAnOutOfRangePageSize() {
-        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, null, null, null, 0, 0))
+        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, null, null, 0, 0))
                 .isInstanceOf(ValidationException.class);
-        assertThatThrownBy(() -> new UserSearchCriteria(
-                        null, null, null, null, null, null, null, 0, UserSearchCriteria.MAX_SIZE + 1))
+        assertThatThrownBy(() ->
+                        new UserSearchCriteria(null, null, null, null, null, null, 0, UserSearchCriteria.MAX_SIZE + 1))
                 .isInstanceOf(ValidationException.class);
     }
 
     @Test
     void rejectsANegativePage() {
-        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, null, null, null, -1, 20))
+        assertThatThrownBy(() -> new UserSearchCriteria(null, null, null, null, null, null, -1, 20))
                 .isInstanceOf(ValidationException.class);
     }
 }

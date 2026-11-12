@@ -3,7 +3,6 @@ package com.smxplore.users.infrastructure.adapter.in.rest;
 import com.smxplore.users.application.dto.ForgotPasswordCommand;
 import com.smxplore.users.application.dto.LoginCommand;
 import com.smxplore.users.application.dto.LoginResult;
-import com.smxplore.users.application.dto.RegisterGestoraCommand;
 import com.smxplore.users.application.dto.RegisterGuideCommand;
 import com.smxplore.users.application.dto.RegisterProviderCommand;
 import com.smxplore.users.application.dto.RegisterTouristCommand;
@@ -11,7 +10,6 @@ import com.smxplore.users.application.dto.ResetPasswordCommand;
 import com.smxplore.users.application.dto.UserView;
 import com.smxplore.users.application.port.in.ForgotPasswordUseCase;
 import com.smxplore.users.application.port.in.LoginUseCase;
-import com.smxplore.users.application.port.in.RegisterGestoraUseCase;
 import com.smxplore.users.application.port.in.RegisterGuideUseCase;
 import com.smxplore.users.application.port.in.RegisterProviderUseCase;
 import com.smxplore.users.application.port.in.RegisterTouristUseCase;
@@ -19,7 +17,6 @@ import com.smxplore.users.application.port.in.ResetPasswordUseCase;
 import com.smxplore.users.application.port.in.VerifyEmailUseCase;
 import com.smxplore.users.infrastructure.adapter.in.dto.ForgotPasswordRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.LoginRequest;
-import com.smxplore.users.infrastructure.adapter.in.dto.RegisterGestoraRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegisterGuideRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegisterProviderRequest;
 import com.smxplore.users.infrastructure.adapter.in.dto.RegisterTouristRequest;
@@ -43,7 +40,6 @@ public class AuthController {
     private final RegisterTouristUseCase registerTourist;
     private final RegisterProviderUseCase registerProvider;
     private final RegisterGuideUseCase registerGuide;
-    private final RegisterGestoraUseCase registerGestora;
     private final LoginUseCase login;
     private final ForgotPasswordUseCase forgotPassword;
     private final ResetPasswordUseCase resetPassword;
@@ -53,7 +49,6 @@ public class AuthController {
             RegisterTouristUseCase registerTourist,
             RegisterProviderUseCase registerProvider,
             RegisterGuideUseCase registerGuide,
-            RegisterGestoraUseCase registerGestora,
             LoginUseCase login,
             ForgotPasswordUseCase forgotPassword,
             ResetPasswordUseCase resetPassword,
@@ -61,7 +56,6 @@ public class AuthController {
         this.registerTourist = registerTourist;
         this.registerProvider = registerProvider;
         this.registerGuide = registerGuide;
-        this.registerGestora = registerGestora;
         this.login = login;
         this.forgotPassword = forgotPassword;
         this.resetPassword = resetPassword;
@@ -103,6 +97,10 @@ public class AuthController {
                         .body(user));
     }
 
+    /**
+     * MS01-B8: registro público de guías. El alta nace pendiente de revisión, así que la cuenta todavía no puede
+     * iniciar sesión; el 201 devuelve el usuario creado para que el cliente pueda mostrar el estado.
+     */
     @PostMapping("/register/guia")
     public Mono<ResponseEntity<UserView>> registerGuide(@Valid @RequestBody RegisterGuideRequest request) {
         return registerGuide
@@ -114,20 +112,6 @@ public class AuthController {
                         request.dniType(),
                         request.dniNumber(),
                         request.license(),
-                        request.startOperationDate()))
-                .map(user -> ResponseEntity.created(URI.create("/api/v1/users/" + user.id()))
-                        .body(user));
-    }
-
-    @PostMapping("/register/gestora")
-    public Mono<ResponseEntity<UserView>> registerGestora(@Valid @RequestBody RegisterGestoraRequest request) {
-        return registerGestora
-                .register(new RegisterGestoraCommand(
-                        request.fullName(),
-                        request.email(),
-                        request.phone(),
-                        request.password(),
-                        request.nit(),
                         request.startOperationDate()))
                 .map(user -> ResponseEntity.created(URI.create("/api/v1/users/" + user.id()))
                         .body(user));

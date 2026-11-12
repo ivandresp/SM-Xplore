@@ -1,11 +1,10 @@
 package com.smxplore.users.domain.model;
 
 /**
- * Estado de aprobación del registro de guías y gestoras de destinos.
+ * Estado del alta de un perfil que no puede operar hasta que una gestora lo apruebe.
  *
- * <p>El auto-registro público nace {@link #PENDIENTE}: la cuenta puede iniciar sesión y verificar su correo, pero la
- * aprobación la concede una gestora de destinos (guías) o un administrador (gestoras). Las cuentas creadas por un
- * administrador nacen aprobadas.
+ * <p>Es una única máquina de estados compartida por los guías y las prestadoras de servicios: los valores no
+ * dependen del rol, solo el perfil que los expone ({@link RegistrationReviewable}).
  */
 public enum RegistrationStatus {
     PENDIENTE,

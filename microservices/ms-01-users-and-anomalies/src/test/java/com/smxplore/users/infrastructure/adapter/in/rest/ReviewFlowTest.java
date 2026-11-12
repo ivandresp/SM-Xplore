@@ -141,7 +141,8 @@ class ReviewFlowTest {
     @Test
     @SuppressWarnings("unchecked")
     void readsLegacySpanishTargetTypeDocuments() {
-        UUID targetId = UUID.randomUUID();
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        UUID targetId = UUID.fromString(createGuide(adminToken, "guia.legacy@example.com", "7770006006", "LIC-LEGACY"));
         ReviewDocument legacy = new ReviewDocument();
         legacy.setId(UUID.randomUUID().toString());
         legacy.setTouristId(UUID.randomUUID());
@@ -163,6 +164,40 @@ class ReviewFlowTest {
         assertThat((List<Map<String, Object>>) legacyPage.get("content")).hasSize(1);
 
         Map<?, ?> summary = get("/api/v1/public/reviews/summary?targetType=GUIDE&targetId=" + targetId);
+        assertThat(summary.get("reviewCount")).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void pendingAndRejectedGuidesCannotBeReviewedNorServeTheirFeed() {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        String guideId = registerPublicGuide("Guia Sin Aprobar", "guia.sinaprobar@example.com", "LIC-REV-PEND");
+        String touristToken =
+                registerAndLoginTourist("Turista Crítico", "critico.tourist@example.com", "7770007007", "3010007007");
+
+        // PENDIENTE: ni reseña nueva ni feed público, igual que su perfil (404).
+        assertThat(createReviewStatus(touristToken, guideId, "GUIDE", 5, "Aún no aprobado"))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(publicReviewsStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(summaryStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
+
+        // RECHAZADO: se comporta igual.
+        assertThat(reviewGuide(adminToken, guideId, "RECHAZADO", "Licencia no verificable"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(createReviewStatus(touristToken, guideId, "GUIDE", 5, "Rechazado"))
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(publicReviewsStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(summaryStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
+
+        // APROBADO: vuelve a admitir reseñas y a servir su feed.
+        assertThat(reviewGuide(adminToken, guideId, "APROBADO", null)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(createReview(touristToken, guideId, "GUIDE", 5, "Excelente guía")
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        Map<?, ?> page = get("/api/v1/public/reviews?targetType=GUIDE&targetId=" + guideId);
+        assertThat((List<Map<String, Object>>) page.get("content")).hasSize(1);
+        Map<?, ?> summary = get("/api/v1/public/reviews/summary?targetType=GUIDE&targetId=" + guideId);
         assertThat(summary.get("reviewCount")).isEqualTo(1);
     }
 
@@ -294,6 +329,48 @@ class ReviewFlowTest {
                 .toEntity(Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return String.valueOf(response.getBody().get("id"));
+    }
+
+    private String registerPublicGuide(String name, String email, String license) {
+        ResponseEntity<Map> registration = client.post()
+                .uri("/api/v1/auth/register/guia")
+                .body(Map.of(
+                        "fullName", name,
+                        "email", email,
+                        "phone", "301999" + Math.abs(email.hashCode() % 10000),
+                        "password", PASSWORD,
+                        "dniType", "CC",
+                        "dniNumber", "88" + Math.abs(email.hashCode()),
+                        "license", license))
+                .retrieve()
+                .toEntity(Map.class);
+        assertThat(registration.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return String.valueOf(registration.getBody().get("id"));
+    }
+
+    private HttpStatusCode reviewGuide(String token, String userId, String decision, String reason) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("decision", decision);
+        if (reason != null) {
+            body.put("reason", reason);
+        }
+        return client.post()
+                .uri("/api/v1/admin/users/" + userId + "/guide-review")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .body(body)
+                .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private HttpStatusCode publicReviewsStatus(String targetType, String targetId) {
+        return client.get()
+                .uri("/api/v1/public/reviews?targetType=" + targetType + "&targetId=" + targetId)
+                .exchange((request, response) -> response.getStatusCode());
+    }
+
+    private HttpStatusCode summaryStatus(String targetType, String targetId) {
+        return client.get()
+                .uri("/api/v1/public/reviews/summary?targetType=" + targetType + "&targetId=" + targetId)
+                .exchange((request, response) -> response.getStatusCode());
     }
 
     private String registerAndLoginTourist(String name, String email, String dni, String phone) {

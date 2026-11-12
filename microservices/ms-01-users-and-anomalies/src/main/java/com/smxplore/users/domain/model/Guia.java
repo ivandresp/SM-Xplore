@@ -1,18 +1,24 @@
 package com.smxplore.users.domain.model;
 
-import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.ValidationException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public final class Guia extends Usuario {
+/**
+ * Guía turístico.
+ *
+ * <p>Desde el registro público el alta nace en {@link RegistrationStatus#PENDIENTE} y solo una gestora puede
+ * aprobarla; mientras tanto la cuenta no puede iniciar sesión. Un alta creada internamente por un administrador nace
+ * aprobada, porque quien la crea es la misma autoridad que aprobaría la solicitud.
+ */
+public final class Guia extends Usuario implements RegistrationReviewable {
 
     private final String dniType;
     private final String dniNumber;
     private String license;
-    private final LocalDate startOperationDate;
     private RegistrationStatus registrationStatus;
+    private final LocalDate startOperationDate;
 
     private Guia(
             UUID id,
@@ -28,44 +34,18 @@ public final class Guia extends Usuario {
             String dniType,
             String dniNumber,
             String license,
-            LocalDate startOperationDate,
-            RegistrationStatus registrationStatus) {
+            RegistrationStatus registrationStatus,
+            LocalDate startOperationDate) {
         super(id, fullName, email, phone, passwordHash, status, authVersion, signedUpAt, updatedAt, deletedAt);
         this.dniType = dniType;
         this.dniNumber = dniNumber;
         this.license = validateLicense(license);
-        this.startOperationDate = startOperationDate;
         this.registrationStatus = registrationStatus == null ? RegistrationStatus.PENDIENTE : registrationStatus;
-    }
-
-    public static Guia register(
-            UUID id,
-            String fullName,
-            Email email,
-            String phone,
-            PasswordHash passwordHash,
-            String dniType,
-            String dniNumber,
-            String license,
-            LocalDate startOperationDate,
-            Instant now) {
-        return register(
-                id,
-                fullName,
-                email,
-                phone,
-                passwordHash,
-                dniType,
-                dniNumber,
-                license,
-                startOperationDate,
-                RegistrationStatus.PENDIENTE,
-                now);
+        this.startOperationDate = startOperationDate;
     }
 
     /**
-     * Alta controlada por un administrador: puede nacer ya aprobada. El auto-registro público siempre usa
-     * {@link #register(UUID, String, Email, String, PasswordHash, String, String, String, LocalDate, Instant)}.
+     * Alta creada por un administrador: la cuenta queda aprobada porque el actor ya es la autoridad que revisa.
      */
     public static Guia register(
             UUID id,
@@ -77,7 +57,6 @@ public final class Guia extends Usuario {
             String dniNumber,
             String license,
             LocalDate startOperationDate,
-            RegistrationStatus registrationStatus,
             Instant now) {
         return new Guia(
                 id,
@@ -93,8 +72,40 @@ public final class Guia extends Usuario {
                 dniType,
                 dniNumber,
                 license,
-                startOperationDate,
-                registrationStatus);
+                RegistrationStatus.APROBADO,
+                startOperationDate);
+    }
+
+    /**
+     * Solicitud pública de registro: la cuenta nace pendiente de revisión y no puede iniciar sesión todavía.
+     */
+    public static Guia requestRegistration(
+            UUID id,
+            String fullName,
+            Email email,
+            String phone,
+            PasswordHash passwordHash,
+            String dniType,
+            String dniNumber,
+            String license,
+            LocalDate startOperationDate,
+            Instant now) {
+        return new Guia(
+                id,
+                fullName,
+                email,
+                phone,
+                passwordHash,
+                UserStatus.ACTIVO,
+                0L,
+                now,
+                now,
+                null,
+                dniType,
+                dniNumber,
+                license,
+                RegistrationStatus.PENDIENTE,
+                startOperationDate);
     }
 
     public static Guia rehydrate(
@@ -111,8 +122,8 @@ public final class Guia extends Usuario {
             String dniType,
             String dniNumber,
             String license,
-            LocalDate startOperationDate,
-            RegistrationStatus registrationStatus) {
+            RegistrationStatus registrationStatus,
+            LocalDate startOperationDate) {
         return new Guia(
                 id,
                 fullName,
@@ -127,8 +138,8 @@ public final class Guia extends Usuario {
                 dniType,
                 dniNumber,
                 license,
-                startOperationDate,
-                registrationStatus);
+                registrationStatus,
+                startOperationDate);
     }
 
     public void updateLicense(String license, Instant now) {
@@ -139,16 +150,11 @@ public final class Guia extends Usuario {
     }
 
     /**
-     * Cambia el estado de aprobación del registro. Repetir el mismo estado es una transición inválida; una decisión
-     * previa (aprobado o rechazado) sí puede corregirse porque la revisión es administrativa.
+     * Cambia el estado del alta e incrementa {@code authVersion}: aprobar o rechazar altera el permiso de acceso, así
+     * que cualquier token emitido antes de la decisión deja de servir.
      */
+    @Override
     public void changeRegistrationStatus(RegistrationStatus newStatus, Instant now) {
-        if (newStatus == null) {
-            throw new ValidationException("El estado de registro es obligatorio");
-        }
-        if (newStatus == this.registrationStatus) {
-            throw new InvalidStatusTransitionException("La guía ya se encuentra en estado " + newStatus.name());
-        }
         this.registrationStatus = newStatus;
         incrementAuthVersion();
         markUpdated(now);
@@ -171,12 +177,13 @@ public final class Guia extends Usuario {
         return license;
     }
 
-    public LocalDate startOperationDate() {
-        return startOperationDate;
-    }
-
+    @Override
     public RegistrationStatus registrationStatus() {
         return registrationStatus;
+    }
+
+    public LocalDate startOperationDate() {
+        return startOperationDate;
     }
 
     private static String validateLicense(String license) {

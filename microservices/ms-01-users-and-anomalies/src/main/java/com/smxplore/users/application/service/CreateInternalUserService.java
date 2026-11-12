@@ -19,7 +19,6 @@ import com.smxplore.users.domain.model.GestoraDestinos;
 import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PasswordHash;
 import com.smxplore.users.domain.model.PasswordResetToken;
-import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.TokenPurpose;
 import com.smxplore.users.domain.model.Usuario;
@@ -116,7 +115,6 @@ public final class CreateInternalUserService implements CreateInternalUserUseCas
                         requireDniNumber(command),
                         requireLicense(command),
                         command.startOperationDate(),
-                        RegistrationStatus.APROBADO,
                         now);
             case DESTINATION_MANAGER ->
                 GestoraDestinos.register(
@@ -127,7 +125,6 @@ public final class CreateInternalUserService implements CreateInternalUserUseCas
                         passwordHash,
                         requireNit(command),
                         command.startOperationDate(),
-                        RegistrationStatus.APROBADO,
                         now);
             case ADMIN ->
                 Admin.create(
