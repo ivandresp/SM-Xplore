@@ -17,6 +17,11 @@ Fases **0-1** y **2 (lado consumidor)** implementadas:
   backoff y DLQ.
 - Agregados de reseñas materializados en Neo4j (`ratingAvg`, `ratingCount`, `lastReviewAt`).
 - Tests de contrato contra `contracts/events/` y tests de integración con Kafka + Neo4j.
+- Filtros por categoría, tipo de ítem y valoración mínima, aplicados antes de puntuar.
+- Paginación (`page`/`size`) de la lista ya diversificada, con metadatos `total`, `totalPages` y
+  `hasNext`.
+- Reemplazo masivo de preferencias explícitas (`PUT /api/v1/preferences`).
+- Warmup opcional al arranque (Neo4j, fallback de candidatos y versión de la cache en Redis).
 
 Decisiones importantes:
 
@@ -84,9 +89,11 @@ src/main/java/com/smxplore/recommendations
 
 | Método | Ruta | Rol | Descripción |
 |---|---|---|---|
-| GET | `/api/v1/recommendations?siteId=&lat=&lng=&limit=20` | `TOURIST` | Recomendaciones del turista autenticado |
+| GET | `/api/v1/recommendations?siteId=&lat=&lng=&limit=20&page=0&size=20&categoryId=&itemType=&minRating=` | `TOURIST` | Recomendaciones del turista autenticado |
 | GET | `/api/v1/recommendations?touristId=&...` | `ADMIN` | Consulta para soporte |
+| GET | `/api/v1/preferences` | `TOURIST` | Lista los gustos del turista |
 | POST | `/api/v1/preferences` | `TOURIST` | Gusto explícito por categoría |
+| PUT | `/api/v1/preferences` | `TOURIST` | Reemplaza en bloque los gustos explícitos |
 | DELETE | `/api/v1/preferences/{categoryId}` | `TOURIST` | Quitar gusto |
 | POST | `/api/v1/interactions/view/{itemType}/{itemId}` | `TOURIST` | Registrar vista |
 | POST | `/internal/admin/reindex?entity=&updatedSince=` | `ADMIN` | Reindexado del catálogo desde ms-04 |
@@ -98,6 +105,35 @@ puede consultar a otro turista; solo `ADMIN` puede usar el query param `touristI
 
 El idioma preferido del turista se envía en `Accept-Language` (`es`, `en-US`, etc.). Se usa al
 crear o refrescar su perfil en Neo4j y no se lee de ningún claim del JWT.
+
+#### Filtros y paginación
+
+`GET /api/v1/recommendations` acepta, además de `siteId`, `lat`, `lng` y `limit`:
+
+- `categoryId` (UUID): solo candidatos de esa categoría.
+- `itemType` (`SITE`, `ACTIVITY`, `EVENT` o `SERVICE`): solo candidatos de ese tipo; un valor
+  desconocido responde `400`.
+- `minRating` (`0`..`5`): descarta candidatos con `ratingAvg` inferior; fuera de rango responde
+  `400`.
+- `page` (`>= 0`, por defecto `0`) y `size` (`1`..`maxLimit`, por defecto `limit`): paginan la
+  lista **después** de puntuar y diversificar.
+
+Los filtros se aplican al conjunto de candidatos **antes** de puntuar y antes de decidir si se
+lanza el fallback: un filtro que deja la lista de afinidad vacía sí provoca fallback, pero el
+fallback también queda filtrado. `limit` sigue acotando cuántos elementos se generan; la
+paginación reparte esa lista ya diversificada. En la respuesta, `total` es el tamaño de esa lista
+(`<= limit`), `totalPages = ceil(total / size)` y `hasNext = (page + 1) * size < total`. Una
+página posterior a la última devuelve `items` vacío y `hasNext=false` (no es un error). La clave
+de cache incluye página, tamaño y filtros, y normaliza coordenadas a 4 decimales y `minRating` a 2.
+
+#### Reemplazo masivo de preferencias
+
+`PUT /api/v1/preferences` con `{"categoryIds": ["<uuid>", ...]}` sustituye en una sola operación
+los gustos **explícitos** del turista autenticado (máximo 20, sin duplicados ni nulos; un
+`categoryIds` ausente o fuera de contrato responde `400`). Las preferencias **inferidas** por
+vistas se conservan. Una lista vacía elimina todos los gustos explícitos. Si algún `categoryId`
+no existe, responde `404` y la transacción no modifica nada (rollback completo). La respuesta
+`200` devuelve el conjunto de preferencias resultante, incluidas las inferidas.
 
 ### Eventos Kafka
 
@@ -177,6 +213,11 @@ Docker-local: ms-04 se publica en `http://localhost:8084` (`CATALOG_EXPORT_BASE_
   "touristId": "66666666-6666-6666-6666-666666666601",
   "generatedAt": "2026-10-26T12:00:00Z",
   "source": "MIXED",
+  "page": 0,
+  "size": 20,
+  "total": 7,
+  "totalPages": 1,
+  "hasNext": false,
   "items": [
     {
       "itemType": "EVENT",
@@ -255,7 +296,7 @@ están activas por defecto; las relajaciones viven solo en los perfiles `local` 
 **MS05-04 — presupuesto en las escrituras del grafo.** Las vistas y las preferencias dejan de ser
 ilimitadas. Cada `TOURIST` tiene una ventana fija para `POST /api/v1/interactions/view/**`
 (`RECOMMENDATIONS_VIEW_QUOTA_MAX_REQUESTS`, `60`/`1m` por defecto) y otra para
-`POST`/`DELETE /api/v1/preferences` (`RECOMMENDATIONS_PREFERENCE_QUOTA_MAX_REQUESTS`, `30`/`1m`).
+`POST`/`PUT`/`DELETE /api/v1/preferences` (`RECOMMENDATIONS_PREFERENCE_QUOTA_MAX_REQUESTS`, `30`/`1m`).
 Además, una vista repetida del mismo ítem dentro de `RECOMMENDATIONS_VIEW_DEDUPE_WINDOW` (`1m`) se
 responde `204` sin tocar Neo4j: no incrementa `VIO.count` ni reescribe la afinidad inferida. Al
 superar un presupuesto se responde `429` con `Retry-After`. Se desactiva por bloque con
@@ -419,7 +460,13 @@ un arranque silencioso sin validación de tokens.
 | `REINDEX_MAX_EVENTS_PER_REQUEST` | `2000` | Tope de eventos proyectados por petición |
 | `REINDEX_MIN_INTERVAL` | `60s` | Espera mínima entre dos reindexados del mismo administrador |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:4200` | Orígenes |
+| `RECOMMENDATIONS_WARMUP_ENABLED` | `true` | Warmup de Neo4j/Redis al arrancar; un fallo solo deja un `warn` |
+| `RECOMMENDATIONS_WARMUP_TIMEOUT` | `30s` | Timeout del warmup de arranque |
 | `RECOMMENDATIONS_*` | ver `application.yaml` | Pesos, límites y diversidad |
+
+El warmup de arranque cuenta los ítems `PUBLISHED`, ejecuta la consulta de fallback con un
+turista sintético y lee en Redis la clave de versión del grafo. No bloquea el arranque si falla:
+solo registra un `warn`. Está desactivado en el perfil `test` para no retrasar los contenedores.
 
 ## Ejecución con Docker
 
@@ -494,10 +541,14 @@ El seed es idempotente (`MERGE`).
 ```
 
 Las pruebas de integración usan Testcontainers con `neo4j:5.26-community`, Kafka
-(`apache/kafka:4.1.0`) y Docker. Son **27 clases y 148 pruebas**, todas en verde. La suite cubre:
+(`apache/kafka:4.1.0`) y Docker. Son **41 clases y 263 pruebas**, todas en verde. La suite cubre:
 
 - scoring bayesiano, proximidad, novedad y normalización;
 - topes de diversidad por sitio/categoría;
+- filtros de candidatos (`categoryId`, `itemType`, `minRating`) y paginación posterior a la
+  diversificación (`page`, `size`, `total`, `totalPages`, `hasNext`, páginas fuera de rango);
+- reemplazo masivo de preferencias explícitas (validación de categorías en una transacción,
+  rollback completo ante ids desconocidos y conservación de las preferencias inferidas);
 - deduplicación afinidad/fallback;
 - preferencias y vistas;
 - seguridad RS256, roles, consulta admin y errores;

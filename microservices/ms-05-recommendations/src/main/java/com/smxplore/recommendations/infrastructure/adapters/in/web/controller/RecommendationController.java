@@ -1,5 +1,6 @@
 package com.smxplore.recommendations.infrastructure.adapters.in.web.controller;
 
+import com.smxplore.recommendations.domain.model.catalog.ItemType;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationRequest;
 import com.smxplore.recommendations.domain.ports.in.GetRecommendationsUseCase;
 import com.smxplore.recommendations.domain.ports.out.RecommendationQuotaPort;
@@ -38,6 +39,11 @@ public class RecommendationController {
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) ItemType itemType,
+            @RequestParam(required = false) Double minRating,
             @RequestParam(required = false) UUID touristId,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -51,6 +57,11 @@ public class RecommendationController {
                 .latitude(lat)
                 .longitude(lng)
                 .limit(limit)
+                .page(page)
+                .size(size)
+                .categoryId(categoryId)
+                .itemType(itemType)
+                .minRating(minRating)
                 .build();
         request.validate();
         return getRecommendationsUseCase.handle(request).map(mapper::toResponse);

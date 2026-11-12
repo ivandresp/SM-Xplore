@@ -4,6 +4,7 @@ import com.smxplore.recommendations.application.interaction.RegisterViewService;
 import com.smxplore.recommendations.application.preference.AddPreferenceService;
 import com.smxplore.recommendations.application.preference.ConsultPreferencesService;
 import com.smxplore.recommendations.application.preference.RemovePreferenceService;
+import com.smxplore.recommendations.application.preference.ReplacePreferencesService;
 import com.smxplore.recommendations.application.projection.ProjectionService;
 import com.smxplore.recommendations.application.recommendation.DiversitySelector;
 import com.smxplore.recommendations.application.recommendation.RecommendationScorer;
@@ -19,6 +20,7 @@ import com.smxplore.recommendations.domain.ports.in.PurgeProcessedEventsUseCase;
 import com.smxplore.recommendations.domain.ports.in.RegisterViewUseCase;
 import com.smxplore.recommendations.domain.ports.in.ReindexCatalogUseCase;
 import com.smxplore.recommendations.domain.ports.in.RemovePreferenceUseCase;
+import com.smxplore.recommendations.domain.ports.in.ReplacePreferencesUseCase;
 import com.smxplore.recommendations.domain.ports.out.CatalogExportPort;
 import com.smxplore.recommendations.domain.ports.out.EventProjectionPort;
 import com.smxplore.recommendations.domain.ports.out.GraphVersionPort;
@@ -153,6 +155,15 @@ public class BeanConfiguration {
             RecommendationQuotaPort quotaPort
     ) {
         return new RemovePreferenceService(graphPort, quotaPort);
+    }
+
+    @Bean
+    public ReplacePreferencesUseCase replacePreferencesUseCase(
+            RecommendationGraphPort graphPort,
+            RecommendationQuotaPort quotaPort,
+            Clock clock
+    ) {
+        return new ReplacePreferencesService(graphPort, quotaPort, clock);
     }
 
     @Bean

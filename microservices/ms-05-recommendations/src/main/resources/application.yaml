@@ -112,6 +112,11 @@ app:
   neo4j:
     # MS05-08: DDL solo cuando se pide de forma explicita (perfil local/test o job de esquema).
     initialize-schema: ${NEO4J_INITIALIZE_SCHEMA:false}
+  warmup:
+    # MS05-11: calienta Neo4j (driver, plan cache y consulta fallback) y Redis al arrancar.
+    # Es una optimizacion best-effort: si falla o expira solo se registra un aviso.
+    enabled: ${RECOMMENDATIONS_WARMUP_ENABLED:true}
+    timeout: ${RECOMMENDATIONS_WARMUP_TIMEOUT:30s}
   seed:
     enabled: ${SEED_ENABLED:false}
   events:

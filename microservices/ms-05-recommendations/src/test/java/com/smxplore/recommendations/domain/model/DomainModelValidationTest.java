@@ -13,6 +13,7 @@ import com.smxplore.recommendations.domain.model.ranking.RecommendationPolicy;
 import com.smxplore.recommendations.domain.model.ranking.ScoredCandidate;
 import com.smxplore.recommendations.domain.model.recommendation.CandidateOrigin;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationCandidate;
+import com.smxplore.recommendations.domain.model.recommendation.RecommendationCacheKey;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationItem;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationQuery;
 import com.smxplore.recommendations.domain.model.recommendation.RecommendationRequest;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DomainModelValidationTest {
 
@@ -55,14 +57,49 @@ class DomainModelValidationTest {
 
     @Test
     void rejectsQueryWithoutTourist() {
-        assertThatThrownBy(() -> new RecommendationQuery(null, null, null, 20))
+        assertThatThrownBy(() -> new RecommendationQuery(null, null, null, 20, 0, 20, null, null, null))
                 .isInstanceOf(InvalidRecommendationQueryException.class);
     }
 
     @Test
     void rejectsQueryWithInvalidLimit() {
-        assertThatThrownBy(() -> new RecommendationQuery(ID, null, null, 0))
+        assertThatThrownBy(() -> new RecommendationQuery(ID, null, null, 0, 0, 20, null, null, null))
                 .isInstanceOf(InvalidRecommendationQueryException.class);
+    }
+
+    @Test
+    void rejectsQueryWithNegativePage() {
+        assertThatThrownBy(() -> new RecommendationQuery(ID, null, null, 20, -1, 20, null, null, null))
+                .isInstanceOf(InvalidRecommendationQueryException.class);
+    }
+
+    @Test
+    void rejectsQueryWithZeroSize() {
+        assertThatThrownBy(() -> new RecommendationQuery(ID, null, null, 20, 0, 0, null, null, null))
+                .isInstanceOf(InvalidRecommendationQueryException.class);
+    }
+
+    @Test
+    void rejectsQueryWithMinRatingOutsideTheCatalogRange() {
+        assertThatThrownBy(() -> new RecommendationQuery(ID, null, null, 20, 0, 20, null, null, 5.5))
+                .isInstanceOf(InvalidRecommendationQueryException.class);
+    }
+
+    @Test
+    void rejectsCacheKeyWithHalfALocation() {
+        assertThatThrownBy(() -> new RecommendationCacheKey(ID, null, 10.0, null, 20, 0, 20, null, null, null))
+                .isInstanceOf(InvalidRecommendationException.class);
+    }
+
+    @Test
+    void normalizesEquivalentRequestsUnderTheSameCacheKey() {
+        RecommendationCacheKey first = new RecommendationCacheKey(
+                ID, null, 10.39104, -75.47904, 20, 1, 10, null, ItemType.SITE, 4.0);
+        RecommendationCacheKey second = new RecommendationCacheKey(
+                ID, null, 10.39101, -75.47901, 20, 1, 10, null, ItemType.SITE, 4.001);
+
+        assertThat(first.value(7)).isEqualTo(second.value(7));
+        assertThat(first.value(8)).isNotEqualTo(second.value(7));
     }
 
     @Test
