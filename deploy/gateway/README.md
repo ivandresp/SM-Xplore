@@ -286,8 +286,8 @@ durante un año.
 | gzip | JSON > 512 B | `nginx.conf` | las respuestas de catálogo son grandes |
 | `server_tokens` | `off` | `nginx.conf` | no revelar versión de nginx |
 | rate limit `auth` | 30 r/m, burst 10 `nodelay` | `nginx.conf` + `routes.conf` | frenar fuerza bruta de login/MFA sin encolar |
-| rate limit `public` | 120 r/m, burst 40 | `nginx.conf` + `routes.conf` | catálogo público y recomendaciones: absorber picos, cortar ráfagas abusivas |
-| rate limit `api` | 600 r/m, burst 100 | `nginx.conf` + `routes.conf` | resto de la superficie publicada |
+| rate limit `public` | 120 r/m, burst 40 `nodelay` | `nginx.conf` + `routes.conf` | catálogo público y recomendaciones: absorber picos, cortar ráfagas abusivas |
+| rate limit `api` | 600 r/m, burst 100 `nodelay` | `nginx.conf` + `routes.conf` | resto de la superficie publicada |
 | `limit_req_status` | `429` | `nginx.conf` | el exceso se rechaza en formato `problem+json` (con `Retry-After`) |
 
 ### Rate limiting por IP (MS01-01)
@@ -299,15 +299,17 @@ falsear** (a diferencia de `X-Forwarded-For`, que el gateway además sobrescribe
 | Zona | Rate | Burst | Dónde se aplica |
 |---|---|---|---|
 | `auth` | 30 r/m (1 cada 2 s) | 10, `nodelay` | `location /api/v1/auth/` **y** `location /svc/ms-01/api/v1/auth/` → ms-01 (login, MFA, recuperación; el namespace no rebaja el límite) |
-| `public` | 120 r/m (2 por s) | 40 | GET de catálogo público: `/api/v1/activities`, `/events`, `/reviews/*`, `/sites`, `/services`, `/categories`, `/zones`, `/recommendations` |
-| `api` | 600 r/m (10 por s) | 100 | resto de rutas publicadas (usuarios, admin, reservas, preferencias, interacciones, namespace `/svc/...`) |
+| `public` | 120 r/m (2 por s) | 40, `nodelay` | GET de catálogo público: `/api/v1/activities`, `/events`, `/reviews/*`, `/sites`, `/services`, `/categories`, `/zones`, `/recommendations` |
+| `api` | 600 r/m (10 por s) | 100, `nodelay` | resto de rutas publicadas (usuarios, admin, reservas, preferencias, interacciones, namespace `/svc/...`) |
 
 - **Cómo se comporta un exceso:** nginx responde `429` con cuerpo
   `{"type":"about:blank","title":"Demasiadas peticiones",...}` y `Retry-After: 1`. La petición **no
   llega al servicio** (no consume cupo de sus filtros internos).
-- **Con `nodelay` (auth)** el burst se atiende de inmediato y lo que excede se rechaza: ideal para
-  cortar fuerza bruta. **Sin `nodelay` (public/api)** el exceso se encola (hasta `burst` peticiones,
-  como máximo `burst / rate` segundos de espera) y solo cuando la cola desborda se responde `429`.
+- **Las tres zonas usan `nodelay`:** la ráfaga se atiende de inmediato y, cuando se agota el
+  `burst`, el exceso responde `429` en el acto. Es clave para páginas que disparan varias consultas
+  en paralelo: sin `nodelay` nginx las **encolaba** a `1/rate` por petición (con `public` a
+  120 r/m eran ~500 ms cada una) y el catálogo tardaba segundos en cargar aunque los servicios
+  respondieran en milisegundos.
 - **Cubo compartido por IP:** si muchos clientes salen por la misma IP (NAT, proxy corporativo,
   runner de CI), comparten el cubo. Curl/Postman desde la misma máquina también. Si una suite E2E
   dispara >10 logins seguidos en frío o >40 lecturas de catálogo en un segundo, verá `429`: espacia
