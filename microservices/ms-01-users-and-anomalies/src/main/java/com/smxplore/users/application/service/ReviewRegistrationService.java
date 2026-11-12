@@ -86,9 +86,18 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
             return Mono.error(
                     registrationScope ? new RegistrationNotFoundException() : new ValidationException(NOT_REVIEWABLE));
         }
-        if (reviewable.registrationStatus() == decision) {
+        RegistrationStatus current = reviewable.registrationStatus();
+        if (current == decision) {
             return Mono.error(
                     new InvalidStatusTransitionException("El alta ya se encuentra en estado " + decision.name()));
+        }
+        // Aprobar es terminal: revocar un alta ya aprobada se hace cambiando el estado del usuario desde
+        // administración, no por revisión. Sin esto, dos gestoras con la lista cacheada se sobrescriben (la última
+        // gana, dos correos y authVersion re-evictada) y el contenido ya publicado acaba apuntando a un perfil que
+        // desaparece del catálogo.
+        if (current == RegistrationStatus.APROBADO) {
+            return Mono.error(new InvalidStatusTransitionException(
+                    "El alta ya está aprobada; para revocarla cambia el estado del usuario desde administración"));
         }
 
         Instant now = clock.instant();

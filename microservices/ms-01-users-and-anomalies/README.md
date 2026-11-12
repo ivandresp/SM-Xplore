@@ -319,7 +319,7 @@ asociarlas a una persona identificable. Los plazos y el horario se cambian por v
 | POST | `/api/v1/admin/users/{id}/provider-review` | ADMIN |
 | POST | `/api/v1/admin/users/{id}/guide-review` | ADMIN, aprueba o rechaza el alta de un guía |
 | GET | `/api/v1/registrations` | ADMIN o GESTORA_DESTINOS, cola de altas `PENDIENTE`/`RECHAZADO` (guías y prestadoras) |
-| POST | `/api/v1/registrations/{id}/review` | ADMIN o GESTORA_DESTINOS, aprueba o rechaza un alta; el motivo es obligatorio al rechazar |
+| POST | `/api/v1/registrations/{id}/review` | ADMIN o GESTORA_DESTINOS, aprueba o rechaza un alta; el motivo es obligatorio al rechazar y `APROBADO` es terminal (revocar = estado de usuario) |
 | POST | `/api/v1/admin/users/{id}/password-reset` | ADMIN |
 | GET | `/api/v1/admin/audit-logs` | ADMIN |
 | GET | `/api/v1/admin/audit-logs/export` | ADMIN, reporte CSV de auditoría |

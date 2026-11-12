@@ -110,6 +110,40 @@ class ReviewRegistrationServiceTest {
     }
 
     @Test
+    void aRejectedRegistrationCanBeApprovedAgain() {
+        Guia guide = guide();
+        guide.changeRegistrationStatus(RegistrationStatus.RECHAZADO, NOW);
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .review(ADMIN_ID, guide.id(), new ReviewRegistrationCommand(RegistrationStatus.APROBADO, null)))
+                .verifyComplete();
+
+        assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.APROBADO);
+        assertThat(decisions).containsExactly(RegistrationStatus.APROBADO);
+    }
+
+    @Test
+    void anApprovedRegistrationIsTerminal() {
+        Guia guide = guide();
+        guide.changeRegistrationStatus(RegistrationStatus.APROBADO, NOW);
+        users.seed(guide).seed(admin());
+
+        // Aprobar es terminal: revocar una guia ya aprobada se hace por estado de usuario desde administracion,
+        // no por revision. Asi dos gestoras con la lista cacheada no se sobrescriben.
+        StepVerifier.create(service()
+                        .review(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, "Ya no cumple")))
+                .expectError(InvalidStatusTransitionException.class)
+                .verify();
+
+        assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.APROBADO);
+        assertThat(decisions).isEmpty();
+    }
+
+    @Test
     void aProfileWithoutRegistrationCannotBeReviewed() {
         Turista tourist = Turista.register(
                 UUID.randomUUID(),
