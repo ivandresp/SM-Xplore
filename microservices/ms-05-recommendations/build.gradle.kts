@@ -28,7 +28,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.2.0")
     implementation("org.mapstruct:mapstruct:1.6.3")
 
     compileOnly("org.projectlombok:lombok")
@@ -37,10 +37,10 @@ dependencies {
 
     constraints {
         // El cliente de Kafka arrastra compresion nativa; se fuerzan las versiones con los CVE cerrados.
-        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+        implementation("at.yawk.lz4:lz4-java:1.13.0") {
             because("CVE-2026-106451: ejecucion arbitraria de codigo en lz4-java 1.11.2")
         }
-        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+        implementation("org.xerial.snappy:snappy-java:1.1.10.12") {
             because("CVE-2026-108106 y CVE-2026-93451: denegacion de servicio y desbordamiento en snappy-java 1.1.10.7")
         }
     }
@@ -59,7 +59,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.testcontainers:testcontainers-neo4j")
     testImplementation("org.awaitility:awaitility")
-    testImplementation("com.networknt:json-schema-validator:1.5.9")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testImplementation(libs.archunit.junit5)
 
     testCompileOnly("org.projectlombok:lombok")
