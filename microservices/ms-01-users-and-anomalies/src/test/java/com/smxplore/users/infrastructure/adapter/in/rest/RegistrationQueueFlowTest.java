@@ -83,6 +83,12 @@ class RegistrationQueueFlowTest {
         String gestoraToken = gestora("gestora.cola@example.com");
 
         Map<?, ?> pendingGuides = registrations(gestoraToken, "?role=GUIDE&status=PENDIENTE");
+        // Contrato de paginacion alineado con ms-03/ms-04: total, no totalElements.
+        assertThat(pendingGuides.containsKey("content")).isTrue();
+        assertThat(pendingGuides.containsKey("total")).isTrue();
+        assertThat(pendingGuides.containsKey("totalPages")).isTrue();
+        assertThat(pendingGuides.containsKey("totalElements")).isFalse();
+        assertThat(((Number) pendingGuides.get("total")).longValue()).isPositive();
         assertThat(entries(pendingGuides)).singleElement().satisfies(registration -> {
             assertThat(registration.get("id")).isEqualTo(guideId);
             assertThat(registration.get("role")).isEqualTo("GUIDE");

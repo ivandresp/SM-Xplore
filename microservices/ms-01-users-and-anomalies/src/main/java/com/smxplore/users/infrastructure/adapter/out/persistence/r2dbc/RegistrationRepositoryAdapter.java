@@ -1,6 +1,6 @@
 package com.smxplore.users.infrastructure.adapter.out.persistence.r2dbc;
 
-import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.RegistrationPage;
 import com.smxplore.users.application.dto.RegistrationSearchCriteria;
 import com.smxplore.users.application.dto.RegistrationSummaryView;
 import com.smxplore.users.application.port.out.RegistrationRepository;
@@ -56,7 +56,7 @@ public class RegistrationRepositoryAdapter implements RegistrationRepository {
     }
 
     @Override
-    public Mono<PageResult<RegistrationSummaryView>> search(RegistrationSearchCriteria criteria) {
+    public Mono<RegistrationPage> search(RegistrationSearchCriteria criteria) {
         Mono<Long> total = bindFilters(databaseClient.sql(COUNT), criteria)
                 .map((row, metadata) -> row.get("total", Long.class))
                 .one()
@@ -70,7 +70,7 @@ public class RegistrationRepositoryAdapter implements RegistrationRepository {
                 .collectList();
 
         return total.zipWith(content)
-                .map(tuple -> PageResult.of(tuple.getT2(), criteria.page(), criteria.size(), tuple.getT1()));
+                .map(tuple -> RegistrationPage.of(tuple.getT2(), criteria.page(), criteria.size(), tuple.getT1()));
     }
 
     private static GenericExecuteSpec bindFilters(GenericExecuteSpec spec, RegistrationSearchCriteria criteria) {

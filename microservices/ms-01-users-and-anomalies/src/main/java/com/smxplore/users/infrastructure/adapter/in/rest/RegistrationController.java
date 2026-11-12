@@ -1,8 +1,7 @@
 package com.smxplore.users.infrastructure.adapter.in.rest;
 
-import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.RegistrationPage;
 import com.smxplore.users.application.dto.RegistrationSearchCriteria;
-import com.smxplore.users.application.dto.RegistrationSummaryView;
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.in.ListRegistrationsUseCase;
 import com.smxplore.users.application.port.in.ReviewRegistrationUseCase;
@@ -47,7 +46,7 @@ public class RegistrationController {
     }
 
     @GetMapping
-    public Mono<PageResult<RegistrationSummaryView>> search(
+    public Mono<RegistrationPage> search(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) RegistrationStatus status,
             @RequestParam(defaultValue = "0") int page,

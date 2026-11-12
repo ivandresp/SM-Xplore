@@ -1,8 +1,7 @@
 package com.smxplore.users.application.service;
 
-import com.smxplore.users.application.dto.PageResult;
+import com.smxplore.users.application.dto.RegistrationPage;
 import com.smxplore.users.application.dto.RegistrationSearchCriteria;
-import com.smxplore.users.application.dto.RegistrationSummaryView;
 import com.smxplore.users.application.port.in.ListRegistrationsUseCase;
 import com.smxplore.users.application.port.out.RegistrationRepository;
 import reactor.core.publisher.Mono;
@@ -16,7 +15,7 @@ public final class ListRegistrationsService implements ListRegistrationsUseCase 
     }
 
     @Override
-    public Mono<PageResult<RegistrationSummaryView>> search(RegistrationSearchCriteria criteria) {
+    public Mono<RegistrationPage> search(RegistrationSearchCriteria criteria) {
         return registrations.search(criteria);
     }
 }
