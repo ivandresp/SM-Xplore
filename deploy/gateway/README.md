@@ -25,6 +25,7 @@ deploy/gateway/
 │   └── gateway.conf           # servers de PRODUCCIÓN: 8080 solo redirige a HTTPS (PLAT-03)
 ├── snippets/
 │   ├── routes.conf            # tabla de rutas ruta -> servicio (lo que más vas a editar)
+│   ├── public-cache.conf      # cache compartido de lecturas públicas del catálogo
 │   └── security-headers.conf  # cabeceras de seguridad comunes (PLAT-16)
 └── README.md                  # este documento
 ```
@@ -34,7 +35,8 @@ deploy/gateway/
 | `nginx.conf` | `/etc/nginx/nginx.conf` | `worker_processes`, logs, tiempos, límites de conexión, zonas de rate limiting, upstreams `ms_01..ms_05`, cabeceras |
 | `conf.d/gateway.conf` | `/etc/nginx/conf.d/gateway.conf` (dev) | servers `8080` y `8443`; `include` de las rutas y de las cabeceras de seguridad |
 | `prod/gateway.conf` | `/etc/nginx/conf.d/default.conf` (prod) | `8443` con rutas y HSTS; `8080` solo `/healthz` + redirect 308 |
-| `snippets/` | `/etc/nginx/snippets/` | `routes.conf` y `security-headers.conf`, incluidos dentro de cada server |
+| `snippets/` | `/etc/nginx/snippets/` | `routes.conf`, `public-cache.conf` y `security-headers.conf`, incluidos dentro de cada server |
+| `snippets/public-cache.conf` | (incluido por `routes.conf`) | cache de 10 s para GET anónimos del catálogo público (ver sección 7) |
 
 `deploy/prod/compose.yaml` monta `prod/gateway.conf` **sobre `/etc/nginx/conf.d/default.conf`**: la
 imagen de producción (`GATEWAY_IMAGE`, por defecto `nginxinc/nginx-unprivileged:1.27-alpine`) no se
@@ -161,6 +163,7 @@ ms-03 y ms-04), no se expone por nombre corto: se usa el namespace `/svc/ms-0N/.
 | `/api/v1/auth/**` | ms-01 | registro, login, MFA, recuperación de contraseña |
 | `/api/v1/users/**` | ms-01 | perfil, contraseña, sesiones, MFA del usuario |
 | `/api/v1/public/**` | ms-01 | perfil público y resumen público de reseñas |
+| `/api/v1/manager/**` | ms-01 | gestoras de destino: listado y aprobación del registro de guías |
 | `/api/v1/admin/users/**` | ms-01 | administración de cuentas |
 | `/api/v1/admin/anomalies`, `/admin/anomaly-thresholds`, `/admin/audit-logs`, `/admin/monitoring` | ms-01 | observabilidad y auditoría |
 | `/api/v1/admin/reviews/reported` | ms-01 | cola de reseñas reportadas |
@@ -327,8 +330,36 @@ falsear** (a diferencia de `X-Forwarded-For`, que el gateway además sobrescribe
 Cosas que el gateway **no** hace a propósito: CORS (lo resuelven los servicios con
 `CORS_ALLOWED_ORIGINS`), rate limiting por **usuario/cuenta** (solo por IP; los límites de negocio
 siguen en los servicios: `AuthRateLimitWebFilter`, `ReportRateLimitWebFilter` y las políticas de
-reservas), cacheo de respuestas ni transformación de cuerpos. Si en el futuro se centraliza CORS
-aquí, hay que quitar las cabeceras equivalentes de los servicios para no duplicarlas.
+reservas) ni transformación de cuerpos. Si en el futuro se centraliza CORS aquí, hay que quitar las
+cabeceras equivalentes de los servicios para no duplicarlas.
+
+### Cache de lecturas públicas del catálogo (pendientes 1-2 del PL)
+
+Una sola visita a `/explorar` pide zonas, sitios y actividades; en desarrollo React duplica esos
+efectos y en producción varios usuarios repiten exactamente las mismas lecturas. Para no pagar el
+`COUNT` + `SELECT` completo en ms-03/ms-04 en cada petición, el gateway cachea **solo** los GET
+anónimos de:
+
+`/api/v1/activities`, `/api/v1/events` (ms-03) y `/api/v1/sites`, `/api/v1/services`,
+`/api/v1/categories`, `/api/v1/zones` (ms-04).
+
+Cómo funciona (`snippets/public-cache.conf` + `proxy_cache_path` de `nginx.conf`):
+
+| Aspecto | Valor | Motivo |
+|---|---|---|
+| Clave | `$scheme$request_method$host$request_uri` | cada combinación de filtros/página/orden tiene su entrada; POST/PATCH/DELETE nunca comparten clave con un GET |
+| TTL | `200` → 10 s | absorbe la ráfaga de una pantalla sin servir catálogo viejo más de 10 s |
+| Zona | `public_catalog:10m`, máx. 128 MB, inactivo 90 s | memoria compartida entre workers; las entradas frías se descartan solas |
+| Authorization | bypass + no_cache | un `ADMIN` puede ver entidades no publicadas: esa respuesta no se cachea ni se sirve a anónimos |
+| `Cache-Control` del cliente | bypass | una petición que pide datos frescos se reenvía al servicio |
+| Concurrencia | `proxy_cache_lock on` | N peticiones idénticas simultáneas no llenan el upstream: la primera llena y las demás esperan (máx. 5 s) |
+| Observabilidad | cabecera `X-Cache-Status` | `MISS`, `HIT` o `BYPASS` por respuesta |
+
+Las respuestas del servicio llevan `Cache-Control: no-store` (PLAT-16), pero el gateway usa
+`proxy_ignore_headers Cache-Control` para cachear en su memoria interna; el navegador sigue recibiendo
+`no-store`. Una escritura de catálogo puede tardar hasta 10 s en reflejarse: es el compromiso asumido
+para el catálogo público, no para datos personales (reservas, reportes o reseñas no pasan por aquí).
+Para desactivarlo, quita los `include /etc/nginx/snippets/public-cache.conf;` de las seis locations.
 
 ---
 
@@ -352,6 +383,26 @@ curl.exe -s -o NUL -w "metricas:    %{http_code}`n"  http://127.0.0.1:8088/actua
 
 # flujo completo (login + negocio) por el gateway
 # el backend completo se valida con el E2E del proyecto; el smoke clásico usa puertos directos.
+```
+
+### Verificar el cache del catálogo
+
+```powershell
+# 1) primera petición: MISS (llega al servicio) y latencia de upstream real
+curl.exe -s -D - -o NUL http://127.0.0.1:8088/api/v1/sites?size=3 | Select-String 'X-Cache-Status'
+
+# 2) repetir dentro de los 10 s: HIT y sin tiempo de upstream (urt=- en el access log del gateway)
+1..3 | ForEach-Object { curl.exe -s -D - -o NUL "http://127.0.0.1:8088/api/v1/sites?size=3" | Select-String 'X-Cache-Status' }
+
+# 3) con Authorization: BYPASS (nunca se sirve una respuesta de admin a un anónimo)
+curl.exe -s -D - -o NUL -H "Authorization: Bearer $env:TOKEN" "http://127.0.0.1:8088/api/v1/sites?size=3" | Select-String 'X-Cache-Status'
+
+# 4) escritura: no se cachea y el GET siguiente puede seguir sirviendo el valor anterior hasta 10 s
+```
+
+```bash
+# equivalente en bash
+curl -s -D - -o /dev/null http://127.0.0.1:8088/api/v1/sites?size=3 | grep -i x-cache-status
 ```
 
 ### Verificar el rate limiting
