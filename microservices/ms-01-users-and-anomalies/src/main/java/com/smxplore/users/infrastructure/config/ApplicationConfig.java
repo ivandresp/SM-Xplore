@@ -684,13 +684,13 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public ListReviewsUseCase listReviewsUseCase(ReviewRepository reviews) {
-        return new ListReviewsService(reviews);
+    public ListReviewsUseCase listReviewsUseCase(ReviewRepository reviews, UserRepository users) {
+        return new ListReviewsService(reviews, users);
     }
 
     @Bean
-    public GetReputationSummaryUseCase getReputationSummaryUseCase(ReviewRepository reviews) {
-        return new GetReputationSummaryService(reviews);
+    public GetReputationSummaryUseCase getReputationSummaryUseCase(ReviewRepository reviews, UserRepository users) {
+        return new GetReputationSummaryService(reviews, users);
     }
 
     @Bean
