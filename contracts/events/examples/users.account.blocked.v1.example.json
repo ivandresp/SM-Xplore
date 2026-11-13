@@ -1,0 +1,13 @@
+{
+  "eventId": "d1e2f3a4-b5c6-4d7e-8f90-1a2b3c4d5e61",
+  "eventType": "users.account.blocked",
+  "eventVersion": 1,
+  "occurredAt": "2026-11-13T04:00:00Z",
+  "aggregateId": "44444444-4444-4444-4444-444444444401",
+  "correlationId": "9f32c4d5-e6f7-4a81-9c1b-2e3f4a5b6c71",
+  "producer": "ms-01",
+  "payload": {
+    "userId": "44444444-4444-4444-4444-444444444401",
+    "role": "GUIDE"
+  }
+}
