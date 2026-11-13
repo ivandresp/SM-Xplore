@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.spring.boot.validation)
     implementation(libs.spring.boot.flyway)
     implementation(libs.spring.boot.mail)
+    implementation("org.springframework.kafka:spring-kafka")
     implementation(libs.spring.boot.actuator)
     implementation(libs.spring.boot.oauth2.resource.server)
     implementation(libs.springdoc.webflux.ui)

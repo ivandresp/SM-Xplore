@@ -1,6 +1,12 @@
 spring:
   application:
     name: ms-01-users-and-anomalies
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        # Un Kafka caido no debe colgar el cambio de estado mas de 5 s.
+        max.block.ms: 5000
   r2dbc:
     url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/smxplore_users}
     username: ${DB_USERNAME:smxplore}
@@ -100,6 +106,10 @@ app:
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
     full-name: ${BOOTSTRAP_ADMIN_NAME:Administrador SM-Xplore}
+  events:
+    account-publisher:
+      # B3: al bloquear una cuenta se publica users.account.blocked para ms-03.
+      enabled: ${ACCOUNT_EVENTS_PUBLISH_ENABLED:true}
   reviews:
     index-initialization:
       enabled: ${REVIEW_INDEX_INIT:false}
