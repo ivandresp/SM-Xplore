@@ -3,6 +3,7 @@ package com.smxplore.users.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
+import com.smxplore.users.application.port.out.AccountEventPublisher;
 import com.smxplore.users.application.port.out.AccountRevokedNotifier;
 import com.smxplore.users.domain.exception.FieldValidationException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
@@ -32,7 +33,8 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 /**
- * Revocación de una cuenta aprobada (B8-11): motivo obligatorio, correo, ADMIN y DESTINATION_MANAGER.
+ * Revocación de una cuenta aprobada (B8-11) y cascada de bloqueo a ms-03 (B3): motivo obligatorio,
+ * correo, evento users.account.blocked, ADMIN y DESTINATION_MANAGER.
  */
 class ChangeUserStatusServiceTest {
 
@@ -42,11 +44,50 @@ class ChangeUserStatusServiceTest {
     private final FakeUserRepository users = new FakeUserRepository();
     private final FakeAuditLogRepository auditLog = new FakeAuditLogRepository();
     private final FakeAuthVersionEvictor evictor = new FakeAuthVersionEvictor();
+    private final List<UUID> blocked = new ArrayList<>();
+    private final AccountEventPublisher events = target -> {
+        blocked.add(target.id());
+        return Mono.empty();
+    };
     private final List<String> revokedReasons = new ArrayList<>();
     private final AccountRevokedNotifier notifier = (target, reason) -> {
         revokedReasons.add(reason);
         return Mono.empty();
     };
+
+    @Test
+    void blockingAnAccountPublishesTheEvent() {
+        Turista tourist = tourist();
+        users.seed(tourist).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                tourist.id(),
+                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, "Incumplimiento", Role.ADMIN)))
+                .verifyComplete();
+
+        assertThat(tourist.status()).isEqualTo(UserStatus.BLOQUEADO);
+        assertThat(blocked).containsExactly(tourist.id());
+        assertThat(revokedReasons).isEmpty();
+    }
+
+    @Test
+    void activatingAnAccountDoesNotPublish() {
+        Turista tourist = tourist();
+        tourist.changeStatus(UserStatus.BLOQUEADO, NOW);
+        users.seed(tourist).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                tourist.id(),
+                                new ChangeUserStatusCommand(UserStatus.ACTIVO, null, Role.ADMIN)))
+                .verifyComplete();
+
+        assertThat(tourist.status()).isEqualTo(UserStatus.ACTIVO);
+        assertThat(blocked).isEmpty();
+    }
 
     @Test
     void revokingAnApprovedGuideWithoutAReasonIsAValidationError() {
@@ -63,6 +104,7 @@ class ChangeUserStatusServiceTest {
 
         assertThat(guide.status()).isEqualTo(UserStatus.ACTIVO);
         assertThat(revokedReasons).isEmpty();
+        assertThat(blocked).isEmpty();
     }
 
     @Test
@@ -81,6 +123,7 @@ class ChangeUserStatusServiceTest {
         assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
         assertThat(revokedReasons).containsExactly("Incumplimiento de la licencia");
         assertThat(evictor.evicted()).containsExactly(guide.id());
+        assertThat(blocked).containsExactly(guide.id());
         assertThat(auditLog.saved())
                 .singleElement()
                 .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.CUENTA_REVOCADA));
@@ -101,6 +144,7 @@ class ChangeUserStatusServiceTest {
 
         assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
         assertThat(revokedReasons).containsExactly("Licencia vencida");
+        assertThat(blocked).containsExactly(guide.id());
     }
 
     @Test
@@ -122,18 +166,7 @@ class ChangeUserStatusServiceTest {
 
     @Test
     void anAdminCanBlockANonReviewableAccountWithoutAReason() {
-        Turista tourist = Turista.register(
-                UUID.randomUUID(),
-                "Ada Turista",
-                new Email("ada@example.com"),
-                "3001234567",
-                new PasswordHash("hash"),
-                "CC",
-                "1234567890",
-                "es",
-                LocalDate.of(1990, 1, 1),
-                "Colombia",
-                NOW);
+        Turista tourist = tourist();
         users.seed(tourist).seed(admin());
 
         StepVerifier.create(service()
@@ -145,9 +178,36 @@ class ChangeUserStatusServiceTest {
 
         assertThat(tourist.status()).isEqualTo(UserStatus.BLOQUEADO);
         assertThat(revokedReasons).isEmpty();
+        assertThat(blocked).containsExactly(tourist.id());
         assertThat(auditLog.saved())
                 .singleElement()
                 .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.ESTADO_CAMBIADO));
+    }
+
+    private ChangeUserStatusService service() {
+        return new ChangeUserStatusService(
+                users,
+                new AuditTrailRecorder(users, auditLog),
+                evictor,
+                events,
+                notifier,
+                new FakeTransactionPort(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    private static Turista tourist() {
+        return Turista.register(
+                UUID.randomUUID(),
+                "Ada Turista",
+                new Email("ada@example.com"),
+                "3001234567",
+                new PasswordHash("hash"),
+                "CC",
+                "1234567890",
+                "es",
+                LocalDate.of(1990, 1, 1),
+                "Colombia",
+                NOW);
     }
 
     private static Usuario admin() {
@@ -160,16 +220,6 @@ class ChangeUserStatusServiceTest {
                 "CC",
                 "1000000000",
                 NOW);
-    }
-
-    private ChangeUserStatusService service() {
-        return new ChangeUserStatusService(
-                users,
-                new AuditTrailRecorder(users, auditLog),
-                evictor,
-                notifier,
-                new FakeTransactionPort(),
-                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private static Guia approvedGuide() {

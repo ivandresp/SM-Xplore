@@ -2,6 +2,7 @@ package com.smxplore.users.application.service;
 
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
+import com.smxplore.users.application.port.out.AccountEventPublisher;
 import com.smxplore.users.application.port.out.AccountRevokedNotifier;
 import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.TransactionPort;
@@ -29,6 +30,7 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
     private final UserRepository users;
     private final AuditTrailRecorder audit;
     private final AuthVersionEvictor evictor;
+    private final AccountEventPublisher events;
     private final AccountRevokedNotifier revokedNotifier;
     private final TransactionPort transactions;
     private final Clock clock;
@@ -37,12 +39,14 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
             UserRepository users,
             AuditTrailRecorder audit,
             AuthVersionEvictor evictor,
+            AccountEventPublisher events,
             AccountRevokedNotifier revokedNotifier,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.audit = audit;
         this.evictor = evictor;
+        this.events = events;
         this.revokedNotifier = revokedNotifier;
         this.transactions = transactions;
         this.clock = clock;
@@ -109,7 +113,10 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
                             now))
                     // MS01-15: bloquear o suspender incrementa authVersion y debe cerrar la sesión al instante.
                     .then(evictor.evict(target.id()))
+                    // B2: el correo de revocación solo aplica cuando se revoca un alta aprobada.
                     .then(revokingApproved ? revokedNotifier.notify(target, command.reason()) : Mono.empty())
+                    // Cascada B3: ms-03 despublica el contenido del usuario bloqueado.
+                    .then(newStatus == UserStatus.BLOQUEADO ? events.accountBlocked(target) : Mono.empty())
                     .thenReturn(target);
         });
     }

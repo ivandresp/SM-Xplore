@@ -1,6 +1,9 @@
 app:
   bootstrap-admin:
     enabled: false
+  events:
+    account-publisher:
+      enabled: false
   security:
     jwt:
       issuer: sm-xplore-ms-01

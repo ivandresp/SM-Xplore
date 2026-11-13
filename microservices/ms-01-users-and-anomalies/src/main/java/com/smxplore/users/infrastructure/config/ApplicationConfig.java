@@ -52,6 +52,7 @@ import com.smxplore.users.application.port.in.UpdateProfileUseCase;
 import com.smxplore.users.application.port.in.VerifyEmailUseCase;
 import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
 import com.smxplore.users.application.port.out.AccountAttemptLimiter;
+import com.smxplore.users.application.port.out.AccountEventPublisher;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AccountLockedNotifier;
 import com.smxplore.users.application.port.out.AccountRevokedNotifier;
@@ -157,6 +158,7 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import reactor.core.publisher.Mono;
 
 @Configuration
 public class ApplicationConfig {
@@ -563,11 +565,18 @@ public class ApplicationConfig {
             UserRepository users,
             AuditTrailRecorder auditTrailRecorder,
             AuthVersionEvictor evictor,
+            AccountEventPublisher accountEventPublisher,
             AccountRevokedNotifier accountRevokedNotifier,
             TransactionPort transactions,
             Clock clock) {
         return new ChangeUserStatusService(
-                users, auditTrailRecorder, evictor, accountRevokedNotifier, transactions, clock);
+                users, auditTrailRecorder, evictor, accountEventPublisher, accountRevokedNotifier, transactions, clock);
+    }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(AccountEventPublisher.class)
+    public AccountEventPublisher noOpAccountEventPublisher() {
+        return target -> Mono.empty();
     }
 
     @Bean

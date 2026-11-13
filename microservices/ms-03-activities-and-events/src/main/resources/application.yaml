@@ -87,6 +87,12 @@ app:
       dlt-replication: ${SITE_EVENTS_DLT_REPLICATION:1}
       retry-interval-ms: ${SITE_EVENTS_RETRY_INTERVAL_MS:1000}
       retry-max-elapsed-ms: ${SITE_EVENTS_RETRY_MAX_ELAPSED_MS:60000}
+    # Consumidor de users.account.blocked (ms-01): despublica las actividades del guia bloqueado.
+    # Apagado por defecto para no conectar con Kafka en tests; el compose lo enciende.
+    account-consumer:
+      enabled: ${ACCOUNT_EVENTS_ENABLED:false}
+      group: ${ACCOUNT_EVENTS_GROUP:ms-03-account-blocked}
+      timeout: ${ACCOUNT_EVENTS_TIMEOUT:PT10S}
   ms04:
     base-url: ${MS04_BASE_URL:http://localhost:8084}
     timeout: ${MS04_TIMEOUT:3s}

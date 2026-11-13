@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smxplore.local/contracts/events/users.account.blocked.v1.json",
+  "title": "users.account.blocked.v1",
+  "description": "Cuenta bloqueada por administracion o por una gestora de destinos. ms-03 lo consume para despublicar las actividades del guia; es idempotente y un bloqueo no republica al desbloquear.",
+  "allOf": [
+    { "$ref": "./envelope.v1.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "users.account.blocked" },
+        "eventVersion": { "const": 1 },
+        "payload": {
+          "type": "object",
+          "required": ["userId", "role"],
+          "properties": {
+            "userId": { "type": "string", "format": "uuid" },
+            "role": { "enum": ["GUIDE", "DESTINATION_MANAGER", "SERVICE_PROVIDER"] }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

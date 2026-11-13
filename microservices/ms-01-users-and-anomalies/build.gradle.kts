@@ -23,6 +23,9 @@ dependencies {
     implementation(libs.spring.boot.validation)
     implementation(libs.spring.boot.flyway)
     implementation(libs.spring.boot.mail)
+    // starter y no spring-kafka suelto: sin el auto-configurador de Kafka no hay KafkaTemplate
+    // y el contexto de ms-01 no arranca cuando el publisher de B3 esta activo (lo vio el Stack CI).
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation(libs.spring.boot.actuator)
     implementation(libs.spring.boot.oauth2.resource.server)
     implementation(libs.springdoc.webflux.ui)
@@ -50,6 +53,15 @@ dependencies {
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.archunit.junit5)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// kafka-clients arrastra lz4-java y snappy-java con CVEs HIGH y sus versiones parcheadas no
+// estan publicadas; ms-01 no usa compresion Kafka, asi que se excluyen del classpath.
+configurations.configureEach {
+    // kafka-clients usa el fork at.yawk.lz4, no org.lz4.
+    exclude(group = "at.yawk.lz4", module = "lz4-java")
+    exclude(group = "org.lz4", module = "lz4-java")
+    exclude(group = "org.xerial.snappy", module = "snappy-java")
 }
 
 tasks.withType<Test> {

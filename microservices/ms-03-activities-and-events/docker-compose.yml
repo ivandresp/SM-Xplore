@@ -107,6 +107,10 @@ services:
       SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-false}
       SITE_EVENTS_GROUP: ${SITE_EVENTS_GROUP:-ms-03-site-snapshot}
       SITE_EVENTS_TIMEOUT: ${SITE_EVENTS_TIMEOUT:-PT10S}
+      # Cascada de B3: al bloquear un guia, ms-01 publica y ms-03 despublica sus actividades.
+      ACCOUNT_EVENTS_ENABLED: ${ACCOUNT_EVENTS_ENABLED:-true}
+      ACCOUNT_EVENTS_GROUP: ${ACCOUNT_EVENTS_GROUP:-ms-03-account-blocked}
+      ACCOUNT_EVENTS_TIMEOUT: ${ACCOUNT_EVENTS_TIMEOUT:-PT10S}
     healthcheck:
       test: ["CMD", "java", "-cp", "/app/healthcheck", "HealthCheck", "http://127.0.0.1:8082/actuator/health"]
       interval: 30s
