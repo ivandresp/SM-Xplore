@@ -1,7 +1,6 @@
 package com.smxplore.users.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
@@ -154,7 +153,10 @@ class ReviewRegistrationServiceTest {
 
         // B8-14: el estado terminal gana al motivo ausente; es 409, no 400.
         StepVerifier.create(service()
-                        .review(ADMIN_ID, guide.id(), new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, null)))
+                        .review(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, null)))
                 .expectError(InvalidStatusTransitionException.class)
                 .verify();
     }

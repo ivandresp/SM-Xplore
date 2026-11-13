@@ -74,8 +74,8 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
         // La gestora de destinos solo puede revocar el alta de un guía; no cambia estados a voluntad.
         if (command.actorRole() == Role.DESTINATION_MANAGER
                 && (newStatus != UserStatus.BLOQUEADO || target.role() != Role.GUIDE)) {
-            return Mono.error(new ForbiddenOperationException(
-                    "Una gestora de destinos solo puede revocar el alta de un guía"));
+            return Mono.error(
+                    new ForbiddenOperationException("Una gestora de destinos solo puede revocar el alta de un guía"));
         }
 
         boolean revokingApproved = newStatus == UserStatus.BLOQUEADO

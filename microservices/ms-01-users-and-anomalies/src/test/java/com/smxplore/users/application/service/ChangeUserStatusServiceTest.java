@@ -95,7 +95,8 @@ class ChangeUserStatusServiceTest {
                         .change(
                                 ADMIN_ID,
                                 guide.id(),
-                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, "Licencia vencida", Role.DESTINATION_MANAGER)))
+                                new ChangeUserStatusCommand(
+                                        UserStatus.BLOQUEADO, "Licencia vencida", Role.DESTINATION_MANAGER)))
                 .verifyComplete();
 
         assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
@@ -136,7 +137,10 @@ class ChangeUserStatusServiceTest {
         users.seed(tourist).seed(admin());
 
         StepVerifier.create(service()
-                        .change(ADMIN_ID, tourist.id(), new ChangeUserStatusCommand(UserStatus.BLOQUEADO, null, Role.ADMIN)))
+                        .change(
+                                ADMIN_ID,
+                                tourist.id(),
+                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, null, Role.ADMIN)))
                 .verifyComplete();
 
         assertThat(tourist.status()).isEqualTo(UserStatus.BLOQUEADO);
