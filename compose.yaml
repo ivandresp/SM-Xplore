@@ -74,7 +74,7 @@ services:
     image: ${MONGO_IMAGE:-mongo:8.2}
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 768m
+    mem_limit: 640m
     # Replica set de un solo nodo: ms-02 y ms-04 usan transacciones (outbox).
     # MS02-13 (riesgo aceptado): este MongoDB de desarrollo NO tiene autenticacion. Solo es
     # accesible desde 127.0.0.1 y desde la red interna `smxplore-stack`; no lo publiques fuera
@@ -229,7 +229,8 @@ services:
     image: smxplore/ms-01:local
     restart: unless-stopped
     logging: *default-logging
-    mem_limit: 640m
+    # spring-kafka suma memoria al arrancar; 768m evita el OOM del runner del stack CI.
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -266,7 +267,7 @@ services:
       # Clave compartida del endpoint interno de contactos (P2-9). En local es una clave de
       # desarrollo; el gateway bloquea /internal/** desde el exterior.
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
-      JDK_JAVA_OPTIONS: "-Xms64m -Xmx384m -XX:MaxDirectMemorySize=96m"
+      JDK_JAVA_OPTIONS: "-Xms64m -Xmx448m -XX:MaxDirectMemorySize=96m"
     volumes:
       # El perfil dev genera y persiste la pareja RSA de JWT aqui.
       - ms01_data:/app/.local
