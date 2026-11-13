@@ -69,7 +69,6 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
     private Mono<Void> review(
             UUID actorId, UUID targetId, ReviewRegistrationCommand command, boolean registrationScope) {
         RegistrationStatus decision = requireDecision(command.decision());
-        requireReasonForRejection(decision, command.reason());
 
         return transactions
                 .execute(Mono.defer(() -> users.findById(targetId)
@@ -109,17 +108,23 @@ public final class ReviewRegistrationService implements ReviewRegistrationUseCas
                     registrationScope ? new RegistrationNotFoundException() : new ValidationException(NOT_REVIEWABLE));
         }
         RegistrationStatus current = reviewable.registrationStatus();
-        if (current == decision) {
-            return Mono.error(
-                    new InvalidStatusTransitionException("El alta ya se encuentra en estado " + decision.name()));
-        }
-        // Aprobar es terminal: revocar un alta ya aprobada se hace cambiando el estado del usuario desde
-        // administración, no por revisión. Sin esto, dos gestoras con la lista cacheada se sobrescriben (la última
-        // gana, dos correos y authVersion re-evictada) y el contenido ya publicado acaba apuntando a un perfil que
-        // desaparece del catálogo.
-        if (current == RegistrationStatus.APROBADO) {
+        // La transición se comprueba antes que el motivo: un APROBADO que se intenta rechazar sin motivo es un 409
+        // (estado terminal), no un 400 de validación (B8-14). La regla vive en el enum.
+        if (!current.canTransitionTo(decision)) {
             return Mono.error(new InvalidStatusTransitionException(
-                    "El alta ya está aprobada; para revocarla cambia el estado del usuario desde administración"));
+                    current == RegistrationStatus.APROBADO
+                            ? "El alta ya está aprobada; para revocarla cambia el estado del usuario desde administración"
+                            : "El alta ya se encuentra en estado " + decision.name()));
+        }
+        requireReasonForRejection(decision, command.reason());
+        // Reabrir un rechazo exige motivo: una lista cacheada no debe revertir un rechazo reciente sin querer
+        // (B8-10).
+        if (current == RegistrationStatus.RECHAZADO
+                && decision == RegistrationStatus.APROBADO
+                && (command.reason() == null || command.reason().isBlank())) {
+            throw new FieldValidationException(
+                    "El motivo es obligatorio al reabrir un alta rechazada",
+                    Map.of("reason", "El motivo es obligatorio al reabrir un alta rechazada"));
         }
 
         Instant now = clock.instant();

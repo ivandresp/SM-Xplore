@@ -254,7 +254,7 @@ class PublicProfileTest {
         return client.patch()
                 .uri("/api/v1/admin/users/" + userId + "/status")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .body(Map.of("status", status))
+                .body(Map.of("status", status, "reason", "Revocación de prueba"))
                 .exchange((request, response) -> response.getStatusCode());
     }
 

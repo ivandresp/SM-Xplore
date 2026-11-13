@@ -9,5 +9,17 @@ package com.smxplore.users.domain.model;
 public enum RegistrationStatus {
     PENDIENTE,
     APROBADO,
-    RECHAZADO
+    RECHAZADO;
+
+    /**
+     * Una aprobación es terminal (para revocarla se cambia el estado del usuario, no el alta); un rechazo puede
+     * reabrirse con una nueva revisión. La regla vive aquí, no en el servicio, para que cualquier llamador la respete.
+     */
+    public boolean canTransitionTo(RegistrationStatus next) {
+        return switch (this) {
+            case PENDIENTE -> next == APROBADO || next == RECHAZADO;
+            case RECHAZADO -> next == APROBADO;
+            case APROBADO -> false;
+        };
+    }
 }
