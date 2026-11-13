@@ -1,7 +1,6 @@
 package com.smxplore.users.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.smxplore.users.application.dto.ReviewRegistrationCommand;
 import com.smxplore.users.application.port.out.RegistrationReviewNotifier;
@@ -96,16 +95,16 @@ class ReviewRegistrationServiceTest {
         Guia guide = guide();
         users.seed(guide).seed(admin());
 
-        // La regla se valida al construir el caso de uso, igual que la decision obligatoria: es un error de la
-        // peticion, no un fallo del flujo reactivo.
-        assertThatThrownBy(() -> service()
+        StepVerifier.create(service()
                         .review(
                                 ADMIN_ID,
                                 guide.id(),
                                 new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, "  ")))
-                .isInstanceOf(FieldValidationException.class)
-                .satisfies(validation -> assertThat(((FieldValidationException) validation).fieldErrors())
-                        .containsKey("reason"));
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(FieldValidationException.class);
+                    assertThat(((FieldValidationException) error).fieldErrors()).containsKey("reason");
+                })
+                .verify();
 
         assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.PENDIENTE);
         assertThat(decisions).isEmpty();
@@ -118,11 +117,48 @@ class ReviewRegistrationServiceTest {
         users.seed(guide).seed(admin());
 
         StepVerifier.create(service()
-                        .review(ADMIN_ID, guide.id(), new ReviewRegistrationCommand(RegistrationStatus.APROBADO, null)))
+                        .review(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.APROBADO, "Revisión manual")))
                 .verifyComplete();
 
         assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.APROBADO);
         assertThat(decisions).containsExactly(RegistrationStatus.APROBADO);
+        assertThat(reasons).containsExactly("Revisión manual");
+    }
+
+    @Test
+    void reopeningARejectedRegistrationWithoutAReasonIsAFieldValidationError() {
+        Guia guide = guide();
+        guide.changeRegistrationStatus(RegistrationStatus.RECHAZADO, NOW);
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .review(ADMIN_ID, guide.id(), new ReviewRegistrationCommand(RegistrationStatus.APROBADO, null)))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(FieldValidationException.class);
+                    assertThat(((FieldValidationException) error).fieldErrors()).containsKey("reason");
+                })
+                .verify();
+
+        assertThat(guide.registrationStatus()).isEqualTo(RegistrationStatus.RECHAZADO);
+    }
+
+    @Test
+    void rejectingAnApprovedRegistrationWithoutAReasonIsAConflictFirst() {
+        Guia guide = guide();
+        guide.changeRegistrationStatus(RegistrationStatus.APROBADO, NOW);
+        users.seed(guide).seed(admin());
+
+        // B8-14: el estado terminal gana al motivo ausente; es 409, no 400.
+        StepVerifier.create(service()
+                        .review(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ReviewRegistrationCommand(RegistrationStatus.RECHAZADO, null)))
+                .expectError(InvalidStatusTransitionException.class)
+                .verify();
     }
 
     @Test

@@ -126,12 +126,17 @@ public class AdminUserController {
 
     @PatchMapping("/{id}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    // La gestora de destinos puede revocar (bloquear) guías; el servicio limita el alcance.
+    @PreAuthorize("hasAnyRole('ADMIN','DESTINATION_MANAGER')")
     public Mono<Void> changeStatus(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
             @Valid @RequestBody ChangeUserStatusRequest request) {
         return changeUserStatus.change(
-                actorId(jwt), id, new ChangeUserStatusCommand(request.status(), request.reason()));
+                actorId(jwt),
+                id,
+                new ChangeUserStatusCommand(
+                        request.status(), request.reason(), Role.valueOf(jwt.getClaimAsString("role"))));
     }
 
     @PatchMapping("/{id}/role")

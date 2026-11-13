@@ -54,6 +54,7 @@ import com.smxplore.users.application.port.in.VerifyMfaLoginUseCase;
 import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AccountLockedNotifier;
+import com.smxplore.users.application.port.out.AccountRevokedNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
@@ -562,9 +563,11 @@ public class ApplicationConfig {
             UserRepository users,
             AuditTrailRecorder auditTrailRecorder,
             AuthVersionEvictor evictor,
+            AccountRevokedNotifier accountRevokedNotifier,
             TransactionPort transactions,
             Clock clock) {
-        return new ChangeUserStatusService(users, auditTrailRecorder, evictor, transactions, clock);
+        return new ChangeUserStatusService(
+                users, auditTrailRecorder, evictor, accountRevokedNotifier, transactions, clock);
     }
 
     @Bean
