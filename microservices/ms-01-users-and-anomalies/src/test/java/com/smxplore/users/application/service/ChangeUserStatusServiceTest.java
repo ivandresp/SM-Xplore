@@ -4,9 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.application.port.out.AccountEventPublisher;
+import com.smxplore.users.application.port.out.AccountRevokedNotifier;
+import com.smxplore.users.domain.exception.FieldValidationException;
+import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.model.Admin;
+import com.smxplore.users.domain.model.AuditAction;
 import com.smxplore.users.domain.model.Email;
+import com.smxplore.users.domain.model.Guia;
 import com.smxplore.users.domain.model.PasswordHash;
+import com.smxplore.users.domain.model.RegistrationStatus;
+import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.Turista;
 import com.smxplore.users.domain.model.UserStatus;
 import com.smxplore.users.domain.model.Usuario;
@@ -25,7 +32,10 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-/** B3: bloquear una cuenta publica users.account.blocked para que ms-03 despublique su contenido. */
+/**
+ * Revocación de una cuenta aprobada (B8-11) y cascada de bloqueo a ms-03 (B3): motivo obligatorio,
+ * correo, evento users.account.blocked, ADMIN y DESTINATION_MANAGER.
+ */
 class ChangeUserStatusServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-01-01T10:00:00Z");
@@ -39,6 +49,11 @@ class ChangeUserStatusServiceTest {
         blocked.add(target.id());
         return Mono.empty();
     };
+    private final List<String> revokedReasons = new ArrayList<>();
+    private final AccountRevokedNotifier notifier = (target, reason) -> {
+        revokedReasons.add(reason);
+        return Mono.empty();
+    };
 
     @Test
     void blockingAnAccountPublishesTheEvent() {
@@ -49,11 +64,12 @@ class ChangeUserStatusServiceTest {
                         .change(
                                 ADMIN_ID,
                                 tourist.id(),
-                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, "Incumplimiento")))
+                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, "Incumplimiento", Role.ADMIN)))
                 .verifyComplete();
 
         assertThat(tourist.status()).isEqualTo(UserStatus.BLOQUEADO);
         assertThat(blocked).containsExactly(tourist.id());
+        assertThat(revokedReasons).isEmpty();
     }
 
     @Test
@@ -62,12 +78,110 @@ class ChangeUserStatusServiceTest {
         tourist.changeStatus(UserStatus.BLOQUEADO, NOW);
         users.seed(tourist).seed(admin());
 
-        StepVerifier.create(
-                        service().change(ADMIN_ID, tourist.id(), new ChangeUserStatusCommand(UserStatus.ACTIVO, null)))
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                tourist.id(),
+                                new ChangeUserStatusCommand(UserStatus.ACTIVO, null, Role.ADMIN)))
                 .verifyComplete();
 
         assertThat(tourist.status()).isEqualTo(UserStatus.ACTIVO);
         assertThat(blocked).isEmpty();
+    }
+
+    @Test
+    void revokingAnApprovedGuideWithoutAReasonIsAValidationError() {
+        Guia guide = approvedGuide();
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, "  ", Role.ADMIN)))
+                .expectError(FieldValidationException.class)
+                .verify();
+
+        assertThat(guide.status()).isEqualTo(UserStatus.ACTIVO);
+        assertThat(revokedReasons).isEmpty();
+        assertThat(blocked).isEmpty();
+    }
+
+    @Test
+    void revokingAnApprovedGuideWithAReasonNotifiesAndAudits() {
+        Guia guide = approvedGuide();
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ChangeUserStatusCommand(
+                                        UserStatus.BLOQUEADO, "Incumplimiento de la licencia", Role.ADMIN)))
+                .verifyComplete();
+
+        assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
+        assertThat(revokedReasons).containsExactly("Incumplimiento de la licencia");
+        assertThat(evictor.evicted()).containsExactly(guide.id());
+        assertThat(blocked).containsExactly(guide.id());
+        assertThat(auditLog.saved())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.CUENTA_REVOCADA));
+    }
+
+    @Test
+    void aDestinationManagerCanRevokeAGuide() {
+        Guia guide = approvedGuide();
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ChangeUserStatusCommand(
+                                        UserStatus.BLOQUEADO, "Licencia vencida", Role.DESTINATION_MANAGER)))
+                .verifyComplete();
+
+        assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
+        assertThat(revokedReasons).containsExactly("Licencia vencida");
+        assertThat(blocked).containsExactly(guide.id());
+    }
+
+    @Test
+    void aDestinationManagerCannotActivateAccounts() {
+        Guia guide = approvedGuide();
+        guide.changeStatus(UserStatus.BLOQUEADO, NOW);
+        users.seed(guide).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                guide.id(),
+                                new ChangeUserStatusCommand(UserStatus.ACTIVO, "Reactivar", Role.DESTINATION_MANAGER)))
+                .expectError(ForbiddenOperationException.class)
+                .verify();
+
+        assertThat(guide.status()).isEqualTo(UserStatus.BLOQUEADO);
+    }
+
+    @Test
+    void anAdminCanBlockANonReviewableAccountWithoutAReason() {
+        Turista tourist = tourist();
+        users.seed(tourist).seed(admin());
+
+        StepVerifier.create(service()
+                        .change(
+                                ADMIN_ID,
+                                tourist.id(),
+                                new ChangeUserStatusCommand(UserStatus.BLOQUEADO, null, Role.ADMIN)))
+                .verifyComplete();
+
+        assertThat(tourist.status()).isEqualTo(UserStatus.BLOQUEADO);
+        assertThat(revokedReasons).isEmpty();
+        assertThat(blocked).containsExactly(tourist.id());
+        assertThat(auditLog.saved())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.action()).isEqualTo(AuditAction.ESTADO_CAMBIADO));
     }
 
     private ChangeUserStatusService service() {
@@ -76,6 +190,7 @@ class ChangeUserStatusServiceTest {
                 new AuditTrailRecorder(users, auditLog),
                 evictor,
                 events,
+                notifier,
                 new FakeTransactionPort(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -105,5 +220,21 @@ class ChangeUserStatusServiceTest {
                 "CC",
                 "1000000000",
                 NOW);
+    }
+
+    private static Guia approvedGuide() {
+        Guia guide = Guia.requestRegistration(
+                UUID.fromString("44444444-4444-4444-4444-444444444444"),
+                "Gina Guía",
+                new Email("guia@example.com"),
+                "3001234567",
+                new PasswordHash("hash"),
+                "CC",
+                "9876543210",
+                "LIC-001",
+                null,
+                NOW);
+        guide.changeRegistrationStatus(RegistrationStatus.APROBADO, NOW);
+        return guide;
     }
 }

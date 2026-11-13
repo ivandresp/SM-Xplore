@@ -55,6 +55,7 @@ import com.smxplore.users.application.port.out.AccountAttemptLimiter;
 import com.smxplore.users.application.port.out.AccountEventPublisher;
 import com.smxplore.users.application.port.out.AccountInvitationNotifier;
 import com.smxplore.users.application.port.out.AccountLockedNotifier;
+import com.smxplore.users.application.port.out.AccountRevokedNotifier;
 import com.smxplore.users.application.port.out.AnomalyRepository;
 import com.smxplore.users.application.port.out.AnomalyThresholdRepository;
 import com.smxplore.users.application.port.out.AuditLogRepository;
@@ -565,10 +566,11 @@ public class ApplicationConfig {
             AuditTrailRecorder auditTrailRecorder,
             AuthVersionEvictor evictor,
             AccountEventPublisher accountEventPublisher,
+            AccountRevokedNotifier accountRevokedNotifier,
             TransactionPort transactions,
             Clock clock) {
         return new ChangeUserStatusService(
-                users, auditTrailRecorder, evictor, accountEventPublisher, transactions, clock);
+                users, auditTrailRecorder, evictor, accountEventPublisher, accountRevokedNotifier, transactions, clock);
     }
 
     @Bean

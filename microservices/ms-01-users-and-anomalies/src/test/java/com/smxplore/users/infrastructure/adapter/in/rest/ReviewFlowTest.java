@@ -189,8 +189,9 @@ class ReviewFlowTest {
         assertThat(publicReviewsStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(summaryStatus("GUIDE", guideId)).isEqualTo(HttpStatus.NOT_FOUND);
 
-        // APROBADO: vuelve a admitir reseñas y a servir su feed.
-        assertThat(reviewGuide(adminToken, guideId, "APROBADO", null)).isEqualTo(HttpStatus.NO_CONTENT);
+        // APROBADO: vuelve a admitir reseñas y a servir su feed. Reabrir un rechazo exige motivo (B8-10).
+        assertThat(reviewGuide(adminToken, guideId, "APROBADO", "Revisión manual"))
+                .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(createReview(touristToken, guideId, "GUIDE", 5, "Excelente guía")
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);

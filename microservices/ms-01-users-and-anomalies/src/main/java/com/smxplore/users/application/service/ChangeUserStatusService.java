@@ -3,14 +3,18 @@ package com.smxplore.users.application.service;
 import com.smxplore.users.application.dto.ChangeUserStatusCommand;
 import com.smxplore.users.application.port.in.ChangeUserStatusUseCase;
 import com.smxplore.users.application.port.out.AccountEventPublisher;
+import com.smxplore.users.application.port.out.AccountRevokedNotifier;
 import com.smxplore.users.application.port.out.AuthVersionEvictor;
 import com.smxplore.users.application.port.out.TransactionPort;
 import com.smxplore.users.application.port.out.UserRepository;
+import com.smxplore.users.domain.exception.FieldValidationException;
 import com.smxplore.users.domain.exception.ForbiddenOperationException;
 import com.smxplore.users.domain.exception.InvalidStatusTransitionException;
 import com.smxplore.users.domain.exception.UserNotFoundException;
 import com.smxplore.users.domain.exception.ValidationException;
 import com.smxplore.users.domain.model.AuditAction;
+import com.smxplore.users.domain.model.RegistrationReviewable;
+import com.smxplore.users.domain.model.RegistrationStatus;
 import com.smxplore.users.domain.model.Role;
 import com.smxplore.users.domain.model.UserStatus;
 import com.smxplore.users.domain.model.Usuario;
@@ -27,6 +31,7 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
     private final AuditTrailRecorder audit;
     private final AuthVersionEvictor evictor;
     private final AccountEventPublisher events;
+    private final AccountRevokedNotifier revokedNotifier;
     private final TransactionPort transactions;
     private final Clock clock;
 
@@ -35,12 +40,14 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
             AuditTrailRecorder audit,
             AuthVersionEvictor evictor,
             AccountEventPublisher events,
+            AccountRevokedNotifier revokedNotifier,
             TransactionPort transactions,
             Clock clock) {
         this.users = users;
         this.audit = audit;
         this.evictor = evictor;
         this.events = events;
+        this.revokedNotifier = revokedNotifier;
         this.transactions = transactions;
         this.clock = clock;
     }
@@ -68,6 +75,21 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
             return Mono.error(
                     new InvalidStatusTransitionException("La cuenta ya se encuentra en estado " + newStatus.name()));
         }
+        // La gestora de destinos solo puede revocar el alta de un guía; no cambia estados a voluntad.
+        if (command.actorRole() == Role.DESTINATION_MANAGER
+                && (newStatus != UserStatus.BLOQUEADO || target.role() != Role.GUIDE)) {
+            return Mono.error(
+                    new ForbiddenOperationException("Una gestora de destinos solo puede revocar el alta de un guía"));
+        }
+
+        boolean revokingApproved = newStatus == UserStatus.BLOQUEADO
+                && target instanceof RegistrationReviewable reviewable
+                && reviewable.registrationStatus() == RegistrationStatus.APROBADO;
+        if (revokingApproved && (command.reason() == null || command.reason().isBlank())) {
+            return Mono.error(new FieldValidationException(
+                    "El motivo es obligatorio al revocar una cuenta aprobada",
+                    Map.of("reason", "El motivo es obligatorio al revocar una cuenta aprobada")));
+        }
 
         boolean wouldRemoveLastActiveAdmin =
                 target.role() == Role.ADMIN && target.isActive() && newStatus != UserStatus.ACTIVO;
@@ -84,9 +106,15 @@ public final class ChangeUserStatusService implements ChangeUserStatusUseCase {
             target.changeStatus(newStatus, now);
             return users.save(target)
                     .then(audit.record(
-                            actorId, AuditAction.ESTADO_CAMBIADO, target.id(), details(previousStatus, command), now))
+                            actorId,
+                            revokingApproved ? AuditAction.CUENTA_REVOCADA : AuditAction.ESTADO_CAMBIADO,
+                            target.id(),
+                            details(previousStatus, command),
+                            now))
                     // MS01-15: bloquear o suspender incrementa authVersion y debe cerrar la sesión al instante.
                     .then(evictor.evict(target.id()))
+                    // B2: el correo de revocación solo aplica cuando se revoca un alta aprobada.
+                    .then(revokingApproved ? revokedNotifier.notify(target, command.reason()) : Mono.empty())
                     // Cascada B3: ms-03 despublica el contenido del usuario bloqueado.
                     .then(newStatus == UserStatus.BLOQUEADO ? events.accountBlocked(target) : Mono.empty())
                     .thenReturn(target);
