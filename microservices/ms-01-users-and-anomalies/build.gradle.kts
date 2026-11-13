@@ -53,6 +53,13 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// kafka-clients arrastra lz4-java y snappy-java con CVEs HIGH y sus versiones parcheadas no
+// estan publicadas; ms-01 no usa compresion Kafka, asi que se excluyen del classpath.
+configurations.configureEach {
+    exclude(group = "org.lz4", module = "lz4-java")
+    exclude(group = "org.xerial.snappy", module = "snappy-java")
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
 }

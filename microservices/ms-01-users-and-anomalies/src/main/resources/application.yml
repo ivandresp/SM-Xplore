@@ -37,6 +37,10 @@ server:
 # Configuración base fail-closed: la imagen que se despliega no trae valores de desarrollo.
 # Los valores cómodos para trabajar en local viven en application-dev.yml (perfil "dev").
 management:
+  health:
+    # El publisher de B3 es best effort: el health de ms-01 no debe depender de Kafka.
+    kafka:
+      enabled: false
   endpoints:
     web:
       exposure:
