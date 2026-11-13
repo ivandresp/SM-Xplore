@@ -354,6 +354,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OUTBOX_ENABLED: "true"
       SITE_EVENTS_ENABLED: ${SITE_EVENTS_ENABLED:-true}
+      # B3: sin esta bandera ms-03 no escucha users.account.blocked y la cascada del
+      # bloqueo de guia no ocurre en el stack (el default del servicio es false).
+      ACCOUNT_EVENTS_ENABLED: ${ACCOUNT_EVENTS_ENABLED:-true}
       REVIEW_AI_FAIL_OPEN: ${REVIEW_AI_FAIL_OPEN:-false}
       # Solo local: ms-03 exige HTTPS para un JWKS remoto; dentro de Compose el emisor
       # se alcanza por HTTP en la red privada.
