@@ -23,7 +23,9 @@ dependencies {
     implementation(libs.spring.boot.validation)
     implementation(libs.spring.boot.flyway)
     implementation(libs.spring.boot.mail)
-    implementation("org.springframework.kafka:spring-kafka")
+    // starter y no spring-kafka suelto: sin el auto-configurador de Kafka no hay KafkaTemplate
+    // y el contexto de ms-01 no arranca cuando el publisher de B3 esta activo (lo vio el Stack CI).
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation(libs.spring.boot.actuator)
     implementation(libs.spring.boot.oauth2.resource.server)
     implementation(libs.springdoc.webflux.ui)

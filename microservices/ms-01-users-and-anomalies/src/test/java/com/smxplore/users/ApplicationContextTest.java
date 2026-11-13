@@ -17,7 +17,12 @@ import reactor.core.publisher.Mono;
 @TestPropertySource(
         properties = {
             "spring.flyway.enabled=false",
-            "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
+            "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+            // B3: el publisher de users.account.blocked queda apagado en application-test.yml para
+            // que los flujos no intenten hablar con Kafka. Este contexto lo enciende a proposito:
+            // si falta el auto-configurador (spring-boot-starter-kafka) o el ObjectMapper de
+            // Jackson 3, el contexto no arranca y el fallo se ve aqui y no en el Stack CI.
+            "app.events.account-publisher.enabled=true"
         })
 class ApplicationContextTest {
 
