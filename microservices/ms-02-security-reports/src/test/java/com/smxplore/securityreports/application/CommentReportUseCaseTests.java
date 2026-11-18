@@ -21,9 +21,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * MS02-02: solo el autor del reporte o el staff pueden comentarlo, y solo mientras no este resuelto.
- */
 class CommentReportUseCaseTests {
 
     private final CommentRepositoryPort commentRepository = mock(CommentRepositoryPort.class);
@@ -35,7 +32,7 @@ class CommentReportUseCaseTests {
         var comment = validComment();
         when(securityReportRepository.findById(comment.getReportId())).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> useCase.handle(comment, false).block())
+        assertThatThrownBy(() -> useCase.handle(comment).block())
                 .isInstanceOf(ReportNotFoundException.class);
 
         verifyNoInteractions(commentRepository);
@@ -48,36 +45,20 @@ class CommentReportUseCaseTests {
                 .thenReturn(Mono.just(reportOf(comment.getReportId(), comment.getUser())));
         when(commentRepository.save(comment)).thenReturn(Mono.just(comment));
 
-        assertThat(useCase.handle(comment, false).block()).isSameAs(comment);
+        assertThat(useCase.handle(comment).block()).isSameAs(comment);
 
         verify(commentRepository).save(comment);
     }
 
-    /**
-     * MS02-10: un reporte ajeno se responde igual que uno inexistente para no filtrar su existencia.
-     */
     @Test
-    void rejectsCommentFromAnotherNonStaffUserAsIfTheReportDidNotExist() {
-        var comment = validComment();
-        var anotherAuthor = new UserRef(UUID.randomUUID(), "Otra persona");
-        when(securityReportRepository.findById(comment.getReportId()))
-                .thenReturn(Mono.just(reportOf(comment.getReportId(), anotherAuthor)));
-
-        assertThatThrownBy(() -> useCase.handle(comment, false).block())
-                .isInstanceOf(ReportNotFoundException.class);
-
-        verifyNoInteractions(commentRepository);
-    }
-
-    @Test
-    void letsStaffCommentAnyReport() {
+    void allowsCommentingOnAnotherUsersReport() {
         var comment = validComment();
         var anotherAuthor = new UserRef(UUID.randomUUID(), "Otra persona");
         when(securityReportRepository.findById(comment.getReportId()))
                 .thenReturn(Mono.just(reportOf(comment.getReportId(), anotherAuthor)));
         when(commentRepository.save(comment)).thenReturn(Mono.just(comment));
 
-        assertThat(useCase.handle(comment, true).block()).isSameAs(comment);
+        assertThat(useCase.handle(comment).block()).isSameAs(comment);
 
         verify(commentRepository).save(comment);
     }
@@ -90,7 +71,7 @@ class CommentReportUseCaseTests {
                 .build();
         when(securityReportRepository.findById(comment.getReportId())).thenReturn(Mono.just(solved));
 
-        assertThatThrownBy(() -> useCase.handle(comment, false).block())
+        assertThatThrownBy(() -> useCase.handle(comment).block())
                 .isInstanceOf(InvalidStatusTransitionException.class)
                 .hasMessageContaining("solved");
 
@@ -99,7 +80,7 @@ class CommentReportUseCaseTests {
 
     @Test
     void rejectsANullComment() {
-        assertThatThrownBy(() -> useCase.handle(null, false).block())
+        assertThatThrownBy(() -> useCase.handle(null).block())
                 .isInstanceOf(InvalidCommentException.class);
     }
 

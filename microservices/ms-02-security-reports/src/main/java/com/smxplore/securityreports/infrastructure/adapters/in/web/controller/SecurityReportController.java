@@ -13,7 +13,6 @@ import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.Securi
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.CorrelationIdResolver;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
-import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import com.smxplore.securityreports.infrastructure.config.JwtProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,7 +49,6 @@ public class SecurityReportController {
     private final PageResponseMapper pageResponseMapper;
     private final JwtUserResolver jwtUserResolver;
     private final JwtProperties jwtProperties;
-    private final ReportAccessGuard reportAccessGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -79,18 +77,15 @@ public class SecurityReportController {
     }
 
     @GetMapping("/{reportId}")
-    @Operation(summary = "Get one security report by id (its author or staff)")
-    public Mono<SecurityReportResponse> findOne(@PathVariable UUID reportId,
-                                                @AuthenticationPrincipal Jwt jwt) {
-        return reportAccessGuard.requireAuthorOrStaff(jwt, reportId)
-                .then(Mono.defer(() -> consultOneReportUseCase.handle(reportId)))
-                .map(mapper::toResponse);
+    @Operation(summary = "Get one security report by id")
+    public Mono<SecurityReportResponse> findOne(@PathVariable UUID reportId) {
+        return consultOneReportUseCase.handle(reportId).map(mapper::toResponse);
     }
 
     @GetMapping
-    @Operation(summary = "List security reports by status using cursor-based pagination")
-    public Mono<PageResponse<SecurityReportResponse>> findByStatus(
-            @RequestParam SecurityReportStatus status,
+    @Operation(summary = "List security reports using cursor-based pagination and an optional status filter")
+    public Mono<PageResponse<SecurityReportResponse>> findReports(
+            @RequestParam(required = false) SecurityReportStatus status,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int size) {
         var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
@@ -109,9 +104,7 @@ public class SecurityReportController {
     public Mono<PageResponse<SecurityReportResponse>> findByUser(
             @PathVariable UUID userId,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") int size,
-            @AuthenticationPrincipal Jwt jwt) {
-        requireSelfOrStaff(jwt, userId);
+            @RequestParam(defaultValue = "20") int size) {
         var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
         return consultReportsByUserUseCase.handle(userId, pageRequest)
                 .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
@@ -174,13 +167,6 @@ public class SecurityReportController {
         var role = UserRole.fromClaimOrNull(jwt == null ? null : jwt.getClaimAsString(
                 jwtProperties.getRoleClaim()));
         return UserRole.ADMIN == role || UserRole.DESTINATION_MANAGER == role;
-    }
-
-    private void requireSelfOrStaff(Jwt jwt, UUID userId) {
-        if (!isAdminOrManager(jwt) && !jwtUserResolver.subjectId(jwt).equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only the user themselves or staff can list these reports.");
-        }
     }
 
     private Mono<Void> requireReportAuthorOrStaff(Jwt jwt, UUID reportId) {

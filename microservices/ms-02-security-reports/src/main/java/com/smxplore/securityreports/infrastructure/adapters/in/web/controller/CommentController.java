@@ -8,7 +8,6 @@ import com.smxplore.securityreports.infrastructure.adapters.in.web.dto.PageRespo
 import com.smxplore.securityreports.infrastructure.adapters.in.web.mapper.SecurityReportWebMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.pagination.PageResponseMapper;
 import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
-import com.smxplore.securityreports.infrastructure.adapters.in.web.security.ReportAccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,29 +31,26 @@ public class CommentController {
     private final SecurityReportWebMapper mapper;
     private final PageResponseMapper pageResponseMapper;
     private final JwtUserResolver jwtUserResolver;
-    private final ReportAccessGuard reportAccessGuard;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Comment a security report (its author or staff; the author is taken from the token)")
+    @Operation(summary = "Comment a security report (the commenter is taken from the token)")
     public Mono<CommentResponse> comment(@PathVariable UUID reportId,
                                          @Valid @RequestBody CommentRequest request,
                                          @AuthenticationPrincipal Jwt jwt) {
         var user = jwtUserResolver.resolve(jwt);
         var comment = mapper.toDomain(request).toBuilder().reportId(reportId).user(user).build();
-        return commentReportUseCase.handle(comment, reportAccessGuard.isStaff(jwt)).map(mapper::toResponse);
+        return commentReportUseCase.handle(comment).map(mapper::toResponse);
     }
 
     @GetMapping
-    @Operation(summary = "List the comments of a security report (its author or staff)")
+    @Operation(summary = "List the comments of a security report")
     public Mono<PageResponse<CommentResponse>> findComments(
             @PathVariable UUID reportId,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") int size,
-            @AuthenticationPrincipal Jwt jwt) {
+            @RequestParam(defaultValue = "20") int size) {
         var pageRequest = pageResponseMapper.toPageRequest(cursor, size);
-        return reportAccessGuard.requireAuthorOrStaff(jwt, reportId)
-                .then(Mono.defer(() -> consultReportCommentsUseCase.handle(reportId, pageRequest)))
+        return consultReportCommentsUseCase.handle(reportId, pageRequest)
                 .map(page -> pageResponseMapper.toResponse(page, mapper::toResponse));
     }
 }

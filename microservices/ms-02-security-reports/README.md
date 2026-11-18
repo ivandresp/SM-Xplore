@@ -187,9 +187,10 @@ si falta cualquiera de las condiciones. `application-local.yaml` contiene el con
 - Solo se acepta RS256; el token lo emite ms-01. Los códigos de rol en inglés son los únicos que se emiten; los alias en español (`TURISTA`, `GUIA`, `PRESTADORA_SERVICIOS`, `GESTORA_DESTINOS`) se siguen leyendo mientras expiran los tokens anteriores a `V10`.
 - El `issuer` (`iss`) debe ser `sm-xplore-ms-01` y la audiencia `sm-xplore-services`.
 - Los roles usados son los códigos en inglés: `ADMIN`, `DESTINATION_MANAGER`, `GUIDE`, `SERVICE_PROVIDER`, `TOURIST`.
-- `GET /security-reports` (listado global por estado) y `/counts` requieren `ADMIN` o `DESTINATION_MANAGER`; cerrar y resolver también.
+- Con un JWT válido se puede consultar `GET /security-reports` y `GET /security-reports/{reportId}`. El listado acepta `status` como filtro opcional, además de `size` y `cursor`. Para ver solo tus reportes, usa `GET /security-reports/by-user/{userId}` con tu ID.
+- El cierre y la resolución de reportes requieren el rol `ADMIN` o `DESTINATION_MANAGER`.
 - Los usuarios solo pueden modificar sus propios reportes, salvo staff.
-- El detalle de un reporte (`GET /security-reports/{reportId}`) y sus comentarios solo los ve su autor o el staff (`ADMIN`/`DESTINATION_MANAGER`): sin ese control cualquier usuario autenticado leía el título, la descripción, las fotos y el denunciante de un incidente.
+- Los usuarios autenticados pueden consultar el catálogo, el detalle, los conteos, el listado por usuario y los comentarios. El catálogo y el detalle incluyen descripción, autor y URLs de fotos.
 - `GET /security-reports/nearby` solo devuelve la proyección anonimizada (`id`, `title`, `status`, coordenadas con 3 decimales, fechas): ni el denunciante, ni la descripción, ni las fotos, ni siquiera al autor o al staff; y acota `size` ≤ 50 y `radiusKm` ≤ 20 km (MS02-01).
 - Los tokens con `scope=mfa` se rechazan: son desafíos de segundo factor, no tokens de acceso.
 - La llave pública se obtiene del JWKS de ms-01 o de un PEM local; nunca se comparte una llave privada.
@@ -197,9 +198,7 @@ si falta cualquiera de las condiciones. `application-local.yaml` contiene el con
 
 ### Comentarios (MS02-02)
 
-Solo el autor del reporte o el staff (`ADMIN`/`DESTINATION_MANAGER`) puede comentarlo, y no se admiten comentarios
-en reportes `SOLVED`. La regla se aplica en el caso de uso, después de cargar el reporte; un reporte ajeno responde
-`404` igual que uno inexistente (MS02-10) y un reporte resuelto `409`.
+Cualquier usuario autenticado puede comentar un reporte. Un reporte inexistente devuelve `404` y un reporte resuelto devuelve `409` al intentar publicar un comentario.
 
 ### Límite de escrituras (MS02-03)
 
@@ -261,9 +260,7 @@ baja a 7 días porque el payload contiene datos del reporte.
 
 ### Sin oráculo de existencia (MS02-10)
 
-Un reporte ajeno responde igual que uno inexistente: `404` en detalle, `PATCH /content`, `/photos` y comentarios;
-el staff sigue viendo cualquier reporte. Así no se puede enumerar qué IDs existen probando respuestas `403` vs
-`404` con tokens autenticados.
+`PATCH /content` y `/photos` devuelven `404` si el usuario no es el autor ni pertenece al staff. Consultar un reporte inexistente devuelve `404`.
 
 ### Coordenadas finitas (MS02-11)
 
