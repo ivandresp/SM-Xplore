@@ -18,6 +18,7 @@ public record EventResponse(
         Instant startsAt,
         Instant endsAt,
         String description,
+        String portraitUrl,
         int expectedAttendance
 ) {
 }

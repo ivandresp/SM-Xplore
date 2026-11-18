@@ -241,9 +241,10 @@ class ActivityControllerTest {
                 .name("City Walking Tour Deluxe")
                 .price(new BigDecimal("95000.00"))
                 .description("Updated description.")
+                .portraitUrl("https://example.com/activity.jpg")
                 .build();
         given(updateActivityUseCase.handle(id, "City Walking Tour Deluxe", "Tour",
-                "Updated description.", new BigDecimal("95000.00")))
+                "Updated description.", new BigDecimal("95000.00"), "https://example.com/activity.jpg"))
                 .willReturn(Mono.just(updated));
 
         webTestClient.patch().uri("/api/v1/activities/{activityId}", id)
@@ -253,13 +254,15 @@ class ActivityControllerTest {
                           "name": "City Walking Tour Deluxe",
                           "category": "Tour",
                           "description": "Updated description.",
-                          "price": 95000.00
+                          "price": 95000.00,
+                          "portraitUrl": "https://example.com/activity.jpg"
                         }
                         """)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.name").isEqualTo("City Walking Tour Deluxe");
+                .jsonPath("$.name").isEqualTo("City Walking Tour Deluxe")
+                .jsonPath("$.portraitUrl").isEqualTo("https://example.com/activity.jpg");
     }
 
     @Test
@@ -561,7 +564,7 @@ class ActivityControllerTest {
         given(viewActivityDetailsUseCase.handle(id)).willReturn(Mono.just(activity));
         given(siteCatalog.findByManagerId(eq(managerId), anyString()))
                 .willReturn(Flux.just(new SiteCatalogPort.SiteSnapshot(siteId, managerId, "Bahia")));
-        given(updateActivityUseCase.handle(id, "Renamed", "Tour", "Own site.", new BigDecimal("1000")))
+        given(updateActivityUseCase.handle(id, "Renamed", "Tour", "Own site.", new BigDecimal("1000"), null))
                 .willReturn(Mono.just(activity.toBuilder().name("Renamed").build()));
 
         managerClient(managerId).patch().uri("/api/v1/activities/{activityId}", id)

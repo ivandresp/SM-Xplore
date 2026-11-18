@@ -72,8 +72,8 @@ public class ActivityUseCaseConfiguration {
                                                            OutboxPublisher publisher,
                                                            TransactionalOperator transactionalOperator) {
         var useCase = new UpdateActivityUseCase(activityRepository, activityEvents, publisher);
-        return (activityId, name, category, description, price) -> transactionalOperator
-                .transactional(useCase.handle(activityId, name, category, description, price));
+        return (activityId, name, category, description, price, portraitUrl) -> transactionalOperator
+                .transactional(useCase.handle(activityId, name, category, description, price, portraitUrl));
     }
 
     @Bean

@@ -20,6 +20,7 @@ public record EventRequest(
         @NotNull @Positive Integer maxCapacity,
         @NotNull Instant startsAt,
         @NotNull Instant endsAt,
-        String description
+        String description,
+        String portraitUrl
 ) {
 }

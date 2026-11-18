@@ -173,7 +173,7 @@ class ActivityTest {
     void shouldUpdateDetails() {
         Activity activity = validActivity();
 
-        activity.updateDetails("Sunset Kayak Tour", "Nautical", "New description", new BigDecimal("99999.00"));
+        activity.updateDetails("Sunset Kayak Tour", "Nautical", "New description", new BigDecimal("99999.00"), null);
 
         assertEquals("Sunset Kayak Tour", activity.getName());
         assertEquals("Nautical", activity.getCategory());

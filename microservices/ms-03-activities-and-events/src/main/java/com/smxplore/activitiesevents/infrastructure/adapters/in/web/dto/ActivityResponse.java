@@ -18,6 +18,7 @@ public record ActivityResponse(
         Integer durationMinutes,
         Instant startsAt,
         Instant endsAt,
-        String description
+        String description,
+        String portraitUrl
 ) {
 }

@@ -40,6 +40,7 @@ public class Activity {
     private Instant startsAt;
     private Instant endsAt;
     private String description;
+    private String portraitUrl;
 
     /** Se reescribe en cada escritura; alimenta el feed de exportacion del catalogo (P0-1). */
     private Instant updatedAt;
@@ -54,7 +55,7 @@ public class Activity {
         validateSchedule(startsAt, endsAt);
     }
 
-    public void updateDetails(String name, String category, String description, BigDecimal price) {
+    public void updateDetails(String name, String category, String description, BigDecimal price, String portraitUrl) {
         requireMutable();
         validateName(name);
         validateCategory(category);
@@ -63,6 +64,9 @@ public class Activity {
         this.category = category;
         this.description = description;
         this.price = price;
+        if (portraitUrl != null) {
+            this.portraitUrl = portraitUrl;
+        }
     }
 
     public void updateSchedule(Instant startsAt, Instant endsAt) {

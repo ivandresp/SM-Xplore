@@ -44,6 +44,7 @@ public class Event {
     private Instant startsAt;
     private Instant endsAt;
     private String description;
+    private String portraitUrl;
 
     @Builder.Default
     private int expectedAttendance = 0;

@@ -11,6 +11,7 @@ public record UpdateActivityRequest(
         @NotBlank @Size(max = 150) String name,
         @NotBlank @Size(max = 50) String category,
         String description,
-        @NotNull @DecimalMin(value = "0.0") BigDecimal price
+        @NotNull @DecimalMin(value = "0.0") BigDecimal price,
+        String portraitUrl
 ) {
 }
