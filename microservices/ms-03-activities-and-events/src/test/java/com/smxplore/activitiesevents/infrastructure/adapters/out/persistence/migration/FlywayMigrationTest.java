@@ -303,6 +303,11 @@ class FlywayMigrationTest {
         var reservationId = UUID.randomUUID();
         try (var connection = connection(); var statement = connection.createStatement()) {
             insertActivity(connection, activityId);
+            try (var update = connection.prepareStatement("UPDATE actividad SET portrait_url = ? WHERE id = ?")) {
+                update.setString(1, "https://example.com/activity.jpg");
+                update.setObject(2, activityId);
+                update.executeUpdate();
+            }
             statement.execute("""
                     INSERT INTO reservations (id, tourist_id, item_type, item_id, item_starts_at, unit_price,
                                               number_of_people, total, payment_method, status, booked_at, booked_for)
@@ -321,6 +326,9 @@ class FlywayMigrationTest {
         try (var connection = connection()) {
             assertThat(count(connection, "reservations")).isEqualTo(1);
             assertThat(count(connection, "reservations_quarantine")).isZero();
+            assertThat(countWhere(connection, "actividad", "portrait_url = 'https://example.com/activity.jpg'"))
+                    .isEqualTo(1);
+            assertThat(columnExists(connection, "evento", "portrait_url")).isTrue();
         }
     }
 
