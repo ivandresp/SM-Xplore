@@ -9,12 +9,21 @@ ENV GRADLE_USER_HOME=/workspace/.gradle-home
 # Primero sólo el build: así la descarga de Gradle y de los plugins queda en una capa cacheable.
 COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
-RUN chmod +x gradlew && ./gradlew --no-daemon --console=plain help
+RUN chmod +x gradlew \
+    && for attempt in 1 2 3 4 5; do \
+        ./gradlew --no-daemon --console=plain help && break; \
+        if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+        sleep $((attempt * 15)); \
+    done
 
 COPY src ./src
 COPY healthcheck ./healthcheck
 RUN javac -d /workspace/healthcheck/classes /workspace/healthcheck/HealthCheck.java
-RUN ./gradlew --no-daemon --console=plain bootJar \
+RUN for attempt in 1 2 3 4 5; do \
+        ./gradlew --no-daemon --console=plain bootJar && break; \
+        if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+        sleep $((attempt * 15)); \
+    done \
     && JAR="$(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -print -quit)" \
     && cp "$JAR" /workspace/app.jar
 
