@@ -16,6 +16,9 @@ import com.smxplore.sitesandservices.domain.ports.out.ServiceRepositoryPort;
 import com.smxplore.sitesandservices.domain.ports.out.SiteRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -32,7 +35,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * MS04-01: la taxonomia global de categorias es solo de ADMIN y el arbol de padres no admite
+ * Crear categorias permite ADMIN y DESTINATION_MANAGER; editar sigue siendo solo ADMIN. El arbol no admite
  * ciclos ni padres inexistentes. Estos tests no necesitan Docker.
  */
 class CategoryTaxonomyServiceTest {
@@ -80,35 +83,38 @@ class CategoryTaxonomyServiceTest {
                 outboxWriter, eventFactory, CLOCK);
     }
 
-    @Test
-    void managerCannotCreateCategories() {
+    @ParameterizedTest
+    @EnumSource(value = UserRole.class, names = {"GUIDE", "SERVICE_PROVIDER", "TOURIST"})
+    void unauthorizedRolesCannotCreateBeforeAnyIo(UserRole role) {
         Category request = Category.builder()
                 .name("Naturaleza")
                 .scope(CategoryScope.GENERAL)
+                .parentId(PARENT_ID)
                 .build();
 
-        StepVerifier.create(createService.handle(request, manager, "corr-1"))
-                .expectErrorSatisfies(error -> assertThat(error)
-                        .isInstanceOf(ForbiddenOperationException.class)
-                        .hasMessageContaining("global category taxonomy"))
+        StepVerifier.create(createService.handle(request, new Actor(MANAGER_ID, role, "User"), "corr-1"))
+                .expectError(ForbiddenOperationException.class)
                 .verify();
 
-        verifyNoInteractions(categoryRepository);
+        verifyNoInteractions(categoryRepository, siteRepository, serviceRepository, lookup, outboxWriter);
     }
 
-    @Test
-    void adminCreatesCategories() {
-        Category request = Category.builder()
-                .name("Naturaleza")
-                .scope(CategoryScope.GENERAL)
-                .build();
+    @ParameterizedTest
+    @CsvSource({
+            "ADMIN,GENERAL", "ADMIN,SITE", "ADMIN,EVENT", "ADMIN,ACTIVITY", "ADMIN,SERVICE",
+            "DESTINATION_MANAGER,GENERAL", "DESTINATION_MANAGER,SITE", "DESTINATION_MANAGER,EVENT",
+            "DESTINATION_MANAGER,ACTIVITY", "DESTINATION_MANAGER,SERVICE"
+    })
+    void authorizedRolesCreateCategoriesInEveryScope(UserRole role, CategoryScope scope) {
+        Category request = Category.builder().name("Naturaleza").scope(scope).build();
+        Actor actor = new Actor(ADMIN_ID, role, "User");
 
-        Category created = createService.handle(request, admin, "corr-2").block();
+        Category created = createService.handle(request, actor, "corr-2").block();
 
         assertThat(created).isNotNull();
         assertThat(created.categoryId()).isNotNull();
         assertThat(created.name()).isEqualTo("Naturaleza");
-        assertThat(created.scope()).isEqualTo(CategoryScope.GENERAL);
+        assertThat(created.scope()).isEqualTo(scope);
         assertThat(created.updatedAt()).isEqualTo(CLOCK.instant());
         verify(categoryRepository).save(any(Category.class));
     }

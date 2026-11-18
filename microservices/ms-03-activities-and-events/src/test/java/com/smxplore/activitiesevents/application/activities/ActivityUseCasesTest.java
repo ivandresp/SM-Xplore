@@ -116,11 +116,12 @@ class ActivityUseCasesTest {
         activityRepo.save(validActivity(id)).block();
 
         Activity updated = Objects.requireNonNull(updateActivity.handle(id, "Sunset Kayak", "Nautical",
-                "New description", new BigDecimal("99999.00")).block());
+                "New description", new BigDecimal("99999.00"), "https://example.com/activity.jpg").block());
 
         assertEquals("Sunset Kayak", updated.getName());
         assertEquals("Nautical", updated.getCategory());
         assertEquals("New description", updated.getDescription());
+        assertEquals("https://example.com/activity.jpg", updated.getPortraitUrl());
         assertEquals(new BigDecimal("99999.00"), updated.getPrice());
     }
 
@@ -128,7 +129,7 @@ class ActivityUseCasesTest {
     void shouldFailUpdateWhenActivityDoesNotExist() {
         assertThrows(ActivityNotFoundException.class,
                 () -> updateActivity.handle(UUID.randomUUID(), "Name", "Category", "Desc",
-                        new BigDecimal("1000.00")).block());
+                        new BigDecimal("1000.00"), null).block());
     }
 
     @Test

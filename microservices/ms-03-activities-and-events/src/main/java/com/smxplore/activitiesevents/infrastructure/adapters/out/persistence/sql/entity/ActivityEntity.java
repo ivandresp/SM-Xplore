@@ -22,6 +22,7 @@ public record ActivityEntity(
         @Column("starts_at") Instant startsAt,
         @Column("ends_at") Instant endsAt,
         String description,
+        @Column("portrait_url") String portraitUrl,
         @Column("updated_at") Instant updatedAt
 ) {
 }

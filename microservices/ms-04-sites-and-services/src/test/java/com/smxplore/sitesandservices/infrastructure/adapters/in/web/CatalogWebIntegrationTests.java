@@ -593,22 +593,13 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
     }
 
     /**
-     * MS04-01: la taxonomia global es solo de ADMIN (regla HTTP + defensa en profundidad)
+     * Crear permite ADMIN y DESTINATION_MANAGER; editar sigue siendo solo ADMIN
      * y el arbol de categorias no admite ciclos ni padres inexistentes.
      */
     @Test
-    void categoryTaxonomyIsAdminOnlyAndRejectsCycles() {
+    void categoryUpdatesRemainAdminOnlyAndRejectCycles() {
         UUID adminId = UUID.randomUUID();
         UUID managerId = UUID.randomUUID();
-
-        clientFor(managerId, "DESTINATION_MANAGER")
-                .post().uri("/api/v1/categories")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("""
-                        {"name":"Taxonomía gestora","scope":"GENERAL","parentId":null}
-                        """)
-                .exchange()
-                .expectStatus().isForbidden();
 
         UUID parentId = createCategory(adminId).categoryId();
         UUID childId = createChildCategory(adminId, parentId);
@@ -648,6 +639,37 @@ class CatalogWebIntegrationTests extends AbstractMongoPostgresIntegrationTest {
                         """.formatted(UUID.randomUUID()))
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void categoryCreationAllowsAdminsAndManagersForEveryScopeButRejectsOtherRoles() {
+        for (String role : List.of("ADMIN", "DESTINATION_MANAGER")) {
+            for (String scope : List.of("GENERAL", "SITE", "EVENT", "ACTIVITY", "SERVICE")) {
+                CategoryResponse created = clientFor(UUID.randomUUID(), role)
+                        .post().uri("/api/v1/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue("{\"name\":\"Nueva categoría\",\"scope\":\"" + scope + "\"}")
+                        .exchange()
+                        .expectStatus().isCreated()
+                        .expectBody(CategoryResponse.class).returnResult().getResponseBody();
+                assertThat(created).isNotNull();
+                assertThat(created.scope().name()).isEqualTo(scope);
+                // No dejar eventos de esta matriz en el lote compartido de los tests del relay.
+                mongoTemplate.remove(Query.query(Criteria.where("aggregateId")
+                                .is(created.categoryId().toString())), OutboxEventDocument.class).block();
+            }
+        }
+        for (String role : List.of("TOURIST", "GUIDE", "SERVICE_PROVIDER")) {
+            clientFor(UUID.randomUUID(), role)
+                    .post().uri("/api/v1/categories")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"name\":\"Prohibida\",\"scope\":\"GENERAL\"}")
+                    .exchange().expectStatus().isForbidden();
+        }
+        webTestClient.post().uri("/api/v1/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"name\":\"Anónima\",\"scope\":\"GENERAL\"}")
+                .exchange().expectStatus().isUnauthorized();
     }
 
     private UUID createChildCategory(UUID adminId, UUID parentId) {

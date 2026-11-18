@@ -1,0 +1,2 @@
+ALTER TABLE actividad ADD COLUMN IF NOT EXISTS portrait_url TEXT;
+ALTER TABLE evento ADD COLUMN IF NOT EXISTS portrait_url TEXT;

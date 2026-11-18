@@ -163,7 +163,8 @@ public class ActivityController {
                                          @Valid @RequestBody UpdateActivityRequest request,
                                          @AuthenticationPrincipal Jwt jwt) {
         return accessGuard.requireCanManage(activityId, jwt)
-                .then(Mono.defer(() -> updateActivityUseCase.handle(activityId, request.name(), request.category(), request.description(), request.price())))
+                .then(Mono.defer(() -> updateActivityUseCase.handle(activityId, request.name(), request.category(), request.description(), request.price(),
+                        request.portraitUrl())))
                 .map(mapper::toResponse);
     }
 

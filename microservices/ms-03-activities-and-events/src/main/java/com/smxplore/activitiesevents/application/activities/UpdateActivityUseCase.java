@@ -22,17 +22,17 @@ public class UpdateActivityUseCase implements UpdateActivityUseCasePort {
     private final OutboxPublisher publisher;
 
     @Override
-    public Mono<Activity> handle(UUID activityId, String name, String category, String description, BigDecimal price) {
+    public Mono<Activity> handle(UUID activityId, String name, String category, String description, BigDecimal price, String portraitUrl) {
         return activityRepo.findById(activityId)
                 .switchIfEmpty(Mono.error(new ActivityNotFoundException(activityId)))
-                .map(activity -> update(activity, name, category, description, price))
+                .map(activity -> update(activity, name, category, description, price, portraitUrl))
                 .flatMap(activityRepo::save)
                 .flatMap(saved -> publisher.publish(saved, "activities.activity.changed", saved.getId(),
                         activityEvents.activityChanged(saved)));
     }
 
-    private Activity update(Activity activity, String name, String category, String description, BigDecimal price) {
-        activity.updateDetails(name, category, description, price);
+    private Activity update(Activity activity, String name, String category, String description, BigDecimal price, String portraitUrl) {
+        activity.updateDetails(name, category, description, price, portraitUrl);
         return activity;
     }
 }

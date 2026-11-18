@@ -74,28 +74,34 @@ class SecurityReportWebIntegrationTests {
                 .jsonPath("$.photosUrls[0]").isEqualTo("https://example.com/photo.jpg");
     }
 
-    /**
-     * MS02-10: un reporte ajeno responde 404, igual que uno inexistente (sin oraculo de existencia).
-     */
     @Test
-    void hidesAnotherUsersReportWhenCommenting() {
-        var author = UUID.randomUUID();
-        var intruder = UUID.randomUUID();
-        var reportId = createReport(author);
+    void letsTouristsPostAndReadCommentsOnAnotherUsersReport() {
+        var reportId = createReport(UUID.randomUUID());
+        var commenter = UUID.randomUUID();
+        var reader = UUID.randomUUID();
 
         webTestClient.post()
                 .uri("/api/v1/security-reports/{reportId}/comments", reportId)
-                .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
+                .header(HttpHeaders.AUTHORIZATION, bearer(commenter, "TOURIST", "Visitante"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
-                        {"content": "Comentario ajeno"}
+                        {"content": "Comentario de otro usuario"}
                         """)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isCreated();
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports/{reportId}/comments", reportId)
+                .header(HttpHeaders.AUTHORIZATION, bearer(reader, "TOURIST", "Lector"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.content[0].content").isEqualTo("Comentario de otro usuario")
+                .jsonPath("$.content[0].user.id").isEqualTo(commenter.toString());
     }
 
     @Test
-    void hidesAnotherUsersReportWhenReadingIt() {
+    void showsFullDetailsForAnotherUsersReport() {
         var author = UUID.randomUUID();
         var intruder = UUID.randomUUID();
         var reportId = createReport(author);
@@ -104,7 +110,13 @@ class SecurityReportWebIntegrationTests {
                 .uri("/api/v1/security-reports/{reportId}", reportId)
                 .header(HttpHeaders.AUTHORIZATION, bearer(intruder, "TOURIST", "Intruso"))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.id").isEqualTo(reportId)
+                .jsonPath("$.title").isEqualTo("Robo en la playa")
+                .jsonPath("$.user.id").isEqualTo(author.toString())
+                .jsonPath("$.description").isEqualTo("Reporte de prueba")
+                .jsonPath("$.photosUrls[0]").isEqualTo("https://example.com/photo.jpg");
 
         webTestClient.get()
                 .uri("/api/v1/security-reports/{reportId}", UUID.randomUUID())
@@ -194,15 +206,18 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
-    void rejectsListingAnotherUsersReports() {
+    void allowsListingAnotherUsersReports() {
         var requester = UUID.randomUUID();
         var otherUser = UUID.randomUUID();
+        var reportId = createReport(otherUser);
 
         webTestClient.get()
                 .uri("/api/v1/security-reports/by-user/{userId}", otherUser)
                 .header(HttpHeaders.AUTHORIZATION, bearer(requester, "TOURIST", "Nestor"))
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.content[0].id").isEqualTo(reportId);
     }
 
     @Test
@@ -330,10 +345,51 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
-    void protectsAdminListingFromTourists() {
+    void allowsTouristsToBrowseReportsAndIdentifyTheirOwn() {
+        var tourist = UUID.randomUUID();
+        var ownReportId = createReport(tourist);
+        var otherUser = UUID.randomUUID();
+        createLocatedReport(otherUser, 10.3916, -75.4786);
+
         webTestClient.get()
-                .uri("/api/v1/security-reports?status=ONGOING")
-                .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
+                .uri("/api/v1/security-reports")
+                .header(HttpHeaders.AUTHORIZATION, bearer(tourist, "TOURIST", "Nestor"))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.content.length()").isEqualTo(2)
+                .jsonPath("$.content[0].title").isEqualTo("Incidente cerca del parque")
+                .jsonPath("$.content[0].user.id").isEqualTo(otherUser.toString())
+                .jsonPath("$.content[0].description").isEqualTo("Reporte geolocalizado con datos personales del denunciante")
+                .jsonPath("$.content[0].photosUrls[0]").isEqualTo("https://example.com/photo.jpg")
+                .jsonPath("$.content[0].location.latitude").isEqualTo(10.3916)
+                .jsonPath("$.content[1].id").isEqualTo(ownReportId)
+                .jsonPath("$.content[1].user.id").isEqualTo(tourist.toString())
+                .jsonPath("$.content[1].description").isEqualTo("Reporte de prueba");
+
+        webTestClient.get()
+                .uri("/api/v1/security-reports")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void reservesStatusChangesForStaff() {
+        var author = UUID.randomUUID();
+        var reportId = createReport(author);
+        var token = bearer(author, "TOURIST", "Visitante");
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/close", reportId)
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        closeReport(UUID.randomUUID(), reportId);
+
+        webTestClient.post()
+                .uri("/api/v1/security-reports/{reportId}/solve", reportId)
+                .header(HttpHeaders.AUTHORIZATION, token)
                 .exchange()
                 .expectStatus().isForbidden();
     }
@@ -363,12 +419,12 @@ class SecurityReportWebIntegrationTests {
     }
 
     @Test
-    void protectsTheCountsFromTouristsAndAnonymousUsers() {
+    void allowsAuthenticatedUsersToReadCounts() {
         webTestClient.get()
                 .uri("/api/v1/security-reports/counts")
                 .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID(), "TOURIST", "Nestor"))
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isOk();
 
         webTestClient.get()
                 .uri("/api/v1/security-reports/counts")
@@ -401,7 +457,8 @@ class SecurityReportWebIntegrationTests {
                 .bodyValue("""
                         {
                           "title": "Robo en la playa",
-                          "description": "Reporte de prueba"
+                          "description": "Reporte de prueba",
+                          "photosUrls": ["https://example.com/photo.jpg"]
                         }
                         """)
                 .exchange()

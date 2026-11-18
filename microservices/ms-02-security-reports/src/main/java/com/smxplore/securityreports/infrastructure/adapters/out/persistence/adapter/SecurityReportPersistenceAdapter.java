@@ -55,7 +55,7 @@ public class SecurityReportPersistenceAdapter implements SecurityReportRepositor
 
     @Override
     public Mono<Page<SecurityReport>> findAllByStatus(SecurityReportStatus status, PageRequest pageRequest) {
-        var query = Query.query(Criteria.where("status").is(status));
+        var query = status == null ? new Query() : Query.query(Criteria.where("status").is(status));
         return findPage(query, pageRequest);
     }
 

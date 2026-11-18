@@ -60,9 +60,17 @@ public class CatalogAccess {
                 : Mono.error(new ForbiddenOperationException("Only an administrator can moderate reviews"));
     }
 
+    /** Crear categorias admite administradores y gestoras, sin conceder edicion global. */
+    public Mono<Actor> requireCategoryCreator(Actor actor) {
+        return actor != null && (actor.isAdmin() || actor.isGestora())
+                ? Mono.just(actor)
+                : Mono.error(new ForbiddenOperationException(
+                        "Only an administrator or destination manager can create categories"));
+    }
+
     /**
-     * La taxonomia de categorias es global: modificarla afecta a los snapshots de los sitios y
-     * servicios de todas las gestoras, asi que solo el ADMIN puede gestionarla (MS04-01).
+     * La taxonomia de categorias es global: editarla afecta a los snapshots de los sitios y
+     * servicios de todas las gestoras, asi que solo el ADMIN puede editarla (MS04-01).
      */
     public Mono<Actor> requireTaxonomyAdmin(Actor actor) {
         return actor.isAdmin()

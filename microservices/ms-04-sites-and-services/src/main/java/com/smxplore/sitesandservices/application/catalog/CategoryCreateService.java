@@ -38,8 +38,8 @@ public class CategoryCreateService implements CreateCategoryUseCase {
 
     @Override
     public Mono<Category> handle(Category category, Actor actor, String correlationId) {
-        // La taxonomia es global: solo ADMIN, y la comprobacion va antes de tocar Mongo.
-        return access.requireTaxonomyAdmin(actor)
+        // Autorizar la creacion antes de consultar padres o escribir en Mongo.
+        return access.requireCategoryCreator(actor)
                 .then(Mono.defer(() -> validateParent(category.parentId(), null)))
                 .then(Mono.defer(() -> {
                     Instant now = Instant.now(clock);
