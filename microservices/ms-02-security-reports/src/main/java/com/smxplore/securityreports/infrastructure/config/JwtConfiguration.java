@@ -1,5 +1,7 @@
 package com.smxplore.securityreports.infrastructure.config;
 
+import com.smxplore.securityreports.domain.exceptions.InvalidJwtException;
+import com.smxplore.securityreports.infrastructure.adapters.in.web.security.JwtUserResolver;
 import io.netty.channel.ChannelOption;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -75,10 +77,21 @@ public class JwtConfiguration {
         validators.add(new JwtClaimValidator<List<String>>(
                 JwtClaimNames.AUD,
                 audience -> audience != null && audience.contains(properties.getAudience())));
+        validators.add(this::requireUserIdentity);
         validators.add(requireRs256());
         validators.add(notMfaChallenge());
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
+    }
+
+    private OAuth2TokenValidatorResult requireUserIdentity(Jwt jwt) {
+        try {
+            JwtUserResolver.subjectId(jwt, properties.getUserIdClaim());
+            return OAuth2TokenValidatorResult.success();
+        } catch (InvalidJwtException exception) {
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token", exception.getMessage(), null));
+        }
     }
 
     private NimbusReactiveJwtDecoder buildDecoder() {

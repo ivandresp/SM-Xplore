@@ -27,9 +27,13 @@ public class JwtUserResolver {
     }
 
     public UUID subjectId(Jwt jwt) {
+        return subjectId(jwt, jwtProperties.getUserIdClaim());
+    }
+
+    public static UUID subjectId(Jwt jwt, String userIdClaim) {
         String identity = jwt.getSubject();
         if (identity == null || identity.isBlank()) {
-            identity = jwt.getClaimAsString(jwtProperties.getUserIdClaim());
+            identity = jwt.getClaimAsString(userIdClaim);
         }
         if (identity == null || identity.isBlank()) {
             throw new InvalidJwtException("Token subject (sub) or user id claim is missing.");

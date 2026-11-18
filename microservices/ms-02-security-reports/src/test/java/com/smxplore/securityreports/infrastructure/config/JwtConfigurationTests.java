@@ -9,7 +9,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +29,31 @@ class JwtConfigurationTests {
         assertThat(jwt).isNotNull();
         assertThat(jwt.getSubject()).isEqualTo("66666666-6666-6666-6666-666666666601");
         assertThat(jwt.getClaimAsString("role")).isEqualTo("TOURIST");
+    }
+
+    @Test
+    void rejectsTokensWithoutAValidUserIdentity() {
+        var decoder = new JwtConfiguration(properties(), new DefaultResourceLoader()).jwtDecoder();
+
+        assertThatThrownBy(() -> decoder.decode(token("TOURIST", null, null, null)).block())
+                .isInstanceOf(JwtValidationException.class)
+                .hasMessageContaining("subject");
+        assertThatThrownBy(() -> decoder.decode(token("TOURIST", null, "not-a-uuid", null)).block())
+                .isInstanceOf(JwtValidationException.class)
+                .hasMessageContaining("valid UUID");
+    }
+
+    @Test
+    void acceptsTheConfiguredUserIdClaimWhenSubjectIsAbsent() {
+        var properties = properties();
+        properties.setUserIdClaim("legacyUserId");
+        var decoder = new JwtConfiguration(properties, new DefaultResourceLoader()).jwtDecoder();
+        var userId = "66666666-6666-6666-6666-666666666601";
+
+        var jwt = decoder.decode(token("TOURIST", null, null, userId)).block();
+
+        assertThat(jwt).isNotNull();
+        assertThat(jwt.getClaimAsString("legacyUserId")).isEqualTo(userId);
     }
 
     @Test
@@ -72,15 +97,24 @@ class JwtConfigurationTests {
     }
 
     private static String token(String role, String scope) {
+        return token(role, scope, "66666666-6666-6666-6666-666666666601", null);
+    }
+
+    private static String token(String role, String scope, String subject, String legacyUserId) {
         Instant now = Instant.now();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .issuer("sm-xplore-ms-01")
                 .audience(List.of("sm-xplore-services"))
-                .subject("66666666-6666-6666-6666-666666666601")
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
                 .claim("role", role)
                 .claim("name", "Turista");
+        if (subject != null) {
+            claims.subject(subject);
+        }
+        if (legacyUserId != null) {
+            claims.claim("legacyUserId", legacyUserId);
+        }
         if (scope != null) {
             claims.claim("scope", scope);
         }
