@@ -77,7 +77,7 @@ class PublicProfileTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> profile = profile(response);
         assertThat(profile.get("license")).isEqualTo("LIC-PUB");
-        assertThat(profile).doesNotContainKeys("dniType", "dniNumber");
+        assertThat(profile).doesNotContainKeys("dniType", "dniNumber", "phone");
     }
 
     @Test
@@ -94,6 +94,7 @@ class PublicProfileTest {
         Map<String, Object> profile = profile(response);
         assertThat(profile.get("nit")).isEqualTo("903555666-7");
         assertThat(profile.get("websiteUrl")).isEqualTo("https://prestadora.example.com");
+        assertThat(profile.get("phone")).isEqualTo("3008880001");
         assertThat(profile).doesNotContainKeys("dniType", "dniNumber");
     }
 

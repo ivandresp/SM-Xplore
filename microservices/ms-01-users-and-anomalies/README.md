@@ -243,8 +243,9 @@ El administrador inicial solo se crea si la tabla `users` está vacía, es decir
 ## Fase informativa MS01-20 a MS01-24
 
 - **MS01-20 (perfil público y datos profesionales):** `GET /api/v1/public/users/{id}` solo devuelve perfiles
-  disponibles (guías activos y prestadoras aprobadas) y nunca expone correo, teléfono ni documentos de identidad. Sí
-  publica la licencia del guía y el NIT de la prestadora porque la app ciudadana los usa para verificar que el
+  disponibles (guías activos y prestadoras aprobadas). El perfil de la prestadora incluye su teléfono en
+  `profile.phone`. El endpoint omite el correo y los documentos de identidad. Publica la licencia del guía
+  y el NIT de la prestadora porque la app ciudadana los usa para verificar que el
   prestador es real; es una **decisión de producto aceptada** que esos identificadores profesionales sean consultables
   y por tanto raspables. Si el negocio cambia de criterio, basta con recortar `PublicProfileDetails`.
 - **MS01-21 (tokens de desafío MFA):** ms-01 ya rechaza un token con `scope=mfa` en su decodificador de acceso y lo
