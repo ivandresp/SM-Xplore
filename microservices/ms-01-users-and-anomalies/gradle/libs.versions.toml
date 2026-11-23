@@ -1,5 +1,5 @@
 [versions]
-spring-boot = "4.1.2"
+spring-boot = "4.2.0"
 springdoc = "3.2.0"
 archunit = "1.5.1"
 palantir-java-format = "2.102.0"
